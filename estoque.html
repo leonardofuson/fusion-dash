@@ -245,13 +245,13 @@ table.mtz tfoot td.tdc{background:rgba(255,255,255,0.04)!important;}
       <select id="sel-cat"><option value="">Todas</option></select>
     </div>
     <!-- Botões apenas visíveis no desktop -->
-    <button class="ftoggle" id="btn-zeros" onclick="toggleZeros()" style="display:none;" id="btn-zeros-desktop">Ocultar sem estoque</button>
-    <button class="ftoggle" id="btn-exp" onclick="toggleExpandAll()" style="display:none;">Expandir todos</button>
+    <button class="ftoggle on" id="btn-zeros" onclick="toggleZeros()">Mostrar sem estoque</button>
+    <button class="ftoggle" id="btn-exp" onclick="toggleExpandAll()">Expandir todos</button>
   </div>
 
   <!-- Botões mobile em linha separada -->
   <div class="filter-row2">
-    <button class="ftoggle" id="btn-zeros-m" onclick="toggleZeros()">Ocultar sem estoque</button>
+    <button class="ftoggle on" id="btn-zeros-m" onclick="toggleZeros()">Mostrar sem estoque</button>
     <button class="ftoggle" id="btn-exp-m" onclick="toggleExpandAll()">Expandir todos</button>
   </div>
 
@@ -321,7 +321,7 @@ async function apiAll(base){
   return all;
 }
 
-let DADOS=null, EXP={}, CANAL={}, filtroZ=false, expAll=false;
+let DADOS=null, EXP={}, CANAL={}, filtroZ=true, expAll=false;
 
 async function carregar(){
   try{
@@ -407,9 +407,13 @@ function totPai(p){
 
 function toggleZeros(){
   filtroZ=!filtroZ;
-  const b=document.getElementById('btn-zeros');
-  b.classList.toggle('on',filtroZ);
-  b.textContent=filtroZ?'Mostrar sem estoque':'Ocultar sem estoque';
+  const txt=filtroZ?'Mostrar sem estoque':'Ocultar sem estoque';
+  ['btn-zeros','btn-zeros-m'].forEach(id=>{
+    const b=document.getElementById(id);
+    if(!b) return;
+    b.classList.toggle('on',filtroZ);
+    b.textContent=txt;
+  });
   render();
 }
 
