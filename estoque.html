@@ -627,7 +627,6 @@ function renderProd(pai){
       <div class="prod-head" onclick="toggleProd('${id}')">
         <span class="prod-nome">${pai.nome}</span>
         <span class="prod-cat">${pai.categoria||'—'}</span>
-        <span class="prod-sku">${pai.sku}</span>
         <span class="prod-tot-lbl">Total</span>
         <span class="prod-tot">${fmt(tot)}</span>
         <span class="arrow ${isOpen?'open':''}" id="arrow-${id}">▶</span>
