@@ -129,13 +129,23 @@ var CMAP = {
   'Mercado Livre Full FIO':    {n:'Mercado Livre', c:'#F59E0B'},
   'Mercado Livre FIO':         {n:'Mercado Livre', c:'#F59E0B'},
   'Mercado Livre Full Confec': {n:'Mercado Livre', c:'#F59E0B'},
-  'Mercado Livre Confeções': {n:'Mercado Livre', c:'#F59E0B'},
+  'Mercado Livre Confeções':   {n:'Mercado Livre', c:'#F59E0B'},
+  'Mercado Livre Confecções':  {n:'Mercado Livre', c:'#F59E0B'},
+  'ML Full Confecções':        {n:'Mercado Livre', c:'#F59E0B'},
+  'Mercado Livre (conta 3)':   {n:'Mercado Livre', c:'#F59E0B'},
   'Shopee FIO':                {n:'Shopee',        c:'#EF4444'},
+  'Shopee Fio':                {n:'Shopee',        c:'#EF4444'},
+  'Shopee Confecções':         {n:'Shopee',        c:'#EF4444'},
   'Shopee':                    {n:'Shopee',        c:'#EF4444'},
   'tiktok':                    {n:'TikTok Shop',   c:'#EC4899'},
+  'TikTok':                    {n:'TikTok Shop',   c:'#EC4899'},
+  'TikTok Shop':               {n:'TikTok Shop',   c:'#EC4899'},
+  'shopify':                   {n:'TikTok Shop',   c:'#EC4899'},
+  'Online Store':              {n:'Site Próprio',  c:'#3B82F6'},
   'web':                       {n:'Site Próprio',  c:'#3B82F6'},
   'Site Próprio':              {n:'Site Próprio',  c:'#3B82F6'},
-  'Shein Confecções':          {n:'Shein',         c:'#8B5CF6'}
+  'Shein Confecções':          {n:'Shein',         c:'#8B5CF6'},
+  'Shein ConfecÃ§Ãµes':       {n:'Shein',         c:'#8B5CF6'}
 };
 
 function getNome(raw, orig) {
@@ -308,12 +318,15 @@ async function carregar() {
   }
 }
 
-var hoje = new Date(), ini = new Date();
-ini.setDate(ini.getDate() - 30);
-DE  = ini.toISOString().split('T')[0];
+var hoje = new Date();
+DE  = hoje.toISOString().split('T')[0];
 ATE = hoje.toISOString().split('T')[0];
 document.getElementById('dt-de').value  = DE;
 document.getElementById('dt-ate').value = ATE;
+// Marca chip "Hoje" como ativo
+document.querySelectorAll('.chip').forEach(function(c) { c.classList.remove('on'); });
+var chips = document.querySelectorAll('.chip');
+if (chips.length > 0) chips[0].classList.add('on');
 carregar();
 </script>
 </body>
