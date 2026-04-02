@@ -245,8 +245,24 @@ const CANAL_MAP = {
   'Shein Confecções':         { nome:'Shein',         cor:'#8B5CF6' },
 };
 
-function nomCanal(raw){ return CANAL_MAP[raw]?.nome || raw || 'Outros'; }
-function corCanal(raw){ return CANAL_MAP[raw]?.cor || '#6B7280'; }
+function nomCanal(raw, origem){ 
+  if(raw && CANAL_MAP[raw]) return CANAL_MAP[raw].nome;
+  if(!raw || raw.trim()===''){
+    if(origem==='shopify') return 'TikTok Shop';
+    if(origem==='fio_e_trama') return 'Mercado Livre';
+    if(origem==='confeccoes') return 'Mercado Livre';
+    return 'Outros';
+  }
+  return raw || 'Outros';
+}
+function corCanal(raw, origem){ 
+  if(raw && CANAL_MAP[raw]) return CANAL_MAP[raw].cor;
+  if(!raw || raw.trim()===''){
+    if(origem==='shopify') return '#EC4899';
+    return '#F59E0B';
+  }
+  return '#6B7280';
+}
 
 async function api(path){
   const r = await fetch(`${SB_URL}/rest/v1/${path}`, {
@@ -305,7 +321,7 @@ async function carregar(){
 
   // Busca pedidos do período — ecommerce apenas
   const [pedidos, cancelados] = await Promise.all([
-    api(`pedidos?select=data_pedido,valor_bruto,canal_nome_raw,status&data_pedido=gte.${DE}&data_pedido=lte.${ATE}&origem_conta=in.(fio_e_trama,confeccoes,shopify)&limit=50000`),
+    api(`pedidos?select=data_pedido,valor_bruto,canal_nome_raw,origem_conta,status&data_pedido=gte.${DE}&data_pedido=lte.${ATE}&origem_conta=in.(fio_e_trama,confeccoes,shopify)&limit=50000`),
     api(`pedidos?select=data_pedido,valor_bruto,canal_nome_raw&status=eq.cancelado&data_pedido=gte.${DE}&data_pedido=lte.${ATE}&origem_conta=in.(fio_e_trama,confeccoes,shopify)&limit=10000`),
   ]);
 
@@ -314,7 +330,7 @@ async function carregar(){
   // Agrega por canal normalizado
   const porCanal = {};
   ativos.forEach(p => {
-    const nome = nomCanal(p.canal_nome_raw);
+    const nome = nomCanal(p.canal_nome_raw, p.origem_conta);
     const cor  = corCanal(p.canal_nome_raw);
     if(!porCanal[nome]) porCanal[nome] = { nome, cor, fat:0, ped:0 };
     porCanal[nome].fat += +(p.valor_bruto||0);
