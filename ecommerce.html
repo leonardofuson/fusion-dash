@@ -26,7 +26,6 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
 .chip.on{background:var(--blue);border-color:var(--blue);color:#fff;}
 .drange{display:flex;gap:8px;align-items:center;}
 .dinput{background:var(--bg2);border:1px solid var(--bdr);border-radius:8px;padding:7px 12px;font-size:12px;color:var(--txt1);font-family:inherit;outline:none;}
-.dinput:focus{border-color:var(--blue);}
 .btnf{background:var(--blue);border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;color:#fff;cursor:pointer;}
 .kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:1.5rem;}
 .kpi{background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;padding:16px;transition:transform 0.2s;}
@@ -59,8 +58,7 @@ table.tb tr:hover td{background:rgba(255,255,255,0.02);}
 .bar-lbl{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;}
 .bar-track{background:var(--bg3);border-radius:4px;height:6px;overflow:hidden;}
 .bar-fill{height:100%;border-radius:4px;transition:width 0.6s;}
-.loading{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px;gap:12px;color:var(--txt2);}
-.spin{width:24px;height:24px;border:2px solid var(--bdr);border-top-color:var(--blue);border-radius:50%;animation:spin 0.7s linear infinite;}
+.spin{width:24px;height:24px;border:2px solid var(--bdr);border-top-color:var(--blue);border-radius:50%;animation:spin 0.7s linear infinite;margin:0 auto;}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media(max-width:768px){.kpi-grid{grid-template-columns:repeat(2,1fr);}.grid2,.canais-grid{grid-template-columns:1fr;}}
 </style>
@@ -98,112 +96,84 @@ table.tb tr:hover td{background:rgba(255,255,255,0.02);}
   </div>
 
   <div class="kpi-grid" id="kpis">
-    <div class="kpi"><div class="kpi-lbl">Carregando...</div><div class="kpi-val">—</div></div>
+    <div class="kpi"><div class="kpi-lbl">Carregando...</div><div class="spin"></div></div>
   </div>
-
   <div class="canais-grid" id="canais-cards"></div>
 
   <div class="grid2">
-    <div class="card">
-      <div class="card-title">Faturamento diário</div>
-      <div class="chart-wrap"><canvas id="chart-fat"></canvas></div>
-    </div>
-    <div class="card">
-      <div class="card-title">Faturamento por canal</div>
-      <div id="canal-bars"></div>
-    </div>
+    <div class="card"><div class="card-title">Faturamento diário</div><div class="chart-wrap"><canvas id="chart-fat"></canvas></div></div>
+    <div class="card"><div class="card-title">Faturamento por canal</div><div id="canal-bars"></div></div>
   </div>
-
   <div class="grid2">
-    <div class="card">
-      <div class="card-title">Pedidos por dia</div>
-      <div class="chart-wrap"><canvas id="chart-pedidos"></canvas></div>
-    </div>
-    <div class="card">
-      <div class="card-title">Ticket médio por canal</div>
-      <div id="ticket-bars"></div>
-    </div>
+    <div class="card"><div class="card-title">Pedidos por dia</div><div class="chart-wrap"><canvas id="chart-ped"></canvas></div></div>
+    <div class="card"><div class="card-title">Ticket médio por canal</div><div id="ticket-bars"></div></div>
   </div>
 
   <div class="card" style="margin-bottom:16px;">
     <div class="card-title">Detalhamento por canal</div>
     <table class="tb">
-      <thead>
-        <tr>
-          <th>Canal</th>
-          <th class="r">Pedidos</th>
-          <th class="r">Faturamento</th>
-          <th class="r">Ticket Médio</th>
-          <th class="r">Cancelados</th>
-          <th class="r">% Total</th>
-        </tr>
-      </thead>
+      <thead><tr>
+        <th>Canal</th><th class="r">Pedidos</th><th class="r">Faturamento</th>
+        <th class="r">Ticket Médio</th><th class="r">Cancelados</th><th class="r">% Total</th>
+      </tr></thead>
       <tbody id="tabela-canais"></tbody>
     </table>
   </div>
 </div>
 
 <script>
+var SB_URL = 'https://spulbhnmkomvgohzhfvj.supabase.co';
+var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNwdWxiaG5ta29tdmdvaHpoZnZqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3Mzk3MTk2NCwiZXhwIjoyMDg5NTQ3OTY0fQ.gZSK6cecIExkt2S9REHpQVWStEaXikjxZRusmSjTrpE';
 
-const SB_URL =  + SB_URL + ;
-const SB_KEY =  + SB_KEY + ;
-
-const CMAP = {
+var CMAP = {
   'Mercado Livre Full FIO':    {n:'Mercado Livre', c:'#F59E0B'},
   'Mercado Livre FIO':         {n:'Mercado Livre', c:'#F59E0B'},
   'Mercado Livre Full Confec': {n:'Mercado Livre', c:'#F59E0B'},
-  'Mercado Livre Confeções':   {n:'Mercado Livre', c:'#F59E0B'},
+  'Mercado Livre Confeções': {n:'Mercado Livre', c:'#F59E0B'},
   'Shopee FIO':                {n:'Shopee',        c:'#EF4444'},
   'Shopee':                    {n:'Shopee',        c:'#EF4444'},
   'tiktok':                    {n:'TikTok Shop',   c:'#EC4899'},
   'web':                       {n:'Site Próprio',  c:'#3B82F6'},
   'Site Próprio':              {n:'Site Próprio',  c:'#3B82F6'},
-  'Shein Confecções':          {n:'Shein',         c:'#8B5CF6'},
+  'Shein Confecções':          {n:'Shein',         c:'#8B5CF6'}
 };
 
 function getNome(raw, orig) {
-  var r = raw ? raw.trim() : '';
+  var r = (raw || '').trim();
   if (r && CMAP[r]) return CMAP[r].n;
-  if (!r) {
-    if (orig === 'shopify') return 'TikTok Shop';
-    return 'Mercado Livre';
-  }
+  if (!r) return orig === 'shopify' ? 'TikTok Shop' : 'Mercado Livre';
   return r;
 }
 function getCor(raw, orig) {
-  var r = raw ? raw.trim() : '';
+  var r = (raw || '').trim();
   if (r && CMAP[r]) return CMAP[r].c;
-  if (!r) {
-    if (orig === 'shopify') return '#EC4899';
-    return '#F59E0B';
-  }
+  if (!r) return orig === 'shopify' ? '#EC4899' : '#F59E0B';
   return '#6B7280';
 }
 
-async function apiFetch(path) {
-  var results = [], offset = 0;
+async function buscarTudo(tabela, filtro) {
+  var todos = [], offset = 0, tam = 1000;
   while (true) {
-    var sep = path.indexOf('?') >= 0 ? '&' : '?';
-    var url = SB_URL + '/rest/v1/' + path + sep + 'limit=1000&offset=' + offset;
-    var resp = await fetch(url, {headers: {apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY}});
-    var batch = await resp.json();
-    if (!Array.isArray(batch) || batch.length === 0) break;
-    results = results.concat(batch);
-    if (batch.length < 1000) break;
-    offset += 1000;
+    var url = SB_URL + '/rest/v1/' + tabela + '?' + filtro + '&limit=' + tam + '&offset=' + offset;
+    var r = await fetch(url, {headers: {apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY}});
+    var lote = await r.json();
+    if (!Array.isArray(lote) || lote.length === 0) break;
+    todos = todos.concat(lote);
+    if (lote.length < tam) break;
+    offset += tam;
   }
-  return results;
+  return todos;
 }
 
-function fmt(n)   { return 'R$ ' + Math.round(n||0).toLocaleString('pt-BR'); }
-function fmtN(n)  { return Math.round(n||0).toLocaleString('pt-BR'); }
-function fmtP(n)  { return (n||0).toFixed(1) + '%'; }
+function fmt(n)  { return 'R$ ' + Math.round(n || 0).toLocaleString('pt-BR'); }
+function fmtN(n) { return Math.round(n || 0).toLocaleString('pt-BR'); }
+function fmtP(n) { return (n || 0).toFixed(1) + '%'; }
 
 var chartFat = null, chartPed = null;
 var DE = null, ATE = null;
 
 function setPeriodo(dias, el) {
-  document.querySelectorAll('.chip').forEach(function(c){c.classList.remove('on');});
+  document.querySelectorAll('.chip').forEach(function(c) { c.classList.remove('on'); });
   el.classList.add('on');
   var ate = new Date(), de = new Date();
   de.setDate(de.getDate() - dias);
@@ -217,179 +187,134 @@ function setPeriodo(dias, el) {
 function aplicarFiltro() {
   DE  = document.getElementById('dt-de').value;
   ATE = document.getElementById('dt-ate').value;
-  document.querySelectorAll('.chip').forEach(function(c){c.classList.remove('on');});
+  document.querySelectorAll('.chip').forEach(function(c) { c.classList.remove('on'); });
   carregar();
 }
 
 async function carregar() {
   if (!DE || !ATE) return;
-  document.getElementById('kpis').innerHTML = '<div class="kpi"><div class="kpi-lbl">Carregando...</div><div class="kpi-val">—</div></div>';
+  document.getElementById('kpis').innerHTML = '<div class="kpi"><div class="kpi-lbl">Carregando...</div><div class="spin"></div></div>';
   document.getElementById('canais-cards').innerHTML = '';
 
-  try {
-    var filtro = 'data_pedido=gte.' + DE + '&data_pedido=lte.' + ATE + '&origem_conta=in.(fio_e_trama,confeccoes,shopify)';
+  var filtro = 'select=data_pedido,valor_bruto,canal_nome_raw,origem_conta,status' +
+    '&data_pedido=gte.' + DE +
+    '&data_pedido=lte.' + ATE +
+    '&origem_conta=in.(fio_e_trama,confeccoes,shopify)';
 
-    var resultados = await Promise.all([
-      apiFetch('pedidos?select=data_pedido,valor_bruto,canal_nome_raw,origem_conta,status&' + filtro),
-      apiFetch('pedidos_historico?select=data_pedido,valor_bruto,canal_nome_raw,origem_conta,status&' + filtro),
+  try {
+    var res = await Promise.all([
+      buscarTudo('pedidos', filtro),
+      buscarTudo('pedidos_historico', filtro)
     ]);
 
-    var pedOp   = resultados[0] || [];
-    var pedHist = resultados[1] || [];
+    var todos = res[0].concat(res[1]);
+    var CANC = ['cancelado'];
+    var ativos    = todos.filter(function(p) { return CANC.indexOf((p.status || '').toLowerCase()) < 0; });
+    var cancelados = todos.filter(function(p) { return CANC.indexOf((p.status || '').toLowerCase()) >= 0; });
 
-    // Statuses que NÃO são cancelados no histórico
-    var CANC = ['cancelado', 'cancelado por cliente', 'cancelado por problema no marketplace'];
-
-    var todos = pedOp.concat(pedHist);
-    var ativos = todos.filter(function(p) {
-      return !CANC.includes((p.status||'').toLowerCase());
-    });
-    var cancelados = todos.filter(function(p) {
-      return CANC.includes((p.status||'').toLowerCase());
-    });
-
-    // Agrega por canal
     var porCanal = {};
     ativos.forEach(function(p) {
       var nome = getNome(p.canal_nome_raw, p.origem_conta);
       var cor  = getCor(p.canal_nome_raw, p.origem_conta);
-      if (!porCanal[nome]) porCanal[nome] = {nome:nome, cor:cor, fat:0, ped:0, canc:0};
-      porCanal[nome].fat += parseFloat(p.valor_bruto||0);
+      if (!porCanal[nome]) porCanal[nome] = {nome: nome, cor: cor, fat: 0, ped: 0, canc: 0};
+      porCanal[nome].fat += parseFloat(p.valor_bruto || 0);
       porCanal[nome].ped++;
     });
     cancelados.forEach(function(p) {
       var nome = getNome(p.canal_nome_raw, p.origem_conta);
-      if (!porCanal[nome]) porCanal[nome] = {nome:nome, cor:getCor(p.canal_nome_raw,p.origem_conta), fat:0, ped:0, canc:0};
+      if (!porCanal[nome]) porCanal[nome] = {nome: nome, cor: getCor(p.canal_nome_raw, p.origem_conta), fat: 0, ped: 0, canc: 0};
       porCanal[nome].canc++;
     });
 
-    var canais = Object.values(porCanal).sort(function(a,b){return b.fat-a.fat;});
-    var fatTotal = canais.reduce(function(s,c){return s+c.fat;}, 0);
-    var pedTotal = canais.reduce(function(s,c){return s+c.ped;}, 0);
+    var canais   = Object.values(porCanal).sort(function(a, b) { return b.fat - a.fat; });
+    var fatTotal = canais.reduce(function(s, c) { return s + c.fat; }, 0);
+    var pedTotal = canais.reduce(function(s, c) { return s + c.ped; }, 0);
     var cancTotal = cancelados.length;
+    var tm = pedTotal > 0 ? fatTotal / pedTotal : 0;
 
-    // KPIs
     document.getElementById('kpis').innerHTML =
       '<div class="kpi"><div class="kpi-lbl">Faturamento</div><div class="kpi-val">' + fmt(fatTotal) + '</div><div class="kpi-sub">' + fmtN(pedTotal) + ' pedidos</div></div>' +
-      '<div class="kpi"><div class="kpi-lbl">Ticket Médio</div><div class="kpi-val kv-blue">' + fmt(pedTotal>0?fatTotal/pedTotal:0) + '</div><div class="kpi-sub">por pedido</div></div>' +
+      '<div class="kpi"><div class="kpi-lbl">Ticket Médio</div><div class="kpi-val kv-blue">' + fmt(tm) + '</div><div class="kpi-sub">por pedido</div></div>' +
       '<div class="kpi"><div class="kpi-lbl">Pedidos Ativos</div><div class="kpi-val kv-green">' + fmtN(pedTotal) + '</div><div class="kpi-sub">no período</div></div>' +
-      '<div class="kpi"><div class="kpi-lbl">Cancelados</div><div class="kpi-val ' + (cancTotal>0?'kv-red':'kv-green') + '">' + fmtN(cancTotal) + '</div><div class="kpi-sub">' + (pedTotal>0?((cancTotal/(pedTotal+cancTotal))*100).toFixed(1):0) + '% do total</div></div>' +
+      '<div class="kpi"><div class="kpi-lbl">Cancelados</div><div class="kpi-val ' + (cancTotal > 0 ? 'kv-red' : 'kv-green') + '">' + fmtN(cancTotal) + '</div><div class="kpi-sub">' + (pedTotal + cancTotal > 0 ? ((cancTotal / (pedTotal + cancTotal)) * 100).toFixed(1) : 0) + '% do total</div></div>' +
       '<div class="kpi"><div class="kpi-lbl">Canais Ativos</div><div class="kpi-val kv-amber">' + canais.length + '</div><div class="kpi-sub">plataformas</div></div>';
 
-    // Cards canais
     document.getElementById('canais-cards').innerHTML = canais.map(function(canal) {
       return '<div class="canal-card" style="border-left-color:' + canal.cor + '">' +
         '<div class="canal-nome" style="color:' + canal.cor + '">' + canal.nome + '</div>' +
         '<div class="canal-fat" style="color:' + canal.cor + '">' + fmt(canal.fat) + '</div>' +
-        '<div class="canal-info">' +
-          '<span>' + fmtN(canal.ped) + ' pedidos</span>' +
-          '<span>TM ' + fmt(canal.ped>0?canal.fat/canal.ped:0) + '</span>' +
-          '<span>' + fmtP(fatTotal>0?canal.fat/fatTotal*100:0) + '</span>' +
-        '</div></div>';
+        '<div class="canal-info"><span>' + fmtN(canal.ped) + ' pedidos</span><span>TM ' + fmt(canal.ped > 0 ? canal.fat / canal.ped : 0) + '</span><span>' + fmtP(fatTotal > 0 ? canal.fat / fatTotal * 100 : 0) + '</span></div>' +
+        '</div>';
     }).join('');
 
-    // Barras faturamento
-    var maxFat = Math.max.apply(null, canais.map(function(c){return c.fat;})) || 1;
+    var maxFat = Math.max.apply(null, canais.map(function(c) { return c.fat; }).concat([1]));
     document.getElementById('canal-bars').innerHTML = canais.map(function(canal) {
-      return '<div class="bar-row">' +
-        '<div class="bar-lbl"><span style="color:var(--txt1);font-weight:500">' + canal.nome + '</span><span style="color:var(--txt2)">' + fmt(canal.fat) + '</span></div>' +
-        '<div class="bar-track"><div class="bar-fill" style="width:' + Math.round(canal.fat/maxFat*100) + '%;background:' + canal.cor + '"></div></div>' +
-        '</div>';
+      return '<div class="bar-row"><div class="bar-lbl"><span style="color:var(--txt1);font-weight:500">' + canal.nome + '</span><span style="color:var(--txt2)">' + fmt(canal.fat) + '</span></div>' +
+        '<div class="bar-track"><div class="bar-fill" style="width:' + Math.round(canal.fat / maxFat * 100) + '%;background:' + canal.cor + '"></div></div></div>';
     }).join('');
 
-    // Barras ticket médio
-    var tms = canais.map(function(c){return c.ped>0?c.fat/c.ped:0;});
-    var maxTm = Math.max.apply(null, tms) || 1;
+    var tms = canais.map(function(c) { return c.ped > 0 ? c.fat / c.ped : 0; });
+    var maxTm = Math.max.apply(null, tms.concat([1]));
     document.getElementById('ticket-bars').innerHTML = canais.map(function(canal, i) {
-      var tm = tms[i];
-      return '<div class="bar-row">' +
-        '<div class="bar-lbl"><span style="color:var(--txt1);font-weight:500">' + canal.nome + '</span><span style="color:var(--txt2)">' + fmt(tm) + '</span></div>' +
-        '<div class="bar-track"><div class="bar-fill" style="width:' + Math.round(tm/maxTm*100) + '%;background:' + canal.cor + '"></div></div>' +
-        '</div>';
+      var tmC = tms[i];
+      return '<div class="bar-row"><div class="bar-lbl"><span style="color:var(--txt1);font-weight:500">' + canal.nome + '</span><span style="color:var(--txt2)">' + fmt(tmC) + '</span></div>' +
+        '<div class="bar-track"><div class="bar-fill" style="width:' + Math.round(tmC / maxTm * 100) + '%;background:' + canal.cor + '"></div></div></div>';
     }).join('');
 
-    // Tabela
     document.getElementById('tabela-canais').innerHTML = canais.map(function(canal) {
-      return '<tr>' +
-        '<td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + canal.cor + ';margin-right:8px;"></span>' + canal.nome + '</td>' +
-        '<td class="val">' + fmtN(canal.ped) + '</td>' +
-        '<td class="val">' + fmt(canal.fat) + '</td>' +
-        '<td class="val">' + fmt(canal.ped>0?canal.fat/canal.ped:0) + '</td>' +
-        '<td class="r">' + fmtN(canal.canc) + '</td>' +
-        '<td class="r">' + fmtP(fatTotal>0?canal.fat/fatTotal*100:0) + '</td>' +
-        '</tr>';
+      return '<tr><td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + canal.cor + ';margin-right:8px;"></span>' + canal.nome + '</td>' +
+        '<td class="val">' + fmtN(canal.ped) + '</td><td class="val">' + fmt(canal.fat) + '</td>' +
+        '<td class="val">' + fmt(canal.ped > 0 ? canal.fat / canal.ped : 0) + '</td>' +
+        '<td class="r">' + fmtN(canal.canc) + '</td><td class="r">' + fmtP(fatTotal > 0 ? canal.fat / fatTotal * 100 : 0) + '</td></tr>';
     }).join('');
 
-    // Agrega por dia
     var porDia = {};
     ativos.forEach(function(p) {
       var d = p.data_pedido;
       if (!d) return;
-      if (!porDia[d]) porDia[d] = {fat:0, ped:0};
-      porDia[d].fat += parseFloat(p.valor_bruto||0);
+      if (!porDia[d]) porDia[d] = {fat: 0, ped: 0};
+      porDia[d].fat += parseFloat(p.valor_bruto || 0);
       porDia[d].ped++;
     });
     var dias = Object.keys(porDia).sort();
     var labels = dias.map(function(d) {
-      var dt = new Date(d + 'T12:00:00');
-      return dt.toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'});
+      return new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'});
     });
 
     if (chartFat) chartFat.destroy();
     chartFat = new Chart(document.getElementById('chart-fat'), {
       type: 'line',
-      data: {labels: labels, datasets: [{
-        label: 'Fat.',
-        data: dias.map(function(d){return porDia[d].fat;}),
-        borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.08)',
-        fill: true, tension: 0.4, pointRadius: 2, borderWidth: 2
-      }]},
-      options: {responsive:true, maintainAspectRatio:false,
-        plugins: {legend:{display:false}},
-        scales: {
-          x: {ticks:{color:'#71717a', maxTicksLimit:8, font:{size:10}}, grid:{color:'rgba(255,255,255,0.04)'}},
-          y: {ticks:{color:'#71717a', font:{size:10}, callback:function(v){return 'R$'+Math.round(v/1000)+'k';}}, grid:{color:'rgba(255,255,255,0.04)'}}
-        }
-      }
+      data: {labels: labels, datasets: [{label: 'Fat.', data: dias.map(function(d) { return porDia[d].fat; }),
+        borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.08)', fill: true, tension: 0.4, pointRadius: 2, borderWidth: 2}]},
+      options: {responsive: true, maintainAspectRatio: false, plugins: {legend: {display: false}},
+        scales: {x: {ticks: {color: '#71717a', maxTicksLimit: 8, font: {size: 10}}, grid: {color: 'rgba(255,255,255,0.04)'}},
+          y: {ticks: {color: '#71717a', font: {size: 10}, callback: function(v) { return 'R$' + Math.round(v / 1000) + 'k'; }}, grid: {color: 'rgba(255,255,255,0.04)'}}}}
     });
 
     if (chartPed) chartPed.destroy();
-    chartPed = new Chart(document.getElementById('chart-pedidos'), {
+    chartPed = new Chart(document.getElementById('chart-ped'), {
       type: 'bar',
-      data: {labels: labels, datasets: [{
-        label: 'Pedidos',
-        data: dias.map(function(d){return porDia[d].ped;}),
-        backgroundColor: 'rgba(16,185,129,0.6)', borderColor: '#10b981',
-        borderWidth: 1, borderRadius: 3
-      }]},
-      options: {responsive:true, maintainAspectRatio:false,
-        plugins: {legend:{display:false}},
-        scales: {
-          x: {ticks:{color:'#71717a', maxTicksLimit:8, font:{size:10}}, grid:{color:'rgba(255,255,255,0.04)'}},
-          y: {ticks:{color:'#71717a', font:{size:10}}, grid:{color:'rgba(255,255,255,0.04)'}}
-        }
-      }
+      data: {labels: labels, datasets: [{label: 'Pedidos', data: dias.map(function(d) { return porDia[d].ped; }),
+        backgroundColor: 'rgba(16,185,129,0.6)', borderColor: '#10b981', borderWidth: 1, borderRadius: 3}]},
+      options: {responsive: true, maintainAspectRatio: false, plugins: {legend: {display: false}},
+        scales: {x: {ticks: {color: '#71717a', maxTicksLimit: 8, font: {size: 10}}, grid: {color: 'rgba(255,255,255,0.04)'}},
+          y: {ticks: {color: '#71717a', font: {size: 10}}, grid: {color: 'rgba(255,255,255,0.04)'}}}}
     });
 
     document.getElementById('upd').textContent = 'Atualizado ' + new Date().toLocaleTimeString('pt-BR');
-
   } catch(err) {
-    console.error('Erro ao carregar:', err);
+    console.error(err);
     document.getElementById('kpis').innerHTML = '<div class="kpi"><div class="kpi-lbl">Erro</div><div class="kpi-val kv-red">!</div><div class="kpi-sub">' + err.message + '</div></div>';
   }
 }
 
-// Inicializa com 30 dias
-(function() {
-  var hoje = new Date(), ini = new Date();
-  ini.setDate(ini.getDate() - 30);
-  DE  = ini.toISOString().split('T')[0];
-  ATE = hoje.toISOString().split('T')[0];
-  document.getElementById('dt-de').value  = DE;
-  document.getElementById('dt-ate').value = ATE;
-  carregar();
-})();
-
+var hoje = new Date(), ini = new Date();
+ini.setDate(ini.getDate() - 30);
+DE  = ini.toISOString().split('T')[0];
+ATE = hoje.toISOString().split('T')[0];
+document.getElementById('dt-de').value  = DE;
+document.getElementById('dt-ate').value = ATE;
+carregar();
 </script>
 </body>
 </html>
