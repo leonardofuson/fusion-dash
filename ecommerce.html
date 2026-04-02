@@ -246,18 +246,20 @@ const CANAL_MAP = {
 };
 
 function nomCanal(raw, origem){ 
-  if(raw && CANAL_MAP[raw]) return CANAL_MAP[raw].nome;
-  if(!raw || raw.trim()===''){
+  const r = (raw||'').trim();
+  if(r && CANAL_MAP[r]) return CANAL_MAP[r].nome;
+  if(!r){
     if(origem==='shopify') return 'TikTok Shop';
     if(origem==='fio_e_trama') return 'Mercado Livre';
     if(origem==='confeccoes') return 'Mercado Livre';
     return 'Outros';
   }
-  return raw || 'Outros';
+  return r;
 }
 function corCanal(raw, origem){ 
-  if(raw && CANAL_MAP[raw]) return CANAL_MAP[raw].cor;
-  if(!raw || raw.trim()===''){
+  const r = (raw||'').trim();
+  if(r && CANAL_MAP[r]) return CANAL_MAP[r].cor;
+  if(!r){
     if(origem==='shopify') return '#EC4899';
     return '#F59E0B';
   }
@@ -331,7 +333,7 @@ async function carregar(){
   const porCanal = {};
   ativos.forEach(p => {
     const nome = nomCanal(p.canal_nome_raw, p.origem_conta);
-    const cor  = corCanal(p.canal_nome_raw);
+    const cor  = corCanal(p.canal_nome_raw, p.origem_conta);
     if(!porCanal[nome]) porCanal[nome] = { nome, cor, fat:0, ped:0 };
     porCanal[nome].fat += +(p.valor_bruto||0);
     porCanal[nome].ped++;
