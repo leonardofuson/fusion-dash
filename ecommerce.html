@@ -7,140 +7,62 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
-:root{
-  --bg:    #0a0a0b;
-  --bg2:   #18181b;
-  --bg3:   #27272a;
-  --bdr:   #27272a;
-  --txt1:  #ffffff;
-  --txt2:  #a1a1aa;
-  --txt3:  #52525b;
-  --blue:  #3b82f6;
-  --green: #10b981;
-  --red:   #ef4444;
-  --amber: #f59e0b;
-}
+:root{--bg:#0a0a0b;--bg2:#18181b;--bg3:#27272a;--bdr:#27272a;--txt1:#ffffff;--txt2:#a1a1aa;--txt3:#52525b;--blue:#3b82f6;--green:#10b981;--red:#ef4444;--amber:#f59e0b;}
 *{margin:0;padding:0;box-sizing:border-box;font-family:'Inter',sans-serif;}
 body{background:var(--bg);color:var(--txt1);min-height:100vh;}
-.topbar{
-  background:rgba(18,18,20,0.95);backdrop-filter:blur(12px);
-  border-bottom:1px solid var(--bdr);height:52px;
-  display:flex;align-items:center;padding:0 1.5rem;gap:16px;
-  position:sticky;top:0;z-index:100;
-}
+.topbar{background:rgba(18,18,20,0.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--bdr);height:52px;display:flex;align-items:center;padding:0 1.5rem;gap:16px;position:sticky;top:0;z-index:100;}
 .topbar img{height:22px;}
 .topbar-div{width:1px;height:18px;background:var(--bdr);}
 .topbar-label{font-size:10px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--txt2);}
 .nav{display:flex;gap:4px;margin-left:auto;}
-.nav a{
-  font-size:11px;font-weight:500;padding:5px 12px;border-radius:6px;
-  text-decoration:none;color:var(--txt2);transition:all 0.15s;
-}
+.nav a{font-size:11px;font-weight:500;padding:5px 12px;border-radius:6px;text-decoration:none;color:var(--txt2);transition:all 0.15s;}
 .nav a:hover{background:var(--bg3);color:var(--txt1);}
 .nav a.ativo{background:var(--blue);color:#fff;}
 .main{max-width:1400px;margin:0 auto;padding:1.5rem;}
-
-/* FILTROS DE DATA */
-.filtros{
-  display:flex;gap:10px;flex-wrap:wrap;margin-bottom:1.5rem;align-items:center;
-}
-.periodo-chips{display:flex;gap:6px;flex-wrap:wrap;}
-.chip{
-  padding:6px 14px;border-radius:20px;font-size:12px;font-weight:500;
-  border:1px solid var(--bdr);background:var(--bg2);color:var(--txt2);
-  cursor:pointer;transition:all 0.15s;
-}
+.filtros{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:1.5rem;align-items:center;}
+.chips{display:flex;gap:6px;flex-wrap:wrap;}
+.chip{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:500;border:1px solid var(--bdr);background:var(--bg2);color:var(--txt2);cursor:pointer;transition:all 0.15s;}
 .chip:hover{border-color:var(--blue);color:var(--blue);}
-.chip.ativo{background:var(--blue);border-color:var(--blue);color:#fff;}
-.date-range{display:flex;gap:8px;align-items:center;}
-.date-input{
-  background:var(--bg2);border:1px solid var(--bdr);border-radius:8px;
-  padding:7px 12px;font-size:12px;color:var(--txt1);font-family:inherit;
-  outline:none;transition:border-color 0.2s;
-}
-.date-input:focus{border-color:var(--blue);}
-.btn-filtrar{
-  background:var(--blue);border:none;border-radius:8px;
-  padding:7px 16px;font-size:12px;font-weight:600;color:#fff;
-  cursor:pointer;transition:opacity 0.15s;
-}
-.btn-filtrar:hover{opacity:0.85;}
-
-/* KPIs */
+.chip.on{background:var(--blue);border-color:var(--blue);color:#fff;}
+.drange{display:flex;gap:8px;align-items:center;}
+.dinput{background:var(--bg2);border:1px solid var(--bdr);border-radius:8px;padding:7px 12px;font-size:12px;color:var(--txt1);font-family:inherit;outline:none;}
+.dinput:focus{border-color:var(--blue);}
+.btnf{background:var(--blue);border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;color:#fff;cursor:pointer;}
 .kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:1.5rem;}
-.kpi{
-  background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;
-  padding:16px;transition:transform 0.2s,border-color 0.2s;
-}
-.kpi:hover{transform:translateY(-2px);border-color:#3f3f46;}
-.kpi-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.07em;color:var(--txt2);margin-bottom:8px;}
-.kpi-value{font-size:1.6rem;font-weight:700;color:var(--txt1);line-height:1;}
+.kpi{background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;padding:16px;transition:transform 0.2s;}
+.kpi:hover{transform:translateY(-2px);}
+.kpi-lbl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.07em;color:var(--txt2);margin-bottom:8px;}
+.kpi-val{font-size:1.6rem;font-weight:700;color:var(--txt1);line-height:1;}
 .kpi-sub{font-size:11px;color:var(--txt3);margin-top:5px;}
-.kpi-green .kpi-value{color:var(--green);}
-.kpi-red .kpi-value{color:var(--red);}
-.kpi-blue .kpi-value{color:var(--blue);}
-.kpi-amber .kpi-value{color:var(--amber);}
-
-/* GRID 2 COLS */
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
-.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px;}
-.card{
-  background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;padding:20px;
-}
-.card-title{font-size:13px;font-weight:600;color:var(--txt1);margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;}
-.card-title span{font-size:11px;font-weight:400;color:var(--txt3);}
-
-/* CANAL CARDS */
+.kv-blue{color:var(--blue)!important;}
+.kv-green{color:var(--green)!important;}
+.kv-red{color:var(--red)!important;}
+.kv-amber{color:var(--amber)!important;}
 .canais-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;}
-.canal-card{
-  background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;padding:16px;
-  border-left:3px solid;transition:transform 0.15s;
-}
-.canal-card:hover{transform:translateY(-2px);}
-.canal-nome{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px;}
+.canal-card{background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;padding:16px;border-left:3px solid;}
+.canal-nome{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;}
 .canal-fat{font-size:1.3rem;font-weight:700;margin-bottom:4px;}
 .canal-info{display:flex;gap:12px;font-size:11px;color:var(--txt2);}
-
-/* CHART */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
+.card{background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;padding:20px;}
+.card-title{font-size:13px;font-weight:600;color:var(--txt1);margin-bottom:16px;}
 .chart-wrap{position:relative;height:220px;}
-.chart-wrap-tall{position:relative;height:280px;}
-
-/* TABELA */
 table.tb{width:100%;border-collapse:collapse;font-size:12px;}
-table.tb th{
-  background:rgba(255,255,255,0.03);color:var(--txt2);
-  font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;
-  padding:8px 12px;border-bottom:1px solid var(--bdr);text-align:left;
-}
+table.tb th{background:rgba(255,255,255,0.03);color:var(--txt2);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;padding:8px 12px;border-bottom:1px solid var(--bdr);text-align:left;}
 table.tb th.r{text-align:right;}
 table.tb td{padding:9px 12px;border-bottom:1px solid var(--bdr);color:var(--txt1);}
 table.tb td.r{text-align:right;color:var(--txt2);}
-table.tb td.val{text-align:right;font-weight:600;color:var(--txt1);}
+table.tb td.val{text-align:right;font-weight:600;}
 table.tb tr:last-child td{border-bottom:none;}
 table.tb tr:hover td{background:rgba(255,255,255,0.02);}
-.badge{
-  display:inline-block;padding:2px 8px;border-radius:12px;
-  font-size:10px;font-weight:600;
-}
-
-/* BAR HORIZ */
-.bar-row{margin-bottom:12px;}
-.bar-label{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;}
-.bar-name{color:var(--txt1);font-weight:500;}
-.bar-val{color:var(--txt2);}
+.bar-row{margin-bottom:10px;}
+.bar-lbl{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;}
 .bar-track{background:var(--bg3);border-radius:4px;height:6px;overflow:hidden;}
 .bar-fill{height:100%;border-radius:4px;transition:width 0.6s;}
-
-/* LOADING */
 .loading{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px;gap:12px;color:var(--txt2);}
 .spin{width:24px;height:24px;border:2px solid var(--bdr);border-top-color:var(--blue);border-radius:50%;animation:spin 0.7s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg)}}
-
-@media(max-width:768px){
-  .kpi-grid{grid-template-columns:repeat(2,1fr);}
-  .grid2,.grid3,.canais-grid{grid-template-columns:1fr;}
-  .nav a span{display:none;}
-}
+@media(max-width:768px){.kpi-grid{grid-template-columns:repeat(2,1fr);}.grid2,.canais-grid{grid-template-columns:1fr;}}
 </style>
 </head>
 <body>
@@ -158,36 +80,32 @@ table.tb tr:hover td{background:rgba(255,255,255,0.02);}
 </header>
 
 <div class="main">
-  <!-- Filtros -->
   <div class="filtros">
-    <div class="periodo-chips">
-      <button class="chip" onclick="setPeriodo(0)">Hoje</button>
-      <button class="chip" onclick="setPeriodo(1)">Ontem</button>
-      <button class="chip" onclick="setPeriodo(7)">7 dias</button>
-      <button class="chip ativo" onclick="setPeriodo(30)">30 dias</button>
-      <button class="chip" onclick="setPeriodo(365)">12 meses</button>
+    <div class="chips">
+      <button class="chip" onclick="setPeriodo(1,this)">Hoje</button>
+      <button class="chip" onclick="setPeriodo(2,this)">Ontem</button>
+      <button class="chip" onclick="setPeriodo(7,this)">7 dias</button>
+      <button class="chip on" onclick="setPeriodo(30,this)">30 dias</button>
+      <button class="chip" onclick="setPeriodo(365,this)">12 meses</button>
     </div>
-    <div class="date-range">
-      <input type="date" id="dt-de" class="date-input">
+    <div class="drange">
+      <input type="date" id="dt-de" class="dinput">
       <span style="color:var(--txt3);font-size:12px;">até</span>
-      <input type="date" id="dt-ate" class="date-input">
-      <button class="btn-filtrar" onclick="aplicarFiltro()">Filtrar</button>
+      <input type="date" id="dt-ate" class="dinput">
+      <button class="btnf" onclick="aplicarFiltro()">Filtrar</button>
     </div>
     <span id="upd" style="margin-left:auto;font-size:11px;color:var(--txt3);"></span>
   </div>
 
-  <!-- KPIs -->
   <div class="kpi-grid" id="kpis">
-    <div class="kpi"><div class="kpi-label">Carregando</div><div class="kpi-value">—</div></div>
+    <div class="kpi"><div class="kpi-lbl">Carregando...</div><div class="kpi-val">—</div></div>
   </div>
 
-  <!-- Canais -->
   <div class="canais-grid" id="canais-cards"></div>
 
-  <!-- Faturamento diário + Pedidos por canal -->
   <div class="grid2">
     <div class="card">
-      <div class="card-title">Faturamento diário <span id="subtitulo-fat"></span></div>
+      <div class="card-title">Faturamento diário</div>
       <div class="chart-wrap"><canvas id="chart-fat"></canvas></div>
     </div>
     <div class="card">
@@ -196,7 +114,6 @@ table.tb tr:hover td{background:rgba(255,255,255,0.02);}
     </div>
   </div>
 
-  <!-- Pedidos por dia + Ticket médio -->
   <div class="grid2">
     <div class="card">
       <div class="card-title">Pedidos por dia</div>
@@ -208,7 +125,6 @@ table.tb tr:hover td{background:rgba(255,255,255,0.02);}
     </div>
   </div>
 
-  <!-- Tabela detalhada por canal -->
   <div class="card" style="margin-bottom:16px;">
     <div class="card-title">Detalhamento por canal</div>
     <table class="tb">
@@ -219,7 +135,7 @@ table.tb tr:hover td{background:rgba(255,255,255,0.02);}
           <th class="r">Faturamento</th>
           <th class="r">Ticket Médio</th>
           <th class="r">Cancelados</th>
-          <th class="r">% Fat. Total</th>
+          <th class="r">% Total</th>
         </tr>
       </thead>
       <tbody id="tabela-canais"></tbody>
@@ -228,304 +144,252 @@ table.tb tr:hover td{background:rgba(255,255,255,0.02);}
 </div>
 
 <script>
-const SB_URL = 'https://spulbhnmkomvgohzhfvj.supabase.co';
-const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNwdWxiaG5ta29tdmdvaHpoZnZqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3Mzk3MTk2NCwiZXhwIjoyMDg5NTQ3OTY0fQ.gZSK6cecIExkt2S9REHpQVWStEaXikjxZRusmSjTrpE';
 
-// Mapeamento de canais
-const CANAL_MAP = {
-  'Mercado Livre Full FIO':   { nome:'Mercado Livre', cor:'#F59E0B' },
-  'Mercado Livre FIO':        { nome:'Mercado Livre', cor:'#F59E0B' },
-  'Mercado Livre Full Confec':{ nome:'Mercado Livre', cor:'#F59E0B' },
-  'Mercado Livre Confeções':  { nome:'Mercado Livre', cor:'#F59E0B' },
-  'Shopee FIO':               { nome:'Shopee',        cor:'#EF4444' },
-  'Shopee':                   { nome:'Shopee',        cor:'#EF4444' },
-  'tiktok':                   { nome:'TikTok Shop',   cor:'#EC4899' },
-  'web':                      { nome:'Site Próprio',  cor:'#3B82F6' },
-  'Site Próprio':             { nome:'Site Próprio',  cor:'#3B82F6' },
-  'Shein Confecções':         { nome:'Shein',         cor:'#8B5CF6' },
+const SB_URL =  + SB_URL + ;
+const SB_KEY =  + SB_KEY + ;
+
+const CMAP = {
+  'Mercado Livre Full FIO':    {n:'Mercado Livre', c:'#F59E0B'},
+  'Mercado Livre FIO':         {n:'Mercado Livre', c:'#F59E0B'},
+  'Mercado Livre Full Confec': {n:'Mercado Livre', c:'#F59E0B'},
+  'Mercado Livre Confeções':   {n:'Mercado Livre', c:'#F59E0B'},
+  'Shopee FIO':                {n:'Shopee',        c:'#EF4444'},
+  'Shopee':                    {n:'Shopee',        c:'#EF4444'},
+  'tiktok':                    {n:'TikTok Shop',   c:'#EC4899'},
+  'web':                       {n:'Site Próprio',  c:'#3B82F6'},
+  'Site Próprio':              {n:'Site Próprio',  c:'#3B82F6'},
+  'Shein Confecções':          {n:'Shein',         c:'#8B5CF6'},
 };
 
-function nomCanal(raw, origem){ 
-  const r = (raw||'').trim();
-  if(r && CANAL_MAP[r]) return CANAL_MAP[r].nome;
-  if(!r){
-    if(origem==='shopify') return 'TikTok Shop';
-    if(origem==='fio_e_trama') return 'Mercado Livre';
-    if(origem==='confeccoes') return 'Mercado Livre';
-    return 'Outros';
+function getNome(raw, orig) {
+  var r = raw ? raw.trim() : '';
+  if (r && CMAP[r]) return CMAP[r].n;
+  if (!r) {
+    if (orig === 'shopify') return 'TikTok Shop';
+    return 'Mercado Livre';
   }
   return r;
 }
-function corCanal(raw, origem){ 
-  const r = (raw||'').trim();
-  if(r && CANAL_MAP[r]) return CANAL_MAP[r].cor;
-  if(!r){
-    if(origem==='shopify') return '#EC4899';
+function getCor(raw, orig) {
+  var r = raw ? raw.trim() : '';
+  if (r && CMAP[r]) return CMAP[r].c;
+  if (!r) {
+    if (orig === 'shopify') return '#EC4899';
     return '#F59E0B';
   }
   return '#6B7280';
 }
 
-async function api(path){
-  const r = await fetch(`${SB_URL}/rest/v1/${path}`, {
-    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` }
-  });
-  return r.json();
+async function apiFetch(path) {
+  var results = [], offset = 0;
+  while (true) {
+    var sep = path.indexOf('?') >= 0 ? '&' : '?';
+    var url = SB_URL + '/rest/v1/' + path + sep + 'limit=1000&offset=' + offset;
+    var resp = await fetch(url, {headers: {apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY}});
+    var batch = await resp.json();
+    if (!Array.isArray(batch) || batch.length === 0) break;
+    results = results.concat(batch);
+    if (batch.length < 1000) break;
+    offset += 1000;
+  }
+  return results;
 }
 
-function fmt(n){ return 'R$ ' + Math.round(n||0).toLocaleString('pt-BR'); }
-function fmtN(n){ return Math.round(n||0).toLocaleString('pt-BR'); }
-function fmtPct(n){ return (n||0).toFixed(1) + '%'; }
+function fmt(n)   { return 'R$ ' + Math.round(n||0).toLocaleString('pt-BR'); }
+function fmtN(n)  { return Math.round(n||0).toLocaleString('pt-BR'); }
+function fmtP(n)  { return (n||0).toFixed(1) + '%'; }
 
-let chartFat = null, chartPed = null;
-let DE = null, ATE = null;
+var chartFat = null, chartPed = null;
+var DE = null, ATE = null;
 
-function setPeriodo(dias){
-  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('ativo'));
-  event.target.classList.add('ativo');
-  const ate=new Date(),de=new Date();
-  de.setDate(de.getDate()-dias);
-  DE=de.toISOString().split('T')[0];
-  ATE=ate.toISOString().split('T')[0];
-  document.getElementById('dt-de').value=DE;
-  document.getElementById('dt-ate').value=ATE;
-  carregar();
-}
-function setPeriodoHoje(){
-  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('ativo'));
-  event.target.classList.add('ativo');
-  const hoje=new Date().toISOString().split('T')[0];
-  DE=hoje; ATE=hoje;
-  document.getElementById('dt-de').value=DE;
-  document.getElementById('dt-ate').value=ATE;
-  carregar();
-}
-function setPeriodoOntem(){
-  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('ativo'));
-  event.target.classList.add('ativo');
-  const d=new Date(); d.setDate(d.getDate()-1);
-  const ontem=d.toISOString().split('T')[0];
-  DE=ontem; ATE=ontem;
-  document.getElementById('dt-de').value=DE;
-  document.getElementById('dt-ate').value=ATE;
+function setPeriodo(dias, el) {
+  document.querySelectorAll('.chip').forEach(function(c){c.classList.remove('on');});
+  el.classList.add('on');
+  var ate = new Date(), de = new Date();
+  de.setDate(de.getDate() - dias);
+  DE  = de.toISOString().split('T')[0];
+  ATE = ate.toISOString().split('T')[0];
+  document.getElementById('dt-de').value  = DE;
+  document.getElementById('dt-ate').value = ATE;
   carregar();
 }
 
-function aplicarFiltro(){
+function aplicarFiltro() {
   DE  = document.getElementById('dt-de').value;
   ATE = document.getElementById('dt-ate').value;
-  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('ativo'));
+  document.querySelectorAll('.chip').forEach(function(c){c.classList.remove('on');});
   carregar();
 }
 
-async function carregar(){
-  if(!DE || !ATE) return;
+async function carregar() {
+  if (!DE || !ATE) return;
+  document.getElementById('kpis').innerHTML = '<div class="kpi"><div class="kpi-lbl">Carregando...</div><div class="kpi-val">—</div></div>';
+  document.getElementById('canais-cards').innerHTML = '';
 
-  // Busca das duas tabelas — operacional + histórico
-  const [pedidos, pedHist, cancelados, cancelHist] = await Promise.all([
-    api(`pedidos?select=data_pedido,valor_bruto,canal_nome_raw,origem_conta,status&data_pedido=gte.${DE}&data_pedido=lte.${ATE}&origem_conta=in.(fio_e_trama,confeccoes,shopify)&limit=50000`),
-    api(`pedidos_historico?select=data_pedido,valor_bruto,canal_nome_raw,origem_conta,status&data_pedido=gte.${DE}&data_pedido=lte.${ATE}&origem_conta=in.(fio_e_trama,confeccoes,shopify)&limit=50000`),
-    api(`pedidos?select=data_pedido,valor_bruto,canal_nome_raw,origem_conta&status=eq.cancelado&data_pedido=gte.${DE}&data_pedido=lte.${ATE}&origem_conta=in.(fio_e_trama,confeccoes,shopify)&limit=10000`),
-    api(`pedidos_historico?select=data_pedido,valor_bruto,canal_nome_raw,origem_conta&status=eq.cancelado&data_pedido=gte.${DE}&data_pedido=lte.${ATE}&origem_conta=in.(fio_e_trama,confeccoes,shopify)&limit=10000`),
-  ]);
+  try {
+    var filtro = 'data_pedido=gte.' + DE + '&data_pedido=lte.' + ATE + '&origem_conta=in.(fio_e_trama,confeccoes,shopify)';
 
-  // Normaliza histórico para mesmo formato
-  const histNorm = (pedHist||[]).map(p => ({
-    data_pedido: p.data_pedido,
-    valor_bruto: p.valor_bruto,
-    canal_nome_raw: p.canal_nome_raw || '',
-    origem_conta: p.origem_conta,
-    status: 'aprovado'
-  }));
-  const cancelHistNorm = (cancelHist||[]).map(p => ({
-    data_pedido: p.data_pedido,
-    valor_bruto: p.valor_bruto,
-    canal_nome_raw: p.canal_nome_raw || '',
-    origem_conta: p.origem_conta
-  }));
+    var resultados = await Promise.all([
+      apiFetch('pedidos?select=data_pedido,valor_bruto,canal_nome_raw,origem_conta,status&' + filtro),
+      apiFetch('pedidos_historico?select=data_pedido,valor_bruto,canal_nome_raw,origem_conta,status&' + filtro),
+    ]);
 
-  const todosPedidos = [...(pedidos||[]), ...histNorm];
-  const todosCancelados = [...(cancelados||[]), ...cancelHistNorm];
-  const ativos = todosPedidos.filter(p => p.status !== 'cancelado');
+    var pedOp   = resultados[0] || [];
+    var pedHist = resultados[1] || [];
 
-  // Agrega por canal normalizado
-  const porCanal = {};
-  ativos.forEach(p => {
-    const nome = nomCanal(p.canal_nome_raw, p.origem_conta);
-    const cor  = corCanal(p.canal_nome_raw, p.origem_conta);
-    if(!porCanal[nome]) porCanal[nome] = { nome, cor, fat:0, ped:0 };
-    porCanal[nome].fat += +(p.valor_bruto||0);
-    porCanal[nome].ped++;
-  });
-  todosCancelados.forEach(p => {
-    const nome = nomCanal(p.canal_nome_raw);
-    if(!porCanal[nome]) porCanal[nome] = { nome, cor:corCanal(p.canal_nome_raw), fat:0, ped:0, canc:0 };
-    if(!porCanal[nome].canc) porCanal[nome].canc = 0;
-    porCanal[nome].canc++;
-  });
+    // Statuses que NÃO são cancelados no histórico
+    var CANC = ['cancelado', 'cancelado por cliente', 'cancelado por problema no marketplace'];
 
-  const canais = Object.values(porCanal).sort((a,b) => b.fat - a.fat);
-  const fatTotal = canais.reduce((s,c) => s+c.fat, 0);
-  const pedTotal = canais.reduce((s,c) => s+c.ped, 0);
-  const ticketMedio = pedTotal > 0 ? fatTotal/pedTotal : 0;
-  const cancTotal = todosCancelados.length;
+    var todos = pedOp.concat(pedHist);
+    var ativos = todos.filter(function(p) {
+      return !CANC.includes((p.status||'').toLowerCase());
+    });
+    var cancelados = todos.filter(function(p) {
+      return CANC.includes((p.status||'').toLowerCase());
+    });
 
-  // Agrega por dia
-  const porDia = {};
-  ativos.forEach(p => {
-    const d = p.data_pedido;
-    if(!porDia[d]) porDia[d] = { fat:0, ped:0 };
-    porDia[d].fat += +(p.valor_bruto||0);
-    porDia[d].ped++;
-  });
-  const dias = Object.keys(porDia).sort();
+    // Agrega por canal
+    var porCanal = {};
+    ativos.forEach(function(p) {
+      var nome = getNome(p.canal_nome_raw, p.origem_conta);
+      var cor  = getCor(p.canal_nome_raw, p.origem_conta);
+      if (!porCanal[nome]) porCanal[nome] = {nome:nome, cor:cor, fat:0, ped:0, canc:0};
+      porCanal[nome].fat += parseFloat(p.valor_bruto||0);
+      porCanal[nome].ped++;
+    });
+    cancelados.forEach(function(p) {
+      var nome = getNome(p.canal_nome_raw, p.origem_conta);
+      if (!porCanal[nome]) porCanal[nome] = {nome:nome, cor:getCor(p.canal_nome_raw,p.origem_conta), fat:0, ped:0, canc:0};
+      porCanal[nome].canc++;
+    });
 
-  // KPIs
-  document.getElementById('kpis').innerHTML = `
-    <div class="kpi">
-      <div class="kpi-label">Faturamento</div>
-      <div class="kpi-value">${fmt(fatTotal)}</div>
-      <div class="kpi-sub">${fmtN(pedTotal)} pedidos</div>
-    </div>
-    <div class="kpi kpi-blue">
-      <div class="kpi-label">Ticket Médio</div>
-      <div class="kpi-value">${fmt(ticketMedio)}</div>
-      <div class="kpi-sub">por pedido</div>
-    </div>
-    <div class="kpi kpi-green">
-      <div class="kpi-label">Pedidos Ativos</div>
-      <div class="kpi-value">${fmtN(pedTotal)}</div>
-      <div class="kpi-sub">no período</div>
-    </div>
-    <div class="kpi kpi-red">
-      <div class="kpi-label">Cancelados</div>
-      <div class="kpi-value">${fmtN(cancTotal)}</div>
-      <div class="kpi-sub">${pedTotal>0?((cancTotal/(pedTotal+cancTotal))*100).toFixed(1):0}% do total</div>
-    </div>
-    <div class="kpi kpi-amber">
-      <div class="kpi-label">Canais Ativos</div>
-      <div class="kpi-value">${canais.length}</div>
-      <div class="kpi-sub">plataformas</div>
-    </div>
-  `;
+    var canais = Object.values(porCanal).sort(function(a,b){return b.fat-a.fat;});
+    var fatTotal = canais.reduce(function(s,c){return s+c.fat;}, 0);
+    var pedTotal = canais.reduce(function(s,c){return s+c.ped;}, 0);
+    var cancTotal = cancelados.length;
 
-  // Canal cards
-  document.getElementById('canais-cards').innerHTML = canais.map(c => `
-    <div class="canal-card" style="border-left-color:${c.cor}">
-      <div class="canal-nome" style="color:${c.cor}">${c.nome}</div>
-      <div class="canal-fat" style="color:${c.cor}">${fmt(c.fat)}</div>
-      <div class="canal-info">
-        <span>${fmtN(c.ped)} pedidos</span>
-        <span>TM ${fmt(c.ped>0?c.fat/c.ped:0)}</span>
-        <span>${fmtPct(fatTotal>0?c.fat/fatTotal*100:0)}</span>
-      </div>
-    </div>
-  `).join('');
+    // KPIs
+    document.getElementById('kpis').innerHTML =
+      '<div class="kpi"><div class="kpi-lbl">Faturamento</div><div class="kpi-val">' + fmt(fatTotal) + '</div><div class="kpi-sub">' + fmtN(pedTotal) + ' pedidos</div></div>' +
+      '<div class="kpi"><div class="kpi-lbl">Ticket Médio</div><div class="kpi-val kv-blue">' + fmt(pedTotal>0?fatTotal/pedTotal:0) + '</div><div class="kpi-sub">por pedido</div></div>' +
+      '<div class="kpi"><div class="kpi-lbl">Pedidos Ativos</div><div class="kpi-val kv-green">' + fmtN(pedTotal) + '</div><div class="kpi-sub">no período</div></div>' +
+      '<div class="kpi"><div class="kpi-lbl">Cancelados</div><div class="kpi-val ' + (cancTotal>0?'kv-red':'kv-green') + '">' + fmtN(cancTotal) + '</div><div class="kpi-sub">' + (pedTotal>0?((cancTotal/(pedTotal+cancTotal))*100).toFixed(1):0) + '% do total</div></div>' +
+      '<div class="kpi"><div class="kpi-lbl">Canais Ativos</div><div class="kpi-val kv-amber">' + canais.length + '</div><div class="kpi-sub">plataformas</div></div>';
 
-  // Barras por canal
-  const maxFat = Math.max(...canais.map(c=>c.fat), 1);
-  document.getElementById('canal-bars').innerHTML = canais.map(c => `
-    <div class="bar-row">
-      <div class="bar-label">
-        <span class="bar-name">${c.nome}</span>
-        <span class="bar-val">${fmt(c.fat)}</span>
-      </div>
-      <div class="bar-track">
-        <div class="bar-fill" style="width:${Math.round(c.fat/maxFat*100)}%;background:${c.cor}"></div>
-      </div>
-    </div>
-  `).join('');
+    // Cards canais
+    document.getElementById('canais-cards').innerHTML = canais.map(function(canal) {
+      return '<div class="canal-card" style="border-left-color:' + canal.cor + '">' +
+        '<div class="canal-nome" style="color:' + canal.cor + '">' + canal.nome + '</div>' +
+        '<div class="canal-fat" style="color:' + canal.cor + '">' + fmt(canal.fat) + '</div>' +
+        '<div class="canal-info">' +
+          '<span>' + fmtN(canal.ped) + ' pedidos</span>' +
+          '<span>TM ' + fmt(canal.ped>0?canal.fat/canal.ped:0) + '</span>' +
+          '<span>' + fmtP(fatTotal>0?canal.fat/fatTotal*100:0) + '</span>' +
+        '</div></div>';
+    }).join('');
 
-  // Ticket médio por canal
-  const maxTm = Math.max(...canais.map(c=>c.ped>0?c.fat/c.ped:0), 1);
-  document.getElementById('ticket-bars').innerHTML = canais.map(c => {
-    const tm = c.ped>0?c.fat/c.ped:0;
-    return `<div class="bar-row">
-      <div class="bar-label">
-        <span class="bar-name">${c.nome}</span>
-        <span class="bar-val">${fmt(tm)}</span>
-      </div>
-      <div class="bar-track">
-        <div class="bar-fill" style="width:${Math.round(tm/maxTm*100)}%;background:${c.cor}"></div>
-      </div>
-    </div>`;
-  }).join('');
+    // Barras faturamento
+    var maxFat = Math.max.apply(null, canais.map(function(c){return c.fat;})) || 1;
+    document.getElementById('canal-bars').innerHTML = canais.map(function(canal) {
+      return '<div class="bar-row">' +
+        '<div class="bar-lbl"><span style="color:var(--txt1);font-weight:500">' + canal.nome + '</span><span style="color:var(--txt2)">' + fmt(canal.fat) + '</span></div>' +
+        '<div class="bar-track"><div class="bar-fill" style="width:' + Math.round(canal.fat/maxFat*100) + '%;background:' + canal.cor + '"></div></div>' +
+        '</div>';
+    }).join('');
 
-  // Tabela detalhada
-  document.getElementById('tabela-canais').innerHTML = canais.map(c => `
-    <tr>
-      <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${c.cor};margin-right:8px;"></span>${c.nome}</td>
-      <td class="val">${fmtN(c.ped)}</td>
-      <td class="val">${fmt(c.fat)}</td>
-      <td class="val">${fmt(c.ped>0?c.fat/c.ped:0)}</td>
-      <td class="r">${fmtN(c.canc||0)}</td>
-      <td class="r">${fmtPct(fatTotal>0?c.fat/fatTotal*100:0)}</td>
-    </tr>
-  `).join('');
+    // Barras ticket médio
+    var tms = canais.map(function(c){return c.ped>0?c.fat/c.ped:0;});
+    var maxTm = Math.max.apply(null, tms) || 1;
+    document.getElementById('ticket-bars').innerHTML = canais.map(function(canal, i) {
+      var tm = tms[i];
+      return '<div class="bar-row">' +
+        '<div class="bar-lbl"><span style="color:var(--txt1);font-weight:500">' + canal.nome + '</span><span style="color:var(--txt2)">' + fmt(tm) + '</span></div>' +
+        '<div class="bar-track"><div class="bar-fill" style="width:' + Math.round(tm/maxTm*100) + '%;background:' + canal.cor + '"></div></div>' +
+        '</div>';
+    }).join('');
 
-  // Charts
-  const labels = dias.map(d => {
-    const dt = new Date(d+'T12:00:00');
-    return dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
-  });
+    // Tabela
+    document.getElementById('tabela-canais').innerHTML = canais.map(function(canal) {
+      return '<tr>' +
+        '<td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + canal.cor + ';margin-right:8px;"></span>' + canal.nome + '</td>' +
+        '<td class="val">' + fmtN(canal.ped) + '</td>' +
+        '<td class="val">' + fmt(canal.fat) + '</td>' +
+        '<td class="val">' + fmt(canal.ped>0?canal.fat/canal.ped:0) + '</td>' +
+        '<td class="r">' + fmtN(canal.canc) + '</td>' +
+        '<td class="r">' + fmtP(fatTotal>0?canal.fat/fatTotal*100:0) + '</td>' +
+        '</tr>';
+    }).join('');
 
-  if(chartFat) chartFat.destroy();
-  chartFat = new Chart(document.getElementById('chart-fat'), {
-    type:'line',
-    data:{
-      labels,
-      datasets:[{
-        label:'Faturamento',
-        data: dias.map(d=>porDia[d]?.fat||0),
-        borderColor:'#3b82f6',
-        backgroundColor:'rgba(59,130,246,0.08)',
-        fill:true,tension:0.4,pointRadius:2,borderWidth:2
-      }]
-    },
-    options:{
-      responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{display:false}},
-      scales:{
-        x:{ticks:{color:'#71717a',maxTicksLimit:8,font:{size:10}},grid:{color:'rgba(255,255,255,0.04)'}},
-        y:{ticks:{color:'#71717a',font:{size:10},callback:v=>'R$ '+Math.round(v/1000)+'k'},grid:{color:'rgba(255,255,255,0.04)'}}
+    // Agrega por dia
+    var porDia = {};
+    ativos.forEach(function(p) {
+      var d = p.data_pedido;
+      if (!d) return;
+      if (!porDia[d]) porDia[d] = {fat:0, ped:0};
+      porDia[d].fat += parseFloat(p.valor_bruto||0);
+      porDia[d].ped++;
+    });
+    var dias = Object.keys(porDia).sort();
+    var labels = dias.map(function(d) {
+      var dt = new Date(d + 'T12:00:00');
+      return dt.toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'});
+    });
+
+    if (chartFat) chartFat.destroy();
+    chartFat = new Chart(document.getElementById('chart-fat'), {
+      type: 'line',
+      data: {labels: labels, datasets: [{
+        label: 'Fat.',
+        data: dias.map(function(d){return porDia[d].fat;}),
+        borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.08)',
+        fill: true, tension: 0.4, pointRadius: 2, borderWidth: 2
+      }]},
+      options: {responsive:true, maintainAspectRatio:false,
+        plugins: {legend:{display:false}},
+        scales: {
+          x: {ticks:{color:'#71717a', maxTicksLimit:8, font:{size:10}}, grid:{color:'rgba(255,255,255,0.04)'}},
+          y: {ticks:{color:'#71717a', font:{size:10}, callback:function(v){return 'R$'+Math.round(v/1000)+'k';}}, grid:{color:'rgba(255,255,255,0.04)'}}
+        }
       }
-    }
-  });
+    });
 
-  if(chartPed) chartPed.destroy();
-  chartPed = new Chart(document.getElementById('chart-pedidos'), {
-    type:'bar',
-    data:{
-      labels,
-      datasets:[{
-        label:'Pedidos',
-        data: dias.map(d=>porDia[d]?.ped||0),
-        backgroundColor:'rgba(16,185,129,0.6)',
-        borderColor:'#10b981',borderWidth:1,borderRadius:3
-      }]
-    },
-    options:{
-      responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{display:false}},
-      scales:{
-        x:{ticks:{color:'#71717a',maxTicksLimit:8,font:{size:10}},grid:{color:'rgba(255,255,255,0.04)'}},
-        y:{ticks:{color:'#71717a',font:{size:10}},grid:{color:'rgba(255,255,255,0.04)'}}
+    if (chartPed) chartPed.destroy();
+    chartPed = new Chart(document.getElementById('chart-pedidos'), {
+      type: 'bar',
+      data: {labels: labels, datasets: [{
+        label: 'Pedidos',
+        data: dias.map(function(d){return porDia[d].ped;}),
+        backgroundColor: 'rgba(16,185,129,0.6)', borderColor: '#10b981',
+        borderWidth: 1, borderRadius: 3
+      }]},
+      options: {responsive:true, maintainAspectRatio:false,
+        plugins: {legend:{display:false}},
+        scales: {
+          x: {ticks:{color:'#71717a', maxTicksLimit:8, font:{size:10}}, grid:{color:'rgba(255,255,255,0.04)'}},
+          y: {ticks:{color:'#71717a', font:{size:10}}, grid:{color:'rgba(255,255,255,0.04)'}}
+        }
       }
-    }
-  });
+    });
 
-  document.getElementById('upd').textContent = 'Atualizado ' + new Date().toLocaleTimeString('pt-BR');
+    document.getElementById('upd').textContent = 'Atualizado ' + new Date().toLocaleTimeString('pt-BR');
+
+  } catch(err) {
+    console.error('Erro ao carregar:', err);
+    document.getElementById('kpis').innerHTML = '<div class="kpi"><div class="kpi-lbl">Erro</div><div class="kpi-val kv-red">!</div><div class="kpi-sub">' + err.message + '</div></div>';
+  }
 }
 
-// Inicia com 30 dias
-const hoje = new Date();
-const ini  = new Date();
-ini.setDate(ini.getDate()-30);
-DE  = ini.toISOString().split('T')[0];
-ATE = hoje.toISOString().split('T')[0];
-document.getElementById('dt-de').value  = DE;
-document.getElementById('dt-ate').value = ATE;
-carregar();
+// Inicializa com 30 dias
+(function() {
+  var hoje = new Date(), ini = new Date();
+  ini.setDate(ini.getDate() - 30);
+  DE  = ini.toISOString().split('T')[0];
+  ATE = hoje.toISOString().split('T')[0];
+  document.getElementById('dt-de').value  = DE;
+  document.getElementById('dt-ate').value = ATE;
+  carregar();
+})();
+
 </script>
 </body>
 </html>
