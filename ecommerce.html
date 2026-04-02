@@ -321,13 +321,32 @@ function aplicarFiltro(){
 async function carregar(){
   if(!DE || !ATE) return;
 
-  // Busca pedidos do período — ecommerce apenas
-  const [pedidos, cancelados] = await Promise.all([
+  // Busca das duas tabelas — operacional + histórico
+  const [pedidos, pedHist, cancelados, cancelHist] = await Promise.all([
     api(`pedidos?select=data_pedido,valor_bruto,canal_nome_raw,origem_conta,status&data_pedido=gte.${DE}&data_pedido=lte.${ATE}&origem_conta=in.(fio_e_trama,confeccoes,shopify)&limit=50000`),
-    api(`pedidos?select=data_pedido,valor_bruto,canal_nome_raw&status=eq.cancelado&data_pedido=gte.${DE}&data_pedido=lte.${ATE}&origem_conta=in.(fio_e_trama,confeccoes,shopify)&limit=10000`),
+    api(`pedidos_historico?select=data_pedido,valor_bruto,canal_nome_raw,origem_conta,status&data_pedido=gte.${DE}&data_pedido=lte.${ATE}&origem_conta=in.(fio_e_trama,confeccoes,shopify)&limit=50000`),
+    api(`pedidos?select=data_pedido,valor_bruto,canal_nome_raw,origem_conta&status=eq.cancelado&data_pedido=gte.${DE}&data_pedido=lte.${ATE}&origem_conta=in.(fio_e_trama,confeccoes,shopify)&limit=10000`),
+    api(`pedidos_historico?select=data_pedido,valor_bruto,canal_nome_raw,origem_conta&status=eq.cancelado&data_pedido=gte.${DE}&data_pedido=lte.${ATE}&origem_conta=in.(fio_e_trama,confeccoes,shopify)&limit=10000`),
   ]);
 
-  const ativos = (pedidos||[]).filter(p => p.status !== 'cancelado');
+  // Normaliza histórico para mesmo formato
+  const histNorm = (pedHist||[]).map(p => ({
+    data_pedido: p.data_pedido,
+    valor_bruto: p.valor_bruto,
+    canal_nome_raw: p.canal_nome_raw || '',
+    origem_conta: p.origem_conta,
+    status: 'aprovado'
+  }));
+  const cancelHistNorm = (cancelHist||[]).map(p => ({
+    data_pedido: p.data_pedido,
+    valor_bruto: p.valor_bruto,
+    canal_nome_raw: p.canal_nome_raw || '',
+    origem_conta: p.origem_conta
+  }));
+
+  const todosPedidos = [...(pedidos||[]), ...histNorm];
+  const todosCancelados = [...(cancelados||[]), ...cancelHistNorm];
+  const ativos = todosPedidos.filter(p => p.status !== 'cancelado');
 
   // Agrega por canal normalizado
   const porCanal = {};
@@ -338,7 +357,7 @@ async function carregar(){
     porCanal[nome].fat += +(p.valor_bruto||0);
     porCanal[nome].ped++;
   });
-  (cancelados||[]).forEach(p => {
+  todosCancelados.forEach(p => {
     const nome = nomCanal(p.canal_nome_raw);
     if(!porCanal[nome]) porCanal[nome] = { nome, cor:corCanal(p.canal_nome_raw), fat:0, ped:0, canc:0 };
     if(!porCanal[nome].canc) porCanal[nome].canc = 0;
@@ -349,7 +368,7 @@ async function carregar(){
   const fatTotal = canais.reduce((s,c) => s+c.fat, 0);
   const pedTotal = canais.reduce((s,c) => s+c.ped, 0);
   const ticketMedio = pedTotal > 0 ? fatTotal/pedTotal : 0;
-  const cancTotal = (cancelados||[]).length;
+  const cancTotal = todosCancelados.length;
 
   // Agrega por dia
   const porDia = {};
