@@ -233,7 +233,7 @@ async function carregar() {
     ]);
 
     var todos = res[0].concat(res[1]);
-    var CANC = ['cancelado'];
+    var CANC = ['cancelado', 'devolvido'];
     var ativos    = todos.filter(function(p) { return CANC.indexOf((p.status || '').toLowerCase()) < 0; });
     var cancelados = todos.filter(function(p) { return CANC.indexOf((p.status || '').toLowerCase()) >= 0; });
 
