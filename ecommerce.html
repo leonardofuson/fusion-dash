@@ -151,13 +151,21 @@ var CMAP = {
 function getNome(raw, orig) {
   var r = (raw || '').trim();
   if (r && CMAP[r]) return CMAP[r].n;
-  if (!r) return orig === 'shopify' ? 'TikTok Shop' : 'Mercado Livre';
+  if (!r || r === '') {
+    if (orig === 'shopify') return 'Site Próprio';
+    if (orig === 'confeccoes') return 'Mercado Livre';
+    if (orig === 'fio_e_trama') return 'Mercado Livre';
+    return 'Outros';
+  }
   return r;
 }
 function getCor(raw, orig) {
   var r = (raw || '').trim();
   if (r && CMAP[r]) return CMAP[r].c;
-  if (!r) return orig === 'shopify' ? '#EC4899' : '#F59E0B';
+  if (!r || r === '') {
+    if (orig === 'shopify') return '#3B82F6';
+    return '#F59E0B';
+  }
   return '#6B7280';
 }
 
