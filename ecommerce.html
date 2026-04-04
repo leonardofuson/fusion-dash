@@ -126,24 +126,30 @@ var SB_URL = 'https://spulbhnmkomvgohzhfvj.supabase.co';
 var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNwdWxiaG5ta29tdmdvaHpoZnZqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3Mzk3MTk2NCwiZXhwIjoyMDg5NTQ3OTY0fQ.gZSK6cecIExkt2S9REHpQVWStEaXikjxZRusmSjTrpE';
 
 var CMAP = {
-  'Mercado Livre Full FIO':    {n:'Mercado Livre', c:'#F59E0B'},
-  'Mercado Livre FIO':         {n:'Mercado Livre', c:'#F59E0B'},
-  'Mercado Livre Full Confec': {n:'Mercado Livre', c:'#F59E0B'},
-  'Mercado Livre Confeções':   {n:'Mercado Livre', c:'#F59E0B'},
-  'Mercado Livre Confecções':  {n:'Mercado Livre', c:'#F59E0B'},
-  'ML Full Confecções':        {n:'Mercado Livre', c:'#F59E0B'},
-  'Mercado Livre (conta 3)':   {n:'Mercado Livre', c:'#F59E0B'},
+  // ML Fio e Trama
+  'Mercado Livre Full FIO':    {n:'ML Fio',        c:'#F59E0B'},
+  'Mercado Livre FIO':         {n:'ML Fio',        c:'#F59E0B'},
+  // ML Confecções
+  'Mercado Livre Full Confec': {n:'ML Confecções', c:'#F97316'},
+  'Mercado Livre Confeções':   {n:'ML Confecções', c:'#F97316'},
+  'Mercado Livre Confecções':  {n:'ML Confecções', c:'#F97316'},
+  'ML Full Confecções':        {n:'ML Confecções', c:'#F97316'},
+  'Mercado Livre (conta 3)':   {n:'ML Confecções', c:'#F97316'},
+  // Shopee
   'Shopee FIO':                {n:'Shopee',        c:'#EF4444'},
   'Shopee Fio':                {n:'Shopee',        c:'#EF4444'},
   'Shopee Confecções':         {n:'Shopee',        c:'#EF4444'},
   'Shopee':                    {n:'Shopee',        c:'#EF4444'},
+  // TikTok
   'tiktok':                    {n:'TikTok Shop',   c:'#EC4899'},
   'TikTok':                    {n:'TikTok Shop',   c:'#EC4899'},
   'TikTok Shop':               {n:'TikTok Shop',   c:'#EC4899'},
   'shopify':                   {n:'TikTok Shop',   c:'#EC4899'},
+  // Site Próprio
   'Online Store':              {n:'Site Próprio',  c:'#3B82F6'},
   'web':                       {n:'Site Próprio',  c:'#3B82F6'},
   'Site Próprio':              {n:'Site Próprio',  c:'#3B82F6'},
+  // Shein
   'Shein Confecções':          {n:'Shein',         c:'#8B5CF6'},
   'Shein ConfecÃ§Ãµes':       {n:'Shein',         c:'#8B5CF6'}
 };
@@ -153,8 +159,8 @@ function getNome(raw, orig) {
   if (r && CMAP[r]) return CMAP[r].n;
   if (!r || r === '') {
     if (orig === 'shopify') return 'Site Próprio';
-    if (orig === 'confeccoes') return 'Mercado Livre';
-    if (orig === 'fio_e_trama') return 'Mercado Livre';
+    if (orig === 'confeccoes') return 'ML Confecções';
+    if (orig === 'fio_e_trama') return 'ML Fio';
     return 'Outros';
   }
   return r;
@@ -164,6 +170,7 @@ function getCor(raw, orig) {
   if (r && CMAP[r]) return CMAP[r].c;
   if (!r || r === '') {
     if (orig === 'shopify') return '#3B82F6';
+    if (orig === 'confeccoes') return '#F97316';
     return '#F59E0B';
   }
   return '#6B7280';
