@@ -1,8 +1,253 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta http-equiv="refresh" content="0; url=/estoque.html">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fusion BI</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg-body:     #0a0a0b;
+  --bg-card:     #18181b;
+  --bg-card-hover:#27272a;
+  --border:      #27272a;
+  --text:        #ffffff;
+  --text-soft:   #a1a1aa;
+  --accent:      #3b82f6;
+  --accent-hover:#2563eb;
+  --danger:      #ef4444;
+}
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Inter',sans-serif;}
+body{
+  background:var(--bg-body);color:var(--text);
+  min-height:100vh;display:flex;flex-direction:column;
+}
+
+/* TOPBAR */
+.topbar{
+  background:rgba(18,18,20,0.95);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border);
+  padding:0 1.5rem;height:64px;
+  display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:100;
+}
+.topbar .brand{display:flex;align-items:center;gap:14px;font-size:16px;font-weight:600;letter-spacing:.08em;}
+.topbar .brand img{height:32px;width:auto;}
+.topbar .brand span{color:var(--text-soft);font-weight:500;border-left:1px solid var(--border);padding-left:14px;}
+.topbar-right{display:flex;align-items:center;gap:14px;font-size:14px;color:var(--text-soft);}
+.btn-logout{
+  background:transparent;border:1px solid var(--border);color:var(--text-soft);
+  padding:7px 14px;border-radius:6px;font-size:13px;cursor:pointer;
+  font-family:inherit;
+}
+.btn-logout:hover{border-color:var(--danger);color:var(--danger);}
+@media(max-width:768px){
+  .topbar{padding:0 1rem;height:56px;}
+  .topbar .brand{font-size:13px;gap:10px;}
+  .topbar .brand img{height:26px;}
+  .topbar .brand span{padding-left:10px;}
+  .topbar-right{gap:8px;font-size:12px;}
+  #user-info{display:none;}
+  .btn-logout{padding:5px 10px;font-size:11px;}
+}
+
+/* CENTRAL */
+.center{
+  flex:1;display:flex;align-items:center;justify-content:center;
+  padding:2rem 1rem;
+}
+
+/* LOGIN CARD */
+.login-card{
+  width:100%;max-width:380px;
+  background:var(--bg-card);border:1px solid var(--border);
+  border-radius:12px;padding:2rem;
+}
+.login-card .logo-wrap{
+  display:flex;justify-content:center;margin-bottom:1.5rem;
+}
+.login-card .logo-wrap img{
+  height:64px;width:auto;
+}
+.login-card h1{
+  font-size:18px;font-weight:600;margin-bottom:.4rem;text-align:center;
+}
+.login-card .subtitle{
+  font-size:13px;color:var(--text-soft);margin-bottom:1.5rem;text-align:center;
+}
+.field{margin-bottom:1rem;}
+.field label{
+  display:block;font-size:11px;font-weight:600;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--text-soft);margin-bottom:.4rem;
+}
+.field input{
+  width:100%;background:var(--bg-body);border:1px solid var(--border);
+  color:var(--text);padding:.7rem .9rem;border-radius:8px;
+  font-size:14px;font-family:inherit;
+}
+.field input:focus{outline:none;border-color:var(--accent);}
+.btn-primary{
+  width:100%;background:var(--accent);border:none;color:#fff;
+  padding:.8rem;border-radius:8px;font-size:14px;font-weight:600;
+  cursor:pointer;font-family:inherit;margin-top:.5rem;
+}
+.btn-primary:hover{background:var(--accent-hover);}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed;}
+.error-msg{
+  color:var(--danger);font-size:12px;margin-top:.8rem;text-align:center;
+  min-height:1em;
+}
+
+/* MENU GRID */
+.menu-wrap{
+  width:100%;max-width:1100px;
+}
+.menu-header{
+  margin-bottom:1.5rem;
+}
+.menu-header h1{
+  font-size:24px;font-weight:600;margin-bottom:.3rem;
+}
+.menu-header p{font-size:13px;color:var(--text-soft);}
+.menu-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
+  gap:14px;
+}
+.menu-card{
+  background:var(--bg-card);border:1px solid var(--border);
+  border-radius:12px;padding:1.4rem;cursor:pointer;
+  transition:all .15s;text-decoration:none;color:inherit;
+  display:block;
+}
+.menu-card:hover{
+  background:var(--bg-card-hover);border-color:var(--accent);
+  transform:translateY(-2px);
+}
+.menu-card .icone{font-size:28px;margin-bottom:.6rem;}
+.menu-card .titulo{font-size:16px;font-weight:600;margin-bottom:.2rem;}
+.menu-card .descricao{font-size:12px;color:var(--text-soft);}
+
+.hidden{display:none!important;}
+.loading-msg{text-align:center;color:var(--text-soft);font-size:13px;}
+</style>
 </head>
-<body>Redirecionando...</body>
+<body>
+
+<div class="topbar">
+  <div class="brand"><img src="/logo-urso.png" alt="Fusion"><span>BI</span></div>
+  <div class="topbar-right">
+    <span id="user-info"></span>
+    <button id="btn-logout" class="btn-logout hidden" onclick="fusionAuth.signOut()">Sair</button>
+  </div>
+</div>
+
+<div class="center">
+  <!-- TELA DE LOGIN -->
+  <div id="login-view" class="login-card hidden">
+    <div class="logo-wrap"><img src="/logo-marca.png" alt="Fusion"></div>
+    <h1>Business Intelligence</h1>
+    <p class="subtitle">Entre com seu e-mail corporativo.</p>
+    <form id="login-form">
+      <div class="field">
+        <label for="email">E-mail</label>
+        <input type="email" id="email" required autocomplete="email" autofocus>
+      </div>
+      <div class="field">
+        <label for="password">Senha</label>
+        <input type="password" id="password" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn-primary" id="btn-login">Entrar</button>
+      <div class="error-msg" id="login-error"></div>
+    </form>
+  </div>
+
+  <!-- MENU PÓS-LOGIN -->
+  <div id="menu-view" class="menu-wrap hidden">
+    <div class="menu-header">
+      <h1 id="menu-greeting">Olá</h1>
+      <p>Selecione um dashboard para acessar.</p>
+    </div>
+    <div class="menu-grid" id="menu-grid"></div>
+  </div>
+
+  <!-- LOADING -->
+  <div id="loading-view" class="loading-msg">Carregando...</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/auth.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+
+function show(view) {
+  ['login-view', 'menu-view', 'loading-view'].forEach(v => $(v).classList.add('hidden'));
+  $(view).classList.remove('hidden');
+}
+
+async function init() {
+  show('loading-view');
+  const session = await fusionAuth.getSession();
+  if (!session) {
+    $('user-info').textContent = '';
+    $('btn-logout').classList.add('hidden');
+    show('login-view');
+    return;
+  }
+  const role = await fusionAuth.getUserRole(session);
+  if (!role || !role.ativo) {
+    alert('Usuário sem permissões cadastradas. Contate o administrador.');
+    await fusionAuth.signOut();
+    return;
+  }
+  // Header
+  $('user-info').textContent = role.nome || role.email;
+  $('btn-logout').classList.remove('hidden');
+  // Greeting
+  const primeiroNome = (role.nome || role.email.split('@')[0]).split(' ')[0];
+  $('menu-greeting').textContent = `Olá, ${primeiroNome}`;
+  // Cards
+  const grid = $('menu-grid');
+  grid.innerHTML = '';
+  role.dashes.forEach(key => {
+    const meta = fusionAuth.DASHES[key];
+    if (!meta) return;
+    const card = document.createElement('a');
+    card.className = 'menu-card';
+    card.href = meta.url;
+    card.innerHTML = `
+      <div class="icone">${meta.icone}</div>
+      <div class="titulo">${meta.titulo}</div>
+      <div class="descricao">${meta.descricao}</div>
+    `;
+    grid.appendChild(card);
+  });
+  if (!role.dashes.length) {
+    grid.innerHTML = '<p class="loading-msg">Você ainda não tem nenhum dashboard liberado.</p>';
+  }
+  show('menu-view');
+}
+
+$('login-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = $('btn-login');
+  const errBox = $('login-error');
+  errBox.textContent = '';
+  btn.disabled = true;
+  btn.textContent = 'Entrando...';
+  try {
+    await fusionAuth.signInWithPassword($('email').value.trim(), $('password').value);
+    await init();
+  } catch (err) {
+    errBox.textContent = err.message === 'Invalid login credentials'
+      ? 'E-mail ou senha incorretos.'
+      : (err.message || 'Erro ao entrar.');
+    btn.disabled = false;
+    btn.textContent = 'Entrar';
+  }
+});
+
+init();
+</script>
+</body>
 </html>
