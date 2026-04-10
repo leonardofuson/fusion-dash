@@ -484,7 +484,8 @@ async function carregar(){
     }).join('');
 
     // ---- Produtos mais vendidos (SKU Pai) ----
-    var prods=Object.values(agg.porProd).sort(function(a,b){return b.qtd-a.qtd;}).slice(0,20);
+    // Filtra SKUs de material/insumo (MAT-*) — não são produtos de varejo
+    var prods=Object.values(agg.porProd).filter(function(p){return !/^MAT-/i.test(p.sku);}).sort(function(a,b){return b.qtd-a.qtd;}).slice(0,20);
     document.getElementById('tbody-produtos').innerHTML=prods.length?prods.map(function(p,i){
       var pm=p.qtd>0?p.val/p.qtd:0;
       var topLoja='—';var topVal=0;
