@@ -130,7 +130,7 @@ table.tb tr:hover td:first-child,table.tb tr:hover td:nth-child(2){background:rg
     <div class="card-title">Produtos Mais Vendidos (SKU Pai)</div>
     <div class="tb-wrap-scroll"><table class="tb tb-freeze2"><thead><tr>
       <th style="width:30px">#</th><th>Produto</th>
-      <th class="r">Qtd Vendida</th><th class="r">Faturamento</th><th class="r">Top Loja</th>
+      <th class="r">Qtd Vendida</th><th class="r">Faturamento</th><th class="r">PA</th><th class="r">Ticket Médio</th><th class="r">Top Loja</th>
     </tr></thead><tbody id="tbody-produtos"></tbody></table></div>
   </div>
 
@@ -242,7 +242,7 @@ function processItens(rawItens,prodMap,pedMap){
   }).filter(Boolean);
 }
 
-function aggregate(peds,itens){
+function aggregate(peds,itens,pedMap){
   var porLoja={},porVend={},porDia={},porDiaLoja={};
   var fatT=0,pedT=0,descT=0;
   peds.forEach(function(p){
@@ -262,7 +262,13 @@ function aggregate(peds,itens){
   Object.values(porVend).forEach(function(v){
     var mx=0;Object.keys(v.lojas).forEach(function(l){if(v.lojas[l]>mx){mx=v.lojas[l];v.loja=l;}});delete v.lojas;
   });
-  var itensLoja={},itensVend={},porProd={},totalQtd=0,totalVal=0;
+  var itensLoja={},itensVend={},porProd={},itensPorPed={},totalQtd=0,totalVal=0;
+  // 1º passo: total de itens por pedido (pra calcular PA)
+  itens.forEach(function(i){
+    if(!itensPorPed[i.pid]) itensPorPed[i.pid]={qtd:0};
+    itensPorPed[i.pid].qtd+=i.qtd;
+  });
+  // 2º passo: agrega por loja, vendedor, produto
   itens.forEach(function(i){
     var l=i.loja,v=i.vendedor||'Sem vendedor';
     var val=i.qtd*i.preco;
@@ -275,10 +281,28 @@ function aggregate(peds,itens){
     itensVend[v].qtd+=i.qtd;itensVend[v].val+=val;
     // Agrega por SKU Pai
     var sp=i.sku_pai||'?';
-    if(!porProd[sp]) porProd[sp]={sku:sp,nome:i.nome_pai||sp,cat:i.cat,qtd:0,val:0,lojas:{}};
+    if(!porProd[sp]) porProd[sp]={sku:sp,nome:i.nome_pai||sp,cat:i.cat,qtd:0,val:0,lojas:{},pids:{}};
     porProd[sp].qtd+=i.qtd;porProd[sp].val+=val;
     porProd[sp].lojas[l]=(porProd[sp].lojas[l]||0)+val;
+    porProd[sp].pids[i.pid]=1; // registra quais pedidos contêm este produto
     totalQtd+=i.qtd;totalVal+=val;
+  });
+  // 3º passo: calcula PA e TM por produto
+  Object.values(porProd).forEach(function(p){
+    var pidList=Object.keys(p.pids);
+    var nPeds=pidList.length;
+    if(nPeds>0){
+      var somaItens=0,somaFat=0;
+      pidList.forEach(function(pid){
+        somaItens+=(itensPorPed[pid]?itensPorPed[pid].qtd:0);
+        var ped=pedMap[parseInt(pid)];
+        somaFat+=(ped?ped.fat:0);
+      });
+      p.pa=somaItens/nPeds;  // peças por atendimento (média)
+      p.tm=somaFat/nPeds;    // ticket médio dos pedidos com este produto
+      p.nPeds=nPeds;
+    }else{p.pa=null;p.tm=null;p.nPeds=0;}
+    delete p.pids; // limpa memória
   });
   Object.keys(porLoja).forEach(function(l){
     var il=itensLoja[l];
@@ -419,7 +443,7 @@ async function carregar(){
     try{rawItens=await fetchItensForIds(currentMonthIds);}catch(e){console.warn('Itens fetch:',e.message);}
     var itens=processItens(rawItens,prodMap,pedMap);
 
-    var agg=aggregate(peds,itens);
+    var agg=aggregate(peds,itens,pedMap);
     var aggP=aggSimple(pedsPrev);
 
     // ---- KPIs ----
@@ -464,8 +488,10 @@ async function carregar(){
         '<td style="font-weight:600">'+p.nome+'</td>'+
         '<td class="val">'+fmtN(p.qtd)+'</td>'+
         '<td class="val">'+fmt(p.val)+'</td>'+
+        '<td class="val">'+(p.pa!==null?fmtD(p.pa):'—')+'</td>'+
+        '<td class="val">'+(p.tm!==null?fmt(p.tm):'—')+'</td>'+
         '<td class="r"><span class="loja-dot" style="background:'+corLoja(topLoja)+';color:'+corLoja(topLoja)+'"></span>'+topLoja.replace('Loja ','')+'</td></tr>';
-    }).join(''):'<tr><td colspan="5" style="text-align:center;color:var(--txt3);padding:20px">Dados de itens indisponíveis para o período</td></tr>';
+    }).join(''):'<tr><td colspan="7" style="text-align:center;color:var(--txt3);padding:20px">Dados de itens indisponíveis para o período</td></tr>';
 
     // ---- Ranking vendedores ----
     var vends=Object.values(agg.porVend).filter(function(v){return v.nome!=='Sem vendedor';}).sort(function(a,b){return b.fat-a.fat;});
