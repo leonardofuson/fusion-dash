@@ -216,8 +216,12 @@ var PROD_CACHE=null;
 async function fetchProdutos(){
   if(PROD_CACHE) return PROD_CACHE;
   var lista=await buscarTudo('produtos','select=id,sku,sku_pai,nome,categoria&ativo=eq.true');
-  var m={};lista.forEach(function(p){m[p.id]={cat:p.categoria||'OUTROS',sku:p.sku,sku_pai:p.sku_pai||p.sku,nome:p.nome||p.sku};});
-  PROD_CACHE=m;return m;
+  var byId={},bySku={};
+  lista.forEach(function(p){
+    byId[p.id]={cat:p.categoria||'OUTROS',sku:p.sku,sku_pai:p.sku_pai||p.sku,nome:p.nome||p.sku};
+    bySku[p.sku]={nome:p.nome||p.sku,cat:p.categoria||'OUTROS'};
+  });
+  PROD_CACHE={byId:byId,bySku:bySku};return PROD_CACHE;
 }
 
 function normPedidos(raw){
@@ -235,10 +239,12 @@ function processItens(rawItens,prodMap,pedMap){
   return rawItens.map(function(i){
     var ped=pedMap[i.pedido_id];
     if(!ped) return null;
-    var prod=prodMap[i.produto_id]||{cat:'OUTROS',sku:'?',sku_pai:'?',nome:'Desconhecido'};
+    var prod=prodMap.byId[i.produto_id]||{cat:'OUTROS',sku:'?',sku_pai:'?',nome:'Desconhecido'};
+    // Busca nome e categoria do PAI (sem cor/tamanho)
+    var pai=prodMap.bySku[prod.sku_pai]||{nome:prod.nome,cat:prod.cat};
     return{loja:ped.loja, vendedor:ped.vendedor, data:ped.data,
       qtd:i.quantidade, preco:i.preco_unitario, desc:i.desconto_item||0,
-      cat:prod.cat, sku_pai:prod.sku_pai, nome_pai:prod.nome, pid:i.pedido_id};
+      cat:pai.cat, sku_pai:prod.sku_pai, nome_pai:pai.nome, pid:i.pedido_id};
   }).filter(Boolean);
 }
 
