@@ -127,6 +127,14 @@ table.tb tr:hover td:first-child,table.tb tr:hover td:nth-child(2){background:rg
   </div>
 
   <div class="card">
+    <div class="card-title">Produtos Mais Vendidos (SKU Pai)</div>
+    <div class="tb-wrap-scroll"><table class="tb tb-freeze2"><thead><tr>
+      <th style="width:30px">#</th><th>Produto</th><th>Categoria</th>
+      <th class="r">Qtd Vendida</th><th class="r">Faturamento</th><th class="r">Preço Médio</th><th class="r">Top Loja</th>
+    </tr></thead><tbody id="tbody-produtos"></tbody></table></div>
+  </div>
+
+  <div class="card">
     <div class="card-title">Ranking de Vendedores</div>
     <div class="tb-wrap-scroll"><table class="tb tb-freeze2"><thead><tr>
       <th style="width:30px">#</th><th>Vendedor</th><th>Loja</th>
@@ -207,8 +215,8 @@ async function fetchItensForIds(ids){
 var PROD_CACHE=null;
 async function fetchProdutos(){
   if(PROD_CACHE) return PROD_CACHE;
-  var lista=await buscarTudo('produtos','select=id,categoria&ativo=eq.true');
-  var m={};lista.forEach(function(p){m[p.id]=p.categoria||'OUTROS';});
+  var lista=await buscarTudo('produtos','select=id,sku,sku_pai,nome,categoria&ativo=eq.true');
+  var m={};lista.forEach(function(p){m[p.id]={cat:p.categoria||'OUTROS',sku:p.sku,sku_pai:p.sku_pai||p.sku,nome:p.nome||p.sku};});
   PROD_CACHE=m;return m;
 }
 
@@ -227,9 +235,10 @@ function processItens(rawItens,prodMap,pedMap){
   return rawItens.map(function(i){
     var ped=pedMap[i.pedido_id];
     if(!ped) return null;
+    var prod=prodMap[i.produto_id]||{cat:'OUTROS',sku:'?',sku_pai:'?',nome:'Desconhecido'};
     return{loja:ped.loja, vendedor:ped.vendedor, data:ped.data,
       qtd:i.quantidade, preco:i.preco_unitario, desc:i.desconto_item||0,
-      cat:prodMap[i.produto_id]||'OUTROS', pid:i.pedido_id};
+      cat:prod.cat, sku_pai:prod.sku_pai, nome_pai:prod.nome, pid:i.pedido_id};
   }).filter(Boolean);
 }
 
@@ -253,17 +262,22 @@ function aggregate(peds,itens){
   Object.values(porVend).forEach(function(v){
     var mx=0;Object.keys(v.lojas).forEach(function(l){if(v.lojas[l]>mx){mx=v.lojas[l];v.loja=l;}});delete v.lojas;
   });
-  var itensLoja={},itensVend={},totalQtd=0,totalVal=0;
+  var itensLoja={},itensVend={},porProd={},totalQtd=0,totalVal=0;
   itens.forEach(function(i){
     var l=i.loja,v=i.vendedor||'Sem vendedor';
-    if(!itensLoja[l]) itensLoja[l]={qtd:0,val:0,cats:{}};
     var val=i.qtd*i.preco;
+    if(!itensLoja[l]) itensLoja[l]={qtd:0,val:0,cats:{}};
     itensLoja[l].qtd+=i.qtd;itensLoja[l].val+=val;
     var c=i.cat;
     if(!itensLoja[l].cats[c]) itensLoja[l].cats[c]={qtd:0,val:0};
     itensLoja[l].cats[c].qtd+=i.qtd;itensLoja[l].cats[c].val+=val;
     if(!itensVend[v]) itensVend[v]={qtd:0,val:0};
     itensVend[v].qtd+=i.qtd;itensVend[v].val+=val;
+    // Agrega por SKU Pai
+    var sp=i.sku_pai||'?';
+    if(!porProd[sp]) porProd[sp]={sku:sp,nome:i.nome_pai||sp,cat:i.cat,qtd:0,val:0,lojas:{}};
+    porProd[sp].qtd+=i.qtd;porProd[sp].val+=val;
+    porProd[sp].lojas[l]=(porProd[sp].lojas[l]||0)+val;
     totalQtd+=i.qtd;totalVal+=val;
   });
   Object.keys(porLoja).forEach(function(l){
@@ -277,7 +291,7 @@ function aggregate(peds,itens){
     porVend[v].upt=iv?iv.qtd/porVend[v].ped:null;
   });
   var diasCV=Math.max(1,Object.keys(porDia).length);
-  return{porLoja:porLoja,porVend:porVend,porDia:porDia,porDiaLoja:porDiaLoja,
+  return{porLoja:porLoja,porVend:porVend,porProd:porProd,porDia:porDia,porDiaLoja:porDiaLoja,
     fatT:fatT,pedT:pedT,descT:descT,totalQtd:totalQtd,totalVal:totalVal,
     diasCV:diasCV,upt:pedT>0?totalQtd/pedT:0,pm:totalQtd>0?totalVal/totalQtd:0};
 }
@@ -381,6 +395,7 @@ async function carregar(){
   if(!DE||!ATE) return;
   document.getElementById('kpis').innerHTML='<div class="kpi"><div class="kpi-lbl">Carregando...</div><div class="spin"></div></div>';
   document.getElementById('tbody-lojas').innerHTML='';
+  document.getElementById('tbody-produtos').innerHTML='';
   document.getElementById('tbody-vendedores').innerHTML='';
 
   try{
@@ -437,6 +452,22 @@ async function carregar(){
         '<td class="r">'+fmtP(descPct)+'</td>'+
         '<td>'+sparkSVG(sparkData,corLoja(l.nome))+'</td></tr>';
     }).join('');
+
+    // ---- Produtos mais vendidos (SKU Pai) ----
+    var prods=Object.values(agg.porProd).sort(function(a,b){return b.qtd-a.qtd;}).slice(0,20);
+    document.getElementById('tbody-produtos').innerHTML=prods.length?prods.map(function(p,i){
+      var pm=p.qtd>0?p.val/p.qtd:0;
+      var topLoja='—';var topVal=0;
+      Object.keys(p.lojas).forEach(function(l){if(p.lojas[l]>topVal){topVal=p.lojas[l];topLoja=l;}});
+      return '<tr>'+
+        '<td style="color:var(--txt3);font-weight:700">'+(i+1)+'</td>'+
+        '<td style="font-weight:600">'+p.nome+'<span style="display:block;font-size:10px;color:var(--txt3);font-weight:400">'+p.sku+'</span></td>'+
+        '<td><span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;background:rgba(255,255,255,0.05);color:var(--txt2)">'+p.cat+'</span></td>'+
+        '<td class="val">'+fmtN(p.qtd)+'</td>'+
+        '<td class="val">'+fmt(p.val)+'</td>'+
+        '<td class="val">'+fmt(pm)+'</td>'+
+        '<td class="r"><span class="loja-dot" style="background:'+corLoja(topLoja)+';color:'+corLoja(topLoja)+'"></span>'+topLoja.replace('Loja ','')+'</td></tr>';
+    }).join(''):'<tr><td colspan="7" style="text-align:center;color:var(--txt3);padding:20px">Dados de itens indisponíveis para o período</td></tr>';
 
     // ---- Ranking vendedores ----
     var vends=Object.values(agg.porVend).filter(function(v){return v.nome!=='Sem vendedor';}).sort(function(a,b){return b.fat-a.fat;});
