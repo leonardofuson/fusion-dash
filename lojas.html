@@ -130,7 +130,7 @@ table.tb tr:hover td:first-child,table.tb tr:hover td:nth-child(2){background:rg
     <div class="card-title">Produtos Mais Vendidos (SKU Pai)</div>
     <div class="tb-wrap-scroll"><table class="tb tb-freeze2"><thead><tr>
       <th style="width:30px">#</th><th>Produto</th>
-      <th class="r">Qtd Vendida</th><th class="r">Faturamento</th><th class="r">PA</th><th class="r">Ticket Médio</th><th class="r">Top Loja</th>
+      <th class="r">Faturamento</th><th class="r">Qtd</th><th class="r">Δ Unid.</th><th class="r">PA</th><th class="r">Ticket Médio</th><th class="r">Top Loja</th>
     </tr></thead><tbody id="tbody-produtos"></tbody></table></div>
   </div>
 
@@ -456,7 +456,24 @@ async function carregar(){
     try{rawItens=await fetchItensForIds(currentMonthIds);}catch(e){console.warn('Itens fetch:',e.message);}
     var itens=processItens(rawItens,prodMap,pedMap);
 
+    // Itens do período anterior (pra delta de unidades por produto)
+    var pedMapPrev={};
+    pedsPrev.forEach(function(p){pedMapPrev[p.id]=p;});
+    var prevMonthIds=pedsPrev.filter(function(p){return p.data>=inicio;}).map(function(p){return p.id;});
+    var rawItensPrev=[];
+    try{if(prevMonthIds.length) rawItensPrev=await fetchItensForIds(prevMonthIds);}catch(e){}
+    var itensPrev=processItens(rawItensPrev,prodMap,pedMapPrev);
+    // Agrega qtd por sku_pai do período anterior
+    var porProdPrev={};
+    itensPrev.forEach(function(i){
+      var sp=i.sku_pai;
+      if(!porProdPrev[sp]) porProdPrev[sp]={qtd:0,val:0};
+      porProdPrev[sp].qtd+=i.qtd;
+      porProdPrev[sp].val+=i.qtd*i.preco;
+    });
+
     var agg=aggregate(peds,itens,pedMap);
+    agg.porProdPrev=porProdPrev;
     var aggP=aggSimple(pedsPrev);
 
     // ---- KPIs ----
@@ -491,20 +508,23 @@ async function carregar(){
     }).join('');
 
     // ---- Produtos mais vendidos (SKU Pai) ----
-    var prods=Object.values(agg.porProd).sort(function(a,b){return b.qtd-a.qtd;}).slice(0,20);
+    var prods=Object.values(agg.porProd).sort(function(a,b){return b.val-a.val;}).slice(0,20);
+    var ppp=agg.porProdPrev||{};
     document.getElementById('tbody-produtos').innerHTML=prods.length?prods.map(function(p,i){
-      var pm=p.qtd>0?p.val/p.qtd:0;
       var topLoja='—';var topVal=0;
       Object.keys(p.lojas).forEach(function(l){if(p.lojas[l]>topVal){topVal=p.lojas[l];topLoja=l;}});
+      var prev=ppp[p.sku];
+      var deltaQtd=prev?deltaBadge(p.qtd,prev.qtd):'<span class="delta-badge neutral">—</span>';
       return '<tr>'+
         '<td style="color:var(--txt3);font-weight:700">'+(i+1)+'</td>'+
         '<td style="font-weight:600">'+p.nome+'</td>'+
-        '<td class="val">'+fmtN(p.qtd)+'</td>'+
         '<td class="val">'+fmt(p.val)+'</td>'+
+        '<td class="val">'+fmtN(p.qtd)+'</td>'+
+        '<td class="r">'+deltaQtd+'</td>'+
         '<td class="val">'+(p.pa!==null?fmtD(p.pa):'—')+'</td>'+
         '<td class="val">'+(p.tm!==null?fmt(p.tm):'—')+'</td>'+
         '<td class="r"><span class="loja-dot" style="background:'+corLoja(topLoja)+';color:'+corLoja(topLoja)+'"></span>'+topLoja.replace('Loja ','')+'</td></tr>';
-    }).join(''):'<tr><td colspan="7" style="text-align:center;color:var(--txt3);padding:20px">Dados de itens indisponíveis para o período</td></tr>';
+    }).join(''):'<tr><td colspan="8" style="text-align:center;color:var(--txt3);padding:20px">Dados de itens indisponíveis para o período</td></tr>';
 
     // ---- Ranking vendedores ----
     var vends=Object.values(agg.porVend).filter(function(v){return v.nome!=='Sem vendedor';}).sort(function(a,b){return b.fat-a.fat;});
