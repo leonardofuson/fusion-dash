@@ -321,6 +321,7 @@ const COR_MAP={
 
 function corV(n){
   if(!n) return '#CCC';
+  if(n==='(Modelo único)') return '#7B61FF'; // roxo distinto pra estoque guarda-chuva
   const u=n.toUpperCase().trim();
   for(const[k,v] of Object.entries(COR_MAP)) if(u.includes(k)) return v;
   return '#CCC';
@@ -368,40 +369,94 @@ async function carregar(){
       eBySku[k][e.localizacao]=(eBySku[k][e.localizacao]||0)+(e.quantidade||0);
     });
 
-    // Mapas de pai
+    // Indexar todos os produtos por SKU (qualquer tipo) — pra resolver metadados de pais
+    const prodsBySku={};
+    prods.forEach(p=>{
+      const k=(p.sku||'').trim().toUpperCase();
+      if(k && !prodsBySku[k]) prodsBySku[k]=p;
+    });
+
+    // Conjunto de SKUs que devem aparecer como agrupador "pai" no dash:
+    //   1) qualquer registro com tipo='pai'
+    //   2) qualquer sku_pai referenciado por algum filho
+    // Isso torna o dash robusto a SKUs guarda-chuva (CLMALHA, BLZPM, etc) que
+    // estão cadastrados como pai E também são vendidos diretamente no PDV/atacado.
+    const skuPaiSet=new Set();
+    prods.forEach(p=>{
+      if(p.tipo==='pai'){
+        const k=(p.sku||'').trim().toUpperCase();
+        if(k) skuPaiSet.add(k);
+      }
+      if(p.sku_pai){
+        const k=p.sku_pai.trim().toUpperCase();
+        if(k) skuPaiSet.add(k);
+      }
+    });
+
+    // Construir mapa de pais a partir do conjunto, usando metadados do registro
+    // que existe no banco com aquele SKU (independente se é tipo='pai' ou 'filho').
     const pBySku={};
-    prods.filter(p=>p.tipo==='pai').forEach(p=>{
-      pBySku[p.sku.trim().toUpperCase()]={
-        id:p.id, sku:p.sku,
-        nome:p.descricao||p.nome||p.sku,
-        categoria:p.categoria||'',
+    skuPaiSet.forEach(skuU=>{
+      const meta=prodsBySku[skuU];
+      if(!meta) return; // sku_pai referenciado mas não existe na tabela produtos
+      pBySku[skuU]={
+        id:meta.id,
+        sku:meta.sku,
+        nome:meta.descricao||meta.nome||meta.sku,
+        categoria:meta.categoria||'',
         cores:{},
       };
     });
 
-    // Distribui filhos
+    // Captura estoque do REGISTRO guarda-chuva (CLMALHA puro, BLZPM puro, etc)
+    // e adiciona como "cor virtual" — '(Modelo único)' com tamanho 'Único'.
+    // Esses são produtos vendidos por SKU pai sem variar tamanho/cor (PDV/atacado).
+    // IMPORTANTE: lookup só por SKU exato (eBySku), nunca por produto_id, pois
+    // o produto_id no estoque aponta para o pai mesmo nas linhas das variantes
+    // — usar eById[pai.id] inflaria o modelo único somando estoque das filhos.
+    const COR_GUARDACHUVA='(Modelo único)';
+    Object.values(pBySku).forEach(pai=>{
+      const skuU=pai.sku.trim().toUpperCase();
+      const e=eBySku[skuU]||{};
+      const tem=LOCS.some(loc=>(e[loc.key]||0)>0);
+      if(tem){
+        pai.cores[COR_GUARDACHUVA]={'Único':{}};
+        LOCS.forEach(loc=>{
+          pai.cores[COR_GUARDACHUVA]['Único'][loc.key]=e[loc.key]||0;
+        });
+      }
+    });
+
+    // Distribuir filhos — pular filhos auto-referência (SKU == SKU PAI),
+    // pois esses representam o próprio guarda-chuva já capturado acima.
     prods.filter(p=>p.tipo==='filho').forEach(p=>{
+      const skuU=(p.sku||'').trim().toUpperCase();
+      const spU=(p.sku_pai||'').trim().toUpperCase();
+
+      // Skip auto-ref: filho cujo SKU é igual ao SKU PAI (já tratado como modelo único)
+      if(skuU && skuU===spU) return;
+
       let pai=null;
 
       // 1) pelo sku_pai direto
-      if(p.sku_pai) pai=pBySku[p.sku_pai.trim().toUpperCase()];
+      if(spU) pai=pBySku[spU];
 
       // 2) extrai do sku removendo último segmento após hífen
-      if(!pai&&p.sku){
-        const parts=p.sku.trim().toUpperCase().split('-');
+      if(!pai && skuU){
+        const parts=skuU.split('-');
         if(parts.length>1) pai=pBySku[parts.slice(0,-1).join('-')];
       }
 
       if(!pai) return;
 
-      const rawCor = (p.cor||'').replace(/[¨"'`]/g,'').trim();
-      const cor = rawCor || 'Sem cor';
+      const rawCor=(p.cor||'').replace(/[¨"'`]/g,'').trim();
+      const cor=rawCor || 'Sem cor';
       const tam=(p.tamanho||'Único').trim();
       if(!pai.cores[cor]) pai.cores[cor]={};
       if(!pai.cores[cor][tam]) pai.cores[cor][tam]={};
 
       // SKU como fonte primária — produto_id no estoque aponta para o pai, não o filho
-      const e=eBySku[p.sku?.trim().toUpperCase()]||eById[p.id]||{};
+      const e=eBySku[skuU]||eById[p.id]||{};
       LOCS.forEach(loc=>{
         pai.cores[cor][tam][loc.key]=(pai.cores[cor][tam][loc.key]||0)+(e[loc.key]||0);
       });
