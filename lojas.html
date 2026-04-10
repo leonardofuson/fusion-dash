@@ -131,6 +131,8 @@ table.tb tr:hover td{background:rgba(255,255,255,0.02);}
 
 <script>
 var SB_URL = 'https://spulbhnmkomvgohzhfvj.supabase.co';
+var SELECT_COLS = 'data_pedido,valor_bruto,loja_nome,origem_conta';
+var MAX_PAGES = 50;
 let AUTH_HEADERS = null; // populated after requireAuth
 
 var LOJA_CORES = {
@@ -144,24 +146,64 @@ var LOJA_CORES = {
 var IGNORAR = ['Loja Não Identificada', 'Loja Antiga', 'Venda Funcionário'];
 
 function corLoja(n) { return LOJA_CORES[n] || '#6B7280'; }
+function fmt(n)  { return 'R$ ' + Math.round(n || 0).toLocaleString('pt-BR'); }
+function fmtN(n) { return Math.round(n || 0).toLocaleString('pt-BR'); }
+function fmtP(n) { return (n || 0).toFixed(1) + '%'; }
 
+// ---- Datas em America/Sao_Paulo ----
+function hojeSP() {
+  return new Date().toLocaleString('sv-SE', {timeZone: 'America/Sao_Paulo'}).slice(0, 10);
+}
+function somaDias(dateStr, dias) {
+  var d = new Date(dateStr + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + dias);
+  return d.toISOString().slice(0, 10);
+}
+function inicioMesSP() {
+  return hojeSP().slice(0, 7) + '-01';
+}
+
+// ---- Fetch com paginação (teto defensivo) ----
 async function buscarTudo(tabela, filtro) {
-  var todos = [], offset = 0, tam = 1000;
-  while (true) {
+  var todos = [], offset = 0, tam = 1000, pag = 0;
+  while (pag < MAX_PAGES) {
     var url = SB_URL + '/rest/v1/' + tabela + '?' + filtro + '&limit=' + tam + '&offset=' + offset;
     var r = await fetch(url, {headers: AUTH_HEADERS});
+    if (!r.ok) throw new Error(tabela + ' HTTP ' + r.status);
     var lote = await r.json();
     if (!Array.isArray(lote) || lote.length === 0) break;
     todos = todos.concat(lote);
     if (lote.length < tam) break;
     offset += tam;
+    pag++;
   }
   return todos;
 }
 
-function fmt(n)  { return 'R$ ' + Math.round(n || 0).toLocaleString('pt-BR'); }
-function fmtN(n) { return Math.round(n || 0).toLocaleString('pt-BR'); }
-function fmtP(n) { return (n || 0).toFixed(1) + '%'; }
+function buildFiltro(de, ate) {
+  return 'select=' + SELECT_COLS +
+    '&data_pedido=gte.' + de +
+    '&data_pedido=lte.' + ate +
+    '&origem_conta=in.(kwid,flecha)' +
+    '&status=not.in.(cancelado,devolvido)';
+}
+
+// Roteamento: `pedidos` (mês corrente) / `pedidos_historico` (fechado) / ambos
+async function fetchPedidos(de, ate) {
+  var inicio = inicioMesSP();
+  if (de >= inicio) {
+    return buscarTudo('pedidos', buildFiltro(de, ate));
+  }
+  if (ate < inicio) {
+    return buscarTudo('pedidos_historico', buildFiltro(de, ate));
+  }
+  var fimHist = somaDias(inicio, -1);
+  var res = await Promise.all([
+    buscarTudo('pedidos_historico', buildFiltro(de, fimHist)),
+    buscarTudo('pedidos', buildFiltro(inicio, ate))
+  ]);
+  return res[0].concat(res[1]);
+}
 
 var chartFat = null, chartComp = null;
 var DE = null, ATE = null;
@@ -169,10 +211,8 @@ var DE = null, ATE = null;
 function setPeriodo(dias, el) {
   document.querySelectorAll('.chip').forEach(function(c) { c.classList.remove('on'); });
   el.classList.add('on');
-  var ate = new Date(), de = new Date();
-  de.setDate(de.getDate() - dias);
-  DE  = de.toISOString().split('T')[0];
-  ATE = ate.toISOString().split('T')[0];
+  ATE = hojeSP();
+  DE  = somaDias(ATE, -(dias - 1));
   document.getElementById('dt-de').value  = DE;
   document.getElementById('dt-ate').value = ATE;
   carregar();
@@ -189,19 +229,15 @@ async function carregar() {
   if (!DE || !ATE) return;
   document.getElementById('kpis').innerHTML = '<div class="kpi"><div class="kpi-lbl">Carregando...</div><div class="spin"></div></div>';
 
-  var filtroOp   = 'select=data_pedido,valor_bruto,loja_nome,status&data_pedido=gte.' + DE + '&data_pedido=lte.' + ATE + '&origem_conta=eq.kwid';
-  var filtroHist = 'select=data_pedido,valor_bruto,loja_nome,status&data_pedido=gte.' + DE + '&data_pedido=lte.' + ATE + '&origem_conta=eq.kwid';
-
   try {
-    var res = await Promise.all([
-      buscarTudo('pedidos', filtroOp),
-      buscarTudo('pedidos_historico', filtroHist)
-    ]);
+    var todos = await fetchPedidos(DE, ATE);
 
-    var todos  = res[0].concat(res[1]);
-    var ativos = todos.filter(function(p) {
-      return (p.status || '').toLowerCase() !== 'cancelado' &&
-             p.loja_nome && IGNORAR.indexOf(p.loja_nome) < 0;
+    // Normaliza: flecha → Atacado WhatsApp (o loja_nome pode vir vazio)
+    var ativos = todos.map(function(p) {
+      var nome = p.origem_conta === 'flecha' ? 'Atacado WhatsApp' : p.loja_nome;
+      return {data_pedido: p.data_pedido, valor_bruto: p.valor_bruto, loja_nome: nome};
+    }).filter(function(p) {
+      return p.loja_nome && IGNORAR.indexOf(p.loja_nome) < 0;
     });
 
     var porLoja = {};
@@ -215,14 +251,25 @@ async function carregar() {
     var lojas    = Object.values(porLoja).sort(function(a, b) { return b.fat - a.fat; });
     var fatTotal = lojas.reduce(function(s, l) { return s + l.fat; }, 0);
     var pedTotal = lojas.reduce(function(s, l) { return s + l.ped; }, 0);
-    var diasP    = Math.max(1, Math.round((new Date(ATE) - new Date(DE)) / 86400000));
+
+    // Fat/Dia = só dias com venda (dias efetivamente abertos)
+    var porDia = {};
+    ativos.forEach(function(p) {
+      var d = p.data_pedido;
+      if (!d) return;
+      if (!porDia[d]) porDia[d] = 0;
+      porDia[d] += parseFloat(p.valor_bruto || 0);
+    });
+    var diasComVenda = Math.max(1, Object.keys(porDia).length);
+    var fatPorDia = fatTotal / diasComVenda;
+    var pedPorDia = pedTotal / diasComVenda;
 
     document.getElementById('kpis').innerHTML =
       '<div class="kpi"><div class="kpi-lbl">Faturamento Total</div><div class="kpi-val">' + fmt(fatTotal) + '</div><div class="kpi-sub">' + fmtN(pedTotal) + ' pedidos</div></div>' +
       '<div class="kpi"><div class="kpi-lbl">Ticket Médio</div><div class="kpi-val kv-blue">' + fmt(pedTotal > 0 ? fatTotal / pedTotal : 0) + '</div><div class="kpi-sub">por pedido</div></div>' +
-      '<div class="kpi"><div class="kpi-lbl">Fat/Dia</div><div class="kpi-val kv-green">' + fmt(fatTotal / diasP) + '</div><div class="kpi-sub">média diária</div></div>' +
+      '<div class="kpi"><div class="kpi-lbl">Fat/Dia</div><div class="kpi-val kv-green">' + fmt(fatPorDia) + '</div><div class="kpi-sub">' + diasComVenda + ' dia' + (diasComVenda > 1 ? 's' : '') + ' com venda</div></div>' +
       '<div class="kpi"><div class="kpi-lbl">Lojas Ativas</div><div class="kpi-val kv-amber">' + lojas.length + '</div><div class="kpi-sub">no período</div></div>' +
-      '<div class="kpi"><div class="kpi-lbl">Pedidos/Dia</div><div class="kpi-val">' + Math.round(pedTotal / diasP) + '</div><div class="kpi-sub">média diária</div></div>';
+      '<div class="kpi"><div class="kpi-lbl">Pedidos/Dia</div><div class="kpi-val">' + Math.round(pedPorDia) + '</div><div class="kpi-sub">média por dia aberto</div></div>';
 
     document.getElementById('lojas-cards').innerHTML = lojas.map(function(l) {
       return '<div class="loja-card" style="border-left-color:' + corLoja(l.nome) + '">' +
@@ -250,16 +297,9 @@ async function carregar() {
         '<td class="val">' + fmtN(l.ped) + '</td><td class="val">' + fmt(l.fat) + '</td>' +
         '<td class="val">' + fmt(l.ped > 0 ? l.fat / l.ped : 0) + '</td>' +
         '<td class="r">' + fmtP(fatTotal > 0 ? l.fat / fatTotal * 100 : 0) + '</td>' +
-        '<td class="r">' + fmt(l.fat / diasP) + '</td></tr>';
+        '<td class="r">' + fmt(l.fat / diasComVenda) + '</td></tr>';
     }).join('');
 
-    var porDia = {};
-    ativos.forEach(function(p) {
-      var d = p.data_pedido;
-      if (!d) return;
-      if (!porDia[d]) porDia[d] = 0;
-      porDia[d] += parseFloat(p.valor_bruto || 0);
-    });
     var dl = Object.keys(porDia).sort();
     var lbs = dl.map(function(d) {
       return new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'});
@@ -279,7 +319,7 @@ async function carregar() {
     chartComp = new Chart(document.getElementById('chart-comp'), {
       type: 'bar',
       data: {labels: lojas.map(function(l) { return l.nome.replace('Loja ', ''); }),
-        datasets: [{label: 'Pedidos/dia', data: lojas.map(function(l) { return parseFloat((l.ped / diasP).toFixed(1)); }),
+        datasets: [{label: 'Pedidos/dia', data: lojas.map(function(l) { return parseFloat((l.ped / diasComVenda).toFixed(1)); }),
           backgroundColor: lojas.map(function(l) { return corLoja(l.nome) + '99'; }),
           borderColor: lojas.map(function(l) { return corLoja(l.nome); }), borderWidth: 1, borderRadius: 4}]},
       options: {responsive: true, maintainAspectRatio: false, plugins: {legend: {display: false}},
@@ -294,10 +334,8 @@ async function carregar() {
   }
 }
 
-var hoje = new Date(), ini = new Date();
-ini.setDate(ini.getDate() - 30);
-DE  = ini.toISOString().split('T')[0];
-ATE = hoje.toISOString().split('T')[0];
+ATE = hojeSP();
+DE  = somaDias(ATE, -29);
 document.getElementById('dt-de').value  = DE;
 document.getElementById('dt-ate').value = ATE;
 (async () => {
