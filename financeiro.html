@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Fusion — Financeiro</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0a0a0b;--bg2:#18181b;--bdr:#27272a;--txt1:#fff;--txt2:#a1a1aa;--blue:#3b82f6;--red:#ef4444;}
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Inter',sans-serif;}
+body{background:var(--bg);color:var(--txt1);min-height:100vh;display:flex;flex-direction:column;}
+.topbar{
+  background:rgba(18,18,20,0.95);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--bdr);height:64px;padding:0 1.5rem;
+  display:flex;align-items:center;gap:16px;
+  position:sticky;top:0;z-index:100;
+}
+.topbar img{height:32px;object-fit:contain;}
+.topbar-div{width:1px;height:18px;background:var(--bdr);}
+.topbar-label{font-size:15px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--txt1);}
+.topbar-actions{display:flex;align-items:center;gap:14px;margin-left:auto;}
+#user-info-tb{font-size:13px;color:var(--txt2);}
+.btn-back, .btn-logout-tb{
+  background:transparent;border:1px solid var(--bdr);color:var(--txt2);
+  padding:7px 14px;border-radius:6px;font-size:13px;cursor:pointer;
+  font-family:inherit;text-decoration:none;display:inline-block;
+}
+.btn-back:hover{border-color:var(--blue);color:var(--blue);}
+.btn-logout-tb:hover{border-color:var(--red);color:var(--red);}
+@media(max-width:768px){
+  .topbar{height:56px;padding:0 1rem;}
+  .topbar img{height:26px;}
+  .topbar-label{font-size:12px;}
+  .btn-back, .btn-logout-tb{padding:5px 10px;font-size:11px;}
+  #user-info-tb{display:none;}
+  .topbar-actions{gap:8px;}
+}
+.center{
+  flex:1;display:flex;align-items:center;justify-content:center;
+  padding:2rem 1rem;text-align:center;
+}
+.placeholder{
+  max-width:480px;
+}
+.placeholder .icon{font-size:64px;margin-bottom:1rem;}
+.placeholder h1{font-size:24px;font-weight:600;margin-bottom:.5rem;}
+.placeholder p{font-size:14px;color:var(--txt2);line-height:1.5;}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/auth.js"></script>
+</head>
+<body>
+
+<header class="topbar">
+  <img src="/logo-urso.png" alt="Fusion">
+  <div class="topbar-div"></div>
+  <span class="topbar-label">Financeiro</span>
+  <div class="topbar-actions">
+    <span id="user-info-tb"></span>
+    <a href="/index.html" class="btn-back">Menu</a>
+    <button class="btn-logout-tb" onclick="fusionAuth.signOut()">Sair</button>
+  </div>
+</header>
+
+<div class="center">
+  <div class="placeholder">
+    <div class="icon">💰</div>
+    <h1>Em construção</h1>
+    <p>O dashboard de Financeiro está sendo desenvolvido. Em breve você poderá acompanhar receitas, despesas, fluxo de caixa e indicadores financeiros por aqui.</p>
+  </div>
+</div>
+
+<script>
+(async () => {
+  const auth = await fusionAuth.requireAuth("financeiro");
+  if (!auth) return;
+  const ui = document.getElementById('user-info-tb');
+  if (ui) ui.textContent = (auth.role.nome || auth.role.email);
+})();
+</script>
+</body>
+</html>
