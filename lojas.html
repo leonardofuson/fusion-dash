@@ -240,11 +240,18 @@ function processItens(rawItens,prodMap,pedMap){
     var ped=pedMap[i.pedido_id];
     if(!ped) return null;
     var prod=prodMap.byId[i.produto_id]||{cat:'OUTROS',sku:'?',sku_pai:'?',nome:'Desconhecido'};
-    // Busca nome e categoria do PAI (sem cor/tamanho)
-    var pai=prodMap.bySku[prod.sku_pai]||{nome:prod.nome,cat:prod.cat};
+    var skuPai=prod.sku_pai;
+    var pai;
+    // Se sku_pai é catch-all (MAT-*), usar o próprio SKU como agrupador
+    if(/^MAT-/i.test(skuPai)){
+      skuPai=prod.sku;
+      pai={nome:prod.nome,cat:prod.cat};
+    }else{
+      pai=prodMap.bySku[skuPai]||{nome:prod.nome,cat:prod.cat};
+    }
     return{loja:ped.loja, vendedor:ped.vendedor, data:ped.data,
       qtd:i.quantidade, preco:i.preco_unitario, desc:i.desconto_item||0,
-      cat:pai.cat, sku_pai:prod.sku_pai, nome_pai:pai.nome, pid:i.pedido_id};
+      cat:pai.cat, sku_pai:skuPai, nome_pai:pai.nome, pid:i.pedido_id};
   }).filter(Boolean);
 }
 
@@ -484,8 +491,7 @@ async function carregar(){
     }).join('');
 
     // ---- Produtos mais vendidos (SKU Pai) ----
-    // Filtra SKUs de material/insumo (MAT-*) — não são produtos de varejo
-    var prods=Object.values(agg.porProd).filter(function(p){return !/^MAT-/i.test(p.sku);}).sort(function(a,b){return b.qtd-a.qtd;}).slice(0,20);
+    var prods=Object.values(agg.porProd).sort(function(a,b){return b.qtd-a.qtd;}).slice(0,20);
     document.getElementById('tbody-produtos').innerHTML=prods.length?prods.map(function(p,i){
       var pm=p.qtd>0?p.val/p.qtd:0;
       var topLoja='—';var topVal=0;
