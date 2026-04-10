@@ -129,8 +129,8 @@ table.tb tr:hover td:first-child,table.tb tr:hover td:nth-child(2){background:rg
   <div class="card">
     <div class="card-title">Produtos Mais Vendidos (SKU Pai)</div>
     <div class="tb-wrap-scroll"><table class="tb tb-freeze2"><thead><tr>
-      <th style="width:30px">#</th><th>Produto</th><th>Categoria</th>
-      <th class="r">Qtd Vendida</th><th class="r">Faturamento</th><th class="r">Preço Médio</th><th class="r">Top Loja</th>
+      <th style="width:30px">#</th><th>Produto</th>
+      <th class="r">Qtd Vendida</th><th class="r">Faturamento</th><th class="r">Top Loja</th>
     </tr></thead><tbody id="tbody-produtos"></tbody></table></div>
   </div>
 
@@ -461,13 +461,11 @@ async function carregar(){
       Object.keys(p.lojas).forEach(function(l){if(p.lojas[l]>topVal){topVal=p.lojas[l];topLoja=l;}});
       return '<tr>'+
         '<td style="color:var(--txt3);font-weight:700">'+(i+1)+'</td>'+
-        '<td style="font-weight:600">'+p.nome+'<span style="display:block;font-size:10px;color:var(--txt3);font-weight:400">'+p.sku+'</span></td>'+
-        '<td><span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;background:rgba(255,255,255,0.05);color:var(--txt2)">'+p.cat+'</span></td>'+
+        '<td style="font-weight:600">'+p.nome+'</td>'+
         '<td class="val">'+fmtN(p.qtd)+'</td>'+
         '<td class="val">'+fmt(p.val)+'</td>'+
-        '<td class="val">'+fmt(pm)+'</td>'+
         '<td class="r"><span class="loja-dot" style="background:'+corLoja(topLoja)+';color:'+corLoja(topLoja)+'"></span>'+topLoja.replace('Loja ','')+'</td></tr>';
-    }).join(''):'<tr><td colspan="7" style="text-align:center;color:var(--txt3);padding:20px">Dados de itens indisponíveis para o período</td></tr>';
+    }).join(''):'<tr><td colspan="5" style="text-align:center;color:var(--txt3);padding:20px">Dados de itens indisponíveis para o período</td></tr>';
 
     // ---- Ranking vendedores ----
     var vends=Object.values(agg.porVend).filter(function(v){return v.nome!=='Sem vendedor';}).sort(function(a,b){return b.fat-a.fat;});
