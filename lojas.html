@@ -278,9 +278,12 @@ function processItens(rawItens,prodMap,pedMap){
     }else{
       pai=prodMap.bySku[skuPai]||{nome:prod.nome,cat:prod.cat};
     }
+    var nomePai=pai.nome;
+    // Se nome genérico, usar SKU como nome
+    if(!nomePai||nomePai==='Material/Insumo'||nomePai==='Desconhecido') nomePai=skuPai;
     return{loja:ped.loja, vendedor:ped.vendedor, data:ped.data,
       qtd:i.quantidade, preco:i.preco_unitario, desc:i.desconto_item||0,
-      cat:pai.cat, sku_pai:skuPai, nome_pai:pai.nome, pid:i.pedido_id};
+      cat:pai.cat, sku_pai:skuPai, nome_pai:nomePai, pid:i.pedido_id};
   }).filter(function(i){return i && i.cat!=='TECIDO' && i.cat!=='TROCA';});
 }
 
@@ -327,13 +330,16 @@ function aggregate(peds,itens,pedMap){
     vendCats[v][c].val+=val;vendCats[v][c].qtd+=i.qtd;vendCats[v][c].pids[i.pid]=1;
     // Agrega por SKU Pai
     var sp=i.sku_pai||'?';
-    if(!porProd[sp]) porProd[sp]={sku:sp,nome:i.nome_pai||sp,cat:i.cat,qtd:0,val:0,lojas:{},pids:{}};
+    if(!porProd[sp]) porProd[sp]={sku:sp,nome:i.nome_pai||sp,cat:i.cat,qtd:0,val:0,lojas:{},lojaQtd:{},lojaPids:{},pids:{}};
     porProd[sp].qtd+=i.qtd;porProd[sp].val+=val;
     porProd[sp].lojas[l]=(porProd[sp].lojas[l]||0)+val;
-    porProd[sp].pids[i.pid]=1; // registra quais pedidos contêm este produto
+    porProd[sp].lojaQtd[l]=(porProd[sp].lojaQtd[l]||0)+i.qtd;
+    if(!porProd[sp].lojaPids[l]) porProd[sp].lojaPids[l]={};
+    porProd[sp].lojaPids[l][i.pid]=1;
+    porProd[sp].pids[i.pid]=1;
     totalQtd+=i.qtd;totalVal+=val;
   });
-  // 3º passo: calcula PA e TM por produto
+  // 3º passo: calcula PA e TM por produto (global)
   Object.values(porProd).forEach(function(p){
     var pidList=Object.keys(p.pids);
     var nPeds=pidList.length;
@@ -344,11 +350,10 @@ function aggregate(peds,itens,pedMap){
         var ped=pedMap[parseInt(pid)];
         somaFat+=(ped?ped.fat:0);
       });
-      p.pa=somaItens/nPeds;  // peças por atendimento (média)
-      p.tm=somaFat/nPeds;    // ticket médio dos pedidos com este produto
+      p.pa=somaItens/nPeds;
+      p.tm=somaFat/nPeds;
       p.nPeds=nPeds;
     }else{p.pa=null;p.tm=null;p.nPeds=0;}
-    delete p.pids; // limpa memória
   });
   Object.keys(porLoja).forEach(function(l){
     var il=itensLoja[l];
@@ -362,7 +367,8 @@ function aggregate(peds,itens,pedMap){
   });
   var diasCV=Math.max(1,Object.keys(porDia).length);
   return{porLoja:porLoja,porVend:porVend,porProd:porProd,porDia:porDia,porDiaLoja:porDiaLoja,
-    vendCats:vendCats,fatT:fatT,pedT:pedT,descT:descT,totalQtd:totalQtd,totalVal:totalVal,
+    vendCats:vendCats,itensPorPed:itensPorPed,pedMap:pedMap,
+    fatT:fatT,pedT:pedT,descT:descT,totalQtd:totalQtd,totalVal:totalVal,
     diasCV:diasCV,upt:pedT>0?totalQtd/pedT:0,pm:totalQtd>0?totalVal/totalQtd:0};
 }
 
@@ -640,13 +646,31 @@ function toggleCatChip(el){
 }
 
 function renderProds(agg,ppp,lojaFiltro,catFiltro){
+  var ipp=agg.itensPorPed||{}, pm=agg.pedMap||{};
   var prods=Object.values(agg.porProd).map(function(p){
-    // If loja filter active, recalculate val to show only selected lojas' revenue
     if(lojaFiltro.length){
-      var filteredVal=0;
-      lojaFiltro.forEach(function(l){filteredVal+=(p.lojas[l]||0);});
-      if(filteredVal<=0) return null;
-      return Object.assign({},p,{val:filteredVal});
+      // Recalculate ALL metrics for selected lojas only
+      var fVal=0,fQtd=0,fPids={};
+      lojaFiltro.forEach(function(l){
+        fVal+=(p.lojas[l]||0);
+        fQtd+=(p.lojaQtd[l]||0);
+        if(p.lojaPids[l]) Object.assign(fPids,p.lojaPids[l]);
+      });
+      if(fVal<=0) return null;
+      var pidList=Object.keys(fPids);
+      var nPeds=pidList.length;
+      var fPa=null,fTm=null;
+      if(nPeds>0){
+        var sItens=0,sFat=0;
+        pidList.forEach(function(pid){
+          sItens+=(ipp[pid]?ipp[pid].qtd:0);
+          var ped=pm[parseInt(pid)];
+          sFat+=(ped?ped.fat:0);
+        });
+        fPa=sItens/nPeds;
+        fTm=sFat/nPeds;
+      }
+      return Object.assign({},p,{val:fVal,qtd:fQtd,pa:fPa,tm:fTm,nPeds:nPeds});
     }
     return p;
   }).filter(Boolean);
