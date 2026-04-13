@@ -95,11 +95,13 @@ table.tb tr:hover td:first-child,table.tb tr:hover td:nth-child(2){background:rg
 <div class="main">
   <div class="filtros">
     <div class="chips">
-      <button class="chip" onclick="setPeriodo(1,this)">Hoje</button>
-      <button class="chip" onclick="setPeriodo(2,this)">Ontem</button>
-      <button class="chip" onclick="setPeriodo(7,this)">7 dias</button>
-      <button class="chip on" onclick="setPeriodo(30,this)">30 dias</button>
-      <button class="chip" onclick="setPeriodo(365,this)">12 meses</button>
+      <button class="chip" onclick="setPeriodo('hoje',this)">Hoje</button>
+      <button class="chip" onclick="setPeriodo('ontem',this)">Ontem</button>
+      <button class="chip" onclick="setPeriodo('semana',this)">Semana</button>
+      <button class="chip" onclick="setPeriodo('mes',this)">Mês</button>
+      <button class="chip" onclick="setPeriodo('7d',this)">7 dias</button>
+      <button class="chip on" onclick="setPeriodo('30d',this)">30 dias</button>
+      <button class="chip" onclick="setPeriodo('12m',this)">12 meses</button>
     </div>
     <div class="drange">
       <input type="date" id="dt-de" class="dinput">
@@ -414,10 +416,27 @@ function renderChartMix(porLoja){
 
 var DE=null,ATE=null;
 
-function setPeriodo(dias,el){
+function domingoSemana(hoje){
+  // Retorna o domingo (início) da semana corrente (dom=0)
+  var d=new Date(hoje+'T12:00:00Z');
+  var dow=d.getUTCDay(); // 0=dom
+  d.setUTCDate(d.getUTCDate()-dow);
+  return d.toISOString().slice(0,10);
+}
+function setPeriodo(tipo,el){
   document.querySelectorAll('.chip').forEach(function(c){c.classList.remove('on');});
   el.classList.add('on');
-  ATE=hojeSP();DE=somaDias(ATE,-(dias-1));
+  var hoje=hojeSP();
+  switch(tipo){
+    case 'hoje':  DE=hoje; ATE=hoje; break;
+    case 'ontem': DE=somaDias(hoje,-1); ATE=DE; break;
+    case 'semana': DE=domingoSemana(hoje); ATE=hoje; break;
+    case 'mes':   DE=hoje.slice(0,7)+'-01'; ATE=hoje; break;
+    case '7d':    DE=somaDias(hoje,-6); ATE=hoje; break;
+    case '30d':   DE=somaDias(hoje,-29); ATE=hoje; break;
+    case '12m':   DE=somaDias(hoje,-364); ATE=hoje; break;
+    default:      DE=somaDias(hoje,-29); ATE=hoje;
+  }
   document.getElementById('dt-de').value=DE;
   document.getElementById('dt-ate').value=ATE;
   carregar();
