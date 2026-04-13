@@ -180,13 +180,14 @@ function destroyChart(id){ if(charts[id]){ charts[id].destroy(); delete charts[i
 
 async function carregar(){
   if(!DE||!ATE) return;
-  const [todos, historico] = await Promise.all([
+  const [opMes, hist] = await Promise.all([
     api('pedidos?select=data_pedido,valor_bruto,origem_conta,canal_nome_raw,loja_nome,status&data_pedido=gte.'+DE+'&data_pedido=lte.'+ATE+'&limit=100000'),
-    api('pedidos_historico?select=data_pedido,valor_bruto,origem_conta,canal&data_pedido=gte.'+DE+'&data_pedido=lte.'+ATE+'&limit=50000'),
+    api('pedidos_historico?select=data_pedido,valor_bruto,origem_conta,canal_nome_raw,loja_nome,status&data_pedido=gte.'+DE+'&data_pedido=lte.'+ATE+'&limit=100000'),
   ]);
 
   const IGNORAR=['Loja Não Identificada','Loja Antiga','Venda Funcionário'];
-  const ativos=(todos||[]).filter(p=>p.status!=='cancelado');
+  const todos=(opMes||[]).concat(hist||[]);
+  const ativos=todos.filter(p=>p.status!=='cancelado');
   const diasP=Math.max(1,Math.round((new Date(ATE)-new Date(DE))/86400000));
 
   // Por origem
