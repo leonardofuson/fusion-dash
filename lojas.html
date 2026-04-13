@@ -151,13 +151,14 @@ let AUTH_HEADERS=null;
 
 var LOJA_CORES={
   'Loja Oriente':'#6366f1','Loja Marcolina':'#22c55e','Loja São Bernardo':'#eab308',
-  'Loja Vautier':'#a855f7','Loja Polo Plaza':'#ec4899','Atacado WhatsApp':'#06b6d4'
+  'Loja Vautier':'#a855f7','Loja Polo Plaza':'#ec4899','Atacado WhatsApp':'#06b6d4',
+  'Loja Não Identificada':'#ef4444'
 };
 var CAT_CORES={
   'CALÇA':'#6366f1','CAMISA':'#22c55e','CAMISETA':'#eab308','BLAZER & TERNO':'#a855f7',
   'BERMUDA':'#ec4899','INVERNO':'#06b6d4','CALÇADOS':'#f43f5e','ACESSÓRIOS':'#f97316','TECIDO':'#64748b'
 };
-var IGNORAR=['Loja Não Identificada','Loja Antiga','Venda Funcionário'];
+var IGNORAR=['Loja Antiga','Venda Funcionário'];
 
 function corLoja(n){return LOJA_CORES[n]||'#64748b';}
 function corCat(c){return CAT_CORES[c]||'#64748b';}
@@ -230,7 +231,7 @@ function normPedidos(raw){
       id:p.id, data:p.data_pedido, fat:parseFloat(p.valor_bruto||0),
       desc:parseFloat(p.desconto||0),
       loja:p.origem_conta==='flecha'?'Atacado WhatsApp':p.loja_nome,
-      vendedor:(p.vendedor||'').trim()||'Sem vendedor', origem:p.origem_conta
+      vendedor:(p.vendedor||'').trim()||'Vendedor Não Identificado', origem:p.origem_conta
     };
   }).filter(function(p){return p.loja&&IGNORAR.indexOf(p.loja)<0;});
 }
