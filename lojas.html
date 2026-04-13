@@ -441,30 +441,92 @@ function renderChartMix(porLoja){
     if(idx===0){var s=0;cats.forEach(function(c){s+=(todasCats[c]||0);});return s;}
     var l=lojas[idx-1];var s=0;cats.forEach(function(c){s+=(porLoja[l].cats&&porLoja[l].cats[c]?porLoja[l].cats[c].val:0);});return s;
   });
+  // Store raw values for labels and tooltips
+  var rawVals=cats.map(function(c){
+    var todasRaw=todasCats[c]||0;
+    return [todasRaw].concat(lojas.map(function(l){
+      return (porLoja[l].cats&&porLoja[l].cats[c])?porLoja[l].cats[c].val:0;
+    }));
+  });
   // Convert to percentages
-  var datasets=cats.map(function(c){
+  var datasets=cats.map(function(c,ci){
     var todasPct=barTotals[0]>0?(todasCats[c]||0)/barTotals[0]*100:0;
     var data=[todasPct].concat(lojas.map(function(l,i){
       var raw=(porLoja[l].cats&&porLoja[l].cats[c])?porLoja[l].cats[c].val:0;
       return barTotals[i+1]>0?raw/barTotals[i+1]*100:0;
     }));
-    return{label:c,data:data,backgroundColor:corCat(c),borderRadius:2};
+    return{label:c,data:data,backgroundColor:corCat(c),_baseColor:corCat(c),_rawVals:rawVals[ci],borderRadius:2};
   });
+  // Highlight state
+  var highlightIdx=-1;
+  // Plugin: draw value labels on highlighted category
+  var labelPlugin={
+    id:'mixLabels',
+    afterDatasetsDraw:function(chart){
+      if(highlightIdx<0) return;
+      var ctx=chart.ctx;
+      var ds=chart.data.datasets[highlightIdx];
+      var meta=chart.getDatasetMeta(highlightIdx);
+      ctx.save();
+      ctx.font='bold 10px Inter,sans-serif';
+      ctx.textBaseline='middle';
+      meta.data.forEach(function(bar,i){
+        var raw=ds._rawVals[i];
+        if(raw<=0) return;
+        var pct=Math.round(ds.data[i]);
+        var label=fmt(raw)+' ('+pct+'%)';
+        var x=bar.x, y=bar.y;
+        var barW=bar.width||0;
+        // Position: inside bar if wide enough, else outside
+        if(barW>80){
+          ctx.fillStyle='#fff';
+          ctx.textAlign='center';
+          ctx.fillText(label,bar.x-barW/2+barW/2,y);
+        }else{
+          ctx.fillStyle='#fafafa';
+          ctx.textAlign='left';
+          ctx.fillText(label,x+4,y);
+        }
+      });
+      ctx.restore();
+    }
+  };
+  function applyHighlight(chart,dsIndex){
+    highlightIdx=dsIndex;
+    chart.data.datasets.forEach(function(ds,i){
+      if(dsIndex<0){
+        ds.backgroundColor=ds._baseColor;
+      }else{
+        ds.backgroundColor=i===dsIndex?ds._baseColor:(ds._baseColor+'20');
+      }
+    });
+    chart.update();
+  }
   if(chartMix) chartMix.destroy();
   chartMix=new Chart(document.getElementById('chart-mix'),{
     type:'bar',
     data:{labels:chartLabels,datasets:datasets},
+    plugins:[labelPlugin],
     options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{display:true,position:'bottom',labels:{color:'#a1a1aa',font:{size:9,weight:'600'},boxWidth:10,padding:8,usePointStyle:true,pointStyle:'circle'}},
+      onClick:function(e,elements){
+        if(elements.length>0){
+          var dsIdx=elements[0].datasetIndex;
+          applyHighlight(chartMix,highlightIdx===dsIdx?-1:dsIdx);
+        }else{
+          applyHighlight(chartMix,-1);
+        }
+      },
+      plugins:{legend:{display:true,position:'bottom',
+          onClick:function(e,legendItem,legend){
+            var idx=legendItem.datasetIndex;
+            applyHighlight(legend.chart,highlightIdx===idx?-1:idx);
+          },
+          labels:{color:'#a1a1aa',font:{size:9,weight:'600'},boxWidth:10,padding:8,usePointStyle:true,pointStyle:'circle'}},
         tooltip:{backgroundColor:'rgba(24,24,27,0.95)',titleColor:'#fafafa',bodyColor:'#fafafa',borderColor:'#2a2a2e',borderWidth:1,padding:10,cornerRadius:8,
           callbacks:{label:function(ctx){
             var pct=Math.round(ctx.parsed.x);
-            var idx=ctx.dataIndex;
-            var catName=ctx.dataset.label;
-            // recover raw value
-            var rawTotal=barTotals[idx];
-            var rawVal=rawTotal*ctx.parsed.x/100;
-            return catName+': '+fmt(rawVal)+' ('+pct+'%)';
+            var raw=ctx.dataset._rawVals[ctx.dataIndex];
+            return ctx.dataset.label+': '+fmt(raw)+' ('+pct+'%)';
           }}}},
       scales:{
         x:{stacked:true,max:100,ticks:{color:'#52525b',font:{size:10},callback:function(v){return v+'%';}},grid:{color:'rgba(255,255,255,0.03)'}},
