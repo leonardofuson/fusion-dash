@@ -412,7 +412,9 @@ function renderChartFat(porDia){
 }
 
 function renderChartMix(porLoja){
-  var lojas=Object.keys(porLoja).sort(function(a,b){return(porLoja[b].fat||0)-(porLoja[a].fat||0);});
+  var EXCLUIR_MIX={'Atacado WhatsApp':1,'Loja Não Identificada':1};
+  var lojas=Object.keys(porLoja).filter(function(l){return !EXCLUIR_MIX[l];})
+    .sort(function(a,b){return(porLoja[b].fat||0)-(porLoja[a].fat||0);});
   var allCats={};
   lojas.forEach(function(l){Object.keys(porLoja[l].cats||{}).forEach(function(c){
     if(!allCats[c]) allCats[c]=0;
@@ -426,24 +428,27 @@ function renderChartMix(porLoja){
     return;
   }
   title.textContent='Mix por Categoria';
-  // Build "Todas" row (sum all lojas except Atacado WhatsApp)
+  // Build "Todas" row
   var todasCats={};
   lojas.forEach(function(l){
-    if(l==='Atacado WhatsApp') return;
     Object.keys(porLoja[l].cats||{}).forEach(function(c){
-      if(!todasCats[c]) todasCats[c]=0;
-      todasCats[c]+=(porLoja[l].cats[c]?porLoja[l].cats[c].val:0);
+      todasCats[c]=(todasCats[c]||0)+(porLoja[l].cats[c]?porLoja[l].cats[c].val:0);
     });
   });
-  var chartLabels=['Todas (s/ Atacado)'].concat(lojas.map(function(l){return l.replace('Loja ','');}));
-  var datasets=cats.map(function(c){
-    var todasVal=todasCats[c]||0;
-    var data=[todasVal].concat(lojas.map(function(l){return(porLoja[l].cats&&porLoja[l].cats[c])?porLoja[l].cats[c].val:0;}));
-    return{label:c,data:data,backgroundColor:corCat(c),borderRadius:2};
-  });
-  // Pre-compute totals per bar for percentage
+  var chartLabels=['Todas'].concat(lojas.map(function(l){return l.replace('Loja ','');}));
+  // Compute totals per bar
   var barTotals=chartLabels.map(function(_,idx){
-    var sum=0;datasets.forEach(function(ds){sum+=ds.data[idx];});return sum;
+    if(idx===0){var s=0;cats.forEach(function(c){s+=(todasCats[c]||0);});return s;}
+    var l=lojas[idx-1];var s=0;cats.forEach(function(c){s+=(porLoja[l].cats&&porLoja[l].cats[c]?porLoja[l].cats[c].val:0);});return s;
+  });
+  // Convert to percentages
+  var datasets=cats.map(function(c){
+    var todasPct=barTotals[0]>0?(todasCats[c]||0)/barTotals[0]*100:0;
+    var data=[todasPct].concat(lojas.map(function(l,i){
+      var raw=(porLoja[l].cats&&porLoja[l].cats[c])?porLoja[l].cats[c].val:0;
+      return barTotals[i+1]>0?raw/barTotals[i+1]*100:0;
+    }));
+    return{label:c,data:data,backgroundColor:corCat(c),borderRadius:2};
   });
   if(chartMix) chartMix.destroy();
   chartMix=new Chart(document.getElementById('chart-mix'),{
@@ -453,13 +458,16 @@ function renderChartMix(porLoja){
       plugins:{legend:{display:true,position:'bottom',labels:{color:'#a1a1aa',font:{size:9,weight:'600'},boxWidth:10,padding:8,usePointStyle:true,pointStyle:'circle'}},
         tooltip:{backgroundColor:'rgba(24,24,27,0.95)',titleColor:'#fafafa',bodyColor:'#fafafa',borderColor:'#2a2a2e',borderWidth:1,padding:10,cornerRadius:8,
           callbacks:{label:function(ctx){
-            var val=ctx.parsed.x;
-            var total=barTotals[ctx.dataIndex]||1;
-            var pct=Math.round(val/total*100);
-            return ctx.dataset.label+': '+fmt(val)+' ('+pct+'%)';
+            var pct=Math.round(ctx.parsed.x);
+            var idx=ctx.dataIndex;
+            var catName=ctx.dataset.label;
+            // recover raw value
+            var rawTotal=barTotals[idx];
+            var rawVal=rawTotal*ctx.parsed.x/100;
+            return catName+': '+fmt(rawVal)+' ('+pct+'%)';
           }}}},
       scales:{
-        x:{stacked:true,ticks:{color:'#52525b',font:{size:10},callback:function(v){return v>=1000?Math.round(v/1000)+'k':v;}},grid:{color:'rgba(255,255,255,0.03)'}},
+        x:{stacked:true,max:100,ticks:{color:'#52525b',font:{size:10},callback:function(v){return v+'%';}},grid:{color:'rgba(255,255,255,0.03)'}},
         y:{stacked:true,ticks:{color:'#a1a1aa',font:{size:10,weight:'600'}},grid:{display:false}}
       }}
   });
@@ -566,10 +574,16 @@ function toggleCatChip(el){
 }
 
 function renderProds(agg,ppp,lojaFiltro,catFiltro){
-  var prods=Object.values(agg.porProd);
-  if(lojaFiltro.length){prods=prods.filter(function(p){
-    return lojaFiltro.some(function(l){return p.lojas&&p.lojas[l]>0;});
-  });}
+  var prods=Object.values(agg.porProd).map(function(p){
+    // If loja filter active, recalculate val to show only selected lojas' revenue
+    if(lojaFiltro.length){
+      var filteredVal=0;
+      lojaFiltro.forEach(function(l){filteredVal+=(p.lojas[l]||0);});
+      if(filteredVal<=0) return null;
+      return Object.assign({},p,{val:filteredVal});
+    }
+    return p;
+  }).filter(Boolean);
   if(catFiltro.length){prods=prods.filter(function(p){return catFiltro.indexOf(p.cat)>=0;});}
   var st=SORT_STATE.prods;
   prods=sortData(prods,st.key,st.dir).slice(0,30);
@@ -593,12 +607,16 @@ function renderProds(agg,ppp,lojaFiltro,catFiltro){
 function renderVends(agg,lojaFiltro,catFiltro){
   var vends=Object.values(agg.porVend).filter(function(v){return v.nome!=='Vendedor Não Identificado';});
   if(lojaFiltro.length){vends=vends.filter(function(v){return lojaFiltro.indexOf(v.loja)>=0;});}
+  // If category filter active, recalculate fat to show only selected categories' revenue
   if(catFiltro.length&&agg.vendCats){
-    vends=vends.filter(function(v){
+    vends=vends.map(function(v){
       var vc=agg.vendCats[v.nome];
-      if(!vc) return false;
-      return catFiltro.some(function(c){return vc[c]>0;});
-    });
+      if(!vc) return null;
+      var catFat=0;
+      catFiltro.forEach(function(c){catFat+=(vc[c]||0);});
+      if(catFat<=0) return null;
+      return Object.assign({},v,{fat:catFat});
+    }).filter(Boolean);
   }
   // Add tm (ticket medio) for sorting
   vends.forEach(function(v){v.tm=v.ped>0?v.fat/v.ped:0;});
