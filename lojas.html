@@ -66,7 +66,8 @@ th.sortable:hover{color:var(--green);}
 th.sortable::after{content:'⇅';margin-left:4px;font-size:8px;opacity:0.4;}
 th.sortable.asc::after{content:'▲';opacity:1;color:var(--green);}
 th.sortable.desc::after{content:'▼';opacity:1;color:var(--green);}
-.filter-chips-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;}
+.filter-chips-row{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+.filter-chips-row:last-child{margin-bottom:0;}
 .filter-chips-row .filter-label{font-size:11px;font-weight:600;color:var(--txt2);text-transform:uppercase;letter-spacing:0.06em;white-space:nowrap;}
 .chip-sm{padding:4px 12px;border-radius:16px;font-size:11px;font-weight:600;border:1px solid var(--bdr);background:transparent;color:var(--txt2);cursor:pointer;transition:all 0.2s;white-space:nowrap;}
 .chip-sm:hover{border-color:var(--green);color:var(--green);}
@@ -308,6 +309,7 @@ function aggregate(peds,itens,pedMap){
     itensPorPed[i.pid].qtd+=i.qtd;
   });
   // 2º passo: agrega por loja, vendedor, produto
+  var vendCats={};
   itens.forEach(function(i){
     var l=i.loja,v=i.vendedor||'Sem vendedor';
     var val=i.qtd*i.preco;
@@ -318,6 +320,8 @@ function aggregate(peds,itens,pedMap){
     itensLoja[l].cats[c].qtd+=i.qtd;itensLoja[l].cats[c].val+=val;
     if(!itensVend[v]) itensVend[v]={qtd:0,val:0};
     itensVend[v].qtd+=i.qtd;itensVend[v].val+=val;
+    if(!vendCats[v]) vendCats[v]={};
+    vendCats[v][c]=(vendCats[v][c]||0)+val;
     // Agrega por SKU Pai
     var sp=i.sku_pai||'?';
     if(!porProd[sp]) porProd[sp]={sku:sp,nome:i.nome_pai||sp,cat:i.cat,qtd:0,val:0,lojas:{},pids:{}};
@@ -355,7 +359,7 @@ function aggregate(peds,itens,pedMap){
   });
   var diasCV=Math.max(1,Object.keys(porDia).length);
   return{porLoja:porLoja,porVend:porVend,porProd:porProd,porDia:porDia,porDiaLoja:porDiaLoja,
-    fatT:fatT,pedT:pedT,descT:descT,totalQtd:totalQtd,totalVal:totalVal,
+    vendCats:vendCats,fatT:fatT,pedT:pedT,descT:descT,totalQtd:totalQtd,totalVal:totalVal,
     diasCV:diasCV,upt:pedT>0?totalQtd/pedT:0,pm:totalQtd>0?totalVal/totalQtd:0};
 }
 
@@ -586,9 +590,16 @@ function renderProds(agg,ppp,lojaFiltro,catFiltro){
   }).join(''):'<tr><td colspan="8" style="text-align:center;color:var(--txt3);padding:20px">Dados de itens indisponíveis para o período</td></tr>';
 }
 
-function renderVends(agg,lojaFiltro){
+function renderVends(agg,lojaFiltro,catFiltro){
   var vends=Object.values(agg.porVend).filter(function(v){return v.nome!=='Vendedor Não Identificado';});
   if(lojaFiltro.length){vends=vends.filter(function(v){return lojaFiltro.indexOf(v.loja)>=0;});}
+  if(catFiltro.length&&agg.vendCats){
+    vends=vends.filter(function(v){
+      var vc=agg.vendCats[v.nome];
+      if(!vc) return false;
+      return catFiltro.some(function(c){return vc[c]>0;});
+    });
+  }
   // Add tm (ticket medio) for sorting
   vends.forEach(function(v){v.tm=v.ped>0?v.fat/v.ped:0;});
   var st=SORT_STATE.vends;
@@ -639,7 +650,7 @@ function reRender(){
   var lf=getFilteredLojas();
   var cf=getFilteredCats();
   renderProds(LAST_AGG,LAST_PPP||{},lf,cf);
-  renderVends(LAST_AGG,lf);
+  renderVends(LAST_AGG,lf,cf);
 }
 
 function domingoSemana(hoje){
