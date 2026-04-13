@@ -38,10 +38,12 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
 .chart-wrap{position:relative;height:280px;}
 /* ---- Tables ---- */
 .tb-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:10px;}
-table.tb{width:100%;border-collapse:collapse;font-size:12px;min-width:700px;}
-table.tb th{background:rgba(255,255,255,0.03);color:var(--txt2);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;padding:10px 12px;border-bottom:1px solid var(--bdr);text-align:left;white-space:nowrap;}
+table.tb{width:100%;border-collapse:collapse;font-size:13px;min-width:700px;}
+table.tb th{background:rgba(255,255,255,0.03);color:var(--txt2);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;padding:6px 8px;border-bottom:1px solid var(--bdr);text-align:left;white-space:nowrap;}
 table.tb th.r{text-align:right;}
-table.tb td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.04);color:var(--txt1);}
+table.tb td{padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.04);color:var(--txt1);}
+.loja-link{cursor:pointer;transition:opacity 0.15s;}
+.loja-link:hover{opacity:0.8;text-decoration:underline;text-underline-offset:3px;}
 table.tb td.r{text-align:right;color:var(--txt2);}
 table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nums;}
 table.tb tr:last-child td{border-bottom:none;}
@@ -725,6 +727,25 @@ function populateFilters(agg){
   catDiv.innerHTML=chtml;
 }
 
+function clickLoja(lojaName){
+  // Toggle: if already the only selected, reset to Todas. Else select only this one.
+  var cur=getFilteredLojas();
+  var chips=document.querySelectorAll('#loja-chips .chip-sm');
+  if(cur.length===1 && cur[0]===lojaName){
+    // Reset to Todas
+    chips.forEach(function(c){c.classList.remove('on');});
+    var todas=document.querySelector('#loja-chips .chip-sm[data-loja=""]');
+    if(todas) todas.classList.add('on');
+  }else{
+    // Select only this loja
+    chips.forEach(function(c){c.classList.remove('on');});
+    var target=document.querySelector('#loja-chips .chip-sm[data-loja="'+lojaName+'"]');
+    if(target) target.classList.add('on');
+  }
+  refreshLojaChipStyles();
+  reRender();
+}
+
 function reRender(){
   if(!LAST_AGG) return;
   var lf=getFilteredLojas();
@@ -833,7 +854,7 @@ async function carregar(){
       var descPct=(l.fat+l.desc)>0?l.desc/(l.fat+l.desc)*100:0;
       var sparkData=dl.map(function(d){return agg.porDiaLoja[l.nome+'|'+d]||0;});
       return '<tr>'+
-        '<td><span class="loja-dot" style="background:'+corLoja(l.nome)+';color:'+corLoja(l.nome)+'"></span>'+l.nome+'</td>'+
+        '<td><span class="loja-link" onclick="clickLoja(\''+l.nome.replace(/'/g,"\\'")+'\')" title="Filtrar por '+l.nome+'"><span class="loja-dot" style="background:'+corLoja(l.nome)+';color:'+corLoja(l.nome)+'"></span>'+l.nome+'</span></td>'+
         '<td class="val">'+fmt(l.fat)+'</td>'+
         '<td class="r">'+deltaBadge(l.fat,prev?prev.fat:0)+'</td>'+
         '<td class="val">'+fmtN(l.ped)+'</td>'+
