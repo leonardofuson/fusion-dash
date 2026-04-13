@@ -420,7 +420,7 @@ function renderChartFat(porDia){
   });
 }
 
-function renderChartMix(porLoja){
+function renderChartMix(porLoja,highlightLojas){
   var EXCLUIR_MIX={'Atacado WhatsApp':1,'Loja Não Identificada':1};
   var lojas=Object.keys(porLoja).filter(function(l){return !EXCLUIR_MIX[l];})
     .sort(function(a,b){return(porLoja[b].fat||0)-(porLoja[a].fat||0);});
@@ -457,14 +457,22 @@ function renderChartMix(porLoja){
       return (porLoja[l].cats&&porLoja[l].cats[c])?porLoja[l].cats[c].val:0;
     }));
   });
-  // Convert to percentages
+  // Convert to percentages + apply loja highlight opacity
+  var hl=highlightLojas||[];
+  var hasHl=hl.length>0;
   var datasets=cats.map(function(c,ci){
     var todasPct=barTotals[0]>0?(todasCats[c]||0)/barTotals[0]*100:0;
     var data=[todasPct].concat(lojas.map(function(l,i){
       var raw=(porLoja[l].cats&&porLoja[l].cats[c])?porLoja[l].cats[c].val:0;
       return barTotals[i+1]>0?raw/barTotals[i+1]*100:0;
     }));
-    return{label:c,data:data,backgroundColor:corCat(c),_baseColor:corCat(c),_rawVals:rawVals[ci],borderRadius:2};
+    var base=corCat(c);
+    // Per-bar background: dim non-highlighted lojas
+    var bgArr=hasHl?data.map(function(_,idx){
+      if(idx===0) return base; // "Todas" always full
+      return hl.indexOf(lojas[idx-1])>=0?base:(base+'30');
+    }):base;
+    return{label:c,data:data,backgroundColor:bgArr,_baseColor:base,_rawVals:rawVals[ci],borderRadius:2};
   });
   // Highlight state
   var highlightIdx=-1;
@@ -815,10 +823,8 @@ function reRender(){
 
     renderChartFat(porDia);
 
-    // Mix chart: only selected lojas
-    var filtLoja={};
-    lf.forEach(function(l){if(agg.porLoja[l]) filtLoja[l]=agg.porLoja[l];});
-    renderChartMix(filtLoja);
+    // Mix chart: always full data (Todas stays global), highlight selected
+    renderChartMix(agg.porLoja,lf);
   }else{
     // No loja filter: show full KPIs
     var atvCur=agg.pedT>0?agg.fatT/agg.pedT:0;
@@ -832,7 +838,7 @@ function reRender(){
       '<div class="kpi"><div class="kpi-lbl">Pedidos/Dia</div><div class="kpi-val">'+Math.round(agg.pedT/agg.diasCV)+'</div><div class="kpi-sub">média por dia aberto</div></div>';
 
     renderChartFat(agg.porDia);
-    renderChartMix(agg.porLoja);
+    renderChartMix(agg.porLoja,[]);
   }
 
   renderProds(agg,LAST_PPP||{},lf,cf);
