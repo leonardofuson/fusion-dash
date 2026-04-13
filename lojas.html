@@ -323,7 +323,8 @@ function aggregate(peds,itens,pedMap){
     if(!itensVend[v]) itensVend[v]={qtd:0,val:0};
     itensVend[v].qtd+=i.qtd;itensVend[v].val+=val;
     if(!vendCats[v]) vendCats[v]={};
-    vendCats[v][c]=(vendCats[v][c]||0)+val;
+    if(!vendCats[v][c]) vendCats[v][c]={val:0,qtd:0,pids:{}};
+    vendCats[v][c].val+=val;vendCats[v][c].qtd+=i.qtd;vendCats[v][c].pids[i.pid]=1;
     // Agrega por SKU Pai
     var sp=i.sku_pai||'?';
     if(!porProd[sp]) porProd[sp]={sku:sp,nome:i.nome_pai||sp,cat:i.cat,qtd:0,val:0,lojas:{},pids:{}};
@@ -539,6 +540,7 @@ function renderChartMix(porLoja){
 
 var DE=null,ATE=null;
 var LAST_AGG=null,LAST_AGGP=null,LAST_PPP=null;
+var LAST_RAW_PEDS=null,LAST_RAW_PEDS_PREV=null;
 var SORT_STATE={prods:{key:'val',dir:'desc'},vends:{key:'fat',dir:'desc'}};
 
 function sortData(arr,key,dir){
@@ -671,15 +673,19 @@ function renderProds(agg,ppp,lojaFiltro,catFiltro){
 function renderVends(agg,lojaFiltro,catFiltro){
   var vends=Object.values(agg.porVend).filter(function(v){return v.nome!=='Vendedor Não Identificado';});
   if(lojaFiltro.length){vends=vends.filter(function(v){return lojaFiltro.indexOf(v.loja)>=0;});}
-  // If category filter active, recalculate fat to show only selected categories' revenue
+  // If category filter active, recalculate fat/ped/upt for selected categories only
   if(catFiltro.length&&agg.vendCats){
     vends=vends.map(function(v){
       var vc=agg.vendCats[v.nome];
       if(!vc) return null;
-      var catFat=0;
-      catFiltro.forEach(function(c){catFat+=(vc[c]||0);});
+      var catFat=0,catQtd=0,catPids={};
+      catFiltro.forEach(function(c){
+        if(vc[c]){catFat+=vc[c].val;catQtd+=vc[c].qtd;Object.assign(catPids,vc[c].pids);}
+      });
       if(catFat<=0) return null;
-      return Object.assign({},v,{fat:catFat});
+      var catPed=Object.keys(catPids).length;
+      var catUpt=catPed>0?catQtd/catPed:null;
+      return Object.assign({},v,{fat:catFat,ped:catPed,upt:catUpt});
     }).filter(Boolean);
   }
   // Add tm (ticket medio) for sorting
@@ -750,8 +756,63 @@ function reRender(){
   if(!LAST_AGG) return;
   var lf=getFilteredLojas();
   var cf=getFilteredCats();
-  renderProds(LAST_AGG,LAST_PPP||{},lf,cf);
-  renderVends(LAST_AGG,lf,cf);
+  var agg=LAST_AGG, aggP=LAST_AGGP;
+
+  // If loja filter active, recalculate KPIs and charts from filtered pedidos
+  if(lf.length && LAST_RAW_PEDS){
+    var filtPeds=LAST_RAW_PEDS.filter(function(p){return lf.indexOf(p.loja)>=0;});
+    var filtPrev=LAST_RAW_PEDS_PREV?LAST_RAW_PEDS_PREV.filter(function(p){return lf.indexOf(p.loja)>=0;}):[];
+    // KPIs from filtered peds
+    var fatT=0,pedT=0;
+    var porDia={};
+    filtPeds.forEach(function(p){fatT+=p.fat;pedT++;if(!porDia[p.data])porDia[p.data]=0;porDia[p.data]+=p.fat;});
+    var fatP=0,pedP=0;
+    filtPrev.forEach(function(p){fatP+=p.fat;pedP++;});
+    var diasCV=Math.max(1,Object.keys(porDia).length);
+    var atvCur=pedT>0?fatT/pedT:0;
+    var atvPrev=pedP>0?fatP/pedP:0;
+
+    // KPIs for filtered loja - get UPT and PM from agg
+    var totalQtd=0,totalVal=0;
+    lf.forEach(function(l){
+      var lo=agg.porLoja[l];
+      if(lo&&lo.cats){Object.values(lo.cats).forEach(function(c){totalQtd+=c.qtd;totalVal+=c.val;});}
+    });
+    var upt=pedT>0?totalQtd/pedT:0;
+    var pm=totalQtd>0?totalVal/totalQtd:0;
+
+    document.getElementById('kpis').innerHTML=
+      '<div class="kpi"><div class="kpi-lbl">Faturamento</div><div class="kpi-val">'+fmt(fatT)+'</div><div class="kpi-sub">'+fmtN(pedT)+' pedidos</div><div class="kpi-delta">'+deltaBadge(fatT,fatP)+'</div></div>'+
+      '<div class="kpi"><div class="kpi-lbl">Ticket Médio</div><div class="kpi-val kv-blue">'+fmt(atvCur)+'</div><div class="kpi-sub">por pedido</div><div class="kpi-delta">'+deltaBadge(atvCur,atvPrev)+'</div></div>'+
+      '<div class="kpi"><div class="kpi-lbl">Prod/Atendimento</div><div class="kpi-val" style="color:var(--amber)">'+(upt?fmtD(upt):'—')+'</div><div class="kpi-sub">itens por pedido</div></div>'+
+      '<div class="kpi"><div class="kpi-lbl">Preço Médio Peça</div><div class="kpi-val" style="color:var(--pink)">'+(pm?fmt(pm):'—')+'</div><div class="kpi-sub">por item vendido</div></div>'+
+      '<div class="kpi"><div class="kpi-lbl">Fat/Dia</div><div class="kpi-val kv-green">'+fmt(fatT/diasCV)+'</div><div class="kpi-sub">'+diasCV+' dia'+(diasCV>1?'s':'')+' com venda</div></div>'+
+      '<div class="kpi"><div class="kpi-lbl">Pedidos/Dia</div><div class="kpi-val">'+Math.round(pedT/diasCV)+'</div><div class="kpi-sub">média por dia aberto</div></div>';
+
+    renderChartFat(porDia);
+
+    // Mix chart: only selected lojas
+    var filtLoja={};
+    lf.forEach(function(l){if(agg.porLoja[l]) filtLoja[l]=agg.porLoja[l];});
+    renderChartMix(filtLoja);
+  }else{
+    // No loja filter: show full KPIs
+    var atvCur=agg.pedT>0?agg.fatT/agg.pedT:0;
+    var atvPrev=aggP&&aggP.pedT>0?aggP.fatT/aggP.pedT:0;
+    document.getElementById('kpis').innerHTML=
+      '<div class="kpi"><div class="kpi-lbl">Faturamento</div><div class="kpi-val">'+fmt(agg.fatT)+'</div><div class="kpi-sub">'+fmtN(agg.pedT)+' pedidos</div><div class="kpi-delta">'+deltaBadge(agg.fatT,aggP?aggP.fatT:0)+'</div></div>'+
+      '<div class="kpi"><div class="kpi-lbl">Ticket Médio</div><div class="kpi-val kv-blue">'+fmt(atvCur)+'</div><div class="kpi-sub">por pedido</div><div class="kpi-delta">'+deltaBadge(atvCur,atvPrev)+'</div></div>'+
+      '<div class="kpi"><div class="kpi-lbl">Prod/Atendimento</div><div class="kpi-val" style="color:var(--amber)">'+(agg.upt?fmtD(agg.upt):'—')+'</div><div class="kpi-sub">itens por pedido</div></div>'+
+      '<div class="kpi"><div class="kpi-lbl">Preço Médio Peça</div><div class="kpi-val" style="color:var(--pink)">'+(agg.pm?fmt(agg.pm):'—')+'</div><div class="kpi-sub">por item vendido</div></div>'+
+      '<div class="kpi"><div class="kpi-lbl">Fat/Dia</div><div class="kpi-val kv-green">'+fmt(agg.fatT/agg.diasCV)+'</div><div class="kpi-sub">'+agg.diasCV+' dia'+(agg.diasCV>1?'s':'')+' com venda</div></div>'+
+      '<div class="kpi"><div class="kpi-lbl">Pedidos/Dia</div><div class="kpi-val">'+Math.round(agg.pedT/agg.diasCV)+'</div><div class="kpi-sub">média por dia aberto</div></div>';
+
+    renderChartFat(agg.porDia);
+    renderChartMix(agg.porLoja);
+  }
+
+  renderProds(agg,LAST_PPP||{},lf,cf);
+  renderVends(agg,lf,cf);
 }
 
 function domingoSemana(hoje){
@@ -867,12 +928,12 @@ async function carregar(){
 
     // ---- Store for re-render and render tables ----
     LAST_AGG=agg;
+    LAST_AGGP=aggP;
     LAST_PPP=agg.porProdPrev||{};
+    LAST_RAW_PEDS=peds;
+    LAST_RAW_PEDS_PREV=pedsPrev;
     populateFilters(agg);
     reRender();
-
-    renderChartFat(agg.porDia);
-    renderChartMix(agg.porLoja);
     document.getElementById('upd').textContent='Atualizado '+new Date().toLocaleTimeString('pt-BR');
   }catch(err){
     console.error(err);
