@@ -279,7 +279,7 @@ function processItens(rawItens,prodMap,pedMap){
     return{loja:ped.loja, vendedor:ped.vendedor, data:ped.data,
       qtd:i.quantidade, preco:i.preco_unitario, desc:i.desconto_item||0,
       cat:pai.cat, sku_pai:skuPai, nome_pai:pai.nome, pid:i.pedido_id};
-  }).filter(function(i){return i && i.cat!=='TECIDO';});
+  }).filter(function(i){return i && i.cat!=='TECIDO' && i.cat!=='TROCA';});
 }
 
 function aggregate(peds,itens,pedMap){
