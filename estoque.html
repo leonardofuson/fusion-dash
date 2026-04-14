@@ -639,16 +639,16 @@ function render() {
     pais.sort((a, b) => totPai(a) - totPai(b));
   }
 
-  renderKPIs(locF);
-  renderLocCards(locF);
-  renderBars(locF);
+  renderKPIs(pais, locF);
+  renderLocCards(pais, locF);
+  renderBars(pais, locF);
   renderProdList(pais, locF, nivel);
 }
 
-function renderKPIs(locF) {
+function renderKPIs(filtrados, locF) {
   const locLabel = locF ? LOCS.find(l => l.key === locF)?.label : null;
   let tg = 0, val = 0, com = 0, sem = 0, quebradas = 0;
-  DADOS.pais.forEach(p => {
+  filtrados.forEach(p => {
     const t = totPai(p, locF || undefined);
     tg += t;
     val += t * (p.preco || 0);
@@ -656,7 +656,7 @@ function renderKPIs(locF) {
     if (isQuebrada(p, locF || undefined)) quebradas++;
   });
 
-  const total = DADOS.pais.length;
+  const total = filtrados.length;
   const stockoutPct = total > 0 ? (sem / total * 100) : 0;
   const subLocal = locLabel ? locLabel : `${LOCS.length} locais`;
 
@@ -688,11 +688,11 @@ function renderKPIs(locF) {
     </div>`;
 }
 
-function renderLocCards(activeLoc) {
+function renderLocCards(filtrados, activeLoc) {
   const tl = {};
   let tg = 0;
   LOCS.forEach(l => { tl[l.key] = 0; });
-  DADOS.pais.forEach(p => {
+  filtrados.forEach(p => {
     const bl = totByLocPai(p);
     LOCS.forEach(l => { tl[l.key] += bl[l.key]; tg += bl[l.key]; });
   });
@@ -700,7 +700,7 @@ function renderLocCards(activeLoc) {
   // Count SKUs per location
   const skuCount = {};
   LOCS.forEach(l => { skuCount[l.key] = 0; });
-  DADOS.pais.forEach(p => {
+  filtrados.forEach(p => {
     const bl = totByLocPai(p);
     LOCS.forEach(l => { if (bl[l.key] > 0) skuCount[l.key]++; });
   });
@@ -718,11 +718,11 @@ function renderLocCards(activeLoc) {
   }).join('');
 }
 
-function renderBars(locF) {
+function renderBars(filtrados, locF) {
   // Channel bars
   const tl = {};
   LOCS.forEach(l => { tl[l.key] = 0; });
-  DADOS.pais.forEach(p => {
+  filtrados.forEach(p => {
     const bl = totByLocPai(p);
     LOCS.forEach(l => { tl[l.key] += bl[l.key]; });
   });
@@ -737,7 +737,7 @@ function renderBars(locF) {
 
   // Category bars
   const tc = {};
-  DADOS.pais.forEach(p => {
+  filtrados.forEach(p => {
     const c = p.categoria || 'Outros';
     tc[c] = (tc[c] || 0) + totPai(p, locF || undefined);
   });
