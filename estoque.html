@@ -55,22 +55,27 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;-webkit-text-size-a
 .fbtn:hover{border-color:var(--blue);color:var(--blue);}
 .fbtn.on{background:var(--blue);border-color:var(--blue);color:#fff;}
 
-/* ── BOTÃO FABRICAÇÃO PRÓPRIA ── */
+/* ── BOTÕES DESTAQUE ── */
 .btn-fab{
   display:flex;align-items:center;gap:10px;
   padding:8px 18px;border-radius:10px;
-  border:1px solid var(--amber);
-  background:rgba(245,158,11,0.08);
-  color:var(--amber);cursor:pointer;
+  border:1px solid;cursor:pointer;
   font-family:inherit;transition:all 0.2s;
   white-space:nowrap;
 }
-.btn-fab:hover{background:rgba(245,158,11,0.15);border-color:#fbbf24;}
-.btn-fab.on{background:var(--amber);border-color:var(--amber);color:#000;box-shadow:0 0 16px rgba(245,158,11,0.3);}
-.btn-fab.on .btn-fab-icon{color:#000;}
-.btn-fab-icon{font-size:18px;line-height:1;}
-.btn-fab-txt{display:flex;flex-direction:column;line-height:1.2;text-align:left;}
+.btn-fab-icon{font-size:18px;line-height:1;flex-shrink:0;}
+.btn-fab-txt{display:flex;flex-direction:column;line-height:1.2;text-align:left;font-size:12px;font-weight:500;}
 .btn-fab-txt small{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;opacity:0.7;}
+
+/* Fabricação Própria — azul */
+.btn-fab-blue{border-color:var(--blue);background:rgba(59,130,246,0.08);color:var(--blue);}
+.btn-fab-blue:hover{background:rgba(59,130,246,0.15);border-color:#60a5fa;}
+.btn-fab-blue.on{background:var(--blue);border-color:var(--blue);color:#fff;box-shadow:0 0 16px rgba(59,130,246,0.3);}
+
+/* Grades Quebradas — amber */
+.btn-fab-amber{border-color:var(--amber);background:rgba(245,158,11,0.08);color:var(--amber);}
+.btn-fab-amber:hover{background:rgba(245,158,11,0.15);border-color:#fbbf24;}
+.btn-fab-amber.on{background:var(--amber);border-color:var(--amber);color:#000;box-shadow:0 0 16px rgba(245,158,11,0.3);}
 
 /* ── KPIs (lojas pattern) ── */
 .kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:1.5rem;}
@@ -195,10 +200,10 @@ table.mtz tr.row-broken:hover td.tdc{background:rgba(245,158,11,0.12);}
   .chip{padding:5px 10px;font-size:11px;}
   .fpill{padding:6px 10px;}
   .fpill label{font-size:9px;}
-  .btn-fab{padding:6px 12px;border-radius:8px;}
+  .btn-fab{padding:6px 12px;border-radius:8px;gap:6px;}
   .btn-fab-icon{font-size:14px;}
-  .btn-fab-txt{font-size:11px;}
-  .btn-fab-txt small{font-size:8px;}
+  .btn-fab-txt{font-size:10px;}
+  .btn-fab-txt small{font-size:7px;}
   .prod-head{padding:12px 14px;gap:8px;}
   .prod-name{font-size:12px;}
   .prod-sku{display:none;}
@@ -259,9 +264,13 @@ table.mtz tr.row-broken:hover td.tdc{background:rgba(245,158,11,0.12);}
       <button class="chip" data-nivel="com" onclick="setNivel('com',this)">Com Estoque</button>
       <button class="chip" data-nivel="sem" onclick="setNivel('sem',this)">Sem Estoque</button>
     </div>
-    <button class="btn-fab" id="btn-fab" data-nivel="quebrada" onclick="setNivel('quebrada',this)">
-      <span class="btn-fab-icon">⚠</span>
-      <span class="btn-fab-txt">Fabricação Própria<small>Grades Quebradas</small></span>
+    <button class="btn-fab btn-fab-blue" id="btn-fabprop" onclick="toggleFab('fabprop')">
+      <svg class="btn-fab-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 20V8l4-4h4l2 2h8v14z"/><path d="M6 12v4"/><path d="M10 12v4"/><path d="M14 12v4"/><path d="M18 12v4"/></svg>
+      <span class="btn-fab-txt">Fabricação Própria<small>13 produtos</small></span>
+    </button>
+    <button class="btn-fab btn-fab-amber" id="btn-quebrada" onclick="toggleFab('quebrada')">
+      <span class="btn-fab-icon" style="font-size:16px">⚠</span>
+      <span class="btn-fab-txt">Grades Quebradas<small>tamanhos com furo</small></span>
     </button>
     <div class="fpill">
       <label>Ordenar</label>
@@ -602,16 +611,17 @@ function render() {
   const busca  = document.getElementById('busca').value.trim().toLowerCase();
   const cat    = document.getElementById('sel-cat').value;
   const locF   = document.getElementById('sel-loc').value;
-  const fabAtivo = document.getElementById('btn-fab').classList.contains('on');
-  const nivel  = fabAtivo ? 'quebrada' : (document.querySelector('#chips-nivel .chip.on')?.dataset?.nivel || 'todos');
+  const fabPropAtivo = document.getElementById('btn-fabprop').classList.contains('on');
+  const quebradaAtivo = document.getElementById('btn-quebrada').classList.contains('on');
+  const nivel = fabPropAtivo ? 'fabprop' : (quebradaAtivo ? 'quebrada' : (document.querySelector('#chips-nivel .chip.on')?.dataset?.nivel || 'todos'));
   const sort   = document.getElementById('sel-sort').value;
 
   let pais = DADOS.pais.filter(p => {
-    // Fabricação Própria: só os 13 SKUs fabricados, com grade quebrada
-    if (nivel === 'quebrada') {
-      if (!SKU_FINALIZADOS.has(p.sku.trim().toUpperCase())) return false;
-      if (!isQuebrada(p, locF || undefined)) return false;
-    }
+    const skuU = p.sku.trim().toUpperCase();
+    // Fabricação Própria: só os 13 SKUs fabricados
+    if (nivel === 'fabprop' && !SKU_FINALIZADOS.has(skuU)) return false;
+    // Grades Quebradas: qualquer produto com grade quebrada
+    if (nivel === 'quebrada' && !isQuebrada(p, locF || undefined)) return false;
     if (cat && p.categoria !== cat) return false;
     if (busca && !p.sku.toLowerCase().includes(busca) && !p.nome.toLowerCase().includes(busca)) return false;
     const t = totPai(p, locF || undefined);
@@ -743,12 +753,12 @@ function renderBars(locF) {
 }
 
 function renderProdList(pais, locF, nivel) {
-  const modoQuebrada = nivel === 'quebrada';
-  if (modoQuebrada) pais.forEach(p => { EXP[safe(p.sku)] = true; });
+  const modoDestaque = nivel === 'quebrada' || nivel === 'fabprop';
+  if (modoDestaque) pais.forEach(p => { EXP[safe(p.sku)] = true; });
   document.getElementById('prod-count').textContent = `${pais.length} de ${DADOS.pais.length}`;
   document.getElementById('prod-list').innerHTML = pais.length === 0
     ? '<div class="empty">Nenhum produto encontrado</div>'
-    : pais.map(p => renderProd(p, locF, modoQuebrada)).join('');
+    : pais.map(p => renderProd(p, locF, modoDestaque)).join('');
 }
 
 function renderProd(pai, locF, modoQuebrada) {
@@ -901,19 +911,37 @@ function toggleCanal(id) {
 
 function setNivel(nivel, el) {
   const jaAtivo = el.classList.contains('on');
-  const btnFab = document.getElementById('btn-fab');
-  // Limpar todos os chips e o botão fab
+  // Limpar chips (não toca nos botões fab)
   document.querySelectorAll('#chips-nivel .chip').forEach(c => c.classList.remove('on'));
-  btnFab.classList.remove('on');
+  document.getElementById('btn-fabprop').classList.remove('on');
+  document.getElementById('btn-quebrada').classList.remove('on');
 
   if (jaAtivo && nivel !== 'todos') {
-    // Toggle off → volta para "Todos", recolhe produtos
     document.querySelector('#chips-nivel .chip[data-nivel="todos"]').classList.add('on');
     if (!expAll) EXP = {};
-  } else if (nivel === 'quebrada') {
-    btnFab.classList.add('on');
   } else {
     el.classList.add('on');
+  }
+  render();
+}
+
+function toggleFab(modo) {
+  const btnProp = document.getElementById('btn-fabprop');
+  const btnQueb = document.getElementById('btn-quebrada');
+  const btn = modo === 'fabprop' ? btnProp : btnQueb;
+  const jaAtivo = btn.classList.contains('on');
+
+  // Limpar tudo
+  document.querySelectorAll('#chips-nivel .chip').forEach(c => c.classList.remove('on'));
+  btnProp.classList.remove('on');
+  btnQueb.classList.remove('on');
+
+  if (jaAtivo) {
+    // Toggle off → volta para Todos
+    document.querySelector('#chips-nivel .chip[data-nivel="todos"]').classList.add('on');
+    if (!expAll) EXP = {};
+  } else {
+    btn.classList.add('on');
   }
   render();
 }
