@@ -180,7 +180,7 @@ let AUTH_HEADERS=null;
 
 var LOJA_CORES={
   'Loja Oriente':'#6366f1','Loja Marcolina':'#22c55e','Loja São Bernardo':'#eab308',
-  'Loja Vautier':'#a855f7','Loja Polo Plaza':'#ec4899','Atacado WhatsApp':'#06b6d4',
+  'Loja Vautier':'#a855f7','Loja Polo Plaza':'#ec4899',
   'Loja Não Identificada':'#ef4444'
 };
 var CAT_CORES={
@@ -224,7 +224,7 @@ async function buscarTudo(tab,filtro){
 
 function buildFiltro(de,ate){
   return 'select='+SELECT_COLS+'&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+
-    '&origem_conta=in.(kwid,flecha)&status=not.in.(cancelado,devolvido)';
+    '&origem_conta=eq.kwid&status=not.in.(cancelado,devolvido)';
 }
 
 async function fetchPedidos(de,ate){
@@ -266,7 +266,7 @@ function normPedidos(raw){
     return{
       id:p.id, data:p.data_pedido, fat:parseFloat(p.valor_bruto||0),
       desc:parseFloat(p.desconto||0),
-      loja:p.origem_conta==='flecha'?'Atacado WhatsApp':p.loja_nome,
+      loja:p.loja_nome,
       vendedor:(p.vendedor||'').trim()||'Vendedor Não Identificado', origem:p.origem_conta
     };
   }).filter(function(p){return p.loja&&IGNORAR.indexOf(p.loja)<0;});
@@ -429,7 +429,7 @@ function renderChartFat(porDia){
 }
 
 function renderChartMix(porLoja,highlightLojas){
-  var EXCLUIR_MIX={'Atacado WhatsApp':1,'Loja Não Identificada':1};
+  var EXCLUIR_MIX={'Loja Não Identificada':1};
   var lojas=Object.keys(porLoja).filter(function(l){return !EXCLUIR_MIX[l];})
     .sort(function(a,b){return(porLoja[b].fat||0)-(porLoja[a].fat||0);});
   var allCats={};
