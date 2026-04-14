@@ -665,6 +665,52 @@ function toggleCatChip(el){
   reRender();
 }
 
+function renderLojaTable(){
+  if(!LAST_AGG) return;
+  var agg=LAST_AGG, aggP=LAST_AGGP||{};
+
+  // If a product is highlighted, show per-loja breakdown for that product
+  if(HIGHLIGHT_PROD && agg.porProd[HIGHLIGHT_PROD]){
+    var hp=agg.porProd[HIGHLIGHT_PROD];
+    var lojaRows=Object.keys(agg.porLoja).sort(function(a,b){return(hp.lojas[b]||0)-(hp.lojas[a]||0);});
+    document.getElementById('tbody-lojas').innerHTML=lojaRows.map(function(lname){
+      var lo=agg.porLoja[lname];
+      var prodFat=hp.lojas[lname]||0;
+      var prodQtd=hp.lojaQtd[lname]||0;
+      if(prodFat<=0) return '';
+      var pctOfLoja=lo.fat>0?prodFat/lo.fat*100:0;
+      return '<tr>'+
+        '<td><span class="loja-link" onclick="clickLoja(\''+lname.replace(/'/g,"\\'")+'\')" title="Filtrar por '+lname+'"><span class="loja-dot" style="background:'+corLoja(lname)+';color:'+corLoja(lname)+'"></span>'+lname+'</span></td>'+
+        '<td class="val">'+fmt(prodFat)+'</td>'+
+        '<td class="r">'+fmtP(pctOfLoja)+' da loja</td>'+
+        '<td class="val">'+fmtN(prodQtd)+'</td>'+
+        '<td class="val">'+fmt(prodQtd>0?prodFat/prodQtd:0)+'</td>'+
+        '<td class="val">—</td><td class="val">—</td><td class="r">—</td><td>—</td></tr>';
+    }).filter(Boolean).join('');
+    return;
+  }
+
+  // Normal mode: full loja stats
+  var lojas=Object.values(agg.porLoja).sort(function(a,b){return b.fat-a.fat;});
+  var dl=Object.keys(agg.porDia).sort();
+  document.getElementById('tbody-lojas').innerHTML=lojas.map(function(l){
+    var prev=(aggP.porLoja||{})[l.nome];
+    var atv=l.ped>0?l.fat/l.ped:0;
+    var descPct=(l.fat+l.desc)>0?l.desc/(l.fat+l.desc)*100:0;
+    var sparkData=dl.map(function(d){return agg.porDiaLoja[l.nome+'|'+d]||0;});
+    return '<tr>'+
+      '<td><span class="loja-link" onclick="clickLoja(\''+l.nome.replace(/'/g,"\\'")+'\')" title="Filtrar por '+l.nome+'"><span class="loja-dot" style="background:'+corLoja(l.nome)+';color:'+corLoja(l.nome)+'"></span>'+l.nome+'</span></td>'+
+      '<td class="val">'+fmt(l.fat)+'</td>'+
+      '<td class="r">'+deltaBadge(l.fat,prev?prev.fat:0)+'</td>'+
+      '<td class="val">'+fmtN(l.ped)+'</td>'+
+      '<td class="val">'+fmt(atv)+'</td>'+
+      '<td class="val">'+(l.upt!==null?fmtD(l.upt):'—')+'</td>'+
+      '<td class="val">'+(l.pm!==null?fmt(l.pm):'—')+'</td>'+
+      '<td class="r">'+fmtP(descPct)+'</td>'+
+      '<td>'+sparkSVG(sparkData,corLoja(l.nome))+'</td></tr>';
+  }).join('');
+}
+
 function renderProds(agg,ppp,lojaFiltro,catFiltro){
   var ipp=agg.itensPorPed||{}, pm=agg.pedMap||{};
   var prods=Object.values(agg.porProd).map(function(p){
@@ -781,33 +827,41 @@ var HIGHLIGHT_LOJA=null;
 var HIGHLIGHT_PROD=null;
 
 function clickLoja(lojaName){
-  // Toggle highlight
+  HIGHLIGHT_PROD=null; // limpar seleção de produto
   if(HIGHLIGHT_LOJA===lojaName){
     HIGHLIGHT_LOJA=null;
-    // Reset chip filter to Todas
     var chips=document.querySelectorAll('#loja-chips .chip-sm');
     chips.forEach(function(c){c.classList.remove('on');});
     var todas=document.querySelector('#loja-chips .chip-sm[data-loja=""]');
     if(todas) todas.classList.add('on');
   }else{
     HIGHLIGHT_LOJA=lojaName;
-    // Set chip filter
     var chips=document.querySelectorAll('#loja-chips .chip-sm');
     chips.forEach(function(c){c.classList.remove('on');});
     var target=document.querySelector('#loja-chips .chip-sm[data-loja="'+lojaName+'"]');
     if(target) target.classList.add('on');
   }
   refreshLojaChipStyles();
+  renderLojaTable();
   reRender();
   applyHighlights();
 }
 
 function clickProd(skuPai){
+  HIGHLIGHT_LOJA=null; // limpar seleção de loja
+  // Reset chip to Todas
+  var chips=document.querySelectorAll('#loja-chips .chip-sm');
+  chips.forEach(function(c){c.classList.remove('on');});
+  var todas=document.querySelector('#loja-chips .chip-sm[data-loja=""]');
+  if(todas) todas.classList.add('on');
+  refreshLojaChipStyles();
+
   if(HIGHLIGHT_PROD===skuPai){
     HIGHLIGHT_PROD=null;
   }else{
     HIGHLIGHT_PROD=skuPai;
   }
+  renderLojaTable();
   reRender();
   applyHighlights();
 }
@@ -897,27 +951,7 @@ function reRender(){
 
   renderProds(agg,LAST_PPP||{},lf,cf);
   renderVends(agg,lf,cf);
-
-  // If product highlighted, update loja table to show that product's breakdown per loja
-  if(HIGHLIGHT_PROD && agg.porProd[HIGHLIGHT_PROD]){
-    var hp=agg.porProd[HIGHLIGHT_PROD];
-    var lojaRows=Object.keys(agg.porLoja).sort(function(a,b){return(hp.lojas[b]||0)-(hp.lojas[a]||0);});
-    var dl=Object.keys(agg.porDia).sort();
-    document.getElementById('tbody-lojas').innerHTML=lojaRows.map(function(lname){
-      var lo=agg.porLoja[lname];
-      var prodFat=hp.lojas[lname]||0;
-      var prodQtd=hp.lojaQtd[lname]||0;
-      if(prodFat<=0) return '';
-      var pctOfLoja=lo.fat>0?prodFat/lo.fat*100:0;
-      return '<tr>'+
-        '<td><span class="loja-link" onclick="clickLoja(\''+lname.replace(/'/g,"\\'")+'\')" title="Filtrar por '+lname+'"><span class="loja-dot" style="background:'+corLoja(lname)+';color:'+corLoja(lname)+'"></span>'+lname+'</span></td>'+
-        '<td class="val">'+fmt(prodFat)+'</td>'+
-        '<td class="r">'+fmtP(pctOfLoja)+' da loja</td>'+
-        '<td class="val">'+fmtN(prodQtd)+'</td>'+
-        '<td class="val">'+fmt(prodQtd>0?prodFat/prodQtd:0)+'</td>'+
-        '<td class="val">—</td><td class="val">—</td><td class="r">—</td><td>—</td></tr>';
-    }).filter(Boolean).join('');
-  }
+  renderLojaTable();
 }
 
 function domingoSemana(hoje){
@@ -1012,24 +1046,7 @@ async function carregar(){
       '<div class="kpi"><div class="kpi-lbl">Pedidos/Dia</div><div class="kpi-val">'+Math.round(agg.pedT/agg.diasCV)+'</div><div class="kpi-sub">média por dia aberto</div></div>';
 
     // ---- Tabela lojas ----
-    var lojas=Object.values(agg.porLoja).sort(function(a,b){return b.fat-a.fat;});
-    var dl=Object.keys(agg.porDia).sort();
-    document.getElementById('tbody-lojas').innerHTML=lojas.map(function(l){
-      var prev=aggP.porLoja[l.nome];
-      var atv=l.ped>0?l.fat/l.ped:0;
-      var descPct=(l.fat+l.desc)>0?l.desc/(l.fat+l.desc)*100:0;
-      var sparkData=dl.map(function(d){return agg.porDiaLoja[l.nome+'|'+d]||0;});
-      return '<tr>'+
-        '<td><span class="loja-link" onclick="clickLoja(\''+l.nome.replace(/'/g,"\\'")+'\')" title="Filtrar por '+l.nome+'"><span class="loja-dot" style="background:'+corLoja(l.nome)+';color:'+corLoja(l.nome)+'"></span>'+l.nome+'</span></td>'+
-        '<td class="val">'+fmt(l.fat)+'</td>'+
-        '<td class="r">'+deltaBadge(l.fat,prev?prev.fat:0)+'</td>'+
-        '<td class="val">'+fmtN(l.ped)+'</td>'+
-        '<td class="val">'+fmt(atv)+'</td>'+
-        '<td class="val">'+(l.upt!==null?fmtD(l.upt):'—')+'</td>'+
-        '<td class="val">'+(l.pm!==null?fmt(l.pm):'—')+'</td>'+
-        '<td class="r">'+fmtP(descPct)+'</td>'+
-        '<td>'+sparkSVG(sparkData,corLoja(l.nome))+'</td></tr>';
-    }).join('');
+    renderLojaTable();
 
     // ---- Store for re-render and render tables ----
     LAST_AGG=agg;
