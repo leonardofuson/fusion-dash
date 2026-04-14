@@ -44,10 +44,6 @@ table.tb th.r{text-align:right;}
 table.tb td{padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.04);color:var(--txt1);}
 .loja-link{cursor:pointer;transition:opacity 0.15s;}
 .loja-link:hover{opacity:0.8;text-decoration:underline;text-underline-offset:3px;}
-table.tb tr.dimmed td{opacity:0.25;}
-table.tb tr.highlighted td{opacity:1;}
-.prod-link{cursor:pointer;transition:opacity 0.15s;}
-.prod-link:hover{text-decoration:underline;text-underline-offset:3px;}
 table.tb td.r{text-align:right;color:var(--txt2);}
 table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nums;}
 table.tb tr:last-child td{border-bottom:none;}
@@ -177,14 +173,13 @@ th.sortable.desc::after{content:'▼';opacity:1;color:var(--green);}
 
 <script>
 var SB_URL='https://spulbhnmkomvgohzhfvj.supabase.co';
-// valor_bruto = total do pedido (pós-desconto, com frete) — NÃO é valor cheio dos itens
 var SELECT_COLS='id,data_pedido,valor_bruto,desconto,loja_nome,origem_conta,vendedor';
 var MAX_PAGES=50, BATCH_SZ=400;
 let AUTH_HEADERS=null;
 
 var LOJA_CORES={
   'Loja Oriente':'#6366f1','Loja Marcolina':'#22c55e','Loja São Bernardo':'#eab308',
-  'Loja Vautier':'#a855f7','Loja Polo Plaza':'#ec4899',
+  'Loja Vautier':'#a855f7','Loja Polo Plaza':'#ec4899','Atacado WhatsApp':'#06b6d4',
   'Loja Não Identificada':'#ef4444'
 };
 var CAT_CORES={
@@ -228,7 +223,7 @@ async function buscarTudo(tab,filtro){
 
 function buildFiltro(de,ate){
   return 'select='+SELECT_COLS+'&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+
-    '&origem_conta=eq.kwid&status=not.in.(cancelado,devolvido)';
+    '&origem_conta=in.(kwid,flecha)&status=not.in.(cancelado,devolvido)';
 }
 
 async function fetchPedidos(de,ate){
@@ -270,7 +265,7 @@ function normPedidos(raw){
     return{
       id:p.id, data:p.data_pedido, fat:parseFloat(p.valor_bruto||0),
       desc:parseFloat(p.desconto||0),
-      loja:p.loja_nome,
+      loja:p.origem_conta==='flecha'?'Atacado WhatsApp':p.loja_nome,
       vendedor:(p.vendedor||'').trim()||'Vendedor Não Identificado', origem:p.origem_conta
     };
   }).filter(function(p){return p.loja&&IGNORAR.indexOf(p.loja)<0;});
@@ -326,19 +321,10 @@ function aggregate(peds,itens,pedMap){
     itensPorPed[i.pid].qtd+=i.qtd;
   });
   // 2º passo: agrega por loja, vendedor, produto
-  var vendCats={},vendProds={},prodVends={};
+  var vendCats={};
   itens.forEach(function(i){
     var l=i.loja,v=i.vendedor||'Sem vendedor';
     var val=i.qtd*i.preco;
-    var sp=i.sku_pai||'?';
-    // vendedor→produto
-    if(!vendProds[v]) vendProds[v]={};
-    if(!vendProds[v][sp]) vendProds[v][sp]={val:0,qtd:0,nome:i.nome_pai||sp};
-    vendProds[v][sp].val+=val; vendProds[v][sp].qtd+=i.qtd;
-    // produto→vendedor
-    if(!prodVends[sp]) prodVends[sp]={};
-    if(!prodVends[sp][v]) prodVends[sp][v]={val:0,qtd:0};
-    prodVends[sp][v].val+=val; prodVends[sp][v].qtd+=i.qtd;
     if(!itensLoja[l]) itensLoja[l]={qtd:0,val:0,cats:{}};
     itensLoja[l].qtd+=i.qtd;itensLoja[l].val+=val;
     var c=i.cat;
@@ -388,7 +374,7 @@ function aggregate(peds,itens,pedMap){
   });
   var diasCV=Math.max(1,Object.keys(porDia).length);
   return{porLoja:porLoja,porVend:porVend,porProd:porProd,porDia:porDia,porDiaLoja:porDiaLoja,
-    vendCats:vendCats,vendProds:vendProds,prodVends:prodVends,itensPorPed:itensPorPed,pedMap:pedMap,
+    vendCats:vendCats,itensPorPed:itensPorPed,pedMap:pedMap,
     fatT:fatT,pedT:pedT,descT:descT,totalQtd:totalQtd,totalVal:totalVal,
     diasCV:diasCV,upt:pedT>0?totalQtd/pedT:0,pm:totalQtd>0?totalVal/totalQtd:0};
 }
@@ -442,7 +428,7 @@ function renderChartFat(porDia){
 }
 
 function renderChartMix(porLoja,highlightLojas){
-  var EXCLUIR_MIX={'Loja Não Identificada':1};
+  var EXCLUIR_MIX={'Atacado WhatsApp':1,'Loja Não Identificada':1};
   var lojas=Object.keys(porLoja).filter(function(l){return !EXCLUIR_MIX[l];})
     .sort(function(a,b){return(porLoja[b].fat||0)-(porLoja[a].fat||0);});
   var allCats={};
@@ -674,76 +660,8 @@ function toggleCatChip(el){
   reRender();
 }
 
-function renderLojaTable(){
-  if(!LAST_AGG) return;
-  var agg=LAST_AGG, aggP=LAST_AGGP||{};
-
-  // If a product is highlighted, show per-loja breakdown for that product
-  if(HIGHLIGHT_PROD && agg.porProd[HIGHLIGHT_PROD]){
-    var hp=agg.porProd[HIGHLIGHT_PROD];
-    var lojaRows=Object.keys(agg.porLoja).sort(function(a,b){return(hp.lojas[b]||0)-(hp.lojas[a]||0);});
-    document.getElementById('tbody-lojas').innerHTML=lojaRows.map(function(lname){
-      var lo=agg.porLoja[lname];
-      var prodFat=hp.lojas[lname]||0;
-      var prodQtd=hp.lojaQtd[lname]||0;
-      if(prodFat<=0) return '';
-      var pctOfLoja=lo.fat>0?prodFat/lo.fat*100:0;
-      return '<tr>'+
-        '<td><span class="loja-link" onclick="clickLoja(\''+lname.replace(/'/g,"\\'")+'\')" title="Filtrar por '+lname+'"><span class="loja-dot" style="background:'+corLoja(lname)+';color:'+corLoja(lname)+'"></span>'+lname+'</span></td>'+
-        '<td class="val">'+fmt(prodFat)+'</td>'+
-        '<td class="r">'+fmtP(pctOfLoja)+' da loja</td>'+
-        '<td class="val">'+fmtN(prodQtd)+'</td>'+
-        '<td class="val">'+fmt(prodQtd>0?prodFat/prodQtd:0)+'</td>'+
-        '<td class="val">—</td><td class="val">—</td><td class="r">—</td><td>—</td></tr>';
-    }).filter(Boolean).join('');
-    return;
-  }
-
-  // Normal mode: full loja stats
-  var lojas=Object.values(agg.porLoja).sort(function(a,b){return b.fat-a.fat;});
-  var dl=Object.keys(agg.porDia).sort();
-  document.getElementById('tbody-lojas').innerHTML=lojas.map(function(l){
-    var prev=(aggP.porLoja||{})[l.nome];
-    var atv=l.ped>0?l.fat/l.ped:0;
-    var descPct=(l.fat+l.desc)>0?l.desc/(l.fat+l.desc)*100:0;
-    var sparkData=dl.map(function(d){return agg.porDiaLoja[l.nome+'|'+d]||0;});
-    return '<tr>'+
-      '<td><span class="loja-link" onclick="clickLoja(\''+l.nome.replace(/'/g,"\\'")+'\')" title="Filtrar por '+l.nome+'"><span class="loja-dot" style="background:'+corLoja(l.nome)+';color:'+corLoja(l.nome)+'"></span>'+l.nome+'</span></td>'+
-      '<td class="val">'+fmt(l.fat)+'</td>'+
-      '<td class="r">'+deltaBadge(l.fat,prev?prev.fat:0)+'</td>'+
-      '<td class="val">'+fmtN(l.ped)+'</td>'+
-      '<td class="val">'+fmt(atv)+'</td>'+
-      '<td class="val">'+(l.upt!==null?fmtD(l.upt):'—')+'</td>'+
-      '<td class="val">'+(l.pm!==null?fmt(l.pm):'—')+'</td>'+
-      '<td class="r">'+fmtP(descPct)+'</td>'+
-      '<td>'+sparkSVG(sparkData,corLoja(l.nome))+'</td></tr>';
-  }).join('');
-}
-
 function renderProds(agg,ppp,lojaFiltro,catFiltro){
   var ipp=agg.itensPorPed||{}, pm=agg.pedMap||{};
-
-  // If vendedor highlighted, show that vendedor's products
-  if(HIGHLIGHT_VEND && agg.vendProds && agg.vendProds[HIGHLIGHT_VEND]){
-    var vp=agg.vendProds[HIGHLIGHT_VEND];
-    var vpList=Object.keys(vp).map(function(sku){return{sku:sku,nome:vp[sku].nome,val:vp[sku].val,qtd:vp[sku].qtd,
-      cat:(agg.porProd[sku]||{}).cat||'?',pa:null,tm:null,lojas:(agg.porProd[sku]||{}).lojas||{}};});
-    vpList.sort(function(a,b){return b.val-a.val;});
-    document.getElementById('tbody-produtos').innerHTML=vpList.slice(0,30).map(function(p,i){
-      var topLoja='—';var topVal=0;
-      Object.keys(p.lojas).forEach(function(l){if(p.lojas[l]>topVal){topVal=p.lojas[l];topLoja=l;}});
-      return '<tr data-sku="'+p.sku+'" onclick="clickProd(\''+p.sku.replace(/'/g,"\\'")+'\')" style="cursor:pointer">'+
-        '<td style="color:var(--txt3);font-weight:700">'+(i+1)+'</td>'+
-        '<td style="font-weight:600"><span class="prod-link">'+p.nome+'</span></td>'+
-        '<td class="val">'+fmt(p.val)+'</td>'+
-        '<td class="val">'+fmtN(p.qtd)+'</td>'+
-        '<td class="r"><span class="delta-badge neutral">—</span></td>'+
-        '<td class="val">—</td><td class="val">—</td>'+
-        '<td class="r"><span class="loja-dot" style="background:'+corLoja(topLoja)+';color:'+corLoja(topLoja)+'"></span>'+topLoja.replace('Loja ','')+'</td></tr>';
-    }).join('');
-    return;
-  }
-
   var prods=Object.values(agg.porProd).map(function(p){
     if(lojaFiltro.length){
       // Recalculate ALL metrics for selected lojas only
@@ -779,9 +697,9 @@ function renderProds(agg,ppp,lojaFiltro,catFiltro){
     Object.keys(p.lojas).forEach(function(l){if(p.lojas[l]>topVal){topVal=p.lojas[l];topLoja=l;}});
     var prev=ppp[p.sku];
     var deltaQtd=prev?deltaBadge(p.qtd,prev.qtd):'<span class="delta-badge neutral">—</span>';
-    return '<tr data-sku="'+p.sku+'" onclick="clickProd(\''+p.sku.replace(/'/g,"\\'")+'\')" style="cursor:pointer">'+
+    return '<tr>'+
       '<td style="color:var(--txt3);font-weight:700">'+(i+1)+'</td>'+
-      '<td style="font-weight:600"><span class="prod-link">'+p.nome+'</span></td>'+
+      '<td style="font-weight:600">'+p.nome+'</td>'+
       '<td class="val">'+fmt(p.val)+'</td>'+
       '<td class="val">'+fmtN(p.qtd)+'</td>'+
       '<td class="r">'+deltaQtd+'</td>'+
@@ -792,28 +710,6 @@ function renderProds(agg,ppp,lojaFiltro,catFiltro){
 }
 
 function renderVends(agg,lojaFiltro,catFiltro){
-  // If product highlighted, show which vendedores sold that product
-  if(HIGHLIGHT_PROD && agg.prodVends && agg.prodVends[HIGHLIGHT_PROD]){
-    var pv=agg.prodVends[HIGHLIGHT_PROD];
-    var pvList=Object.keys(pv).filter(function(v){return v!=='Vendedor Não Identificado';}).map(function(v){
-      var vd=agg.porVend[v]||{loja:'?'};
-      return{nome:v,loja:vd.loja||'?',fat:pv[v].val,qtd:pv[v].qtd,ped:0,upt:null,tm:0};
-    });
-    pvList.sort(function(a,b){return b.fat-a.fat;});
-    pvList.forEach(function(v){v.tm=v.qtd>0?v.fat/v.qtd:0;});
-    document.getElementById('tbody-vendedores').innerHTML=pvList.map(function(v,i){
-      return '<tr data-vend="'+v.nome+'" onclick="clickVend(\''+v.nome.replace(/'/g,"\\'")+'\')" style="cursor:pointer">'+
-        '<td style="color:var(--txt3);font-weight:700">'+(i+1)+'</td>'+
-        '<td style="font-weight:600"><span class="prod-link">'+v.nome+'</span></td>'+
-        '<td><span class="loja-dot" style="background:'+corLoja(v.loja)+';color:'+corLoja(v.loja)+'"></span>'+v.loja.replace('Loja ','')+'</td>'+
-        '<td class="val">'+fmt(v.fat)+'</td>'+
-        '<td class="val">'+fmtN(v.qtd)+'</td>'+
-        '<td class="val">'+fmt(v.tm)+'</td>'+
-        '<td class="val">—</td></tr>';
-    }).join('');
-    return;
-  }
-
   var vends=Object.values(agg.porVend).filter(function(v){return v.nome!=='Vendedor Não Identificado';});
   if(lojaFiltro.length){vends=vends.filter(function(v){return lojaFiltro.indexOf(v.loja)>=0;});}
   // If category filter active, recalculate fat/ped/upt for selected categories only
@@ -836,9 +732,9 @@ function renderVends(agg,lojaFiltro,catFiltro){
   var st=SORT_STATE.vends;
   vends=sortData(vends,st.key,st.dir);
   document.getElementById('tbody-vendedores').innerHTML=vends.map(function(v,i){
-    return '<tr data-vend="'+v.nome+'" onclick="clickVend(\''+v.nome.replace(/'/g,"\\'")+'\')" style="cursor:pointer">'+
+    return '<tr>'+
       '<td style="color:var(--txt3);font-weight:700">'+(i+1)+'</td>'+
-      '<td style="font-weight:600"><span class="prod-link">'+v.nome+'</span></td>'+
+      '<td style="font-weight:600">'+v.nome+'</td>'+
       '<td><span class="loja-dot" style="background:'+corLoja(v.loja)+';color:'+corLoja(v.loja)+'"></span>'+v.loja.replace('Loja ','')+'</td>'+
       '<td class="val">'+fmt(v.fat)+'</td>'+
       '<td class="val">'+fmtN(v.ped)+'</td>'+
@@ -876,96 +772,23 @@ function populateFilters(agg){
   catDiv.innerHTML=chtml;
 }
 
-var HIGHLIGHT_LOJA=null;
-var HIGHLIGHT_PROD=null;
-var HIGHLIGHT_VEND=null;
-
 function clickLoja(lojaName){
-  HIGHLIGHT_PROD=null; HIGHLIGHT_VEND=null;
-  if(HIGHLIGHT_LOJA===lojaName){
-    HIGHLIGHT_LOJA=null;
-    var chips=document.querySelectorAll('#loja-chips .chip-sm');
+  // Toggle: if already the only selected, reset to Todas. Else select only this one.
+  var cur=getFilteredLojas();
+  var chips=document.querySelectorAll('#loja-chips .chip-sm');
+  if(cur.length===1 && cur[0]===lojaName){
+    // Reset to Todas
     chips.forEach(function(c){c.classList.remove('on');});
     var todas=document.querySelector('#loja-chips .chip-sm[data-loja=""]');
     if(todas) todas.classList.add('on');
   }else{
-    HIGHLIGHT_LOJA=lojaName;
-    var chips=document.querySelectorAll('#loja-chips .chip-sm');
+    // Select only this loja
     chips.forEach(function(c){c.classList.remove('on');});
     var target=document.querySelector('#loja-chips .chip-sm[data-loja="'+lojaName+'"]');
     if(target) target.classList.add('on');
   }
   refreshLojaChipStyles();
-  renderLojaTable();
   reRender();
-  applyHighlights();
-}
-
-function clickProd(skuPai){
-  HIGHLIGHT_LOJA=null; HIGHLIGHT_VEND=null;
-  // Reset chip to Todas
-  var chips=document.querySelectorAll('#loja-chips .chip-sm');
-  chips.forEach(function(c){c.classList.remove('on');});
-  var todas=document.querySelector('#loja-chips .chip-sm[data-loja=""]');
-  if(todas) todas.classList.add('on');
-  refreshLojaChipStyles();
-
-  if(HIGHLIGHT_PROD===skuPai){
-    HIGHLIGHT_PROD=null;
-  }else{
-    HIGHLIGHT_PROD=skuPai;
-  }
-  renderLojaTable();
-  reRender();
-  applyHighlights();
-}
-
-function clickVend(vendName){
-  HIGHLIGHT_LOJA=null; HIGHLIGHT_PROD=null;
-  var chips=document.querySelectorAll('#loja-chips .chip-sm');
-  chips.forEach(function(c){c.classList.remove('on');});
-  var todas=document.querySelector('#loja-chips .chip-sm[data-loja=""]');
-  if(todas) todas.classList.add('on');
-  refreshLojaChipStyles();
-
-  if(HIGHLIGHT_VEND===vendName){
-    HIGHLIGHT_VEND=null;
-  }else{
-    HIGHLIGHT_VEND=vendName;
-  }
-  renderLojaTable();
-  reRender();
-  applyHighlights();
-}
-
-function applyHighlights(){
-  // Loja table highlighting
-  document.querySelectorAll('#tbody-lojas tr').forEach(function(tr){
-    tr.classList.remove('dimmed','highlighted');
-    if(HIGHLIGHT_LOJA){
-      var lojaText=tr.querySelector('.loja-link');
-      if(lojaText){
-        var name=tr.querySelector('.loja-link').textContent.trim();
-        tr.classList.add(name===HIGHLIGHT_LOJA?'highlighted':'dimmed');
-      }
-    }
-  });
-  // Products table highlighting
-  document.querySelectorAll('#tbody-produtos tr').forEach(function(tr){
-    tr.classList.remove('dimmed','highlighted');
-    if(HIGHLIGHT_PROD){
-      var sku=tr.dataset.sku||'';
-      tr.classList.add(sku===HIGHLIGHT_PROD?'highlighted':'dimmed');
-    }
-  });
-  // Vendedores table highlighting
-  document.querySelectorAll('#tbody-vendedores tr').forEach(function(tr){
-    tr.classList.remove('dimmed','highlighted');
-    if(HIGHLIGHT_VEND){
-      var vname=tr.dataset.vend||'';
-      tr.classList.add(vname===HIGHLIGHT_VEND?'highlighted':'dimmed');
-    }
-  });
 }
 
 function reRender(){
@@ -1027,7 +850,6 @@ function reRender(){
 
   renderProds(agg,LAST_PPP||{},lf,cf);
   renderVends(agg,lf,cf);
-  renderLojaTable();
 }
 
 function domingoSemana(hoje){
@@ -1122,7 +944,24 @@ async function carregar(){
       '<div class="kpi"><div class="kpi-lbl">Pedidos/Dia</div><div class="kpi-val">'+Math.round(agg.pedT/agg.diasCV)+'</div><div class="kpi-sub">média por dia aberto</div></div>';
 
     // ---- Tabela lojas ----
-    renderLojaTable();
+    var lojas=Object.values(agg.porLoja).sort(function(a,b){return b.fat-a.fat;});
+    var dl=Object.keys(agg.porDia).sort();
+    document.getElementById('tbody-lojas').innerHTML=lojas.map(function(l){
+      var prev=aggP.porLoja[l.nome];
+      var atv=l.ped>0?l.fat/l.ped:0;
+      var descPct=(l.fat+l.desc)>0?l.desc/(l.fat+l.desc)*100:0;
+      var sparkData=dl.map(function(d){return agg.porDiaLoja[l.nome+'|'+d]||0;});
+      return '<tr>'+
+        '<td><span class="loja-link" onclick="clickLoja(\''+l.nome.replace(/'/g,"\\'")+'\')" title="Filtrar por '+l.nome+'"><span class="loja-dot" style="background:'+corLoja(l.nome)+';color:'+corLoja(l.nome)+'"></span>'+l.nome+'</span></td>'+
+        '<td class="val">'+fmt(l.fat)+'</td>'+
+        '<td class="r">'+deltaBadge(l.fat,prev?prev.fat:0)+'</td>'+
+        '<td class="val">'+fmtN(l.ped)+'</td>'+
+        '<td class="val">'+fmt(atv)+'</td>'+
+        '<td class="val">'+(l.upt!==null?fmtD(l.upt):'—')+'</td>'+
+        '<td class="val">'+(l.pm!==null?fmt(l.pm):'—')+'</td>'+
+        '<td class="r">'+fmtP(descPct)+'</td>'+
+        '<td>'+sparkSVG(sparkData,corLoja(l.nome))+'</td></tr>';
+    }).join('');
 
     // ---- Store for re-render and render tables ----
     LAST_AGG=agg;

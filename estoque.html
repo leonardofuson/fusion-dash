@@ -24,8 +24,21 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;-webkit-text-size-a
 .btn-back:hover{border-color:var(--blue);color:var(--blue);}
 .btn-logout-tb:hover{border-color:var(--red);color:var(--red);}
 
+/* ── TABS ── */
+.tabs{display:flex;gap:4px;padding:0 1.5rem;background:var(--bg);border-bottom:1px solid var(--bdr);}
+.tab{padding:12px 20px;font-size:13px;font-weight:600;color:var(--txt2);cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s;letter-spacing:0.02em;}
+.tab:hover{color:var(--txt1);}
+.tab.on{color:var(--blue);border-bottom-color:var(--blue);}
+@media(max-width:768px){.tabs{padding:0 1rem;}.tab{padding:10px 14px;font-size:12px;}}
+
 /* ── MAIN ── */
 .main{max-width:1400px;margin:0 auto;padding:1.5rem;}
+
+/* ── INSUMOS STUB ── */
+.stub{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;gap:16px;color:var(--txt3);}
+.stub-icon{font-size:48px;opacity:0.3;}
+.stub-title{font-size:18px;font-weight:600;color:var(--txt2);}
+.stub-sub{font-size:13px;}
 
 /* ── FILTROS (lojas chip pattern) ── */
 .filtros{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:1.5rem;align-items:center;}
@@ -41,6 +54,23 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;-webkit-text-size-a
 .fbtn{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:500;border:1px solid var(--bdr);background:var(--bg2);color:var(--txt2);cursor:pointer;transition:all 0.15s;white-space:nowrap;}
 .fbtn:hover{border-color:var(--blue);color:var(--blue);}
 .fbtn.on{background:var(--blue);border-color:var(--blue);color:#fff;}
+
+/* ── BOTÃO FABRICAÇÃO PRÓPRIA ── */
+.btn-fab{
+  display:flex;align-items:center;gap:10px;
+  padding:8px 18px;border-radius:10px;
+  border:1px solid var(--amber);
+  background:rgba(245,158,11,0.08);
+  color:var(--amber);cursor:pointer;
+  font-family:inherit;transition:all 0.2s;
+  white-space:nowrap;
+}
+.btn-fab:hover{background:rgba(245,158,11,0.15);border-color:#fbbf24;}
+.btn-fab.on{background:var(--amber);border-color:var(--amber);color:#000;box-shadow:0 0 16px rgba(245,158,11,0.3);}
+.btn-fab.on .btn-fab-icon{color:#000;}
+.btn-fab-icon{font-size:18px;line-height:1;}
+.btn-fab-txt{display:flex;flex-direction:column;line-height:1.2;text-align:left;}
+.btn-fab-txt small{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;opacity:0.7;}
 
 /* ── KPIs (lojas pattern) ── */
 .kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:1.5rem;}
@@ -122,6 +152,13 @@ table.mtz td.h3{background:rgba(16,185,129,0.08);color:#34d399;}
 .run-broken{background:rgba(245,158,11,0.15);color:#f59e0b;}
 .run-empty{background:rgba(239,68,68,0.15);color:#ef4444;}
 
+/* ── HIGHLIGHT ROW (grade quebrada) ── */
+table.mtz tr.row-broken{background:rgba(245,158,11,0.06);}
+table.mtz tr.row-broken td.tdc{background:rgba(245,158,11,0.08);}
+table.mtz tr.row-broken:hover td{background:rgba(245,158,11,0.10);}
+table.mtz tr.row-broken:hover td.tdc{background:rgba(245,158,11,0.12);}
+.prod.prod-quebrada{border-color:var(--amber);}
+
 /* ── CHANNEL DETAIL TOGGLE ── */
 .ch-toggle{display:flex;align-items:center;gap:8px;padding:11px 16px;cursor:pointer;background:rgba(255,255,255,0.02);border-top:1px solid var(--bdr);-webkit-tap-highlight-color:transparent;}
 .ch-toggle:hover{background:rgba(255,255,255,0.04);}
@@ -158,6 +195,10 @@ table.mtz td.h3{background:rgba(16,185,129,0.08);color:#34d399;}
   .chip{padding:5px 10px;font-size:11px;}
   .fpill{padding:6px 10px;}
   .fpill label{font-size:9px;}
+  .btn-fab{padding:6px 12px;border-radius:8px;}
+  .btn-fab-icon{font-size:14px;}
+  .btn-fab-txt{font-size:11px;}
+  .btn-fab-txt small{font-size:8px;}
   .prod-head{padding:12px 14px;gap:8px;}
   .prod-name{font-size:12px;}
   .prod-sku{display:none;}
@@ -191,7 +232,12 @@ table.mtz td.h3{background:rgba(16,185,129,0.08);color:#34d399;}
   </div>
 </header>
 
-<div class="main">
+<div class="tabs">
+  <div class="tab on" onclick="setTab('finalizados',this)">Produtos Finalizados</div>
+  <div class="tab" onclick="setTab('insumos',this)">Insumos</div>
+</div>
+
+<div class="main" id="tab-finalizados">
   <!-- Filtros -->
   <div class="filtros">
     <div class="fpill" style="flex:1;min-width:140px;max-width:260px;">
@@ -209,11 +255,14 @@ table.mtz td.h3{background:rgba(16,185,129,0.08);color:#34d399;}
       </select>
     </div>
     <div class="chips" id="chips-nivel">
-      <button class="chip on" onclick="setNivel('todos',this)">Todos</button>
-      <button class="chip" onclick="setNivel('com',this)">Com Estoque</button>
-      <button class="chip" onclick="setNivel('sem',this)">Sem Estoque</button>
-      <button class="chip" onclick="setNivel('quebrada',this)">Grades Quebradas</button>
+      <button class="chip on" data-nivel="todos" onclick="setNivel('todos',this)">Todos</button>
+      <button class="chip" data-nivel="com" onclick="setNivel('com',this)">Com Estoque</button>
+      <button class="chip" data-nivel="sem" onclick="setNivel('sem',this)">Sem Estoque</button>
     </div>
+    <button class="btn-fab" id="btn-fab" data-nivel="quebrada" onclick="setNivel('quebrada',this)">
+      <span class="btn-fab-icon">⚠</span>
+      <span class="btn-fab-txt">Fabricação Própria<small>Grades Quebradas</small></span>
+    </button>
     <div class="fpill">
       <label>Ordenar</label>
       <select id="sel-sort">
@@ -255,6 +304,14 @@ table.mtz td.h3{background:rgba(16,185,129,0.08);color:#34d399;}
   </div>
 </div>
 
+<div class="main" id="tab-insumos" style="display:none;">
+  <div class="stub">
+    <div class="stub-icon">🧵</div>
+    <div class="stub-title">Insumos</div>
+    <div class="stub-sub">Tecidos, aviamentos e matéria-prima — em breve</div>
+  </div>
+</div>
+
 <script>
 // ═══════════════════════════════════════════
 // CONFIG
@@ -269,6 +326,23 @@ const LOCS = [
   { key:'shopee',        label:'Shopee',         cor:'#ef4444' },
   { key:'shopify',       label:'Shopify',        cor:'#06b6d4' },
 ];
+
+// SKUs dos produtos finalizados (fase 1)
+const SKU_FINALIZADOS = new Set([
+  'CLAFEL01',   // Calça Alfaiataria Com Elastano
+  'CLAF01',     // Calça Alfaiataria Liso
+  'CLTECH',     // Calça Alfaitaria Tech Stretch
+  'CLMALHA',    // Calça De Malha
+  'CLSJ01',     // Calça De Sarja
+  'CLMC01',     // Calça Microfibra
+  'CLOX01',     // Calça Oxford
+  'CMBB',       // Camisa Bambu Nacional
+  'CMINDIANO',  // Camisa ML Indiano
+  'CMMC',       // Camisa ML Microleve
+  'CMEL01',     // Camisa ML Passa Fácil C/Elastano
+  'CMLS01',     // Camisa ML Passa Fácil Lisa
+  'CMPL01',     // Camisa ML Poliamida
+]);
 
 const ORDEM_TAM = ['PP','P','M','G','G1','GG','GG1','XG','XGG','EG','EGG','36','38','40','42','44','46','48','50','52','54','56','Único','UN'];
 
@@ -347,7 +421,7 @@ async function apiAll(base) {
 async function carregar() {
   try {
     const [prods, est] = await Promise.all([
-      apiAll('produtos?select=id,sku,descricao,nome,categoria,tipo,sku_pai,cor,tamanho,preco_venda'),
+      apiAll('produtos?select=id,sku,descricao,nome,categoria,tipo,sku_pai,cor,tamanho,preco_venda&ativo=eq.true'),
       apiAll('estoque?select=produto_id,sku,quantidade,localizacao'),
     ]);
 
@@ -441,6 +515,15 @@ async function carregar() {
       });
     });
 
+    // Correções já aplicadas no Supabase (ativo=false + rename).
+    // Filtro ativo=eq.true na query garante que não aparecem.
+    // Safety net: excluir "Sem cor" (cor NULL → 'Sem cor' no JS) de todos os finalizados.
+    Object.values(pBySku).forEach(pai => {
+      if (SKU_FINALIZADOS.has(pai.sku.trim().toUpperCase())) {
+        delete pai.cores['Sem cor'];
+      }
+    });
+
     const pais = Object.values(pBySku).filter(p => Object.keys(p.cores).length > 0);
 
     // ── Populate category filter ──
@@ -488,12 +571,13 @@ function totByLocPai(p) {
   return r;
 }
 
-function isQuebrada(p) {
+function isQuebrada(p, locKey) {
+  const locs = locKey ? [{ key: locKey }] : LOCS;
   for (const cor of Object.keys(p.cores)) {
     if (cor === '(Modelo único)') continue;
     const tams = Object.keys(p.cores[cor]);
     if (tams.length <= 1) continue;
-    const vals = tams.map(t => LOCS.reduce((s, l) => s + ((p.cores[cor][t] || {})[l.key] || 0), 0));
+    const vals = tams.map(t => locs.reduce((s, l) => s + ((p.cores[cor][t] || {})[l.key] || 0), 0));
     const temStock = vals.some(v => v > 0);
     const temZero  = vals.some(v => v === 0);
     if (temStock && temZero) return true;
@@ -501,10 +585,11 @@ function isQuebrada(p) {
   return false;
 }
 
-function sizeRunInfo(corObj) {
+function sizeRunInfo(corObj, locKey) {
+  const locs = locKey ? [{ key: locKey }] : LOCS;
   const tams = Object.keys(corObj);
   const total = tams.length;
-  const comEstoque = tams.filter(t => LOCS.reduce((s, l) => s + ((corObj[t] || {})[l.key] || 0), 0) > 0).length;
+  const comEstoque = tams.filter(t => locs.reduce((s, l) => s + ((corObj[t] || {})[l.key] || 0), 0) > 0).length;
   return { total, comEstoque };
 }
 
@@ -517,16 +602,21 @@ function render() {
   const busca  = document.getElementById('busca').value.trim().toLowerCase();
   const cat    = document.getElementById('sel-cat').value;
   const locF   = document.getElementById('sel-loc').value;
-  const nivel  = document.querySelector('#chips-nivel .chip.on')?.dataset?.nivel || 'todos';
+  const fabAtivo = document.getElementById('btn-fab').classList.contains('on');
+  const nivel  = fabAtivo ? 'quebrada' : (document.querySelector('#chips-nivel .chip.on')?.dataset?.nivel || 'todos');
   const sort   = document.getElementById('sel-sort').value;
 
   let pais = DADOS.pais.filter(p => {
+    // Fabricação Própria: só os 13 SKUs fabricados, com grade quebrada
+    if (nivel === 'quebrada') {
+      if (!SKU_FINALIZADOS.has(p.sku.trim().toUpperCase())) return false;
+      if (!isQuebrada(p, locF || undefined)) return false;
+    }
     if (cat && p.categoria !== cat) return false;
     if (busca && !p.sku.toLowerCase().includes(busca) && !p.nome.toLowerCase().includes(busca)) return false;
     const t = totPai(p, locF || undefined);
     if (nivel === 'com'  && t === 0) return false;
     if (nivel === 'sem'  && t > 0) return false;
-    if (nivel === 'quebrada' && !isQuebrada(p)) return false;
     return true;
   });
 
@@ -541,28 +631,30 @@ function render() {
 
   renderKPIs(locF);
   renderLocCards(locF);
-  renderBars();
-  renderProdList(pais, locF);
+  renderBars(locF);
+  renderProdList(pais, locF, nivel);
 }
 
 function renderKPIs(locF) {
+  const locLabel = locF ? LOCS.find(l => l.key === locF)?.label : null;
   let tg = 0, val = 0, com = 0, sem = 0, quebradas = 0;
   DADOS.pais.forEach(p => {
-    const t = totPai(p);
+    const t = totPai(p, locF || undefined);
     tg += t;
-    val += valPai(p);
+    val += t * (p.preco || 0);
     if (t > 0) com++; else sem++;
-    if (isQuebrada(p)) quebradas++;
+    if (isQuebrada(p, locF || undefined)) quebradas++;
   });
 
   const total = DADOS.pais.length;
   const stockoutPct = total > 0 ? (sem / total * 100) : 0;
+  const subLocal = locLabel ? locLabel : `${LOCS.length} locais`;
 
   document.getElementById('kpis').innerHTML = `
     <div class="kpi">
       <div class="kpi-lbl">Total em Estoque</div>
       <div class="kpi-val">${fmt(tg)}</div>
-      <div class="kpi-sub">peças em ${LOCS.length} locais</div>
+      <div class="kpi-sub">peças — ${subLocal}</div>
     </div>
     <div class="kpi">
       <div class="kpi-lbl">Valor Estimado</div>
@@ -616,7 +708,7 @@ function renderLocCards(activeLoc) {
   }).join('');
 }
 
-function renderBars() {
+function renderBars(locF) {
   // Channel bars
   const tl = {};
   LOCS.forEach(l => { tl[l.key] = 0; });
@@ -624,8 +716,9 @@ function renderBars() {
     const bl = totByLocPai(p);
     LOCS.forEach(l => { tl[l.key] += bl[l.key]; });
   });
-  const maxL = Math.max(...LOCS.map(l => tl[l.key]), 1);
-  document.getElementById('bars-canal').innerHTML = LOCS
+  const barsLocs = locF ? LOCS.filter(l => l.key === locF) : LOCS;
+  const maxL = Math.max(...barsLocs.map(l => tl[l.key]), 1);
+  document.getElementById('bars-canal').innerHTML = barsLocs
     .slice().sort((a, b) => tl[b.key] - tl[a.key])
     .map(l => `<div class="bar-row">
       <div class="bar-lbl"><span style="color:var(--txt1);font-weight:500">${l.label}</span><span style="color:var(--txt2)">${fmt(tl[l.key])}</span></div>
@@ -636,7 +729,7 @@ function renderBars() {
   const tc = {};
   DADOS.pais.forEach(p => {
     const c = p.categoria || 'Outros';
-    tc[c] = (tc[c] || 0) + totPai(p);
+    tc[c] = (tc[c] || 0) + totPai(p, locF || undefined);
   });
   const catArr = Object.entries(tc).sort((a, b) => b[1] - a[1]);
   const maxC = Math.max(...catArr.map(c => c[1]), 1);
@@ -649,18 +742,21 @@ function renderBars() {
   ).join('');
 }
 
-function renderProdList(pais, locF) {
+function renderProdList(pais, locF, nivel) {
+  const modoQuebrada = nivel === 'quebrada';
+  if (modoQuebrada) pais.forEach(p => { EXP[safe(p.sku)] = true; });
   document.getElementById('prod-count').textContent = `${pais.length} de ${DADOS.pais.length}`;
   document.getElementById('prod-list').innerHTML = pais.length === 0
     ? '<div class="empty">Nenhum produto encontrado</div>'
-    : pais.map(p => renderProd(p, locF)).join('');
+    : pais.map(p => renderProd(p, locF, modoQuebrada)).join('');
 }
 
-function renderProd(pai, locF) {
+function renderProd(pai, locF, modoQuebrada) {
   const id = safe(pai.sku);
   const tot = totPai(pai, locF || undefined);
   const isOpen = !!EXP[id];
   const bl = totByLocPai(pai);
+  const prodQuebrada = modoQuebrada && isQuebrada(pai, locF || undefined);
 
   // Location dots for collapsed view
   const locDots = LOCS.map(l =>
@@ -696,7 +792,8 @@ function renderProd(pai, locF) {
   const thTams = tams.map(t => `<th>${t}</th>`).join('');
 
   const linhas = cors.map(c => {
-    const run = sizeRunInfo(pai.cores[c]);
+    const run = sizeRunInfo(pai.cores[c], locF || undefined);
+    const isCorQuebrada = c !== '(Modelo único)' && run.total > 1 && run.comEstoque > 0 && run.comEstoque < run.total;
     let runBadge = '';
     if (c !== '(Modelo único)' && run.total > 1) {
       if (run.comEstoque === 0) runBadge = `<span class="run run-empty">0/${run.total}</span>`;
@@ -709,7 +806,9 @@ function renderProd(pai, locF) {
       return `<td class="${hcls(v)}">${v === 0 ? '—' : fmt(v)}</td>`;
     }).join('');
 
-    return `<tr>
+    const rowClass = isCorQuebrada ? ' row-broken' : '';
+
+    return `<tr class="${rowClass}">
       <td class="tdc"><span class="cor-dot" style="background:${corV(c)}"></span>${c}${runBadge}</td>
       ${cells}
       <td class="tot">${tCor[c] > 0 ? fmt(tCor[c]) : '—'}</td>
@@ -755,7 +854,8 @@ function renderProd(pai, locF) {
     </div>`;
   }).filter(Boolean).join('');
 
-  return `<div class="prod">
+  const temQuebra = isQuebrada(pai, locF || undefined);
+  return `<div class="prod${temQuebra ? ' prod-quebrada' : ''}">
     <div class="prod-head" onclick="toggleProd('${id}')">
       <div class="prod-info">
         <span class="prod-name">${pai.nome}</span>
@@ -800,9 +900,21 @@ function toggleCanal(id) {
 }
 
 function setNivel(nivel, el) {
+  const jaAtivo = el.classList.contains('on');
+  const btnFab = document.getElementById('btn-fab');
+  // Limpar todos os chips e o botão fab
   document.querySelectorAll('#chips-nivel .chip').forEach(c => c.classList.remove('on'));
-  el.classList.add('on');
-  el.dataset.nivel = nivel;
+  btnFab.classList.remove('on');
+
+  if (jaAtivo && nivel !== 'todos') {
+    // Toggle off → volta para "Todos", recolhe produtos
+    document.querySelector('#chips-nivel .chip[data-nivel="todos"]').classList.add('on');
+    if (!expAll) EXP = {};
+  } else if (nivel === 'quebrada') {
+    btnFab.classList.add('on');
+  } else {
+    el.classList.add('on');
+  }
   render();
 }
 
@@ -810,6 +922,13 @@ function selectLoc(key) {
   const sel = document.getElementById('sel-loc');
   sel.value = sel.value === key ? '' : key;
   render();
+}
+
+function setTab(tab, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
+  el.classList.add('on');
+  document.getElementById('tab-finalizados').style.display = tab === 'finalizados' ? '' : 'none';
+  document.getElementById('tab-insumos').style.display = tab === 'insumos' ? '' : 'none';
 }
 
 function toggleExpandAll() {
@@ -828,15 +947,6 @@ function toggleExpandAll() {
   const el = document.getElementById(id);
   el.addEventListener('input', render);
   el.addEventListener('change', render);
-});
-
-// Set data-nivel on chips
-document.querySelectorAll('#chips-nivel .chip').forEach(el => {
-  const txt = el.textContent.trim();
-  if (txt === 'Todos') el.dataset.nivel = 'todos';
-  else if (txt === 'Com Estoque') el.dataset.nivel = 'com';
-  else if (txt === 'Sem Estoque') el.dataset.nivel = 'sem';
-  else if (txt === 'Grades Quebradas') el.dataset.nivel = 'quebrada';
 });
 
 window.addEventListener('resize', () => { if (DADOS) render(); });
