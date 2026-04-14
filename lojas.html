@@ -198,6 +198,12 @@ function fmtD(n){return(n||0).toFixed(1);}
 function hojeSP(){return new Date().toLocaleString('sv-SE',{timeZone:'America/Sao_Paulo'}).slice(0,10);}
 function somaDias(ds,d){var t=new Date(ds+'T00:00:00Z');t.setUTCDate(t.getUTCDate()+d);return t.toISOString().slice(0,10);}
 function inicioMesSP(){return hojeSP().slice(0,7)+'-01';}
+function inicioPedidos(){
+  // pedidos mantém mês corrente + anterior completo
+  var h=hojeSP();var y=parseInt(h.slice(0,4));var m=parseInt(h.slice(5,7))-1;
+  if(m<1){m=12;y--;}
+  return y+'-'+String(m).padStart(2,'0')+'-01';
+}
 function daysBetween(a,b){return Math.round((new Date(b+'T00:00:00Z')-new Date(a+'T00:00:00Z'))/86400000)+1;}
 
 async function buscarTudo(tab,filtro){
@@ -221,7 +227,8 @@ function buildFiltro(de,ate){
 }
 
 async function fetchPedidos(de,ate){
-  var inicio=inicioMesSP();
+  // pedidos mantém corrente + anterior; historico tem o restante
+  var inicio=inicioPedidos();
   if(de>=inicio) return buscarTudo('pedidos',buildFiltro(de,ate));
   if(ate<inicio) return buscarTudo('pedidos_historico',buildFiltro(de,ate));
   var fimH=somaDias(inicio,-1);
