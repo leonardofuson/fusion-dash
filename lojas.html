@@ -173,6 +173,7 @@ th.sortable.desc::after{content:'▼';opacity:1;color:var(--green);}
 
 <script>
 var SB_URL='https://spulbhnmkomvgohzhfvj.supabase.co';
+// valor_bruto = total do pedido (pós-desconto, com frete) — NÃO é valor cheio dos itens
 var SELECT_COLS='id,data_pedido,valor_bruto,desconto,loja_nome,origem_conta,vendedor';
 var MAX_PAGES=50, BATCH_SZ=400;
 let AUTH_HEADERS=null;
