@@ -336,6 +336,7 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
         <button class="btn-export" onclick="exportImage('produtos')">Compartilhar</button>
       </div>
     </div>
+    <div id="cat-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;"></div>
     <div id="sku-legend" style="margin-bottom:10px;"></div>
     <div id="sku-list" style="max-height:280px;overflow:auto;margin-bottom:14px;"></div>
     <div id="sku-detail" class="sku-empty">Selecione um SKU pai acima para ver o desempenho cross-loja.</div>
@@ -491,7 +492,7 @@ async function fetchProdutos(){
 
 // ---- State ----
 var DE=null, ATE=null;
-var STATE={pedidos:[],anteriores:[],itens:[],prods:null,lojas:[],lojasSel:{},stackMode:'abs',skuGroups:[],skuSel:null,vendSel:null,totLoja:{},metas:{},metasLoaded:false,freshness:null,lojaHighlight:null};
+var STATE={pedidos:[],anteriores:[],itens:[],prods:null,lojas:[],lojasSel:{},stackMode:'abs',skuGroups:[],skuSel:null,vendSel:null,totLoja:{},metas:{},metasLoaded:false,freshness:null,lojaHighlight:null,catSel:null};
 var CHARTS={hero:null,pareto:null,sparkPed:null,sparkTM:null,sparkPA:null,lojaSparklines:[]};
 
 function setPeriodo(preset,el){
@@ -673,6 +674,7 @@ function renderAll(){
   renderHero();
   renderLojaCards();
   renderPareto();
+  renderCatChips();
   renderSkuList();
   renderVendedores();
   if(STATE.skuSel) renderSkuDetail();
@@ -1396,6 +1398,30 @@ function renderPareto(){
 
 // ---- SKU list + detail ----
 // Retorna itens filtrados (por vendedor, se vendSel ativo) e um mapa pedido→vendedor
+// ---- Category filter chips ----
+function renderCatChips(){
+  var cats={};
+  STATE.skuGroups.forEach(function(s){
+    var c=s.cat||'OUTROS';
+    cats[c]=(cats[c]||0)+s.receita;
+  });
+  var sorted=Object.keys(cats).sort(function(a,b){return cats[b]-cats[a];});
+  var el=document.getElementById('cat-chips');
+  var html='<button class="chip-sm'+(STATE.catSel===null?' on':'')+'" onclick="toggleCat(null)" style="'+(STATE.catSel===null?'background:var(--green);border-color:var(--green)':'')+'">Todas</button>';
+  sorted.forEach(function(c){
+    var on=STATE.catSel===c;
+    var cor=corCat(c);
+    html+='<button class="chip-sm'+(on?' on':'')+'" onclick="toggleCat(\''+c.replace(/'/g,"\\'")+'\')" style="'+(on?'background:'+cor+';border-color:'+cor:'')+'">'+c+'</button>';
+  });
+  el.innerHTML=html;
+}
+function toggleCat(c){
+  STATE.catSel=c;
+  renderCatChips();
+  renderSkuList();
+  if(STATE.skuSel) renderSkuDetail();
+}
+
 function itensFiltrados(){
   var pedToVend={};
   STATE.pedidos.forEach(function(p){if(!p._canc) pedToVend[p.id]=p._vend;});
@@ -1439,6 +1465,7 @@ function renderSkuList(){
   });
 
   var lista=grupos.filter(function(s){
+    if(STATE.catSel && (s.cat||'OUTROS')!==STATE.catSel) return false;
     if(!q) return true;
     return s.sku_pai.toLowerCase().indexOf(q)>=0 || (s.nome||'').toLowerCase().indexOf(q)>=0;
   }).slice(0,30);
