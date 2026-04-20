@@ -21,6 +21,7 @@
 
   // Catálogo de dashes disponíveis (chave → metadados)
   const DASHES = {
+    'max-chat': { titulo: 'Max Chat',    descricao: 'Pergunte sobre vendas, estoque e mais — IA responde na hora', url: 'https://max-chat-frontend.onrender.com', icone: '🤖', destaque: true },
     lojas:      { titulo: 'Lojas',       descricao: 'Vendas das lojas físicas',  url: '/lojas.html',      icone: '🏬' },
     ecommerce:  { titulo: 'E-commerce',  descricao: 'Canais digitais',           url: '/ecommerce.html',  icone: '🛒' },
     diretoria:  { titulo: 'Diretoria',   descricao: 'Visão consolidada',         url: '/diretoria.html',  icone: '📊' },
