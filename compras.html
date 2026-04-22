@@ -77,12 +77,14 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
 .g-group-stats strong{color:var(--txt2);}
 
 /* Linha de OP individual */
-.g-row{display:flex;min-height:36px;border-bottom:1px solid rgba(255,255,255,0.025);}
+.g-row{display:flex;min-height:44px;border-bottom:1px solid rgba(255,255,255,0.025);}
 .g-row:hover{background:rgba(255,255,255,0.015);}
-.g-row-label{position:sticky;left:0;z-index:4;min-width:200px;max-width:200px;padding:6px 14px 6px 28px;display:flex;align-items:center;gap:8px;background:var(--bg);border-right:1px solid var(--bdr);font-size:12px;color:var(--txt2);}
-.g-row-cor{width:10px;height:10px;border-radius:3px;flex-shrink:0;}
-.g-row-info{flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
-.g-row-pcs{font-size:10px;color:var(--txt3);margin-left:auto;white-space:nowrap;flex-shrink:0;}
+.g-row-label{position:sticky;left:0;z-index:4;min-width:220px;max-width:220px;padding:8px 14px 8px 28px;display:flex;align-items:center;gap:10px;background:var(--bg);border-right:1px solid var(--bdr);font-size:12px;color:var(--txt2);}
+.g-row-cor{width:12px;height:12px;border-radius:3px;flex-shrink:0;}
+.g-row-info{flex:1;overflow:hidden;display:flex;flex-direction:column;gap:1px;min-width:0;}
+.g-row-costureiro{font-size:13px;font-weight:700;color:var(--txt1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:0.01em;}
+.g-row-cor-nome{font-size:11px;color:var(--txt3);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.g-row-late{font-size:10px;color:var(--red);font-weight:700;margin-left:auto;flex-shrink:0;}
 .g-row-bars{position:relative;display:flex;}
 .g-row-bars .g-cell{min-width:90px;border-right:1px solid rgba(255,255,255,0.04);}
 .g-cell.now{background:rgba(99,102,241,0.04);}
@@ -160,6 +162,16 @@ table.tb tr:hover td{background:rgba(99,102,241,0.03);}
 .form-input::placeholder{color:var(--txt4);}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
 .form-textarea{min-height:80px;resize:vertical;}
+
+/* ── Grid de grade por tamanho ── */
+.grade-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;margin-top:8px;}
+.grade-cell{display:flex;flex-direction:column;gap:4px;}
+.grade-cell label{font-size:11px;font-weight:600;color:var(--txt3);text-align:center;letter-spacing:0.04em;}
+.grade-cell input{width:100%;padding:8px 10px;background:var(--bg);border:1px solid var(--bdr);border-radius:6px;color:var(--txt1);font-family:inherit;font-size:14px;font-weight:600;text-align:center;font-variant-numeric:tabular-nums;}
+.grade-cell input:focus{outline:none;border-color:var(--indigo);box-shadow:0 0 0 3px rgba(99,102,241,0.12);}
+.grade-total{margin-top:8px;padding:8px 12px;background:var(--bg3);border-radius:6px;font-size:12px;color:var(--txt2);display:flex;justify-content:space-between;}
+.grade-total strong{color:var(--txt1);font-weight:700;}
+.grade-empty{padding:12px;text-align:center;color:var(--txt3);font-size:12px;background:var(--bg);border-radius:6px;border:1px dashed var(--bdr);}
 
 /* ── Coverage Bars ── */
 .cov-row{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.03);}
@@ -390,7 +402,7 @@ async function buscarTudo(tab, filtro) {
 
 async function carregar() {
   try {
-    var [ops, compras, costureiros, precos, insumos, consumo, planejamento, fornecedores] = await Promise.all([
+    var [ops, compras, costureiros, precos, insumos, consumo, planejamento, fornecedores, produtos] = await Promise.all([
       buscarTudo('ordens_producao', 'select=*&order=criado_em.desc'),
       buscarTudo('ordens_compra', 'select=*&order=data_faturamento.desc&limit=500'),
       buscarTudo('costureiros', 'select=*&order=nome'),
@@ -399,6 +411,7 @@ async function carregar() {
       buscarTudo('consumo_tecido', 'select=*&ativo=eq.true'),
       buscarTudo('planejamento_producao', 'select=*&order=data_calculo.desc&limit=50'),
       buscarTudo('fornecedores', 'select=*&ativo=eq.true&order=nome'),
+      buscarTudo('produtos', 'select=id,sku,sku_pai,nome,categoria,tipo,cor,tamanho,ativo&ativo=eq.true'),
     ]);
     STATE.ops = ops;
     STATE.compras = compras;
@@ -408,6 +421,7 @@ async function carregar() {
     STATE.consumo = consumo;
     STATE.planejamento = planejamento;
     STATE.fornecedores = fornecedores;
+    STATE.produtos = produtos;
     renderAll();
   } catch (e) {
     console.error('Erro ao carregar:', e);
@@ -595,12 +609,6 @@ function renderGantt() {
       var prevData = o.data_prevista_entrega || o.data_pagamento || null;
       var prevLabel = prevData ? formatDate(prevData) : '<span style="color:var(--orange)">sem data</span>';
 
-      // Label da linha
-      var labelHtml = '<div class="g-row-label">' +
-        '<div class="g-row-cor" style="background:' + corColor + '"></div>' +
-        '<div class="g-row-info" title="' + costureiro + ' · ' + cor + '">' + (cor || '—') + ' <span style="color:var(--txt3);font-size:10px">· ' + costureiro + '</span></div>' +
-        '<div class="g-row-pcs">' + fmt(pendOp) + ' pend.</div></div>';
-
       // Cells background
       var cellsHtml = semanas.map(function(s) {
         return '<div class="g-cell' + (s.getTime()===semanaHoje.getTime()?' now':'') + '" style="width:'+COL_W+'px"></div>';
@@ -628,10 +636,14 @@ function renderGantt() {
         (pctEnt > 0 ? '<div class="g-bar-fill" style="width:'+pctEnt+'%"></div>' : '') +
         '<span class="g-bar-lbl">'+barLabel+'</span></div>';
 
-      return '<div class="g-row"><div class="g-row-label">' +
+      return '<div class="g-row"><div class="g-row-label" title="'+costureiro+' — '+(cor||'—')+' — Prev: '+(prevData||'sem data')+'">' +
         '<div class="g-row-cor" style="background:'+corColor+'"></div>' +
-        '<div class="g-row-info" title="'+costureiro+' — Prev: '+(prevData||'sem data')+'">'+(cor||'—')+' <span style="color:var(--txt3);font-size:10px">· '+costureiro+' · '+prevLabel+'</span></div>' +
-        '<div class="g-row-pcs">'+(isLate?'<span style="color:var(--red)">'+dias+'d</span> · ':'')+fmt(pendOp)+' pend.</div></div>' +
+        '<div class="g-row-info">' +
+          '<div class="g-row-costureiro">'+costureiro+'</div>' +
+          '<div class="g-row-cor-nome">'+(cor||'—')+' · '+prevLabel+'</div>' +
+        '</div>' +
+        (isLate ? '<div class="g-row-late">'+dias+'d</div>' : '') +
+        '</div>' +
         '<div class="g-row-bars" style="width:'+totalW+'px;position:relative">'+cellsHtml+barHtml+'</div></div>';
     }).join('');
 
@@ -937,17 +949,148 @@ function closeDrawer() {
   STATE.drawerType = null;
 }
 
+// ═══ Helpers produtos/grades ═══
+function produtosPais() {
+  // Retorna lista unica de {sku_pai, nome} dos produtos pai ativos
+  var pais = STATE.produtos || [];
+  var map = {};
+  pais.forEach(function(p) {
+    var pai = p.sku_pai || p.sku;
+    if (!pai) return;
+    if (!map[pai]) {
+      // Se tipo=pai usa o nome; senao tenta achar um pai
+      var paiProd = pais.find(function(x) { return x.sku === pai; });
+      map[pai] = (paiProd && paiProd.nome) || p.nome || pai;
+    }
+  });
+  return Object.entries(map).map(function(e) { return { sku_pai: e[0], nome: e[1] }; })
+    .sort(function(a, b) { return a.nome.localeCompare(b.nome); });
+}
+
+function coresDoSKU(skuPai) {
+  if (!skuPai) return [];
+  var set = {};
+  (STATE.produtos || []).forEach(function(p) {
+    if ((p.sku_pai || p.sku) === skuPai && p.cor) set[p.cor.trim()] = 1;
+  });
+  return Object.keys(set).sort();
+}
+
+function tamanhosDoSKU(skuPai) {
+  if (!skuPai) return [];
+  var set = {};
+  (STATE.produtos || []).forEach(function(p) {
+    if ((p.sku_pai || p.sku) === skuPai && p.tamanho) set[p.tamanho.trim()] = 1;
+  });
+  // Sort numeric ascending
+  return Object.keys(set).sort(function(a, b) {
+    var na = parseInt(a), nb = parseInt(b);
+    if (!isNaN(na) && !isNaN(nb)) return na - nb;
+    return a.localeCompare(b);
+  });
+}
+
+function renderGradeInputs(skuPai, prefixo, valoresExistentes) {
+  var tamanhos = tamanhosDoSKU(skuPai);
+  if (!tamanhos.length) {
+    return '<div class="grade-empty">Selecione um produto para ver a grade</div>';
+  }
+  var existing = valoresExistentes || {};
+  return '<div class="grade-grid">' +
+    tamanhos.map(function(t) {
+      var val = existing[t] || '';
+      return '<div class="grade-cell">' +
+        '<label>' + t + '</label>' +
+        '<input type="number" min="0" data-tamanho="' + t + '" class="grade-input-' + prefixo + '" value="' + val + '" oninput="atualizarGradeTotal(\'' + prefixo + '\')"></div>';
+    }).join('') +
+    '</div>' +
+    '<div class="grade-total">' +
+      '<span>Total de peças</span>' +
+      '<strong id="grade-total-' + prefixo + '">0</strong>' +
+    '</div>';
+}
+
+function atualizarGradeTotal(prefixo) {
+  var inputs = document.querySelectorAll('.grade-input-' + prefixo);
+  var total = 0;
+  inputs.forEach(function(inp) { total += parseInt(inp.value) || 0; });
+  var el = document.getElementById('grade-total-' + prefixo);
+  if (el) el.textContent = total.toLocaleString('pt-BR');
+  // Espelhar total no campo "pecas" se existir
+  var pecasInput = document.getElementById('f-pecas') || document.getElementById('f-edit-pecas');
+  if (pecasInput) pecasInput.value = total;
+}
+
+function coletarGrade(prefixo) {
+  var inputs = document.querySelectorAll('.grade-input-' + prefixo);
+  var grade = {};
+  inputs.forEach(function(inp) {
+    var q = parseInt(inp.value) || 0;
+    if (q > 0) grade[inp.dataset.tamanho] = q;
+  });
+  return Object.keys(grade).length ? grade : null;
+}
+
+function atualizarCamposProduto(prefixo) {
+  var sku = document.getElementById('f-' + prefixo + '-produto').value;
+  // Atualizar dropdown de cor
+  var cores = coresDoSKU(sku);
+  var corSel = document.getElementById('f-' + prefixo + '-cor');
+  corSel.innerHTML = '<option value="">Selecione...</option>' +
+    cores.map(function(c) { return '<option value="' + c + '">' + c + '</option>'; }).join('');
+  // Atualizar grade
+  document.getElementById('grade-container-' + prefixo).innerHTML = renderGradeInputs(sku, prefixo);
+  atualizarGradeTotal(prefixo);
+  // Filtrar costureiros que sabem fazer esse SKU
+  var costSel = document.getElementById('f-' + prefixo + '-costureiro');
+  if (costSel) {
+    var habilitados = STATE.costureiros.filter(function(c) {
+      return c.ativo && (!sku || (c.skus_habilitados || []).indexOf(sku) >= 0);
+    });
+    var todos = STATE.costureiros.filter(function(c) { return c.ativo; });
+    var lista = habilitados.length > 0 ? habilitados : todos;
+    costSel.innerHTML = lista.map(function(c) {
+      var faz = (c.skus_habilitados || []).indexOf(sku) >= 0;
+      return '<option value="' + c.id + '">' + c.nome + (faz ? ' ✓' : '') + '</option>';
+    }).join('');
+  }
+}
+
 function buildOPForm() {
-  var costOpts = STATE.costureiros.filter(function(c) { return c.ativo; }).map(function(c) { return '<option value="' + c.id + '">' + c.nome + ' — ' + (c.skus_habilitados || []).join(', ') + '</option>'; }).join('');
-  return '<div class="form-group"><label class="form-label">Costureiro</label><select class="form-select" id="f-costureiro">' + costOpts + '</select></div>' +
-    '<div class="form-row"><div class="form-group"><label class="form-label">SKU Produto</label><input class="form-input" id="f-sku" placeholder="Ex: CLAF01"></div>' +
-    '<div class="form-group"><label class="form-label">Cor</label><input class="form-input" id="f-cor" placeholder="Ex: PRETO"></div></div>' +
-    '<div class="form-row"><div class="form-group"><label class="form-label">Peças Projetadas</label><input class="form-input" id="f-pecas" type="number" placeholder="1000"></div>' +
-    '<div class="form-group"><label class="form-label">Valor/Peça (R$)</label><input class="form-input" id="f-valor" type="number" step="0.01" placeholder="18.00"></div></div>' +
-    '<div class="form-group"><label class="form-label">Grade (JSON)</label><input class="form-input" id="f-grade" placeholder=\'{"38":50,"40":100,"42":150,"44":100,"46":50}\'></div>' +
-    '<div class="form-row"><div class="form-group"><label class="form-label">Data Envio Tecido</label><input class="form-input" id="f-data-envio" type="date"></div>' +
-    '<div class="form-group"><label class="form-label">Corte Externo?</label><select class="form-select" id="f-corte"><option value="false">Não</option><option value="true">Sim</option></select></div></div>' +
-    '<div class="form-group"><label class="form-label">Observações</label><textarea class="form-textarea" id="f-obs" placeholder="Opcional..."></textarea></div>';
+  var prodOpts = produtosPais().map(function(p) {
+    return '<option value="' + p.sku_pai + '">' + p.nome + ' (' + p.sku_pai + ')</option>';
+  }).join('');
+  var costOpts = STATE.costureiros.filter(function(c) { return c.ativo; }).map(function(c) {
+    return '<option value="' + c.id + '">' + c.nome + '</option>';
+  }).join('');
+
+  return '<div class="form-group"><label class="form-label">Produto</label>' +
+      '<select class="form-select" id="f-nova-produto" onchange="atualizarCamposProduto(\'nova\')">' +
+        '<option value="">Selecione um produto...</option>' + prodOpts +
+      '</select></div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label class="form-label">Cor</label>' +
+        '<select class="form-select" id="f-nova-cor"><option value="">Selecione um produto primeiro</option></select></div>' +
+      '<div class="form-group"><label class="form-label">Costureiro</label>' +
+        '<select class="form-select" id="f-nova-costureiro">' + costOpts + '</select></div>' +
+    '</div>' +
+    '<div class="form-group"><label class="form-label">Grade por tamanho <small style="color:var(--txt3);font-weight:400">(peças por grade)</small></label>' +
+      '<div id="grade-container-nova"><div class="grade-empty">Selecione um produto para ver a grade</div></div>' +
+    '</div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label class="form-label">Total de Peças <small style="color:var(--txt3);font-weight:400">(automático)</small></label>' +
+        '<input class="form-input" id="f-pecas" type="number" readonly placeholder="0"></div>' +
+      '<div class="form-group"><label class="form-label">Valor/Peça (R$)</label>' +
+        '<input class="form-input" id="f-valor" type="number" step="0.01" placeholder="18.00"></div>' +
+    '</div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label class="form-label">Data Envio Tecido</label>' +
+        '<input class="form-input" id="f-data-envio" type="date"></div>' +
+      '<div class="form-group"><label class="form-label">Corte Externo?</label>' +
+        '<select class="form-select" id="f-corte"><option value="false">Não</option><option value="true">Sim</option></select></div>' +
+    '</div>' +
+    '<div class="form-group"><label class="form-label">Observações</label>' +
+      '<textarea class="form-textarea" id="f-obs" placeholder="Opcional..."></textarea></div>';
 }
 
 function buildCostureiroForm() {
@@ -970,21 +1113,48 @@ function buildInsumoForm() {
 }
 
 function buildEditOPForm(op) {
+  var prodOpts = produtosPais().map(function(p) {
+    var sel = p.sku_pai === op.sku_produto ? ' selected' : '';
+    return '<option value="' + p.sku_pai + '"' + sel + '>' + p.nome + ' (' + p.sku_pai + ')</option>';
+  }).join('');
+  var coresDisp = coresDoSKU(op.sku_produto);
+  var corAtual = (op.cor || '').trim();
+  var corOpts = '<option value="">—</option>' + coresDisp.map(function(c) {
+    var sel = c === corAtual ? ' selected' : '';
+    return '<option value="' + c + '"' + sel + '>' + c + '</option>';
+  }).join('');
+  if (corAtual && coresDisp.indexOf(corAtual) < 0) {
+    corOpts += '<option value="' + corAtual + '" selected>' + corAtual + ' (custom)</option>';
+  }
   var costOpts = STATE.costureiros.filter(function(c) { return c.ativo; }).map(function(c) {
     var sel = c.id === op.costureiro_id ? ' selected' : '';
-    return '<option value="' + c.id + '"' + sel + '>' + c.nome + '</option>';
+    var faz = (c.skus_habilitados || []).indexOf(op.sku_produto) >= 0;
+    return '<option value="' + c.id + '"' + sel + '>' + c.nome + (faz ? ' ✓' : '') + '</option>';
   }).join('');
   var statusOpts = ['Produzindo','Costureiro - Produzindo','parcial','concluida','atrasada','aguardando_tecido','Entregue'].map(function(s) {
     var sel = s === op.status ? ' selected' : '';
     return '<option value="' + s + '"' + sel + '>' + s + '</option>';
   }).join('');
 
-  return '<div class="form-group"><label class="form-label">Produto</label><input class="form-input" id="f-edit-produto" value="' + (op.produto || '') + '"></div>' +
-    '<div class="form-row"><div class="form-group"><label class="form-label">SKU</label><input class="form-input" id="f-edit-sku" value="' + (op.sku_produto || '') + '"></div>' +
-    '<div class="form-group"><label class="form-label">Cor</label><input class="form-input" id="f-edit-cor" value="' + (op.cor || '').trim() + '"></div></div>' +
-    '<div class="form-group"><label class="form-label">Costureiro</label><select class="form-select" id="f-edit-costureiro">' + costOpts + '</select></div>' +
-    '<div class="form-row"><div class="form-group"><label class="form-label">Peças Projetadas</label><input class="form-input" type="number" id="f-edit-pecas" value="' + (op.qtde_pecas || '') + '"></div>' +
-    '<div class="form-group"><label class="form-label">Peças Entregues</label><input class="form-input" type="number" id="f-edit-entregues" value="' + (op.qtde_pecas_entregues || 0) + '"></div></div>' +
+  return '<div class="form-group"><label class="form-label">Produto</label>' +
+      '<select class="form-select" id="f-edit-produto" onchange="atualizarCamposProduto(\'edit\')">' +
+        '<option value="">Selecione...</option>' + prodOpts +
+      '</select></div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label class="form-label">Cor</label>' +
+        '<select class="form-select" id="f-edit-cor">' + corOpts + '</select></div>' +
+      '<div class="form-group"><label class="form-label">Costureiro</label>' +
+        '<select class="form-select" id="f-edit-costureiro">' + costOpts + '</select></div>' +
+    '</div>' +
+    '<div class="form-group"><label class="form-label">Grade por tamanho</label>' +
+      '<div id="grade-container-edit">' + renderGradeInputs(op.sku_produto, 'edit', op.grade_projetada || {}) + '</div>' +
+    '</div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label class="form-label">Total Projetado</label>' +
+        '<input class="form-input" type="number" id="f-edit-pecas" value="' + (op.qtde_pecas || '') + '"></div>' +
+      '<div class="form-group"><label class="form-label">Peças Entregues</label>' +
+        '<input class="form-input" type="number" id="f-edit-entregues" value="' + (op.qtde_pecas_entregues || 0) + '"></div>' +
+    '</div>' +
     '<div class="form-row"><div class="form-group"><label class="form-label">Data Envio Tecido</label><input class="form-input" type="date" id="f-edit-envio" value="' + (op.data_envio_tecido || op.data_pagamento || '') + '"></div>' +
     '<div class="form-group"><label class="form-label">Status</label><select class="form-select" id="f-edit-status">' + statusOpts + '</select></div></div>' +
     '<div class="form-row"><div class="form-group"><label class="form-label">Valor/Peça (R$)</label><input class="form-input" type="number" step="0.01" id="f-edit-valor" value="' + (op.valor_unitario || op.valor_peca || '') + '"></div>' +
@@ -1004,13 +1174,17 @@ async function submitDrawer() {
   try {
     if (type === 'edit-op') {
       var op = STATE.editingOp;
+      var skuEdit = document.getElementById('f-edit-produto').value;
+      var prodInfoEdit = produtosPais().find(function(p) { return p.sku_pai === skuEdit; });
+      var gradeEdit = coletarGrade('edit');
       var body = {
-        produto: document.getElementById('f-edit-produto').value.trim(),
-        sku_produto: document.getElementById('f-edit-sku').value.trim().toUpperCase(),
+        sku_produto: skuEdit,
+        produto: prodInfoEdit ? prodInfoEdit.nome : (op.produto || skuEdit),
         cor: document.getElementById('f-edit-cor').value.trim(),
         costureiro_id: parseInt(document.getElementById('f-edit-costureiro').value),
         qtde_pecas: parseFloat(document.getElementById('f-edit-pecas').value),
         qtde_pecas_entregues: parseInt(document.getElementById('f-edit-entregues').value) || 0,
+        grade_projetada: gradeEdit,
         data_envio_tecido: document.getElementById('f-edit-envio').value || null,
         status: document.getElementById('f-edit-status').value,
         valor_unitario: parseFloat(document.getElementById('f-edit-valor').value) || null,
@@ -1020,13 +1194,20 @@ async function submitDrawer() {
       };
       await patchSupabase('ordens_producao', op.id, body);
     } else if (type === 'nova-op') {
-      var gradeStr = document.getElementById('f-grade').value;
-      var grade = gradeStr ? JSON.parse(gradeStr) : null;
+      var sku = document.getElementById('f-nova-produto').value;
+      if (!sku) { alert('Selecione um produto'); btn.textContent = 'Salvar'; btn.disabled = false; return; }
+      var grade = coletarGrade('nova');
+      var totalPecas = parseInt(document.getElementById('f-pecas').value) || 0;
+      if (totalPecas === 0) { alert('Informe as quantidades na grade'); btn.textContent = 'Salvar'; btn.disabled = false; return; }
+
+      // Buscar nome do produto pai
+      var prodInfo = produtosPais().find(function(p) { return p.sku_pai === sku; });
       var body = {
-        costureiro_id: parseInt(document.getElementById('f-costureiro').value),
-        sku_produto: document.getElementById('f-sku').value.trim().toUpperCase(),
-        cor: document.getElementById('f-cor').value.trim(),
-        qtde_pecas: parseFloat(document.getElementById('f-pecas').value),
+        costureiro_id: parseInt(document.getElementById('f-nova-costureiro').value),
+        sku_produto: sku,
+        produto: prodInfo ? prodInfo.nome : sku,
+        cor: document.getElementById('f-nova-cor').value.trim(),
+        qtde_pecas: totalPecas,
         valor_peca: parseFloat(document.getElementById('f-valor').value) || null,
         valor_unitario: parseFloat(document.getElementById('f-valor').value) || null,
         grade_projetada: grade,
