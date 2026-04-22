@@ -77,13 +77,16 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
 .g-group-stats strong{color:var(--txt2);}
 
 /* Linha de OP individual */
-.g-row{display:flex;min-height:44px;border-bottom:1px solid rgba(255,255,255,0.025);}
+.g-row{display:flex;min-height:48px;border-bottom:1px solid rgba(255,255,255,0.025);}
 .g-row:hover{background:rgba(255,255,255,0.015);}
 .g-row-label{position:sticky;left:0;z-index:4;min-width:220px;max-width:220px;padding:8px 14px 8px 28px;display:flex;align-items:center;gap:10px;background:var(--bg);border-right:1px solid var(--bdr);font-size:12px;color:var(--txt2);}
 .g-row-cor{width:12px;height:12px;border-radius:3px;flex-shrink:0;}
 .g-row-info{flex:1;overflow:hidden;display:flex;flex-direction:column;gap:1px;min-width:0;}
 .g-row-costureiro{font-size:13px;font-weight:700;color:var(--txt1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:0.01em;}
 .g-row-cor-nome{font-size:11px;color:var(--txt3);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.g-row-datas{font-size:10px;color:var(--txt3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;gap:4px;align-items:center;}
+.g-row-datas strong{color:var(--txt2);font-weight:600;}
+.g-row-datas .arrow{color:var(--txt4);}
 .g-row-late{font-size:10px;color:var(--red);font-weight:700;margin-left:auto;flex-shrink:0;}
 .g-row-bars{position:relative;display:flex;}
 .g-row-bars .g-cell{min-width:90px;border-right:1px solid rgba(255,255,255,0.04);}
@@ -606,8 +609,10 @@ function renderGantt() {
       var pendOp = pecas - entregues;
       var costureiro = costuName(o.costureiro_id);
       var pctEnt = pecas > 0 ? Math.round(entregues / pecas * 100) : 0;
-      var prevData = o.data_prevista_entrega || o.data_pagamento || null;
-      var prevLabel = prevData ? formatDate(prevData) : '<span style="color:var(--orange)">sem data</span>';
+      var envioData = o.data_envio_tecido || null;
+      var envioLabel = envioData ? formatDate(envioData) : '<span style="color:var(--orange)">—</span>';
+      var prevData = o.data_prevista_entrega || null;
+      var prevLabel = prevData ? formatDate(prevData) : '<span style="color:var(--orange)">—</span>';
 
       // Cells background
       var cellsHtml = semanas.map(function(s) {
@@ -636,11 +641,11 @@ function renderGantt() {
         (pctEnt > 0 ? '<div class="g-bar-fill" style="width:'+pctEnt+'%"></div>' : '') +
         '<span class="g-bar-lbl">'+barLabel+'</span></div>';
 
-      return '<div class="g-row"><div class="g-row-label" title="'+costureiro+' — '+(cor||'—')+' — Prev: '+(prevData||'sem data')+'">' +
+      return '<div class="g-row"><div class="g-row-label" title="'+costureiro+' — '+(cor||'—')+'\nOP: '+(envioData||'—')+'\nEntrega: '+(prevData||'—')+'">' +
         '<div class="g-row-cor" style="background:'+corColor+'"></div>' +
         '<div class="g-row-info">' +
-          '<div class="g-row-costureiro">'+costureiro+'</div>' +
-          '<div class="g-row-cor-nome">'+(cor||'—')+' · '+prevLabel+'</div>' +
+          '<div class="g-row-costureiro">'+costureiro+' <span style="color:var(--txt3);font-weight:500;font-size:11px">· '+(cor||'—')+'</span></div>' +
+          '<div class="g-row-datas"><span>OP: <strong>'+envioLabel+'</strong></span><span class="arrow">·</span><span>ENTREGA: <strong>'+prevLabel+'</strong></span></div>' +
         '</div>' +
         (isLate ? '<div class="g-row-late">'+dias+'d</div>' : '') +
         '</div>' +
@@ -1084,13 +1089,28 @@ function buildOPForm() {
         '<input class="form-input" id="f-valor" type="number" step="0.01" placeholder="18.00"></div>' +
     '</div>' +
     '<div class="form-row">' +
-      '<div class="form-group"><label class="form-label">Data Envio Tecido</label>' +
-        '<input class="form-input" id="f-data-envio" type="date"></div>' +
-      '<div class="form-group"><label class="form-label">Corte Externo?</label>' +
-        '<select class="form-select" id="f-corte"><option value="false">Não</option><option value="true">Sim</option></select></div>' +
+      '<div class="form-group"><label class="form-label">Data Recebimento do Tecido</label>' +
+        '<input class="form-input" id="f-data-envio" type="date" onchange="sugerirDataEntrega(\'nova\')"></div>' +
+      '<div class="form-group"><label class="form-label">Data Estimada de Entrega</label>' +
+        '<input class="form-input" id="f-data-prevista" type="date"></div>' +
     '</div>' +
+    '<div class="form-group"><label class="form-label">Corte Externo?</label>' +
+      '<select class="form-select" id="f-corte"><option value="false">Não</option><option value="true">Sim</option></select></div>' +
     '<div class="form-group"><label class="form-label">Observações</label>' +
       '<textarea class="form-textarea" id="f-obs" placeholder="Opcional..."></textarea></div>';
+}
+
+function sugerirDataEntrega(prefixo) {
+  var envioId = prefixo === 'nova' ? 'f-data-envio' : 'f-edit-envio';
+  var prevId = prefixo === 'nova' ? 'f-data-prevista' : 'f-edit-prevista';
+  var envio = document.getElementById(envioId).value;
+  var prevEl = document.getElementById(prevId);
+  if (!envio || !prevEl) return;
+  // Só sugere se o campo de previsão estiver vazio
+  if (prevEl.value) return;
+  var d = new Date(envio);
+  d.setDate(d.getDate() + 40);
+  prevEl.value = d.toISOString().slice(0, 10);
 }
 
 function buildCostureiroForm() {
@@ -1150,15 +1170,16 @@ function buildEditOPForm(op) {
       '<div id="grade-container-edit">' + renderGradeInputs(op.sku_produto, 'edit', op.grade_projetada || {}) + '</div>' +
     '</div>' +
     '<div class="form-row">' +
-      '<div class="form-group"><label class="form-label">Total Projetado</label>' +
+      '<div class="form-group"><label class="form-label">Peças Projetadas</label>' +
         '<input class="form-input" type="number" id="f-edit-pecas" value="' + (op.qtde_pecas || '') + '"></div>' +
       '<div class="form-group"><label class="form-label">Peças Entregues</label>' +
         '<input class="form-input" type="number" id="f-edit-entregues" value="' + (op.qtde_pecas_entregues || 0) + '"></div>' +
     '</div>' +
-    '<div class="form-row"><div class="form-group"><label class="form-label">Data Envio Tecido</label><input class="form-input" type="date" id="f-edit-envio" value="' + (op.data_envio_tecido || op.data_pagamento || '') + '"></div>' +
-    '<div class="form-group"><label class="form-label">Status</label><select class="form-select" id="f-edit-status">' + statusOpts + '</select></div></div>' +
-    '<div class="form-row"><div class="form-group"><label class="form-label">Valor/Peça (R$)</label><input class="form-input" type="number" step="0.01" id="f-edit-valor" value="' + (op.valor_unitario || op.valor_peca || '') + '"></div>' +
-    '<div class="form-group"><label class="form-label">Corte Externo?</label><select class="form-select" id="f-edit-corte"><option value="false"' + (!op.corte_externo ? ' selected' : '') + '>Não</option><option value="true"' + (op.corte_externo ? ' selected' : '') + '>Sim</option></select></div></div>' +
+    '<div class="form-row"><div class="form-group"><label class="form-label">Data Recebimento do Tecido</label><input class="form-input" type="date" id="f-edit-envio" value="' + (op.data_envio_tecido || '') + '" onchange="sugerirDataEntrega(\'edit\')"></div>' +
+    '<div class="form-group"><label class="form-label">Data Estimada de Entrega</label><input class="form-input" type="date" id="f-edit-prevista" value="' + (op.data_prevista_entrega || '') + '"></div></div>' +
+    '<div class="form-row"><div class="form-group"><label class="form-label">Status</label><select class="form-select" id="f-edit-status">' + statusOpts + '</select></div>' +
+    '<div class="form-group"><label class="form-label">Valor/Peça (R$)</label><input class="form-input" type="number" step="0.01" id="f-edit-valor" value="' + (op.valor_unitario || op.valor_peca || '') + '"></div></div>' +
+    '<div class="form-group"><label class="form-label">Corte Externo?</label><select class="form-select" id="f-edit-corte"><option value="false"' + (!op.corte_externo ? ' selected' : '') + '>Não</option><option value="true"' + (op.corte_externo ? ' selected' : '') + '>Sim</option></select></div>' +
     '<div style="margin-top:16px;padding:12px;background:var(--bg);border-radius:8px;font-size:12px;color:var(--txt3)">' +
       '<strong style="color:var(--txt2)">Resumo:</strong> ' + diasRodando(op) + ' dias rodando · ' +
       'Valor total: ' + fmtR(op.valor_total) + ' · Criado em: ' + (op.criado_em ? op.criado_em.slice(0, 10) : '—') +
@@ -1186,6 +1207,7 @@ async function submitDrawer() {
         qtde_pecas_entregues: parseInt(document.getElementById('f-edit-entregues').value) || 0,
         grade_projetada: gradeEdit,
         data_envio_tecido: document.getElementById('f-edit-envio').value || null,
+        data_prevista_entrega: document.getElementById('f-edit-prevista').value || null,
         status: document.getElementById('f-edit-status').value,
         valor_unitario: parseFloat(document.getElementById('f-edit-valor').value) || null,
         valor_peca: parseFloat(document.getElementById('f-edit-valor').value) || null,
@@ -1212,6 +1234,7 @@ async function submitDrawer() {
         valor_unitario: parseFloat(document.getElementById('f-valor').value) || null,
         grade_projetada: grade,
         data_envio_tecido: document.getElementById('f-data-envio').value || null,
+        data_prevista_entrega: document.getElementById('f-data-prevista').value || null,
         corte_externo: document.getElementById('f-corte').value === 'true',
         status: 'Produzindo',
       };
