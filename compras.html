@@ -3,48 +3,198 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Fusion — Compras</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<title>Fusion — Compras & Produção</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
-:root{--bg:#0a0a0b;--bg2:#18181b;--bdr:#27272a;--txt1:#fff;--txt2:#a1a1aa;--blue:#3b82f6;--red:#ef4444;}
+:root{--bg:#09090b;--bg2:#111113;--bg3:#1a1a1e;--bdr:#2a2a2e;--bdr-hover:#3f3f46;
+  --txt1:#fafafa;--txt2:#a1a1aa;--txt3:#71717a;--txt4:#52525b;
+  --indigo:#6366f1;--green:#4ade80;--red:#f87171;--amber:#facc15;--orange:#fb923c;--purple:#a78bfa;--cyan:#22d3ee;--pink:#ec4899;}
 *{margin:0;padding:0;box-sizing:border-box;font-family:'Inter',sans-serif;}
-body{background:var(--bg);color:var(--txt1);min-height:100vh;display:flex;flex-direction:column;}
-.topbar{
-  background:rgba(18,18,20,0.95);backdrop-filter:blur(12px);
-  border-bottom:1px solid var(--bdr);height:64px;padding:0 1.5rem;
-  display:flex;align-items:center;gap:16px;
-  position:sticky;top:0;z-index:100;
-}
+body{background:var(--bg);color:var(--txt1);min-height:100vh;}
+
+/* ── Topbar ── */
+.topbar{background:rgba(9,9,11,0.85);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--bdr);height:64px;display:flex;align-items:center;padding:0 1.5rem;gap:16px;position:sticky;top:0;z-index:100;}
 .topbar img{height:32px;object-fit:contain;}
 .topbar-div{width:1px;height:18px;background:var(--bdr);}
-.topbar-label{font-size:15px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--txt1);}
+.topbar-label{font-size:15px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--txt1);}
 .topbar-actions{display:flex;align-items:center;gap:14px;margin-left:auto;}
 #user-info-tb{font-size:13px;color:var(--txt2);}
-.btn-back, .btn-logout-tb{
-  background:transparent;border:1px solid var(--bdr);color:var(--txt2);
-  padding:7px 14px;border-radius:6px;font-size:13px;cursor:pointer;
-  font-family:inherit;text-decoration:none;display:inline-block;
-}
-.btn-back:hover{border-color:var(--blue);color:var(--blue);}
+.btn-back,.btn-logout-tb{background:transparent;border:1px solid var(--bdr);color:var(--txt2);padding:7px 14px;border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit;text-decoration:none;display:inline-block;transition:all 0.15s;}
+.btn-back:hover{border-color:var(--indigo);color:var(--indigo);}
 .btn-logout-tb:hover{border-color:var(--red);color:var(--red);}
+
+/* ── Layout ── */
+.main{max-width:1440px;margin:0 auto;padding:1.5rem;}
+
+/* ── Tab Navigation (Pill Tabs) ── */
+.tab-nav{display:flex;gap:4px;padding:4px;background:var(--bg2);border:1px solid var(--bdr);border-radius:10px;width:fit-content;margin-bottom:24px;}
+.tab-btn{padding:8px 18px;border:none;border-radius:8px;background:transparent;color:var(--txt3);font-family:'Inter',sans-serif;font-size:13px;font-weight:500;cursor:pointer;transition:all 0.15s;white-space:nowrap;}
+.tab-btn:hover{color:var(--txt2);background:rgba(255,255,255,0.04);}
+.tab-btn.active{background:var(--indigo);color:#fff;box-shadow:0 1px 3px rgba(99,102,241,0.3);}
+.tab-btn .badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;margin-left:6px;border-radius:9px;background:rgba(255,255,255,0.1);font-size:11px;font-weight:600;color:var(--txt2);}
+.tab-btn.active .badge{background:rgba(255,255,255,0.2);color:#fff;}
+.tab-panel{display:none;}
+.tab-panel.active{display:block;}
+
+/* ── KPIs ── */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:24px;}
+.kpi{background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;padding:18px;position:relative;overflow:hidden;transition:transform 0.2s,box-shadow 0.2s;}
+.kpi:hover{transform:translateY(-2px);box-shadow:0 4px 20px rgba(0,0,0,0.3);}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--kpi-accent,var(--indigo));opacity:0.7;}
+.kpi-lbl{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--txt3);margin-bottom:8px;}
+.kpi-val{font-size:1.5rem;font-weight:800;color:var(--txt1);line-height:1;font-variant-numeric:tabular-nums;}
+.kpi-sub{font-size:12px;color:var(--txt3);margin-top:6px;}
+
+/* ── Cards ── */
+.card{background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;overflow:hidden;margin-bottom:16px;}
+.card-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--bdr);}
+.card-title{font-size:15px;font-weight:600;color:var(--txt1);}
+.card-title small{font-size:12px;font-weight:400;color:var(--txt3);margin-left:8px;}
+.card-body{padding:20px;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
+.chart-wrap{position:relative;height:280px;}
+
+/* ── Gantt Timeline ── */
+.gantt-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--bdr);border-radius:10px;background:var(--bg);}
+.gantt-inner{min-width:max-content;position:relative;}
+
+/* Header semanas */
+.g-header{display:flex;position:sticky;top:0;z-index:10;background:var(--bg2);border-bottom:1px solid var(--bdr);}
+.g-label-col{position:sticky;left:0;z-index:12;min-width:200px;max-width:200px;background:var(--bg2);border-right:1px solid var(--bdr);padding:8px 14px;font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;}
+.g-weeks{display:flex;}
+.g-week{min-width:90px;text-align:center;padding:8px 4px;font-size:10px;font-weight:600;color:var(--txt3);border-right:1px solid rgba(255,255,255,0.04);}
+.g-week.now{background:rgba(99,102,241,0.1);color:var(--indigo);font-weight:700;}
+
+/* Grupo de produto */
+.g-group{border-bottom:1px solid var(--bdr);}
+.g-group-header{display:flex;position:sticky;left:0;z-index:5;background:var(--bg3);border-bottom:1px solid rgba(255,255,255,0.06);cursor:pointer;}
+.g-group-header:hover{background:rgba(99,102,241,0.06);}
+.g-group-label{position:sticky;left:0;z-index:6;min-width:200px;max-width:200px;padding:10px 14px;display:flex;align-items:center;gap:10px;background:inherit;border-right:1px solid var(--bdr);}
+.g-group-name{font-size:13px;font-weight:700;color:var(--txt1);}
+.g-group-badge{font-size:10px;font-weight:600;padding:2px 8px;border-radius:9px;background:rgba(99,102,241,0.15);color:var(--indigo);}
+.g-group-stats{flex:1;display:flex;align-items:center;gap:16px;padding:0 14px;font-size:11px;color:var(--txt3);}
+.g-group-stats strong{color:var(--txt2);}
+
+/* Linha de OP individual */
+.g-row{display:flex;min-height:36px;border-bottom:1px solid rgba(255,255,255,0.025);}
+.g-row:hover{background:rgba(255,255,255,0.015);}
+.g-row-label{position:sticky;left:0;z-index:4;min-width:200px;max-width:200px;padding:6px 14px 6px 28px;display:flex;align-items:center;gap:8px;background:var(--bg);border-right:1px solid var(--bdr);font-size:12px;color:var(--txt2);}
+.g-row-cor{width:10px;height:10px;border-radius:3px;flex-shrink:0;}
+.g-row-info{flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+.g-row-pcs{font-size:10px;color:var(--txt3);margin-left:auto;white-space:nowrap;flex-shrink:0;}
+.g-row-bars{position:relative;display:flex;}
+.g-row-bars .g-cell{min-width:90px;border-right:1px solid rgba(255,255,255,0.04);}
+.g-cell.now{background:rgba(99,102,241,0.04);}
+
+/* Barra */
+.g-bar{position:absolute;top:4px;height:calc(100% - 8px);border-radius:5px;cursor:pointer;overflow:hidden;transition:filter 0.15s;display:flex;align-items:center;min-width:16px;}
+.g-bar:hover{filter:brightness(1.2);z-index:2;}
+.g-bar-fill{position:absolute;left:0;top:0;bottom:0;background:rgba(255,255,255,0.22);border-radius:5px 0 0 5px;pointer-events:none;}
+.g-bar-lbl{position:relative;z-index:1;padding:0 6px;font-size:10px;font-weight:600;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,0.6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+/* Linha do Hoje */
+.g-today{position:absolute;top:0;bottom:0;width:2px;background:var(--red);z-index:8;pointer-events:none;}
+.g-today::before{content:'HOJE';position:absolute;top:-18px;left:-12px;font-size:8px;font-weight:700;color:var(--red);letter-spacing:0.05em;}
+
+/* Filtros do gantt */
+.gantt-filters{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center;}
+
+/* Empty */
+.g-empty{padding:40px;text-align:center;color:var(--txt3);font-size:13px;}
+
+/* ── Pills ── */
+.pill{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:9999px;font-size:11px;font-weight:600;white-space:nowrap;}
+.pill::before{content:'';width:6px;height:6px;border-radius:50%;}
+.pill-ok{background:rgba(74,222,128,0.12);color:var(--green);}.pill-ok::before{background:var(--green);}
+.pill-warning{background:rgba(250,204,21,0.12);color:var(--amber);}.pill-warning::before{background:var(--amber);}
+.pill-danger{background:rgba(248,113,113,0.12);color:var(--red);}.pill-danger::before{background:var(--red);}
+.pill-info{background:rgba(99,102,241,0.12);color:var(--indigo);}.pill-info::before{background:var(--indigo);}
+.pill-delayed{background:rgba(251,146,60,0.12);color:var(--orange);}.pill-delayed::before{background:var(--orange);}
+.pill-neutral{background:rgba(161,161,170,0.12);color:var(--txt2);}.pill-neutral::before{background:var(--txt2);}
+.pill-purple{background:rgba(167,139,250,0.12);color:var(--purple);}.pill-purple::before{background:var(--purple);}
+
+/* ── Tables ── */
+.tb-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:0 0 12px 12px;}
+.tb-wrap-scroll{max-height:60vh;overflow:auto;-webkit-overflow-scrolling:touch;}
+table.tb{width:100%;border-collapse:collapse;font-size:13px;min-width:820px;}
+table.tb th{background:rgba(255,255,255,0.03);color:var(--txt3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;padding:10px 14px;border-bottom:1px solid var(--bdr);text-align:left;white-space:nowrap;cursor:pointer;user-select:none;}
+table.tb th.r{text-align:right;}
+table.tb th:hover{color:var(--txt2);}
+table.tb th.sort-asc::after{content:' ↑';color:var(--indigo);}
+table.tb th.sort-desc::after{content:' ↓';color:var(--indigo);}
+table.tb td{padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.04);color:var(--txt1);font-size:13px;vertical-align:middle;}
+table.tb td.r{text-align:right;font-variant-numeric:tabular-nums;}
+table.tb td.dim{color:var(--txt2);}
+table.tb tr:hover td{background:rgba(99,102,241,0.03);}
+
+/* ── Filters ── */
+.filtros{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center;}
+.chip{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;border:1px solid var(--bdr);background:transparent;color:var(--txt2);cursor:pointer;transition:all 0.15s;}
+.chip:hover{border-color:var(--indigo);color:var(--indigo);}
+.chip.on{background:var(--indigo);border-color:var(--indigo);color:#fff;box-shadow:0 0 10px rgba(99,102,241,0.25);}
+.dinput,.dselect{background:var(--bg);border:1px solid var(--bdr);border-radius:8px;padding:7px 12px;font-size:12px;color:var(--txt1);font-family:inherit;outline:none;}
+.dselect{min-width:150px;cursor:pointer;}
+.dinput:focus,.dselect:focus{border-color:var(--indigo);box-shadow:0 0 0 3px rgba(99,102,241,0.12);}
+.btnf{background:var(--indigo);border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:600;color:#fff;cursor:pointer;transition:all 0.15s;}
+.btnf:hover{box-shadow:0 0 12px rgba(99,102,241,0.3);}
+.btnf.ghost{background:transparent;border:1px solid var(--bdr);color:var(--txt2);}
+.btnf.ghost:hover{border-color:var(--txt2);color:var(--txt1);}
+.btnf.success{background:var(--green);color:#000;}
+
+/* ── Drawer (Slide-out Panel) ── */
+.drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);z-index:999;opacity:0;pointer-events:none;transition:opacity 0.2s ease;}
+.drawer-overlay.open{opacity:1;pointer-events:auto;}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(560px,90vw);background:var(--bg2);border-left:1px solid var(--bdr);z-index:1000;transform:translateX(100%);transition:transform 0.25s cubic-bezier(0.4,0,0.2,1);display:flex;flex-direction:column;}
+.drawer-overlay.open .drawer{transform:translateX(0);}
+.drawer-header{display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid var(--bdr);}
+.drawer-header h2{font-size:16px;font-weight:600;color:var(--txt1);margin:0;}
+.drawer-close{width:32px;height:32px;border-radius:6px;border:1px solid var(--bdr);background:transparent;color:var(--txt3);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;}
+.drawer-close:hover{background:var(--bg3);color:var(--txt1);}
+.drawer-body{flex:1;overflow-y:auto;padding:24px;}
+.drawer-footer{padding:16px 24px;border-top:1px solid var(--bdr);display:flex;gap:12px;justify-content:flex-end;}
+.form-group{margin-bottom:18px;}
+.form-label{display:block;font-size:13px;font-weight:500;color:var(--txt2);margin-bottom:6px;}
+.form-input,.form-select,.form-textarea{width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--bdr);border-radius:8px;color:var(--txt1);font-family:inherit;font-size:14px;transition:border-color 0.15s;}
+.form-input:focus,.form-select:focus,.form-textarea:focus{outline:none;border-color:var(--indigo);box-shadow:0 0 0 3px rgba(99,102,241,0.12);}
+.form-input::placeholder{color:var(--txt4);}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.form-textarea{min-height:80px;resize:vertical;}
+
+/* ── Coverage Bars ── */
+.cov-row{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.03);}
+.cov-row:last-child{border-bottom:none;}
+.cov-label{min-width:100px;font-size:13px;font-weight:600;color:var(--txt1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cov-bar-track{flex:1;background:var(--bg3);border-radius:4px;height:10px;overflow:hidden;}
+.cov-bar-fill{height:100%;border-radius:4px;transition:width 0.4s;}
+.cov-val{min-width:70px;text-align:right;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;}
+
+/* ── Bar Rows (Costureiros etc) ── */
+.bar-row{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
+.bar-row:last-child{margin-bottom:0;}
+.bar-lbl{min-width:130px;font-size:12px;color:var(--txt2);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.bar-track{flex:1;background:var(--bg3);border-radius:4px;height:10px;overflow:hidden;}
+.bar-fill{height:100%;border-radius:4px;transition:width 0.4s;}
+.bar-val{min-width:90px;text-align:right;font-size:12px;color:var(--txt1);font-weight:600;font-variant-numeric:tabular-nums;}
+
+/* ── Utilities ── */
+.empty{text-align:center;color:var(--txt3);padding:32px;font-size:13px;}
+.spin{width:24px;height:24px;border:2px solid var(--bdr);border-top-color:var(--indigo);border-radius:50%;animation:spin 0.7s linear infinite;margin:24px auto;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.mt-16{margin-top:16px;}
+.mb-16{margin-bottom:16px;}
+.hidden{display:none!important;}
+
+/* ── Responsive ── */
+@media(max-width:1100px){.kanban{grid-template-columns:repeat(3,1fr);}.kpi-grid{grid-template-columns:repeat(3,1fr);}}
+@media(max-width:900px){.grid2{grid-template-columns:1fr;}.kanban{grid-template-columns:repeat(2,1fr);}}
 @media(max-width:768px){
-  .topbar{height:56px;padding:0 1rem;}
-  .topbar img{height:26px;}
-  .topbar-label{font-size:12px;}
-  .btn-back, .btn-logout-tb{padding:5px 10px;font-size:11px;}
-  #user-info-tb{display:none;}
-  .topbar-actions{gap:8px;}
+  .topbar{height:56px;padding:0 1rem;}.topbar img{height:26px;}.topbar-label{font-size:12px;}
+  .btn-back,.btn-logout-tb{padding:5px 10px;font-size:11px;}#user-info-tb{display:none;}.topbar-actions{gap:8px;}
+  .main{padding:1rem;}.tab-nav{overflow-x:auto;width:100%;}.tab-btn{font-size:12px;padding:7px 14px;}
+  .kpi-grid{grid-template-columns:repeat(2,1fr);}.kpi-val{font-size:1.2rem;}
+  .kanban{grid-template-columns:1fr;}.kanban-col{min-height:auto;}
 }
-.center{
-  flex:1;display:flex;align-items:center;justify-content:center;
-  padding:2rem 1rem;text-align:center;
-}
-.placeholder{
-  max-width:480px;
-}
-.placeholder .icon{font-size:64px;margin-bottom:1rem;}
-.placeholder h1{font-size:24px;font-weight:600;margin-bottom:.5rem;}
-.placeholder p{font-size:14px;color:var(--txt2);line-height:1.5;}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="/auth.js"></script>
@@ -54,7 +204,7 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;display:flex;flex-d
 <header class="topbar">
   <img src="/logo-urso.png" alt="Fusion">
   <div class="topbar-div"></div>
-  <span class="topbar-label">Compras</span>
+  <span class="topbar-label">Compras & Produção</span>
   <div class="topbar-actions">
     <span id="user-info-tb"></span>
     <a href="/index.html" class="btn-back">Menu</a>
@@ -62,21 +212,903 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;display:flex;flex-d
   </div>
 </header>
 
-<div class="center">
-  <div class="placeholder">
-    <div class="icon">🧾</div>
-    <h1>Em construção</h1>
-    <p>O dashboard de Compras está sendo desenvolvido. Em breve você poderá acompanhar ordens de compra, fornecedores e prazos por aqui.</p>
+<div class="main">
+  <!-- Tab Navigation -->
+  <nav class="tab-nav" id="tab-nav">
+    <button class="tab-btn active" data-tab="pipeline">Pipeline <span class="badge" id="badge-pipeline">0</span></button>
+    <button class="tab-btn" data-tab="costureiros">Costureiros</button>
+    <button class="tab-btn" data-tab="insumos">Insumos</button>
+    <button class="tab-btn" data-tab="planejamento">Planejamento</button>
+    <button class="tab-btn" data-tab="custos">Custos</button>
+  </nav>
+
+  <!-- ═══════════════ TAB: PIPELINE ═══════════════ -->
+  <div class="tab-panel active" id="panel-pipeline">
+    <div class="kpi-grid" id="kpis-pipeline">
+      <div class="kpi"><div class="kpi-lbl">Carregando...</div><div class="spin"></div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Cronograma de Produção<small id="op-count"></small></span>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btnf ghost" onclick="exportCSV('op')">CSV</button>
+          <button class="btnf" onclick="openDrawer('nova-op')">+ Nova OP</button>
+        </div>
+      </div>
+      <div class="card-body" style="padding:12px;">
+        <div class="gantt-filters">
+          <select id="flt-produto-gantt" class="dselect" onchange="renderGantt()"><option value="">Todos produtos</option></select>
+          <select id="flt-costureiro-gantt" class="dselect" onchange="renderGantt()"><option value="">Todos costureiros</option></select>
+          <select id="flt-status-op" class="dselect" onchange="renderGantt()"><option value="">Todos status</option></select>
+          <button class="btnf ghost" onclick="document.getElementById('flt-produto-gantt').value='';document.getElementById('flt-costureiro-gantt').value='';document.getElementById('flt-status-op').value='';renderGantt()">Limpar</button>
+        </div>
+        <div class="gantt-scroll" id="gantt-scroll"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ TAB: COSTUREIROS ═══════════════ -->
+  <div class="tab-panel" id="panel-costureiros">
+    <div class="kpi-grid" id="kpis-costureiros"></div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Performance por Costureiro</span>
+        <button class="btnf" onclick="openDrawer('edit-costureiro')">+ Cadastrar</button>
+      </div>
+      <div class="card-body" id="costureiro-bars"></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Previsão de Pagamentos</span>
+        <small style="color:var(--txt3)">D+10 (NF) / D+15 (sem NF) a partir da entrega</small>
+      </div>
+      <div class="tb-wrap tb-wrap-scroll">
+        <table class="tb"><thead><tr>
+          <th>Costureiro</th><th>Produto</th><th class="r">Peças</th><th class="r">Valor/pç</th><th class="r">Total</th><th>Tipo NF</th><th>Vencimento Est.</th>
+        </tr></thead><tbody id="tbody-pagamentos"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ TAB: INSUMOS ═══════════════ -->
+  <div class="tab-panel" id="panel-insumos">
+    <div class="kpi-grid" id="kpis-insumos"></div>
+    <div class="filtros">
+      <div style="display:flex;gap:6px;">
+        <button class="chip on" data-tipo="tecido" onclick="toggleInsumoTipo(this)">Tecidos</button>
+        <button class="chip" data-tipo="aviamento" onclick="toggleInsumoTipo(this)">Aviamentos</button>
+      </div>
+      <input type="text" id="flt-insumo-busca" class="dinput" placeholder="Buscar tecido, cor..." oninput="renderInsumos()">
+      <button class="btnf" onclick="openDrawer('novo-insumo')">+ Cadastrar Insumo</button>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Estoque de Insumos<small id="insumo-count"></small></span></div>
+      <div class="tb-wrap tb-wrap-scroll">
+        <table class="tb"><thead><tr>
+          <th data-sort="nome">Nome</th>
+          <th data-sort="cor">Cor</th>
+          <th class="r" data-sort="quantidade_atual">Qtde Atual</th>
+          <th>Unidade</th>
+          <th class="r" data-sort="quantidade_minima">Mínimo</th>
+          <th class="r" data-sort="valor_unitario_referencia">R$/Unid</th>
+          <th data-sort="status">Status</th>
+        </tr></thead><tbody id="tbody-insumos"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ TAB: PLANEJAMENTO ═══════════════ -->
+  <div class="tab-panel" id="panel-planejamento">
+    <div class="kpi-grid" id="kpis-planejamento"></div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Cobertura de Estoque por SKU</span><small style="color:var(--txt3)">dias de venda cobertos (estoque + em produção)</small></div>
+      <div class="card-body" id="cobertura-bars"></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Sugestões do MRP</span><small style="color:var(--txt3)">atualizado diariamente</small></div>
+      <div class="card-body" id="mrp-sugestoes"><div class="empty">MRP ainda não executado. Execute fusion_sync_producao.py para gerar sugestões.</div></div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ TAB: CUSTOS ═══════════════ -->
+  <div class="tab-panel" id="panel-custos">
+    <div class="kpi-grid" id="kpis-custos"></div>
+    <div class="grid2">
+      <div class="card">
+        <div class="card-header"><span class="card-title">CMV por SKU</span></div>
+        <div class="card-body" id="cmv-table"></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">Custo Tecido — Evolução</span></div>
+        <div class="card-body"><div class="chart-wrap"><canvas id="chart-custos"></canvas></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Top Fornecedores</span></div>
+      <div class="tb-wrap">
+        <table class="tb"><thead><tr>
+          <th>Fornecedor</th><th class="r">Ordens</th><th class="r">Volume Total</th><th class="r">Valor Total</th><th class="r">Preço Médio</th>
+        </tr></thead><tbody id="tbody-fornecedores"></tbody></table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ DRAWER (Slide-out) ═══════════════ -->
+<div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()">
+  <div class="drawer" onclick="event.stopPropagation()">
+    <div class="drawer-header">
+      <h2 id="drawer-title">Nova Ordem</h2>
+      <button class="drawer-close" onclick="closeDrawer()">✕</button>
+    </div>
+    <div class="drawer-body" id="drawer-body"></div>
+    <div class="drawer-footer" id="drawer-footer">
+      <button class="btnf ghost" onclick="closeDrawer()">Cancelar</button>
+      <button class="btnf" id="drawer-submit" onclick="submitDrawer()">Salvar</button>
+    </div>
   </div>
 </div>
 
 <script>
-(async () => {
-  const auth = await fusionAuth.requireAuth('compras');
+// ═══════════════ CONFIG ═══════════════
+var SB_URL = 'https://spulbhnmkomvgohzhfvj.supabase.co';
+var AUTH_HEADERS = null;
+var MAX_PAGES = 20;
+
+// ═══════════════ STATE ═══════════════
+var STATE = {
+  ops: [], compras: [], costureiros: [], precos: [], cortadores: [],
+  insumos: [], consumo: [], planejamento: [], fornecedores: [],
+  tab: 'pipeline', drawerType: null
+};
+
+// ═══════════════ INIT ═══════════════
+(async function() {
+  var auth = await fusionAuth.requireAuth('compras');
   if (!auth) return;
-  const ui = document.getElementById('user-info-tb');
-  if (ui) ui.textContent = (auth.role.nome || auth.role.email);
+  AUTH_HEADERS = auth.headers;
+  document.getElementById('user-info-tb').textContent = auth.role.nome || auth.role.email;
+  await carregar();
 })();
+
+// ═══════════════ DATA FETCH ═══════════════
+async function buscarTudo(tab, filtro) {
+  var todos = [], off = 0, tam = 1000, pag = 0;
+  while (pag < MAX_PAGES) {
+    var url = SB_URL + '/rest/v1/' + tab + '?' + filtro + '&limit=' + tam + '&offset=' + off;
+    var r = await fetch(url, { headers: AUTH_HEADERS });
+    if (!r.ok) throw new Error(tab + ' HTTP ' + r.status);
+    var lote = await r.json();
+    if (!Array.isArray(lote) || lote.length === 0) break;
+    todos = todos.concat(lote);
+    if (lote.length < tam) break;
+    off += tam; pag++;
+  }
+  return todos;
+}
+
+async function carregar() {
+  try {
+    var [ops, compras, costureiros, precos, insumos, consumo, planejamento, fornecedores] = await Promise.all([
+      buscarTudo('ordens_producao', 'select=*&order=criado_em.desc'),
+      buscarTudo('ordens_compra', 'select=*&order=data_faturamento.desc&limit=500'),
+      buscarTudo('costureiros', 'select=*&order=nome'),
+      buscarTudo('costureiro_precos', 'select=*&vigencia_fim=is.null'),
+      buscarTudo('estoque_insumos', 'select=*&ativo=eq.true&order=nome'),
+      buscarTudo('consumo_tecido', 'select=*&ativo=eq.true'),
+      buscarTudo('planejamento_producao', 'select=*&order=data_calculo.desc&limit=50'),
+      buscarTudo('fornecedores', 'select=*&ativo=eq.true&order=nome'),
+    ]);
+    STATE.ops = ops;
+    STATE.compras = compras;
+    STATE.costureiros = costureiros;
+    STATE.precos = precos;
+    STATE.insumos = insumos;
+    STATE.consumo = consumo;
+    STATE.planejamento = planejamento;
+    STATE.fornecedores = fornecedores;
+    renderAll();
+  } catch (e) {
+    console.error('Erro ao carregar:', e);
+    document.getElementById('kpis-pipeline').innerHTML = '<div class="empty">Erro ao carregar dados: ' + e.message + '</div>';
+  }
+}
+
+// ═══════════════ RENDER ALL ═══════════════
+function renderAll() {
+  renderPipeline();
+  renderCostureiros();
+  renderInsumos();
+  renderPlanejamento();
+  renderCustos();
+  populateFilters();
+}
+
+// ═══════════════ HELPERS ═══════════════
+function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('pt-BR'); }
+function fmtR(n) { return n == null ? '—' : 'R$ ' + Number(n).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
+function costuName(id) { var c = STATE.costureiros.find(function(x) { return x.id === id; }); return c ? c.nome : '—'; }
+function statusPill(st) {
+  var map = {
+    'Entregue': 'pill-ok', 'concluida': 'pill-ok', 'Pronto': 'pill-ok',
+    'Produzindo': 'pill-warning', 'Costureiro - Produzindo': 'pill-warning', 'em_producao': 'pill-warning', 'parcial': 'pill-warning',
+    'atrasada': 'pill-danger', 'Devolvido': 'pill-danger',
+    'aguardando_tecido': 'pill-purple', 'tecido_enviado': 'pill-info',
+    'Costureiro -  Estocado': 'pill-info', 'No CD': 'pill-ok',
+  };
+  var cls = map[st] || 'pill-neutral';
+  return '<span class="pill ' + cls + '">' + (st || '—') + '</span>';
+}
+
+// ═══════════════ TAB: PIPELINE (Gantt por Costureiro) ═══════════════
+
+// Cores mapeadas para cores de produto (cor do tecido/produto)
+var COR_MAP = {
+  'PRETO':'#2d2d2d','AZUL':'#3b82f6','AZUL MARINHO':'#1e3a8a','MARINHO':'#1e3a8a',
+  'CINZA':'#6b7280','CINZA MESCLA':'#9ca3af','CINZA GRAFITE':'#4b5563','GRAFITE':'#4b5563',
+  'CINZA GESSO':'#d4d4d8','GESSO':'#d4d4d8',
+  'BRANCO':'#e5e7eb','BEGE':'#d4a574','AREIA':'#c9b896','CHUMBO':'#52525b',
+  'VERDE':'#166534','VERDE ESCURO':'#14532d','VERDE CLARO':'#4ade80',
+  'VERMELHO':'#ef4444','ICE':'#a5f3fc','OFFWHITE':'#fef3c7','CAQUI':'#a3a042',
+  'NAUTICO':'#1e3a5f','VINHO':'#7f1d1d','JEANS':'#4a7fb5',
+  'BLUE OPAL':'#7dd3fc','AZUL NEBULOSO':'#93c5fd','NEBULOSO':'#93c5fd',
+  'THESEUS':'#8b8b9e','THESEUS ( CINZA)':'#8b8b9e',
+  'AZUL BEBE':'#bfdbfe','MARROM':'#78350f','ALUMINIO':'#b0b0b0','ALIMINIO':'#b0b0b0',
+  'VERMELHO E AZUL MARINHO':'#991b1b','AZUL E MARROM':'#3b5998','VINHO E AMARELO':'#881337',
+};
+function corToColor(cor) {
+  if (!cor) return '#6366f1';
+  var c = cor.trim().toUpperCase();
+  // Busca exata
+  if (COR_MAP[c]) return COR_MAP[c];
+  // Busca parcial — se a cor contém alguma chave conhecida
+  var keys = Object.keys(COR_MAP);
+  for (var i = 0; i < keys.length; i++) {
+    if (c.indexOf(keys[i]) !== -1) return COR_MAP[keys[i]];
+  }
+  return '#6366f1';
+}
+
+function renderPipeline() {
+  var ops = STATE.ops;
+  var ativas = ops.filter(function(o) { return o.status !== 'concluida' && o.status !== 'Entregue'; });
+  var entregues = ops.filter(function(o) { return o.status === 'Entregue' || o.status === 'concluida'; });
+  var totalPecas = ativas.reduce(function(s, o) { return s + (o.qtde_pecas || 0); }, 0);
+  var totalEntregues = ativas.reduce(function(s, o) { return s + (o.qtde_pecas_entregues || 0); }, 0);
+  var aReceber = totalPecas - totalEntregues;
+  var semData = ativas.filter(function(o) { return !o.data_prevista_entrega && !o.data_pagamento; }).length;
+
+  document.getElementById('badge-pipeline').textContent = ativas.length;
+  document.getElementById('kpis-pipeline').innerHTML = [
+    kpiHtml('Ordens Ativas', ativas.length, '', '--kpi-accent:var(--indigo)'),
+    kpiHtml('Peças a Receber', fmt(Math.round(aReceber)), 'pendentes dos costureiros', '--kpi-accent:var(--purple)'),
+    kpiHtml('Já Entregues', fmt(Math.round(totalEntregues)), Math.round(totalPecas ? totalEntregues/totalPecas*100 : 0) + '% do total', '--kpi-accent:var(--green)'),
+    kpiHtml('Ordens >40 dias', ativas.filter(function(o){return diasRodando(o)>40;}).length, 'além do lead time', '--kpi-accent:var(--red)'),
+    kpiHtml('Sem Data Prevista', semData, semData > 0 ? 'atenção — sem previsão de entrega!' : 'todas com data', '--kpi-accent:' + (semData > 0 ? 'var(--orange)' : 'var(--green)')),
+  ].join('');
+
+  renderGantt();
+}
+
+function kpiHtml(lbl, val, sub, accent) {
+  return '<div class="kpi" style="' + accent + '"><div class="kpi-lbl">' + lbl + '</div><div class="kpi-val">' + val + '</div>' + (sub ? '<div class="kpi-sub">' + sub + '</div>' : '') + '</div>';
+}
+
+function diasRodando(op) {
+  var inicio = op.data_envio_tecido || op.data_pagamento || op.criado_em;
+  if (!inicio) return 0;
+  return Math.floor((new Date() - new Date(inicio)) / 86400000);
+}
+
+function getWeekStart(d) {
+  // Semana começa no sábado (operacional Fusion)
+  var dt = new Date(d);
+  var offset = (dt.getDay() + 1) % 7;
+  dt.setDate(dt.getDate() - offset);
+  dt.setHours(0,0,0,0);
+  return dt;
+}
+
+function weekLabel(d) {
+  var dt = new Date(d);
+  return (dt.getDate() < 10 ? '0' : '') + dt.getDate() + '/' + (dt.getMonth() < 9 ? '0' : '') + (dt.getMonth()+1);
+}
+
+function renderGantt() {
+  var ops = STATE.ops.slice();
+
+  // Filtros
+  var fSt = document.getElementById('flt-status-op').value;
+  var fProd = document.getElementById('flt-produto-gantt').value;
+  var fCost = document.getElementById('flt-costureiro-gantt').value;
+  if (fSt) ops = ops.filter(function(o) { return o.status === fSt; });
+  if (fProd) ops = ops.filter(function(o) { return (o.produto||'').trim() === fProd || o.sku_produto === fProd; });
+  if (fCost) ops = ops.filter(function(o) { return o.costureiro_id == fCost; });
+
+  // Excluir concluídas/entregues do gantt
+  var ativas = ops.filter(function(o) { return o.status !== 'Entregue' && o.status !== 'concluida'; });
+  document.getElementById('op-count').textContent = ' — ' + ativas.length + ' ordens ativas';
+
+  if (!ativas.length) {
+    document.getElementById('gantt-scroll').innerHTML = '<div class="g-empty">Nenhuma ordem ativa encontrada</div>';
+    return;
+  }
+
+  // Config timeline
+  var WEEKS_BACK = 6, WEEKS_FWD = 10, COL_W = 90;
+  var hoje = new Date(); hoje.setHours(0,0,0,0);
+  var semanaHoje = getWeekStart(hoje);
+  var inicioRange = getWeekStart(new Date(hoje.getTime() - WEEKS_BACK * 7 * 86400000));
+  var semanas = [];
+  for (var i = 0; i < WEEKS_BACK + WEEKS_FWD; i++) {
+    semanas.push(new Date(inicioRange.getTime() + i * 7 * 86400000));
+  }
+  var totalW = semanas.length * COL_W;
+
+  // Agrupar por PRODUTO
+  var grupos = {};
+  ativas.forEach(function(o) {
+    var prod = (o.produto || o.sku_produto || 'Sem produto').trim();
+    if (!grupos[prod]) grupos[prod] = { ops: [], totalPecas: 0, totalEntregues: 0 };
+    grupos[prod].ops.push(o);
+    grupos[prod].totalPecas += (o.qtde_pecas || 0);
+    grupos[prod].totalEntregues += (o.qtde_pecas_entregues || 0);
+  });
+  var gruposSorted = Object.entries(grupos).sort(function(a, b) { return b[1].totalPecas - a[1].totalPecas; });
+
+  // ── Header semanas ──
+  var monthLabels = {};
+  semanas.forEach(function(s) { var m = s.toLocaleString('pt-BR',{month:'short'}); monthLabels[m] = (monthLabels[m]||0)+1; });
+
+  var hdrWeeks = semanas.map(function(s) {
+    var isNow = s.getTime() === semanaHoje.getTime();
+    var dd = (s.getDate()<10?'0':'')+s.getDate();
+    var mm = (s.getMonth()<9?'0':'')+(s.getMonth()+1);
+    return '<div class="g-week' + (isNow?' now':'') + '" style="width:'+COL_W+'px">'+dd+'/'+mm+'</div>';
+  }).join('');
+
+  var headerHtml = '<div class="g-header"><div class="g-label-col">Produto / Cor</div><div class="g-weeks">' + hdrWeeks + '</div></div>';
+
+  // ── Rows por grupo de produto ──
+  var bodyHtml = gruposSorted.map(function(entry) {
+    var prodNome = entry[0], grupo = entry[1];
+    var pendente = Math.round(grupo.totalPecas - grupo.totalEntregues);
+    var numOps = grupo.ops.length;
+
+    // Group header
+    var ghLabel = '<div class="g-group-label"><span class="g-group-name">' + prodNome + '</span><span class="g-group-badge">' + numOps + ' OP' + (numOps>1?'s':'') + '</span></div>';
+    var ghStats = '<div class="g-group-stats"><span><strong>' + fmt(Math.round(grupo.totalPecas)) + '</strong> peças total</span>' +
+      '<span><strong>' + fmt(Math.round(grupo.totalEntregues)) + '</strong> entregues</span>' +
+      '<span style="color:' + (pendente > 0 ? 'var(--amber)' : 'var(--green)') + '"><strong>' + fmt(pendente) + '</strong> a receber</span></div>';
+    var groupHeader = '<div class="g-group-header">' + ghLabel + ghStats + '</div>';
+
+    // Rows individuais por OP (cada cor = uma linha)
+    var opRows = grupo.ops.map(function(o) {
+      var cor = (o.cor || '').trim();
+      var corColor = corToColor(cor);
+      var pecas = Math.round(o.qtde_pecas || 0);
+      var entregues = Math.round(o.qtde_pecas_entregues || 0);
+      var pendOp = pecas - entregues;
+      var costureiro = costuName(o.costureiro_id);
+      var pctEnt = pecas > 0 ? Math.round(entregues / pecas * 100) : 0;
+      var prevData = o.data_prevista_entrega || o.data_pagamento || null;
+      var prevLabel = prevData ? formatDate(prevData) : '<span style="color:var(--orange)">sem data</span>';
+
+      // Label da linha
+      var labelHtml = '<div class="g-row-label">' +
+        '<div class="g-row-cor" style="background:' + corColor + '"></div>' +
+        '<div class="g-row-info" title="' + costureiro + ' · ' + cor + '">' + (cor || '—') + ' <span style="color:var(--txt3);font-size:10px">· ' + costureiro + '</span></div>' +
+        '<div class="g-row-pcs">' + fmt(pendOp) + ' pend.</div></div>';
+
+      // Cells background
+      var cellsHtml = semanas.map(function(s) {
+        return '<div class="g-cell' + (s.getTime()===semanaHoje.getTime()?' now':'') + '" style="width:'+COL_W+'px"></div>';
+      }).join('');
+
+      // Calcular posicao da barra
+      var inicio = new Date(o.data_envio_tecido || o.data_pagamento || o.criado_em || hoje);
+      var fim = o.data_prevista_entrega ? new Date(o.data_prevista_entrega) : new Date(inicio.getTime() + 40*86400000);
+      if (inicio < inicioRange) inicio = new Date(inicioRange);
+
+      var leftPx = Math.max(0, Math.round((inicio - inicioRange) / 86400000 / 7 * COL_W));
+      var widthPx = Math.max(24, Math.round((fim - inicio) / 86400000 / 7 * COL_W));
+      if (leftPx + widthPx > totalW) widthPx = totalW - leftPx;
+
+      var dias = diasRodando(o);
+      var isLate = dias > 40;
+
+      // Texto da barra
+      var barLabel = fmt(pecas) + 'pç';
+      if (entregues > 0) barLabel = fmt(entregues) + '/' + fmt(pecas) + ' (' + pctEnt + '%)';
+
+      var barHtml = '<div class="g-bar" style="left:'+leftPx+'px;width:'+widthPx+'px;background:'+corColor+(isLate?';outline:2px solid var(--red)':'')+'" ' +
+        'onclick="event.stopPropagation();openDrawerEdit('+o.id+')" ' +
+        'title="'+prodNome+' — '+cor+'\nCostureiro: '+costureiro+'\nPrevisão: '+(prevData||'SEM DATA')+'\n'+fmt(pecas)+' peças ('+entregues+' entregues)\n'+dias+' dias rodando">' +
+        (pctEnt > 0 ? '<div class="g-bar-fill" style="width:'+pctEnt+'%"></div>' : '') +
+        '<span class="g-bar-lbl">'+barLabel+'</span></div>';
+
+      return '<div class="g-row"><div class="g-row-label">' +
+        '<div class="g-row-cor" style="background:'+corColor+'"></div>' +
+        '<div class="g-row-info" title="'+costureiro+' — Prev: '+(prevData||'sem data')+'">'+(cor||'—')+' <span style="color:var(--txt3);font-size:10px">· '+costureiro+' · '+prevLabel+'</span></div>' +
+        '<div class="g-row-pcs">'+(isLate?'<span style="color:var(--red)">'+dias+'d</span> · ':'')+fmt(pendOp)+' pend.</div></div>' +
+        '<div class="g-row-bars" style="width:'+totalW+'px;position:relative">'+cellsHtml+barHtml+'</div></div>';
+    }).join('');
+
+    return '<div class="g-group">' + groupHeader + opRows + '</div>';
+  }).join('');
+
+  // Linha do hoje
+  var todayPx = Math.round((hoje - inicioRange) / 86400000 / 7 * COL_W) + 200; // +200 pra compensar label col
+
+  document.getElementById('gantt-scroll').innerHTML =
+    '<div class="gantt-inner">' + headerHtml + '<div style="position:relative">' +
+    '<div class="g-today" style="left:'+todayPx+'px"></div>' +
+    bodyHtml + '</div></div>';
+
+  // Scroll para semana atual
+  var el = document.getElementById('gantt-scroll');
+  el.scrollLeft = Math.max(0, todayPx - 300);
+}
+
+function formatDate(d) {
+  if (!d) return '—';
+  var parts = String(d).slice(0, 10).split('-');
+  if (parts.length !== 3) return d;
+  return parts[2] + '/' + parts[1];
+}
+
+function openDrawerEdit(opId) {
+  var op = STATE.ops.find(function(o) { return o.id === opId; });
+  if (!op) return;
+  STATE.drawerType = 'edit-op';
+  STATE.editingOp = op;
+
+  var overlay = document.getElementById('drawer-overlay');
+  document.getElementById('drawer-title').textContent = 'Editar OP #' + op.id;
+  document.getElementById('drawer-body').innerHTML = buildEditOPForm(op);
+  overlay.classList.add('open');
+}
+
+// ═══════════════ TAB: COSTUREIROS ═══════════════
+function renderCostureiros() {
+  var costureiros = STATE.costureiros.filter(function(c) { return c.ativo; });
+  var ops = STATE.ops;
+
+  // Performance: pecas em producao por costureiro
+  var perf = {};
+  costureiros.forEach(function(c) { perf[c.id] = { nome: c.nome, pecas: 0, entregues: 0, ordens: 0, skus: c.skus_habilitados || [] }; });
+  ops.forEach(function(o) {
+    if (perf[o.costureiro_id]) {
+      perf[o.costureiro_id].pecas += (o.qtde_pecas || 0);
+      perf[o.costureiro_id].entregues += (o.qtde_pecas_entregues || 0);
+      perf[o.costureiro_id].ordens++;
+    }
+  });
+
+  var sorted = Object.values(perf).filter(function(p) { return p.ordens > 0; }).sort(function(a, b) { return b.pecas - a.pecas; });
+  var maxPecas = sorted.length ? sorted[0].pecas : 1;
+
+  // KPIs
+  document.getElementById('kpis-costureiros').innerHTML = [
+    kpiHtml('Ativos', costureiros.length, '', '--kpi-accent:var(--indigo)'),
+    kpiHtml('Em Produção', sorted.length, 'com ordens ativas', '--kpi-accent:var(--purple)'),
+    kpiHtml('Peças Totais', fmt(Math.round(sorted.reduce(function(s, p) { return s + p.pecas; }, 0))), '', '--kpi-accent:var(--amber)'),
+    kpiHtml('Capacidade Total', fmt(costureiros.reduce(function(s, c) { return s + (c.capacidade_mensal || 0); }, 0)) + '/mês', '', '--kpi-accent:var(--green)'),
+  ].join('');
+
+  // Bars
+  var barsHtml = sorted.map(function(p) {
+    var pct = Math.round(p.pecas / maxPecas * 100);
+    var entPct = p.pecas ? Math.round(p.entregues / p.pecas * 100) : 0;
+    return '<div class="bar-row"><span class="bar-lbl">' + p.nome + '</span>' +
+      '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%;background:var(--indigo)"></div></div>' +
+      '<span class="bar-val">' + fmt(Math.round(p.pecas)) + ' pç (' + entPct + '% ent.)</span></div>';
+  }).join('');
+  document.getElementById('costureiro-bars').innerHTML = barsHtml || '<div class="empty">Sem dados</div>';
+
+  // Pagamentos previstos
+  renderPagamentos(ops, costureiros);
+}
+
+function renderPagamentos(ops, costureiros) {
+  var ativas = ops.filter(function(o) { return o.status !== 'Entregue' && o.status !== 'concluida'; });
+  var html = ativas.map(function(o) {
+    var c = costureiros.find(function(x) { return x.id === o.costureiro_id; });
+    var tipoNf = c ? (c.tipo_nf || 'com_nf') : 'com_nf';
+    var dias = tipoNf === 'com_nf' ? 10 : 15;
+    var venc = o.data_pagamento || '—';
+    return '<tr><td>' + costuName(o.costureiro_id) + '</td><td class="dim">' + (o.sku_produto || o.produto || '') + '</td>' +
+      '<td class="r">' + fmt(Math.round(o.qtde_pecas || 0)) + '</td>' +
+      '<td class="r">' + fmtR(o.valor_unitario || o.valor_peca) + '</td>' +
+      '<td class="r">' + fmtR(o.valor_total) + '</td>' +
+      '<td>' + (tipoNf === 'com_nf' ? 'NF (D+10)' : 'Sem NF (D+15)') + '</td>' +
+      '<td class="dim">' + venc + '</td></tr>';
+  }).join('');
+  document.getElementById('tbody-pagamentos').innerHTML = html || '<tr><td colspan="7" class="empty">Sem pagamentos pendentes</td></tr>';
+}
+
+// ═══════════════ TAB: INSUMOS ═══════════════
+function renderInsumos() {
+  var insumos = STATE.insumos;
+  var busca = (document.getElementById('flt-insumo-busca') || {}).value || '';
+  var tipoFilt = document.querySelector('.chip[data-tipo].on');
+  var tipo = tipoFilt ? tipoFilt.dataset.tipo : 'tecido';
+
+  var filtered = insumos.filter(function(i) {
+    if (i.tipo !== tipo) return false;
+    if (busca) {
+      var q = busca.toLowerCase();
+      return (i.nome || '').toLowerCase().includes(q) || (i.cor || '').toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  // KPIs
+  var total = filtered.length;
+  var abaixo = filtered.filter(function(i) { return i.quantidade_minima && i.quantidade_atual < i.quantidade_minima; }).length;
+  var valorTotal = filtered.reduce(function(s, i) { return s + (i.quantidade_atual || 0) * (i.valor_unitario_referencia || 0); }, 0);
+
+  document.getElementById('kpis-insumos').innerHTML = [
+    kpiHtml('Total Cadastrados', total, tipo === 'tecido' ? 'tecidos' : 'aviamentos', '--kpi-accent:var(--indigo)'),
+    kpiHtml('Abaixo do Mínimo', abaixo, abaixo > 0 ? 'atenção!' : 'ok', '--kpi-accent:' + (abaixo > 0 ? 'var(--red)' : 'var(--green)')),
+    kpiHtml('Valor em Estoque', fmtR(valorTotal), 'estimado', '--kpi-accent:var(--purple)'),
+  ].join('');
+
+  document.getElementById('insumo-count').textContent = ' — ' + filtered.length + ' itens';
+
+  var html = filtered.slice(0, 100).map(function(i) {
+    var status = '';
+    if (!i.quantidade_minima) status = '<span class="pill pill-neutral">Sem mín.</span>';
+    else if (i.quantidade_atual <= 0) status = '<span class="pill pill-danger">Zerado</span>';
+    else if (i.quantidade_atual < i.quantidade_minima) status = '<span class="pill pill-delayed">Baixo</span>';
+    else status = '<span class="pill pill-ok">OK</span>';
+
+    return '<tr><td><strong>' + (i.nome || '').trim() + '</strong></td>' +
+      '<td class="dim">' + (i.cor || '—').trim() + '</td>' +
+      '<td class="r">' + fmt(i.quantidade_atual) + '</td>' +
+      '<td>' + (i.unidade || '') + '</td>' +
+      '<td class="r">' + (i.quantidade_minima ? fmt(i.quantidade_minima) : '—') + '</td>' +
+      '<td class="r">' + (i.valor_unitario_referencia ? fmtR(i.valor_unitario_referencia) : '—') + '</td>' +
+      '<td>' + status + '</td></tr>';
+  }).join('');
+  document.getElementById('tbody-insumos').innerHTML = html || '<tr><td colspan="7" class="empty">Nenhum insumo encontrado</td></tr>';
+}
+
+function toggleInsumoTipo(el) {
+  document.querySelectorAll('.chip[data-tipo]').forEach(function(c) { c.classList.remove('on'); });
+  el.classList.add('on');
+  renderInsumos();
+}
+
+// ═══════════════ TAB: PLANEJAMENTO ═══════════════
+function renderPlanejamento() {
+  var plan = STATE.planejamento;
+
+  if (!plan.length) {
+    document.getElementById('kpis-planejamento').innerHTML = [
+      kpiHtml('Status', 'Aguardando', 'MRP não executado ainda', '--kpi-accent:var(--amber)'),
+    ].join('');
+    document.getElementById('cobertura-bars').innerHTML = '<div class="empty">Execute fusion_sync_producao.py para calcular cobertura e sugestões.</div>';
+    return;
+  }
+
+  var criticos = plan.filter(function(p) { return p.prioridade === 'critica'; }).length;
+  var altos = plan.filter(function(p) { return p.prioridade === 'alta'; }).length;
+  var cobMedia = plan.reduce(function(s, p) { return s + (p.cobertura_dias || 0); }, 0) / plan.length;
+
+  document.getElementById('kpis-planejamento').innerHTML = [
+    kpiHtml('SKUs Críticos', criticos, 'cobertura < 30d', '--kpi-accent:var(--red)'),
+    kpiHtml('SKUs Atenção', altos, 'cobertura 30-60d', '--kpi-accent:var(--orange)'),
+    kpiHtml('Cobertura Média', Math.round(cobMedia) + 'd', '', '--kpi-accent:var(--indigo)'),
+    kpiHtml('Total Analisados', plan.length, 'SKUs', '--kpi-accent:var(--green)'),
+  ].join('');
+
+  // Coverage bars
+  var sorted = plan.slice().sort(function(a, b) { return (a.cobertura_dias || 0) - (b.cobertura_dias || 0); });
+  var maxCob = 150;
+  var barsHtml = sorted.map(function(p) {
+    var dias = p.cobertura_dias || 0;
+    var pct = Math.min(100, Math.round(dias / maxCob * 100));
+    var color = dias < 30 ? 'var(--red)' : dias < 60 ? 'var(--orange)' : dias < 100 ? 'var(--amber)' : 'var(--green)';
+    return '<div class="cov-row"><span class="cov-label">' + p.sku_produto + '</span>' +
+      '<div class="cov-bar-track"><div class="cov-bar-fill" style="width:' + pct + '%;background:' + color + '"></div></div>' +
+      '<span class="cov-val" style="color:' + color + '">' + dias + ' dias</span></div>';
+  }).join('');
+  document.getElementById('cobertura-bars').innerHTML = barsHtml;
+
+  // Sugestoes
+  var sugestoes = plan.filter(function(p) { return p.acao_sugerida && p.acao_sugerida !== 'ok'; });
+  if (sugestoes.length) {
+    var sugHtml = sugestoes.map(function(p) {
+      var icon = p.prioridade === 'critica' ? '🔴' : p.prioridade === 'alta' ? '🟠' : '🟡';
+      return '<div style="padding:12px;border:1px solid var(--bdr);border-radius:8px;margin-bottom:8px;background:var(--bg3)">' +
+        '<div style="font-weight:600;margin-bottom:4px">' + icon + ' ' + p.sku_produto + ' — ' + p.acao_sugerida.replace(/_/g, ' ') + '</div>' +
+        '<div style="font-size:12px;color:var(--txt2)">Cobertura: ' + p.cobertura_dias + 'd · Necessidade: ' + fmt(p.necessidade_pecas) + ' pç · Tecido: ' + fmt(p.necessidade_tecido) + ' ' + (p.unidade_tecido || '') + '</div>' +
+        '</div>';
+    }).join('');
+    document.getElementById('mrp-sugestoes').innerHTML = sugHtml;
+  }
+}
+
+// ═══════════════ TAB: CUSTOS ═══════════════
+function renderCustos() {
+  var compras = STATE.compras;
+  var precos = STATE.precos;
+
+  // CMV por SKU: tecido + costureiro
+  var cmv = {};
+  compras.forEach(function(c) {
+    if (!c.produto || !c.valor_pago_tecido || !c.valor_pago_costureiro) return;
+    var key = c.produto.trim();
+    if (!cmv[key]) cmv[key] = { tecido: [], costureiro: [], total: [] };
+    cmv[key].tecido.push(c.valor_pago_tecido);
+    cmv[key].costureiro.push(c.valor_pago_costureiro);
+    cmv[key].total.push(c.valor_peca || 0);
+  });
+
+  var cmvRows = Object.keys(cmv).sort().map(function(k) {
+    var d = cmv[k];
+    var avgTec = d.tecido.reduce(function(s, v) { return s + v; }, 0) / d.tecido.length;
+    var avgCos = d.costureiro.reduce(function(s, v) { return s + v; }, 0) / d.costureiro.length;
+    var avgTot = d.total.reduce(function(s, v) { return s + v; }, 0) / d.total.length;
+    return '<tr><td><strong>' + k + '</strong></td><td class="r">' + fmtR(avgTec) + '</td><td class="r">' + fmtR(avgCos) + '</td><td class="r"><strong>' + fmtR(avgTot) + '</strong></td></tr>';
+  }).join('');
+  document.getElementById('cmv-table').innerHTML = '<table class="tb"><thead><tr><th>Produto</th><th class="r">Tecido/pç</th><th class="r">Costureiro/pç</th><th class="r">CMV Total</th></tr></thead><tbody>' + cmvRows + '</tbody></table>';
+
+  // KPIs
+  var totalGasto = compras.reduce(function(s, c) { return s + (c.valor_nf || 0); }, 0);
+  document.getElementById('kpis-custos').innerHTML = [
+    kpiHtml('Gasto Total Tecido', fmtR(totalGasto), compras.length + ' ordens', '--kpi-accent:var(--indigo)'),
+    kpiHtml('Fornecedores', STATE.fornecedores.length, 'cadastrados', '--kpi-accent:var(--purple)'),
+  ].join('');
+
+  // Top fornecedores
+  var fornMap = {};
+  compras.forEach(function(c) {
+    var f = (c.fornecedor || '').trim();
+    if (!f) return;
+    if (!fornMap[f]) fornMap[f] = { ordens: 0, volume: 0, valor: 0 };
+    fornMap[f].ordens++;
+    fornMap[f].volume += (c.quantidade_metros_kg || 0);
+    fornMap[f].valor += (c.valor_nf || 0);
+  });
+  var fornSorted = Object.entries(fornMap).sort(function(a, b) { return b[1].valor - a[1].valor; }).slice(0, 15);
+  var fornHtml = fornSorted.map(function(e) {
+    var f = e[0], d = e[1];
+    var precoMedio = d.volume > 0 ? d.valor / d.volume : 0;
+    return '<tr><td><strong>' + f + '</strong></td><td class="r">' + d.ordens + '</td><td class="r">' + fmt(Math.round(d.volume)) + '</td><td class="r">' + fmtR(d.valor) + '</td><td class="r">' + fmtR(precoMedio) + '</td></tr>';
+  }).join('');
+  document.getElementById('tbody-fornecedores').innerHTML = fornHtml;
+}
+
+// ═══════════════ FILTERS ═══════════════
+function populateFilters() {
+  // Status filter
+  var statuses = {};
+  STATE.ops.forEach(function(o) { if (o.status) statuses[o.status] = 1; });
+  var sel = document.getElementById('flt-status-op');
+  sel.innerHTML = '<option value="">Todos status</option>' + Object.keys(statuses).sort().map(function(s) { return '<option value="' + s + '">' + s + '</option>'; }).join('');
+
+  // Produto filter (Gantt)
+  var produtos = {};
+  STATE.ops.forEach(function(o) { var p = (o.produto||'').trim(); if (p) produtos[p] = 1; });
+  var selP = document.getElementById('flt-produto-gantt');
+  if (selP) selP.innerHTML = '<option value="">Todos produtos</option>' + Object.keys(produtos).sort().map(function(p) { return '<option value="' + p + '">' + p + '</option>'; }).join('');
+
+  // Costureiro filter (Gantt)
+  var selC = document.getElementById('flt-costureiro-gantt');
+  if (selC) selC.innerHTML = '<option value="">Todos costureiros</option>' + STATE.costureiros.map(function(c) { return '<option value="' + c.id + '">' + c.nome + '</option>'; }).join('');
+}
+
+// ═══════════════ TAB SWITCHING ═══════════════
+document.querySelectorAll('.tab-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+    document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
+    btn.classList.add('active');
+    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+    STATE.tab = btn.dataset.tab;
+  });
+});
+
+// ═══════════════ DRAWER ═══════════════
+function openDrawer(type) {
+  STATE.drawerType = type;
+  var overlay = document.getElementById('drawer-overlay');
+  var title = document.getElementById('drawer-title');
+  var body = document.getElementById('drawer-body');
+
+  if (type === 'nova-op') {
+    title.textContent = 'Nova Ordem de Produção';
+    body.innerHTML = buildOPForm();
+  } else if (type === 'edit-costureiro') {
+    title.textContent = 'Cadastrar Costureiro';
+    body.innerHTML = buildCostureiroForm();
+  } else if (type === 'novo-insumo') {
+    title.textContent = 'Cadastrar Insumo';
+    body.innerHTML = buildInsumoForm();
+  }
+  overlay.classList.add('open');
+}
+
+function closeDrawer() {
+  document.getElementById('drawer-overlay').classList.remove('open');
+  STATE.drawerType = null;
+}
+
+function buildOPForm() {
+  var costOpts = STATE.costureiros.filter(function(c) { return c.ativo; }).map(function(c) { return '<option value="' + c.id + '">' + c.nome + ' — ' + (c.skus_habilitados || []).join(', ') + '</option>'; }).join('');
+  return '<div class="form-group"><label class="form-label">Costureiro</label><select class="form-select" id="f-costureiro">' + costOpts + '</select></div>' +
+    '<div class="form-row"><div class="form-group"><label class="form-label">SKU Produto</label><input class="form-input" id="f-sku" placeholder="Ex: CLAF01"></div>' +
+    '<div class="form-group"><label class="form-label">Cor</label><input class="form-input" id="f-cor" placeholder="Ex: PRETO"></div></div>' +
+    '<div class="form-row"><div class="form-group"><label class="form-label">Peças Projetadas</label><input class="form-input" id="f-pecas" type="number" placeholder="1000"></div>' +
+    '<div class="form-group"><label class="form-label">Valor/Peça (R$)</label><input class="form-input" id="f-valor" type="number" step="0.01" placeholder="18.00"></div></div>' +
+    '<div class="form-group"><label class="form-label">Grade (JSON)</label><input class="form-input" id="f-grade" placeholder=\'{"38":50,"40":100,"42":150,"44":100,"46":50}\'></div>' +
+    '<div class="form-row"><div class="form-group"><label class="form-label">Data Envio Tecido</label><input class="form-input" id="f-data-envio" type="date"></div>' +
+    '<div class="form-group"><label class="form-label">Corte Externo?</label><select class="form-select" id="f-corte"><option value="false">Não</option><option value="true">Sim</option></select></div></div>' +
+    '<div class="form-group"><label class="form-label">Observações</label><textarea class="form-textarea" id="f-obs" placeholder="Opcional..."></textarea></div>';
+}
+
+function buildCostureiroForm() {
+  return '<div class="form-group"><label class="form-label">Nome</label><input class="form-input" id="f-nome" placeholder="Nome do costureiro"></div>' +
+    '<div class="form-row"><div class="form-group"><label class="form-label">Tipo NF</label><select class="form-select" id="f-tipo-nf"><option value="com_nf">Com NF (D+10)</option><option value="sem_nf">Sem NF (D+15)</option></select></div>' +
+    '<div class="form-group"><label class="form-label">Capacidade Mensal</label><input class="form-input" id="f-capacidade" type="number" placeholder="2000"></div></div>' +
+    '<div class="form-group"><label class="form-label">SKUs Habilitados (separar por vírgula)</label><input class="form-input" id="f-skus" placeholder="CLAF01, CMBB, CLOX01"></div>' +
+    '<div class="form-group"><label class="form-label">Valor Transporte/Peça (R$)</label><input class="form-input" id="f-transporte" type="number" step="0.01" placeholder="0.15"></div>' +
+    '<div class="form-group"><label class="form-label">Contato</label><input class="form-input" id="f-contato" placeholder="Telefone ou WhatsApp"></div>';
+}
+
+function buildInsumoForm() {
+  return '<div class="form-row"><div class="form-group"><label class="form-label">Tipo</label><select class="form-select" id="f-tipo-insumo"><option value="tecido">Tecido</option><option value="aviamento">Aviamento</option></select></div>' +
+    '<div class="form-group"><label class="form-label">Subtipo</label><select class="form-select" id="f-subtipo"><option value="plano">Plano (metros)</option><option value="circular">Circular (kg)</option><option value="botao">Botão</option><option value="ziper">Zíper</option><option value="linha">Linha</option></select></div></div>' +
+    '<div class="form-group"><label class="form-label">Nome</label><input class="form-input" id="f-nome-insumo" placeholder="Ex: Sarja Senna Plus Vicunha"></div>' +
+    '<div class="form-row"><div class="form-group"><label class="form-label">Cor</label><input class="form-input" id="f-cor-insumo" placeholder="Ex: PRETO"></div>' +
+    '<div class="form-group"><label class="form-label">Unidade</label><select class="form-select" id="f-unidade"><option value="M">Metros (M)</option><option value="KG">Quilos (KG)</option><option value="UN">Unidades (UN)</option><option value="ROL">Rolos (ROL)</option></select></div></div>' +
+    '<div class="form-row"><div class="form-group"><label class="form-label">Quantidade Mínima</label><input class="form-input" id="f-qtd-min" type="number" placeholder="100"></div>' +
+    '<div class="form-group"><label class="form-label">Valor Unitário Ref. (R$)</label><input class="form-input" id="f-valor-ref" type="number" step="0.01" placeholder="25.00"></div></div>';
+}
+
+function buildEditOPForm(op) {
+  var costOpts = STATE.costureiros.filter(function(c) { return c.ativo; }).map(function(c) {
+    var sel = c.id === op.costureiro_id ? ' selected' : '';
+    return '<option value="' + c.id + '"' + sel + '>' + c.nome + '</option>';
+  }).join('');
+  var statusOpts = ['Produzindo','Costureiro - Produzindo','parcial','concluida','atrasada','aguardando_tecido','Entregue'].map(function(s) {
+    var sel = s === op.status ? ' selected' : '';
+    return '<option value="' + s + '"' + sel + '>' + s + '</option>';
+  }).join('');
+
+  return '<div class="form-group"><label class="form-label">Produto</label><input class="form-input" id="f-edit-produto" value="' + (op.produto || '') + '"></div>' +
+    '<div class="form-row"><div class="form-group"><label class="form-label">SKU</label><input class="form-input" id="f-edit-sku" value="' + (op.sku_produto || '') + '"></div>' +
+    '<div class="form-group"><label class="form-label">Cor</label><input class="form-input" id="f-edit-cor" value="' + (op.cor || '').trim() + '"></div></div>' +
+    '<div class="form-group"><label class="form-label">Costureiro</label><select class="form-select" id="f-edit-costureiro">' + costOpts + '</select></div>' +
+    '<div class="form-row"><div class="form-group"><label class="form-label">Peças Projetadas</label><input class="form-input" type="number" id="f-edit-pecas" value="' + (op.qtde_pecas || '') + '"></div>' +
+    '<div class="form-group"><label class="form-label">Peças Entregues</label><input class="form-input" type="number" id="f-edit-entregues" value="' + (op.qtde_pecas_entregues || 0) + '"></div></div>' +
+    '<div class="form-row"><div class="form-group"><label class="form-label">Data Envio Tecido</label><input class="form-input" type="date" id="f-edit-envio" value="' + (op.data_envio_tecido || op.data_pagamento || '') + '"></div>' +
+    '<div class="form-group"><label class="form-label">Status</label><select class="form-select" id="f-edit-status">' + statusOpts + '</select></div></div>' +
+    '<div class="form-row"><div class="form-group"><label class="form-label">Valor/Peça (R$)</label><input class="form-input" type="number" step="0.01" id="f-edit-valor" value="' + (op.valor_unitario || op.valor_peca || '') + '"></div>' +
+    '<div class="form-group"><label class="form-label">Corte Externo?</label><select class="form-select" id="f-edit-corte"><option value="false"' + (!op.corte_externo ? ' selected' : '') + '>Não</option><option value="true"' + (op.corte_externo ? ' selected' : '') + '>Sim</option></select></div></div>' +
+    '<div style="margin-top:16px;padding:12px;background:var(--bg);border-radius:8px;font-size:12px;color:var(--txt3)">' +
+      '<strong style="color:var(--txt2)">Resumo:</strong> ' + diasRodando(op) + ' dias rodando · ' +
+      'Valor total: ' + fmtR(op.valor_total) + ' · Criado em: ' + (op.criado_em ? op.criado_em.slice(0, 10) : '—') +
+    '</div>';
+}
+
+async function submitDrawer() {
+  var type = STATE.drawerType;
+  var btn = document.getElementById('drawer-submit');
+  btn.textContent = 'Salvando...';
+  btn.disabled = true;
+
+  try {
+    if (type === 'edit-op') {
+      var op = STATE.editingOp;
+      var body = {
+        produto: document.getElementById('f-edit-produto').value.trim(),
+        sku_produto: document.getElementById('f-edit-sku').value.trim().toUpperCase(),
+        cor: document.getElementById('f-edit-cor').value.trim(),
+        costureiro_id: parseInt(document.getElementById('f-edit-costureiro').value),
+        qtde_pecas: parseFloat(document.getElementById('f-edit-pecas').value),
+        qtde_pecas_entregues: parseInt(document.getElementById('f-edit-entregues').value) || 0,
+        data_envio_tecido: document.getElementById('f-edit-envio').value || null,
+        status: document.getElementById('f-edit-status').value,
+        valor_unitario: parseFloat(document.getElementById('f-edit-valor').value) || null,
+        valor_peca: parseFloat(document.getElementById('f-edit-valor').value) || null,
+        corte_externo: document.getElementById('f-edit-corte').value === 'true',
+        atualizado_em: new Date().toISOString(),
+      };
+      await patchSupabase('ordens_producao', op.id, body);
+    } else if (type === 'nova-op') {
+      var gradeStr = document.getElementById('f-grade').value;
+      var grade = gradeStr ? JSON.parse(gradeStr) : null;
+      var body = {
+        costureiro_id: parseInt(document.getElementById('f-costureiro').value),
+        sku_produto: document.getElementById('f-sku').value.trim().toUpperCase(),
+        cor: document.getElementById('f-cor').value.trim(),
+        qtde_pecas: parseFloat(document.getElementById('f-pecas').value),
+        valor_peca: parseFloat(document.getElementById('f-valor').value) || null,
+        valor_unitario: parseFloat(document.getElementById('f-valor').value) || null,
+        grade_projetada: grade,
+        data_envio_tecido: document.getElementById('f-data-envio').value || null,
+        corte_externo: document.getElementById('f-corte').value === 'true',
+        status: 'Produzindo',
+      };
+      await postSupabase('ordens_producao', body);
+    } else if (type === 'edit-costureiro') {
+      var skus = document.getElementById('f-skus').value.split(',').map(function(s) { return s.trim().toUpperCase(); }).filter(Boolean);
+      var body = {
+        nome: document.getElementById('f-nome').value.trim(),
+        tipo_nf: document.getElementById('f-tipo-nf').value,
+        capacidade_mensal: parseInt(document.getElementById('f-capacidade').value) || null,
+        skus_habilitados: skus.length ? skus : null,
+        valor_transporte_peca: parseFloat(document.getElementById('f-transporte').value) || null,
+        contato: document.getElementById('f-contato').value.trim() || null,
+        ativo: true,
+      };
+      await postSupabase('costureiros', body);
+    } else if (type === 'novo-insumo') {
+      var body = {
+        tipo: document.getElementById('f-tipo-insumo').value,
+        subtipo: document.getElementById('f-subtipo').value,
+        nome: document.getElementById('f-nome-insumo').value.trim(),
+        cor: document.getElementById('f-cor-insumo').value.trim() || null,
+        unidade: document.getElementById('f-unidade').value,
+        quantidade_minima: parseFloat(document.getElementById('f-qtd-min').value) || null,
+        valor_unitario_referencia: parseFloat(document.getElementById('f-valor-ref').value) || null,
+      };
+      await postSupabase('estoque_insumos', body);
+    }
+    closeDrawer();
+    await carregar();
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  } finally {
+    btn.textContent = 'Salvar';
+    btn.disabled = false;
+  }
+}
+
+async function postSupabase(table, data) {
+  var r = await fetch(SB_URL + '/rest/v1/' + table, {
+    method: 'POST',
+    headers: Object.assign({}, AUTH_HEADERS, { 'Content-Type': 'application/json', 'Prefer': 'return=representation' }),
+    body: JSON.stringify(data)
+  });
+  if (!r.ok) { var err = await r.text(); throw new Error('HTTP ' + r.status + ': ' + err); }
+  return r.json();
+}
+
+async function patchSupabase(table, id, data) {
+  var r = await fetch(SB_URL + '/rest/v1/' + table + '?id=eq.' + id, {
+    method: 'PATCH',
+    headers: Object.assign({}, AUTH_HEADERS, { 'Content-Type': 'application/json', 'Prefer': 'return=representation' }),
+    body: JSON.stringify(data)
+  });
+  if (!r.ok) { var err = await r.text(); throw new Error('HTTP ' + r.status + ': ' + err); }
+  return r.json();
+}
+
+// ═══════════════ EXPORT CSV ═══════════════
+function exportCSV(type) {
+  var rows = [];
+  if (type === 'op') {
+    rows.push(['SKU','Produto','Costureiro','Cor','Peças','Entregues','%','Previsão','Status']);
+    STATE.ops.forEach(function(o) {
+      rows.push([o.sku_produto, o.produto, costuName(o.costureiro_id), o.cor, o.qtde_pecas, o.qtde_pecas_entregues || 0,
+        o.qtde_pecas ? Math.round((o.qtde_pecas_entregues||0)/o.qtde_pecas*100)+'%' : '0%', o.data_pagamento || '', o.status]);
+    });
+  }
+  var csv = rows.map(function(r) { return r.map(function(c) { return '"' + String(c||'').replace(/"/g,'""') + '"'; }).join(','); }).join('\n');
+  var blob = new Blob(['\ufeff' + csv], {type:'text/csv;charset=utf-8;'});
+  var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'compras-' + type + '.csv'; a.click();
+}
+
+// ═══════════════ CHART DEFAULTS ═══════════════
+Chart.defaults.color = '#71717a';
+Chart.defaults.borderColor = 'rgba(255,255,255,0.06)';
+Chart.defaults.font.family = "'Inter', sans-serif";
+Chart.defaults.font.size = 12;
 </script>
 </body>
 </html>
