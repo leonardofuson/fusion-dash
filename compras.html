@@ -170,27 +170,32 @@ table.tb td.r{text-align:right;font-variant-numeric:tabular-nums;}
 table.tb td.dim{color:var(--txt2);}
 table.tb tr:hover td{background:rgba(99,102,241,0.03);}
 
-/* Tabela do histórico — 1600px+ de largura precisa de scroll horizontal.
-   Best practice (Airtable/Notion): container bounded com max-height cria um
-   "viewport" próprio. User rola dentro dele (horizontal E vertical). Thead fica
-   sticky em top:0 do container (não da página). Scrollbar horizontal fica
-   sempre visível no fundo do viewport — não "enterrada" no fim da tabela. */
+/* Tabela do histórico — 2000px+ de largura precisa de scroll horizontal.
+   Container bounded cria "viewport" próprio (padrão Airtable/Notion).
+   Drag-to-scroll: click-and-drag em qualquer célula (JS em initHistoricoDragScroll).
+   overflow-x:scroll força barra SEMPRE visível mesmo quando não passa. */
 .tb-historico-scroll{
   max-height:calc(100vh - 260px);
-  overflow:auto;
+  overflow-x:scroll;
+  overflow-y:auto;
   border:1px solid var(--bdr);
   border-radius:10px;
   -webkit-overflow-scrolling:touch;
   scrollbar-width:auto;
   scrollbar-color:var(--indigo) var(--bg3);
   position:relative;
+  cursor:grab;
+  user-select:none;
 }
+.tb-historico-scroll.is-dragging{cursor:grabbing;}
+.tb-historico-scroll.is-dragging *{cursor:grabbing !important;}
+/* Quando arrasta, desabilita selecao de texto pra nao "pintar" conforme move */
 .tb-historico-scroll::-webkit-scrollbar{height:14px;width:12px;background:var(--bg3);}
 .tb-historico-scroll::-webkit-scrollbar-thumb{background:var(--indigo);border-radius:7px;border:2px solid var(--bg3);min-width:60px;min-height:60px;}
 .tb-historico-scroll::-webkit-scrollbar-thumb:hover{background:#818cf8;}
 .tb-historico-scroll::-webkit-scrollbar-track{background:var(--bg3);border-radius:7px;}
 .tb-historico-scroll::-webkit-scrollbar-corner{background:var(--bg3);}
-table.tb-historico{min-width:1600px;border-collapse:separate;border-spacing:0;}
+table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
 .tb-historico-scroll table.tb-historico thead th{
   position:sticky;
   top:0;
@@ -1748,6 +1753,55 @@ function renderHistorico() {
       '<td>' + statusPill(c.status) + '</td></tr>';
   }).join('');
   document.getElementById('tbody-historico').innerHTML = html || '<tr><td colspan="16" class="empty">Nenhum registro</td></tr>';
+  initHistoricoDragScroll();
+}
+
+// Drag-to-scroll: click em qualquer lugar da tabela e arrasta pra rolar horizontal/vertical.
+// Idempotente — anexa listeners uma unica vez via flag dataset.
+function initHistoricoDragScroll() {
+  var el = document.querySelector('.tb-historico-scroll');
+  if (!el || el.dataset.dragInit) return;
+  el.dataset.dragInit = '1';
+  var isDown = false, startX = 0, startY = 0, scrollLeft = 0, scrollTop = 0, moved = false;
+
+  el.addEventListener('mousedown', function(e) {
+    // Nao iniciar drag se clicou num link ou botao
+    if (e.target.closest('a, button, input, select')) return;
+    isDown = true; moved = false;
+    el.classList.add('is-dragging');
+    startX = e.pageX; startY = e.pageY;
+    scrollLeft = el.scrollLeft; scrollTop = el.scrollTop;
+  });
+  document.addEventListener('mouseup', function() {
+    if (!isDown) return;
+    isDown = false;
+    el.classList.remove('is-dragging');
+  });
+  document.addEventListener('mousemove', function(e) {
+    if (!isDown) return;
+    var dx = e.pageX - startX;
+    var dy = e.pageY - startY;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
+    if (moved) {
+      e.preventDefault();
+      el.scrollLeft = scrollLeft - dx;
+      el.scrollTop = scrollTop - dy;
+    }
+  });
+  // Wheel vertical tambem rola horizontal quando shift nao pressionado e ha espaco horizontal
+  el.addEventListener('wheel', function(e) {
+    if (e.shiftKey) return;  // deixa comportamento padrao com shift
+    // Se o wheel Y domina e so ha scroll horizontal, converter
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && el.scrollWidth > el.clientWidth) {
+      // Se esta no topo ou fim vertical, usa Y pra deslizar X
+      var atTop = el.scrollTop === 0 && e.deltaY < 0;
+      var atBottom = (el.scrollTop + el.clientHeight) >= (el.scrollHeight - 1) && e.deltaY > 0;
+      if (atTop || atBottom) {
+        el.scrollLeft += e.deltaY;
+        e.preventDefault();
+      }
+    }
+  }, { passive: false });
 }
 
 function limparFiltrosHist() {
