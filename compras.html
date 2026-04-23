@@ -322,7 +322,7 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
     <button class="tab-btn" data-tab="historico">Histórico</button>
     <button class="tab-btn" data-tab="planejamento">Planejamento</button>
     <button class="tab-btn" data-tab="custos">Custos</button>
-    <button class="tab-btn" data-tab="costureiros">Costureiros</button>
+    <button class="tab-btn" data-tab="costureiros">Fornecedores</button>
   </nav>
 
   <!-- ═══════════════ TAB: PIPELINE ═══════════════ -->
@@ -382,7 +382,7 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
     </div>
   </div>
 
-  <!-- ═══════════════ TAB: COSTUREIROS ═══════════════ -->
+  <!-- ═══════════════ TAB: FORNECEDORES (costureiros + tecido) ═══════════════ -->
   <div class="tab-panel" id="panel-costureiros">
     <div class="kpi-grid" id="kpis-costureiros"></div>
     <div class="card">
@@ -401,6 +401,14 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
         <table class="tb"><thead><tr>
           <th>Costureiro</th><th>Produto</th><th class="r">Peças</th><th class="r">Valor/pç</th><th class="r">Total</th><th>Tipo NF</th><th>Vencimento Est.</th>
         </tr></thead><tbody id="tbody-pagamentos"></tbody></table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Top Fornecedores de Tecido</span><small style="color:var(--txt3)">por valor total comprado</small></div>
+      <div class="tb-wrap">
+        <table class="tb"><thead><tr>
+          <th>Fornecedor</th><th class="r">Ordens</th><th class="r">Volume Total</th><th class="r">Valor Total</th><th class="r">Preço Médio</th>
+        </tr></thead><tbody id="tbody-fornecedores"></tbody></table>
       </div>
     </div>
   </div>
@@ -509,16 +517,8 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
         <div class="card-body" id="cmv-table"></div>
       </div>
       <div class="card">
-        <div class="card-header"><span class="card-title">CMV Total por SKU<small style="color:var(--txt3);font-weight:400;margin-left:8px">tecido + costureiro</small></span></div>
+        <div class="card-header"><span class="card-title">Evolução do CMV<small style="color:var(--txt3);font-weight:400;margin-left:8px">custo/peça por SKU ao longo do tempo</small></span></div>
         <div class="card-body"><div class="chart-wrap" style="height:420px"><canvas id="chart-custos"></canvas></div></div>
-      </div>
-    </div>
-    <div class="card">
-      <div class="card-header"><span class="card-title">Top Fornecedores</span></div>
-      <div class="tb-wrap">
-        <table class="tb"><thead><tr>
-          <th>Fornecedor</th><th class="r">Ordens</th><th class="r">Volume Total</th><th class="r">Valor Total</th><th class="r">Preço Médio</th>
-        </tr></thead><tbody id="tbody-fornecedores"></tbody></table>
       </div>
     </div>
   </div>
@@ -1964,52 +1964,125 @@ function renderCustos() {
 }
 
 function renderChartCustos() {
-  // Bar chart horizontal: CMV total por SKU, stacked (tecido + costureiro).
-  // Fonte: custos_sku (mesma tabela que alimenta a lista de CMV por SKU).
-  var custos = (STATE.custosSku || [])
-    .filter(function(c){ return c.cmv_total_peca && parseFloat(c.cmv_total_peca) > 0; })
-    .slice()
-    .sort(function(a,b){ return parseFloat(b.cmv_total_peca) - parseFloat(a.cmv_total_peca); });
+  // Line chart temporal: CMV/peça por SKU ao longo dos últimos 12 meses.
+  // Pra cada mês M e cada SKU, calcula:
+  //   custo_tecido = média das 2 últimas compras do SKU (via fan-out estoque_insumos) com data <= fim de M
+  //   custo_costureiro = média das 2 últimas OPs Entregues do SKU com data <= fim de M
+  //   cmv = tecido + costureiro
+  // Se não houver dados suficientes naquele ponto, valor fica null (spanGaps).
 
   var ctx = document.getElementById('chart-custos');
   if (!ctx) return;
   if (STATE.chartCustos) STATE.chartCustos.destroy();
-  if (!custos.length) return;
 
-  var labels = custos.map(function(c){ return (c.produto_nome || c.sku_pai).substring(0, 28); });
-  var dadosTecido = custos.map(function(c){ return parseFloat(c.custo_tecido_peca) || 0; });
-  var dadosCostureiro = custos.map(function(c){ return parseFloat(c.custo_costureiro_peca) || 0; });
+  var ops = (STATE.ops || []).filter(function(o) {
+    var vp = parseFloat(o.valor_peca);
+    return o.status === 'Entregue' && o.sku_produto && o.data_envio_tecido
+      && vp > 0 && vp <= 100;
+  });
+
+  // Fan-out das compras via estoque_insumos.skus_pai (mesmo padrao do SQL)
+  var mapaTecidoSkus = {};  // nome_tecido_upper -> [skus_pai]
+  (STATE.insumos || []).forEach(function(i) {
+    if (i.tipo !== 'tecido' || !i.nome || !i.skus_pai) return;
+    var k = i.nome.trim().toUpperCase();
+    if (!mapaTecidoSkus[k]) mapaTecidoSkus[k] = new Set();
+    (i.skus_pai || []).forEach(function(s){ mapaTecidoSkus[k].add(s); });
+  });
+
+  var compraPontos = [];  // { sku, data, custoPc }
+  (STATE.compras || []).forEach(function(c) {
+    if (!c.data_faturamento) return;
+    var vm = parseFloat(c.valor_metro_kg);
+    var cons = parseFloat(c.consumo_por_peca);
+    if (!(vm > 0) || !(cons > 0)) return;
+    var custoPc = vm * cons;
+    var skusSet = new Set();
+    if (c.sku_destino) skusSet.add(c.sku_destino);
+    var k = (c.tecido || '').trim().toUpperCase();
+    if (mapaTecidoSkus[k]) mapaTecidoSkus[k].forEach(function(s){ skusSet.add(s); });
+    skusSet.forEach(function(sku) {
+      compraPontos.push({ sku: sku, data: c.data_faturamento, custoPc: custoPc });
+    });
+  });
+
+  var opPontos = ops.map(function(o) {
+    return { sku: o.sku_produto, data: o.data_envio_tecido, valor: parseFloat(o.valor_peca) };
+  });
+
+  // Determinar SKUs a plotar: top 8 por CMV atual (da tabela custos_sku)
+  var topSkus = (STATE.custosSku || [])
+    .filter(function(c){ return parseFloat(c.cmv_total_peca) > 0; })
+    .sort(function(a,b){ return parseFloat(b.cmv_total_peca) - parseFloat(a.cmv_total_peca); })
+    .slice(0, 8)
+    .map(function(c){ return { sku: c.sku_pai, nome: c.produto_nome || c.sku_pai }; });
+
+  if (!topSkus.length) return;
+
+  // Gerar meses (últimos 12)
+  var hoje = new Date();
+  var meses = [];
+  for (var i = 11; i >= 0; i--) {
+    var d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+    var ym = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2, '0');
+    meses.push(ym);
+  }
+  var labels = meses.map(function(m){ var p = m.split('-'); return p[1] + '/' + p[0].slice(2); });
+
+  // Pra cada SKU, pra cada mês: última data = fim do mês; pega 2 últimas compras + 2 últimas OPs até lá
+  function ultimoDiaDoMes(ym) {
+    var p = ym.split('-');
+    return new Date(parseInt(p[0]), parseInt(p[1]), 0).toISOString().slice(0, 10);
+  }
+
+  var cores = ['#6366f1','#22c55e','#f59e0b','#ec4899','#06b6d4','#a855f7','#fb923c','#14b8a6'];
+
+  var datasets = topSkus.map(function(info, idx) {
+    var data = meses.map(function(ym) {
+      var limite = ultimoDiaDoMes(ym);
+      // Tecido: 2 mais recentes até limite
+      var tecs = compraPontos.filter(function(p){ return p.sku === info.sku && p.data <= limite; });
+      tecs.sort(function(a,b){ return b.data.localeCompare(a.data); });
+      var tec2 = tecs.slice(0, 2);
+      var avgTec = tec2.length ? tec2.reduce(function(s,p){return s+p.custoPc;}, 0) / tec2.length : 0;
+      // Costureiro: 2 mais recentes até limite
+      var cs = opPontos.filter(function(p){ return p.sku === info.sku && p.data <= limite; });
+      cs.sort(function(a,b){ return b.data.localeCompare(a.data); });
+      var cs2 = cs.slice(0, 2);
+      var avgCost = cs2.length ? cs2.reduce(function(s,p){return s+p.valor;}, 0) / cs2.length : 0;
+      var total = avgTec + avgCost;
+      return total > 0 ? Math.round(total * 100) / 100 : null;
+    });
+    return {
+      label: info.nome.length > 26 ? info.nome.slice(0, 26) + '…' : info.nome,
+      data: data,
+      borderColor: cores[idx],
+      backgroundColor: cores[idx] + '33',
+      tension: 0.3,
+      spanGaps: true,
+      pointRadius: 2,
+    };
+  });
 
   STATE.chartCustos = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: labels,
-      datasets: [
-        { label: 'Tecido', data: dadosTecido, backgroundColor: '#6366f1' },
-        { label: 'Costureiro', data: dadosCostureiro, backgroundColor: '#22c55e' }
-      ]
-    },
+    type: 'line',
+    data: { labels: labels, datasets: datasets },
     options: {
-      indexAxis: 'y',
       responsive: true, maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+        legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } },
         tooltip: {
           callbacks: {
             label: function(ctx) {
-              return ctx.dataset.label + ': R$ ' + ctx.parsed.x.toFixed(2) + '/pç';
-            },
-            footer: function(items) {
-              var total = items.reduce(function(s, it){ return s + it.parsed.x; }, 0);
-              return 'Total: R$ ' + total.toFixed(2) + '/pç';
+              var v = ctx.parsed.y;
+              return ctx.dataset.label + ': ' + (v == null ? '—' : 'R$ ' + v.toFixed(2) + '/pç');
             }
           }
         }
       },
       scales: {
-        x: { stacked: true, ticks: { callback: function(v){ return 'R$ ' + v; } } },
-        y: { stacked: true, ticks: { font: { size: 11 } } }
+        y: { ticks: { callback: function(v){ return 'R$ ' + v; } } }
       }
     }
   });
