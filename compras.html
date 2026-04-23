@@ -2065,6 +2065,10 @@ document.querySelectorAll('.tab-btn').forEach(function(btn) {
     btn.classList.add('active');
     document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
     STATE.tab = btn.dataset.tab;
+    // Chart.js nao renderiza direito em canvas de 0x0 (aba inativa). Redesenha ao entrar.
+    if (btn.dataset.tab === 'custos') {
+      setTimeout(renderChartCustos, 50);
+    }
   });
 });
 
