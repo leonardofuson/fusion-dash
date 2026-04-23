@@ -170,16 +170,33 @@ table.tb td.r{text-align:right;font-variant-numeric:tabular-nums;}
 table.tb td.dim{color:var(--txt2);}
 table.tb tr:hover td{background:rgba(99,102,241,0.03);}
 
-/* Tabela do histórico — 2000px+ de largura precisa de scroll horizontal.
-   Container bounded cria "viewport" próprio (padrão Airtable/Notion).
-   Drag-to-scroll: click-and-drag em qualquer célula (JS em initHistoricoDragScroll).
-   overflow-x:scroll força barra SEMPRE visível mesmo quando não passa. */
-.tb-historico-scroll{
-  max-height:calc(100vh - 260px);
+/* Tabela do histórico — 2000px+ de largura. Mesmo padrão do Gantt:
+   barra de scroll fantasma (.hist-scroll-top) sticky no topo da pagina,
+   sincronizada com o container real. Drag-to-scroll adicional. */
+.hist-scroll-sticky{position:sticky;top:64px;z-index:20;background:var(--bg);padding-top:4px;}
+.hist-scroll-top{
   overflow-x:scroll;
-  overflow-y:auto;
+  overflow-y:hidden;
+  height:16px;
   border:1px solid var(--bdr);
-  border-radius:10px;
+  border-bottom:none;
+  border-radius:10px 10px 0 0;
+  background:var(--bg2);
+  scrollbar-width:auto;
+  scrollbar-color:var(--indigo) var(--bg3);
+}
+.hist-scroll-top::-webkit-scrollbar{height:14px;background:var(--bg3);}
+.hist-scroll-top::-webkit-scrollbar-thumb{background:var(--indigo);border-radius:7px;border:2px solid var(--bg3);min-width:60px;}
+.hist-scroll-top::-webkit-scrollbar-thumb:hover{background:#818cf8;}
+.hist-scroll-top::-webkit-scrollbar-track{background:var(--bg3);border-radius:7px;}
+.hist-scroll-top .scroll-ghost{height:1px;}
+
+.tb-historico-scroll{
+  max-height:calc(100vh - 280px);
+  overflow:auto;
+  border:1px solid var(--bdr);
+  border-top:none;
+  border-radius:0 0 10px 10px;
   -webkit-overflow-scrolling:touch;
   scrollbar-width:auto;
   scrollbar-color:var(--indigo) var(--bg3);
@@ -189,13 +206,12 @@ table.tb tr:hover td{background:rgba(99,102,241,0.03);}
 }
 .tb-historico-scroll.is-dragging{cursor:grabbing;}
 .tb-historico-scroll.is-dragging *{cursor:grabbing !important;}
-/* Quando arrasta, desabilita selecao de texto pra nao "pintar" conforme move */
-.tb-historico-scroll::-webkit-scrollbar{height:14px;width:12px;background:var(--bg3);}
-.tb-historico-scroll::-webkit-scrollbar-thumb{background:var(--indigo);border-radius:7px;border:2px solid var(--bg3);min-width:60px;min-height:60px;}
+.tb-historico-scroll::-webkit-scrollbar{height:14px;background:var(--bg3);}
+.tb-historico-scroll::-webkit-scrollbar-thumb{background:var(--indigo);border-radius:7px;border:2px solid var(--bg3);min-width:60px;}
 .tb-historico-scroll::-webkit-scrollbar-thumb:hover{background:#818cf8;}
 .tb-historico-scroll::-webkit-scrollbar-track{background:var(--bg3);border-radius:7px;}
-.tb-historico-scroll::-webkit-scrollbar-corner{background:var(--bg3);}
 table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
+/* thead sticky no topo do container (pai tem max-height, cria scroll context proprio) */
 .tb-historico-scroll table.tb-historico thead th{
   position:sticky;
   top:0;
@@ -436,12 +452,15 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
       <button class="btnf ghost" onclick="limparFiltrosHist()">Limpar</button>
       <button class="btnf ghost" onclick="exportHistoricoCSV()" style="margin-left:auto">CSV</button>
     </div>
-    <div class="card">
+    <div class="card" style="overflow:visible">
       <div class="card-header">
         <span class="card-title">Histórico de Compras + Produções<small id="hist-count"></small></span>
         <small style="color:var(--txt3)">cada linha = compra de tecido + produção correspondente</small>
       </div>
-      <div class="tb-historico-scroll">
+      <div class="hist-scroll-sticky">
+        <div class="hist-scroll-top" id="hist-scroll-top"><div class="scroll-ghost"></div></div>
+      </div>
+      <div class="tb-historico-scroll" id="tb-historico-scroll">
         <table class="tb tb-historico">
         <thead><tr>
           <th>Dt. Faturamento</th>
@@ -1756,21 +1775,46 @@ function renderHistorico() {
   initHistoricoDragScroll();
 }
 
-// Drag-to-scroll: click em qualquer lugar da tabela e arrasta pra rolar horizontal/vertical.
-// Idempotente — anexa listeners uma unica vez via flag dataset.
+// Historico: barra de scroll fantasma sticky no topo + drag-to-scroll.
+// Mesmo padrao usado no Gantt (sincronizarScrollbars).
 function initHistoricoDragScroll() {
-  var el = document.querySelector('.tb-historico-scroll');
-  if (!el || el.dataset.dragInit) return;
-  el.dataset.dragInit = '1';
-  var isDown = false, startX = 0, startY = 0, scrollLeft = 0, scrollTop = 0, moved = false;
+  var el = document.getElementById('tb-historico-scroll');
+  var topBar = document.getElementById('hist-scroll-top');
+  if (!el) return;
 
+  // Sincroniza largura da barra fantasma com scrollWidth da tabela
+  if (topBar) {
+    var tbl = el.querySelector('table');
+    var ghost = topBar.querySelector('.scroll-ghost');
+    if (tbl && ghost) ghost.style.width = tbl.scrollWidth + 'px';
+  }
+
+  if (el.dataset.dragInit) return;
+  el.dataset.dragInit = '1';
+
+  // Sincronia bidirecional entre barra fantasma e tabela real
+  if (topBar) {
+    var syncing = false;
+    topBar.addEventListener('scroll', function() {
+      if (syncing) return; syncing = true;
+      el.scrollLeft = topBar.scrollLeft;
+      syncing = false;
+    });
+    el.addEventListener('scroll', function() {
+      if (syncing) return; syncing = true;
+      topBar.scrollLeft = el.scrollLeft;
+      syncing = false;
+    });
+  }
+
+  // Drag-to-scroll horizontal
+  var isDown = false, startX = 0, scrollLeft = 0, moved = false;
   el.addEventListener('mousedown', function(e) {
-    // Nao iniciar drag se clicou num link ou botao
     if (e.target.closest('a, button, input, select')) return;
     isDown = true; moved = false;
     el.classList.add('is-dragging');
-    startX = e.pageX; startY = e.pageY;
-    scrollLeft = el.scrollLeft; scrollTop = el.scrollTop;
+    startX = e.pageX;
+    scrollLeft = el.scrollLeft;
   });
   document.addEventListener('mouseup', function() {
     if (!isDown) return;
@@ -1780,28 +1824,12 @@ function initHistoricoDragScroll() {
   document.addEventListener('mousemove', function(e) {
     if (!isDown) return;
     var dx = e.pageX - startX;
-    var dy = e.pageY - startY;
-    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
+    if (Math.abs(dx) > 3) moved = true;
     if (moved) {
       e.preventDefault();
       el.scrollLeft = scrollLeft - dx;
-      el.scrollTop = scrollTop - dy;
     }
   });
-  // Wheel vertical tambem rola horizontal quando shift nao pressionado e ha espaco horizontal
-  el.addEventListener('wheel', function(e) {
-    if (e.shiftKey) return;  // deixa comportamento padrao com shift
-    // Se o wheel Y domina e so ha scroll horizontal, converter
-    if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && el.scrollWidth > el.clientWidth) {
-      // Se esta no topo ou fim vertical, usa Y pra deslizar X
-      var atTop = el.scrollTop === 0 && e.deltaY < 0;
-      var atBottom = (el.scrollTop + el.clientHeight) >= (el.scrollHeight - 1) && e.deltaY > 0;
-      if (atTop || atBottom) {
-        el.scrollLeft += e.deltaY;
-        e.preventDefault();
-      }
-    }
-  }, { passive: false });
 }
 
 function limparFiltrosHist() {
