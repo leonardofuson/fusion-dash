@@ -2173,6 +2173,36 @@ function configurarBtnExcluir(handler, label) {
 }
 
 // ═══ Helpers produtos/grades ═══
+// Retorna o consumo_por_peca da ultima OP Entregue do SKU.
+// Se nao houver OP Entregue, cai no BOM (consumo_tecido).
+function ultimoConsumoDoSku(sku) {
+  if (!sku) return null;
+  var ops = (STATE.ops || [])
+    .filter(function(o) {
+      return o.sku_produto === sku
+        && o.status === 'Entregue'
+        && o.consumo_por_peca
+        && parseFloat(o.consumo_por_peca) > 0;
+    })
+    .sort(function(a, b) {
+      return (b.data_envio_tecido || b.criado_em || '').localeCompare(a.data_envio_tecido || a.criado_em || '');
+    });
+  if (ops.length) {
+    var o = ops[0];
+    // Unidade vem da compra associada (ordens_compra)
+    var compra = o.ordem_compra_id
+      ? (STATE.compras || []).find(function(c){return c.id === o.ordem_compra_id;})
+      : null;
+    return {
+      consumo: parseFloat(o.consumo_por_peca),
+      unidade: (compra && compra.unidade) || 'M',
+      fonte: 'ultima-op',
+    };
+  }
+  var bom = (STATE.consumo || []).find(function(b){return b.sku_produto === sku;});
+  return bom ? { consumo: parseFloat(bom.consumo_por_peca), unidade: bom.unidade, fonte: 'bom' } : null;
+}
+
 function produtosPais() {
   // Retorna lista unica de {sku_pai, nome} dos produtos pai ativos
   var pais = STATE.produtos || [];
@@ -2530,10 +2560,8 @@ function atualizarCoresTecidoRow(idx) {
     : '<option value="">Nenhuma cor cadastrada</option>';
 
   var info = row.querySelector('[data-field="tecido-info"]');
-  var bom = (STATE.consumo || []).find(function(b){
-    return b.sku_produto === sku && (b.tecido_nome||'').trim().toUpperCase() === (nomeTecido||'').trim().toUpperCase();
-  });
-  if (info && bom) info.innerHTML = 'Consumo padrão: <strong>'+bom.consumo_por_peca+' '+bom.unidade+'/peça</strong>';
+  var cons = ultimoConsumoDoSku(sku);
+  if (info && cons) info.innerHTML = 'Consumo ('+ (cons.fonte==='ultima-op'?'última OP':'padrão') +'): <strong>'+cons.consumo+' '+cons.unidade+'/peça</strong>';
   else if (info) info.textContent = '';
   atualizarSaldoRow(idx);
 }
@@ -2563,11 +2591,8 @@ function atualizarSaldoRow(idx) {
   if (!insumo) return;
 
   var sku = extrairSkuProduto(document.getElementById('f-nova-produto').value);
-  var bom = (STATE.consumo || []).find(function(b){
-    return b.sku_produto === sku && (b.tecido_nome||'').trim().toUpperCase() === (insumo.nome||'').trim().toUpperCase();
-  });
-  if (!bom) bom = (STATE.consumo || []).find(function(b){return b.sku_produto === sku;});
-  if (consumoEl && bom) consumoEl.value = bom.consumo_por_peca + ' ' + bom.unidade + '/pç';
+  var cons = ultimoConsumoDoSku(sku);
+  if (consumoEl && cons) consumoEl.value = cons.consumo + ' ' + cons.unidade + '/pç';
   else if (consumoEl) consumoEl.value = '—';
   recalcularPecasRow(idx);
 }
@@ -2578,8 +2603,8 @@ function recalcularPecasRow(idx) {
   var insumoId = parseInt(row.querySelector('[data-field="cor"]').value);
   var metragem = parseFloat(row.querySelector('[data-field="metragem"]').value) || 0;
   var sku = extrairSkuProduto(document.getElementById('f-nova-produto').value);
-  var bom = (STATE.consumo || []).find(function(b){return b.sku_produto === sku;});
-  var consumo = bom ? bom.consumo_por_peca : 0;
+  var cons = ultimoConsumoDoSku(sku);
+  var consumo = cons ? cons.consumo : 0;
   var pecas = (metragem > 0 && consumo > 0) ? Math.floor(metragem / consumo) : 0;
   row.querySelector('[data-field="pecas-sist"]').value = pecas;
   atualizarPecasFinaisRow(idx);
@@ -2635,13 +2660,11 @@ function atualizarCoresTecido(prefixo) {
       }).join('');
   }
 
-  // Info do tecido (BOM)
+  // Info do tecido — usa último consumo da ultima OP Entregue do SKU
   var info = document.getElementById('f-' + prefixo + '-tecido-info');
-  var bom = (STATE.consumo || []).find(function(b) {
-    return b.sku_produto === sku && (b.tecido_nome||'').trim().toUpperCase() === (nomeTecido||'').trim().toUpperCase();
-  });
-  if (info && bom) {
-    info.innerHTML = 'Consumo padrão: <strong>' + bom.consumo_por_peca + ' ' + bom.unidade + '/peça</strong> (' + bom.tipo_tecido + ')';
+  var cons = ultimoConsumoDoSku(sku);
+  if (info && cons) {
+    info.innerHTML = 'Consumo (' + (cons.fonte==='ultima-op'?'última OP':'padrão') + '): <strong>' + cons.consumo + ' ' + cons.unidade + '/peça</strong>';
   } else if (info) {
     info.textContent = '';
   }
@@ -2669,17 +2692,11 @@ function atualizarSaldoTecido(prefixo) {
   var saldo = insumo.quantidade_atual || 0;
   if (saldoEl) saldoEl.value = fmt(saldo) + ' ' + (insumo.unidade || '');
 
-  // Consumo por peça do BOM
+  // Consumo = última OP Entregue do SKU (user: "utilizar sempre o último consumo do produto")
   var sku = document.getElementById('f-' + prefixo + '-produto').value;
-  var bom = (STATE.consumo || []).find(function(b) {
-    return b.sku_produto === sku && (b.tecido_nome||'').trim().toUpperCase() === (insumo.nome||'').trim().toUpperCase();
-  });
-  if (!bom) {
-    // Fallback: pega o BOM pelo sku
-    bom = (STATE.consumo || []).find(function(b) { return b.sku_produto === sku; });
-  }
-  if (consumoEl && bom) consumoEl.value = bom.consumo_por_peca + ' ' + bom.unidade + '/peça';
-  else if (consumoEl) consumoEl.value = '— sem ficha —';
+  var cons = ultimoConsumoDoSku(sku);
+  if (consumoEl && cons) consumoEl.value = cons.consumo + ' ' + cons.unidade + '/peça';
+  else if (consumoEl) consumoEl.value = '— sem histórico —';
 
   recalcularPecasProjetadas();
 }
@@ -2695,8 +2712,8 @@ function recalcularPecasProjetadas() {
 
   var metragem = parseFloat(qtdInput.value) || 0;
   var sku = document.getElementById('f-' + prefixo + '-produto').value;
-  var bom = (STATE.consumo || []).find(function(b) { return b.sku_produto === sku; });
-  var consumo = bom ? bom.consumo_por_peca : 0;
+  var cons = ultimoConsumoDoSku(sku);
+  var consumo = cons ? cons.consumo : 0;
 
   var pecas = (metragem > 0 && consumo > 0) ? Math.floor(metragem / consumo) : 0;
   pecasSistEl.value = pecas;
