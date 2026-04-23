@@ -1263,7 +1263,30 @@ function buildEditInsumoForm(i) {
     '</div>' +
     '<div class="form-group" style="margin-top:16px;"><label class="form-label">Produtos que usam este tecido</label>' +
       '<div style="display:flex;flex-wrap:wrap;gap:4px;padding:8px;background:var(--bg3);border:1px solid var(--bdr);border-radius:6px;max-height:160px;overflow-y:auto;">' + paisHtml + '</div>' +
+    '</div>' +
+    '<div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--bdr);">' +
+      '<button type="button" class="btnf" style="background:transparent;color:var(--red);border:1px solid rgba(248,113,113,0.3);width:100%;padding:10px;" onclick="excluirInsumo('+i.id+')">Excluir esta compra de tecido</button>' +
     '</div>';
+}
+
+async function excluirInsumo(insumoId) {
+  var insumo = STATE.insumos.find(function(i) { return i.id === insumoId; });
+  if (!insumo) return;
+  var opsLigadas = (STATE.ops || []).filter(function(o) { return o.insumo_id === insumoId; });
+  if (opsLigadas.length > 0) {
+    alert('Não é possível excluir: há ' + opsLigadas.length + ' OP(s) vinculada(s) a este tecido. Exclua as OPs primeiro.');
+    return;
+  }
+  if (!confirm('Excluir esta compra de tecido?\n\n' + (insumo.nome || '') + (insumo.cor ? ' — ' + insumo.cor : '') + '\n\nEsta ação não pode ser desfeita.')) return;
+  try {
+    var r = await fetch(SB_URL + '/rest/v1/estoque_insumos?id=eq.' + insumoId, {
+      method: 'DELETE',
+      headers: Object.assign({'Prefer':'return=minimal'}, AUTH_HEADERS)
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    closeDrawer();
+    await carregar();
+  } catch(e) { alert('Erro ao excluir: ' + e.message); }
 }
 
 function openDrawerEdit(opId) {
@@ -2056,7 +2079,7 @@ function atualizarCamposProduto(prefixo) {
 }
 
 // Lista de SKUs fabricação própria
-var SKU_FINALIZADOS = ['CLAFEL01','CLAF01','CLTECH','CLMALHA','CLSJ01','CLMC01','CLOX01','CMBB','CMINDIANO','CMMC','CMEL01','CMLS01','CMPL01'];
+var SKU_FINALIZADOS = ['CLAFEL01','CLAF01','CLAJUSTE','CLTECH','CLMALHA','CLSJ01','CLMC01','CLOX01','CMBB','CMINDIANO','CMMC','CMEL01','CMLS01','CMPL01','GPDN01'];
 
 function produtosFabricacaoPropria() {
   return produtosPais().filter(function(p) { return SKU_FINALIZADOS.indexOf(p.sku_pai) >= 0; });
@@ -2463,9 +2486,18 @@ function nomesTecidosCadastrados() {
   return Object.keys(set).filter(function(n) { return n.length > 0; }).sort();
 }
 
+function todasCoresConhecidas() {
+  var set = {};
+  (STATE.coresValidas || []).forEach(function(c){ if (c.cor) set[c.cor] = 1; });
+  return Object.keys(set).sort();
+}
+
 function buildInsumoRow(idx, firstRow) {
   var tecidoOpts = nomesTecidosCadastrados().map(function(n) {
     return '<option value="' + n.replace(/"/g, '&quot;') + '">' + n + '</option>';
+  }).join('');
+  var corOpts = todasCoresConhecidas().map(function(c) {
+    return '<option value="' + c.replace(/"/g, '&quot;') + '">' + c + '</option>';
   }).join('');
   var pais = produtosFabricacaoPropria();
   var paisHtml = pais.map(function(p) {
@@ -2491,13 +2523,21 @@ function buildInsumoRow(idx, firstRow) {
     '<div class="form-group">' +
       '<label class="form-label">Nome do Tecido</label>' +
       '<select class="form-select" data-field="nome-select" onchange="onTecidoNomeChange('+idx+')">' +
-        '<option value="">Selecione um tecido cadastrado...</option>' + tecidoOpts +
-        '<option value="__outro__">— Outro (digitar novo) —</option>' +
+        '<option value="">Selecione um tecido...</option>' +
+        '<option value="__novo__" style="color:var(--indigo);font-weight:600">+ Cadastrar novo tecido</option>' +
+        tecidoOpts +
       '</select>' +
       '<input class="form-input" data-field="nome" placeholder="Ex: Sarja Senna Plus Vicunha" style="margin-top:8px;display:none;">' +
     '</div>' +
     '<div class="form-row">' +
-      '<div class="form-group"><label class="form-label">Cor <small style="color:var(--txt3);font-weight:400">(será normalizada)</small></label><input class="form-input" data-field="cor" list="dl-cores-todas" placeholder="Ex: PRETO"></div>' +
+      '<div class="form-group"><label class="form-label">Cor <small style="color:var(--txt3);font-weight:400">(será normalizada)</small></label>' +
+        '<select class="form-select" data-field="cor-select" onchange="onCorInsumoChange('+idx+')">' +
+          '<option value="">Selecione uma cor...</option>' +
+          '<option value="__nova__" style="color:var(--indigo);font-weight:600">+ Cadastrar nova cor</option>' +
+          corOpts +
+        '</select>' +
+        '<input class="form-input" data-field="cor" list="dl-cores-todas" placeholder="Ex: PRETO" style="margin-top:8px;display:none;">' +
+      '</div>' +
       '<div class="form-group"><label class="form-label">Unidade</label>' +
         '<select class="form-select" data-field="unidade"><option value="M">Metros (M)</option><option value="KG">Quilos (KG)</option><option value="UN">Unidades (UN)</option><option value="ROL">Rolos (ROL)</option></select></div>' +
     '</div>' +
@@ -2539,7 +2579,22 @@ function onTecidoNomeChange(idx) {
   if (!row) return;
   var sel = row.querySelector('[data-field="nome-select"]');
   var input = row.querySelector('[data-field="nome"]');
-  if (sel.value === '__outro__') {
+  if (sel.value === '__novo__') {
+    input.style.display = 'block';
+    input.focus();
+    input.value = '';
+  } else {
+    input.style.display = 'none';
+    input.value = sel.value;
+  }
+}
+
+function onCorInsumoChange(idx) {
+  var row = document.getElementById('insumo-row-'+idx);
+  if (!row) return;
+  var sel = row.querySelector('[data-field="cor-select"]');
+  var input = row.querySelector('[data-field="cor"]');
+  if (sel.value === '__nova__') {
     input.style.display = 'block';
     input.focus();
     input.value = '';
@@ -2561,7 +2616,7 @@ function toggleNomeInsumoField(idx) {
     input.placeholder = 'Ex: Botão preto 4 furos';
   } else {
     sel.style.display = 'block';
-    input.style.display = sel.value === '__outro__' ? 'block' : 'none';
+    input.style.display = sel.value === '__novo__' ? 'block' : 'none';
   }
 }
 
@@ -2576,7 +2631,7 @@ function coletarInsumosRows() {
     if (tipo === 'aviamento') {
       nome = inputNome.value.trim();
     } else {
-      nome = (selNome.value && selNome.value !== '__outro__') ? selNome.value : inputNome.value.trim();
+      nome = (selNome.value && selNome.value !== '__novo__') ? selNome.value : inputNome.value.trim();
     }
     if (!nome) return;  // skip linha sem nome
 
@@ -2650,7 +2705,26 @@ function buildEditOPForm(op) {
     '<div style="margin-top:16px;padding:12px;background:var(--bg);border-radius:8px;font-size:12px;color:var(--txt3)">' +
       '<strong style="color:var(--txt2)">Resumo:</strong> ' + diasRodando(op) + ' dias rodando · ' +
       'Valor total: ' + fmtR(op.valor_total) + ' · Criado em: ' + (op.criado_em ? op.criado_em.slice(0, 10) : '—') +
+    '</div>' +
+    '<div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--bdr);">' +
+      '<button type="button" class="btnf" style="background:transparent;color:var(--red);border:1px solid rgba(248,113,113,0.3);width:100%;padding:10px;" onclick="excluirOP('+op.id+')">Excluir esta OP</button>' +
     '</div>';
+}
+
+async function excluirOP(opId) {
+  var op = STATE.ops.find(function(o) { return o.id === opId; });
+  if (!op) return;
+  var label = (op.produto || op.sku_produto || 'OP #'+opId) + (op.cor ? ' — ' + op.cor : '') + ' (' + costuName(op.costureiro_id) + ')';
+  if (!confirm('Excluir esta OP?\n\n' + label + '\n' + fmt(Math.round(op.qtde_pecas || 0)) + ' peças projetadas\n\nEsta ação não pode ser desfeita.')) return;
+  try {
+    var r = await fetch(SB_URL + '/rest/v1/ordens_producao?id=eq.' + opId, {
+      method: 'DELETE',
+      headers: Object.assign({'Prefer':'return=minimal'}, AUTH_HEADERS)
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    closeDrawer();
+    await carregar();
+  } catch(e) { alert('Erro ao excluir: ' + e.message); }
 }
 
 async function submitDrawer() {
