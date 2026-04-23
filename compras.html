@@ -1981,29 +1981,14 @@ function renderChartCustos() {
       && vp > 0 && vp <= 100;
   });
 
-  // Fan-out das compras via estoque_insumos.skus_pai (mesmo padrao do SQL)
-  var mapaTecidoSkus = {};  // nome_tecido_upper -> [skus_pai]
-  (STATE.insumos || []).forEach(function(i) {
-    if (i.tipo !== 'tecido' || !i.nome || !i.skus_pai) return;
-    var k = i.nome.trim().toUpperCase();
-    if (!mapaTecidoSkus[k]) mapaTecidoSkus[k] = new Set();
-    (i.skus_pai || []).forEach(function(s){ mapaTecidoSkus[k].add(s); });
-  });
-
-  var compraPontos = [];  // { sku, data, custoPc }
+  // Compras -> custo/peça, SEM fan-out (usa apenas sku_destino explicito, como a RPC)
+  var compraPontos = [];
   (STATE.compras || []).forEach(function(c) {
-    if (!c.data_faturamento) return;
+    if (!c.data_faturamento || !c.sku_destino) return;
     var vm = parseFloat(c.valor_metro_kg);
     var cons = parseFloat(c.consumo_por_peca);
     if (!(vm > 0) || !(cons > 0)) return;
-    var custoPc = vm * cons;
-    var skusSet = new Set();
-    if (c.sku_destino) skusSet.add(c.sku_destino);
-    var k = (c.tecido || '').trim().toUpperCase();
-    if (mapaTecidoSkus[k]) mapaTecidoSkus[k].forEach(function(s){ skusSet.add(s); });
-    skusSet.forEach(function(sku) {
-      compraPontos.push({ sku: sku, data: c.data_faturamento, custoPc: custoPc });
-    });
+    compraPontos.push({ sku: c.sku_destino, data: c.data_faturamento, custoPc: vm * cons });
   });
 
   var opPontos = ops.map(function(o) {
