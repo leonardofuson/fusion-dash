@@ -494,6 +494,9 @@ table.tb-historico{min-width:1600px;}
   </div>
 </div>
 
+<!-- Datalist global: todas cores conhecidas (produto_cores_validas) — alimenta autocomplete dos inputs -->
+<datalist id="dl-cores-todas"></datalist>
+
 <script>
 // ═══════════════ CONFIG ═══════════════
 var SB_URL = 'https://spulbhnmkomvgohzhfvj.supabase.co';
@@ -504,6 +507,7 @@ var MAX_PAGES = 20;
 var STATE = {
   ops: [], compras: [], costureiros: [], precos: [], cortadores: [],
   insumos: [], consumo: [], planejamento: [], fornecedores: [], produtos: [],
+  coresValidas: [],  // produto_cores_validas: fonte da verdade (sku_pai -> cor) ligando producao/compras/estoque ao cadastro
   tab: 'pipeline', drawerType: null,
   ganttExpanded: {}  // { sku_pai: true/false } - grupos expandidos
 };
@@ -535,7 +539,7 @@ async function buscarTudo(tab, filtro) {
 
 async function carregar() {
   try {
-    var [ops, compras, costureiros, precos, insumos, consumo, planejamento, fornecedores, produtos] = await Promise.all([
+    var [ops, compras, costureiros, precos, insumos, consumo, planejamento, fornecedores, produtos, coresValidas] = await Promise.all([
       buscarTudo('ordens_producao', 'select=*&order=criado_em.desc'),
       buscarTudo('ordens_compra', 'select=*&order=data_faturamento.desc'),
       buscarTudo('costureiros', 'select=*&order=nome'),
@@ -545,6 +549,7 @@ async function carregar() {
       buscarTudo('planejamento_producao', 'select=*&order=data_calculo.desc&limit=50'),
       buscarTudo('fornecedores', 'select=*&ativo=eq.true&order=nome'),
       buscarTudo('produtos', 'select=id,sku,sku_pai,nome,categoria,tipo,cor,tamanho,ativo&ativo=eq.true'),
+      buscarTudo('produto_cores_validas', 'select=sku_pai,cor,origem&ativo=eq.true&order=sku_pai,cor'),
     ]);
     STATE.ops = ops;
     STATE.compras = compras;
@@ -555,6 +560,8 @@ async function carregar() {
     STATE.planejamento = planejamento;
     STATE.fornecedores = fornecedores;
     STATE.produtos = produtos;
+    STATE.coresValidas = coresValidas;
+    popularDatalistCores();
     renderAll();
   } catch (e) {
     console.error('Erro ao carregar:', e);
@@ -1873,12 +1880,29 @@ function produtosPais() {
 }
 
 function coresDoSKU(skuPai) {
+  // Fonte da verdade: produto_cores_validas (unifica cadastro + historico legitimo).
+  // Fallback pra produtos.cor caso a tabela ainda nao esteja carregada.
   if (!skuPai) return [];
   var set = {};
-  (STATE.produtos || []).forEach(function(p) {
-    if ((p.sku_pai || p.sku) === skuPai && p.cor) set[p.cor.trim()] = 1;
+  (STATE.coresValidas || []).forEach(function(c) {
+    if (c.sku_pai === skuPai && c.cor) set[c.cor] = 1;
   });
+  if (!Object.keys(set).length) {
+    (STATE.produtos || []).forEach(function(p) {
+      if ((p.sku_pai || p.sku) === skuPai && p.cor) set[p.cor.trim().toUpperCase()] = 1;
+    });
+  }
   return Object.keys(set).sort();
+}
+
+function popularDatalistCores() {
+  // Alimenta <datalist id="dl-cores-todas"> com todas cores distintas conhecidas.
+  var dl = document.getElementById('dl-cores-todas');
+  if (!dl) return;
+  var set = {};
+  (STATE.coresValidas || []).forEach(function(c){ if (c.cor) set[c.cor] = 1; });
+  var cores = Object.keys(set).sort();
+  dl.innerHTML = cores.map(function(c){ return '<option value="'+c+'">'; }).join('');
 }
 
 function tamanhosDoSKU(skuPai) {
@@ -2442,7 +2466,7 @@ function buildInsumoRow(idx, firstRow) {
       '<input class="form-input" data-field="nome" placeholder="Ex: Sarja Senna Plus Vicunha" style="margin-top:8px;display:none;">' +
     '</div>' +
     '<div class="form-row">' +
-      '<div class="form-group"><label class="form-label">Cor</label><input class="form-input" data-field="cor" placeholder="Ex: PRETO"></div>' +
+      '<div class="form-group"><label class="form-label">Cor <small style="color:var(--txt3);font-weight:400">(será normalizada)</small></label><input class="form-input" data-field="cor" list="dl-cores-todas" placeholder="Ex: PRETO"></div>' +
       '<div class="form-group"><label class="form-label">Unidade</label>' +
         '<select class="form-select" data-field="unidade"><option value="M">Metros (M)</option><option value="KG">Quilos (KG)</option><option value="UN">Unidades (UN)</option><option value="ROL">Rolos (ROL)</option></select></div>' +
     '</div>' +
