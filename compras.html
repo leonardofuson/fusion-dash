@@ -1917,17 +1917,17 @@ function renderCustos() {
     var base = (c.base_compras || 0) + ' compra' + (c.base_compras === 1 ? '' : 's') +
                ' · ' + (c.base_ops || 0) + ' OP' + (c.base_ops === 1 ? '' : 's');
     return '<tr>' +
-      '<td><strong>' + nome + '</strong> <span style="color:var(--txt3);font-size:11px">(' + c.sku_pai + ')</span></td>' +
-      '<td class="r">' + (tec > 0 ? fmtR(tec) + '/pç' : '<span style="color:var(--txt4)">—</span>') + '</td>' +
-      '<td class="r">' + (cost > 0 ? fmtR(cost) + '/pç' : '<span style="color:var(--txt4)">—</span>') + '</td>' +
-      '<td class="r" style="font-weight:700;color:var(--indigo)">' + fmtR(total) + '/pç</td>' +
-      '<td class="r" style="color:var(--txt3);font-size:11px">' + base + '</td>' +
+      '<td style="white-space:nowrap"><strong>' + nome + '</strong> <span style="color:var(--txt3);font-size:11px">(' + c.sku_pai + ')</span></td>' +
+      '<td class="r" style="white-space:nowrap">' + (tec > 0 ? fmtR(tec) : '<span style="color:var(--txt4)">—</span>') + '</td>' +
+      '<td class="r" style="white-space:nowrap">' + (cost > 0 ? fmtR(cost) : '<span style="color:var(--txt4)">—</span>') + '</td>' +
+      '<td class="r" style="font-weight:700;color:var(--indigo);white-space:nowrap">' + fmtR(total) + '</td>' +
+      '<td class="r" style="color:var(--txt3);font-size:11px;white-space:nowrap">' + base + '</td>' +
     '</tr>';
   }).join('');
 
   document.getElementById('cmv-table').innerHTML =
     '<table class="tb"><thead><tr>' +
-      '<th>Produto</th><th class="r">Tecido/pç</th><th class="r">Costureiro/pç</th><th class="r">CMV Total/pç</th><th class="r">Base</th>' +
+      '<th>Produto</th><th class="r">Tecido</th><th class="r">Costureiro</th><th class="r">CMV Total</th><th class="r">Base</th>' +
     '</tr></thead><tbody>' + rows + '</tbody></table>' +
     '<div style="font-size:11px;color:var(--txt3);margin-top:8px">' +
       'Snapshot materializado em <strong>custos_sku</strong>. Fonte: 2 últimas compras (ordens_compra) + 2 últimas OPs Entregues (valor_peca ≤ R$100). ' +
@@ -1975,24 +1975,28 @@ function renderChartCustos() {
   if (!ctx) return;
   if (STATE.chartCustos) STATE.chartCustos.destroy();
 
+  // Mesma logica do SQL: cada OP Entregue vem com seu tecido vinculado via ordem_compra_id.
+  // Tecido/pc = valor_metro_kg (compra) * consumo_por_peca (OP ou compra como fallback)
+  // Costureiro/pc = valor_peca da OP
+  var comprasMap = {};
+  (STATE.compras || []).forEach(function(c){ comprasMap[c.id] = c; });
+
   var ops = (STATE.ops || []).filter(function(o) {
     var vp = parseFloat(o.valor_peca);
     return o.status === 'Entregue' && o.sku_produto && o.data_envio_tecido
       && vp > 0 && vp <= 100;
   });
 
-  // Compras -> custo/peça, SEM fan-out (usa apenas sku_destino explicito, como a RPC)
-  var compraPontos = [];
-  (STATE.compras || []).forEach(function(c) {
-    if (!c.data_faturamento || !c.sku_destino) return;
-    var vm = parseFloat(c.valor_metro_kg);
-    var cons = parseFloat(c.consumo_por_peca);
+  var compraPontos = [];  // tecido/pc pra cada OP
+  var opPontos = [];      // valor_peca da OP
+  ops.forEach(function(o) {
+    opPontos.push({ sku: o.sku_produto, data: o.data_envio_tecido, valor: parseFloat(o.valor_peca) });
+    var compra = o.ordem_compra_id ? comprasMap[o.ordem_compra_id] : null;
+    if (!compra) return;
+    var vm = parseFloat(compra.valor_metro_kg);
+    var cons = parseFloat(o.consumo_por_peca) || parseFloat(compra.consumo_por_peca);
     if (!(vm > 0) || !(cons > 0)) return;
-    compraPontos.push({ sku: c.sku_destino, data: c.data_faturamento, custoPc: vm * cons });
-  });
-
-  var opPontos = ops.map(function(o) {
-    return { sku: o.sku_produto, data: o.data_envio_tecido, valor: parseFloat(o.valor_peca) };
+    compraPontos.push({ sku: o.sku_produto, data: o.data_envio_tecido, custoPc: vm * cons });
   });
 
   // Determinar SKUs a plotar: top 8 por CMV atual (da tabela custos_sku)
@@ -2023,19 +2027,22 @@ function renderChartCustos() {
   var cores = ['#6366f1','#22c55e','#f59e0b','#ec4899','#06b6d4','#a855f7','#fb923c','#14b8a6'];
 
   var datasets = topSkus.map(function(info, idx) {
+    // Carry-forward: se um mes nao tem dado completo (tecido + costureiro),
+    // usa o ultimo valor conhecido (evita gaps).
+    var ultTec = 0, ultCost = 0;
     var data = meses.map(function(ym) {
       var limite = ultimoDiaDoMes(ym);
       // Tecido: 2 mais recentes até limite
       var tecs = compraPontos.filter(function(p){ return p.sku === info.sku && p.data <= limite; });
       tecs.sort(function(a,b){ return b.data.localeCompare(a.data); });
       var tec2 = tecs.slice(0, 2);
-      var avgTec = tec2.length ? tec2.reduce(function(s,p){return s+p.custoPc;}, 0) / tec2.length : 0;
+      if (tec2.length) ultTec = tec2.reduce(function(s,p){return s+p.custoPc;}, 0) / tec2.length;
       // Costureiro: 2 mais recentes até limite
       var cs = opPontos.filter(function(p){ return p.sku === info.sku && p.data <= limite; });
       cs.sort(function(a,b){ return b.data.localeCompare(a.data); });
       var cs2 = cs.slice(0, 2);
-      var avgCost = cs2.length ? cs2.reduce(function(s,p){return s+p.valor;}, 0) / cs2.length : 0;
-      var total = avgTec + avgCost;
+      if (cs2.length) ultCost = cs2.reduce(function(s,p){return s+p.valor;}, 0) / cs2.length;
+      var total = ultTec + ultCost;
       return total > 0 ? Math.round(total * 100) / 100 : null;
     });
     return {
