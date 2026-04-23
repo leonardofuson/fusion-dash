@@ -1990,6 +1990,88 @@ function renderCustos() {
     return '<tr><td><strong>' + f + '</strong></td><td class="r">' + d.ordens + '</td><td class="r">' + fmt(Math.round(d.volume)) + '</td><td class="r">' + fmtR(d.valor) + '</td><td class="r">' + fmtR(precoMedio) + '</td></tr>';
   }).join('');
   document.getElementById('tbody-fornecedores').innerHTML = fornHtml;
+
+  // ========== GRÁFICO: CUSTO TECIDO — EVOLUÇÃO ==========
+  renderChartCustos();
+}
+
+function renderChartCustos() {
+  var compras = (STATE.compras || []).filter(function(c) {
+    return c.data_faturamento && c.valor_metro_kg && parseFloat(c.valor_metro_kg) > 0;
+  });
+  if (!compras.length) return;
+
+  // Agrega por tecido → top 6 tecidos por volume total
+  var porTecido = {};
+  compras.forEach(function(c) {
+    var t = (c.tecido || '').trim();
+    if (!t) return;
+    if (!porTecido[t]) porTecido[t] = { vol: 0, pontos: {} };
+    porTecido[t].vol += parseFloat(c.quantidade_metros_kg || 0);
+    var mes = c.data_faturamento.slice(0, 7);
+    if (!porTecido[t].pontos[mes]) porTecido[t].pontos[mes] = { soma: 0, peso: 0 };
+    var qt = parseFloat(c.quantidade_metros_kg || 0);
+    var vm = parseFloat(c.valor_metro_kg);
+    porTecido[t].pontos[mes].soma += vm * qt;
+    porTecido[t].pontos[mes].peso += qt;
+  });
+  var topTecidos = Object.entries(porTecido)
+    .sort(function(a, b){ return b[1].vol - a[1].vol; })
+    .slice(0, 6)
+    .map(function(e){ return e[0]; });
+
+  // Eixo X: últimos 12 meses com dado
+  var mesesSet = {};
+  compras.forEach(function(c){ mesesSet[c.data_faturamento.slice(0,7)] = 1; });
+  var meses = Object.keys(mesesSet).sort().slice(-12);
+  var labels = meses.map(function(m) {
+    var p = m.split('-');
+    return p[1] + '/' + p[0].slice(2);
+  });
+
+  var cores = ['#6366f1','#22c55e','#f59e0b','#ec4899','#06b6d4','#a855f7'];
+  var datasets = topTecidos.map(function(t, i) {
+    var ponts = porTecido[t].pontos;
+    return {
+      label: t.length > 30 ? t.slice(0, 30) + '…' : t,
+      data: meses.map(function(m) {
+        var p = ponts[m];
+        return p && p.peso > 0 ? Math.round((p.soma / p.peso) * 100) / 100 : null;
+      }),
+      borderColor: cores[i],
+      backgroundColor: cores[i] + '33',
+      tension: 0.3,
+      spanGaps: true,
+    };
+  });
+
+  var ctx = document.getElementById('chart-custos');
+  if (!ctx) return;
+  if (STATE.chartCustos) STATE.chartCustos.destroy();
+  STATE.chartCustos = new Chart(ctx, {
+    type: 'line',
+    data: { labels: labels, datasets: datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) {
+              var v = ctx.parsed.y;
+              return ctx.dataset.label + ': ' + (v == null ? '—' : 'R$ ' + v.toFixed(2));
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          ticks: { callback: function(v){ return 'R$ ' + v; } }
+        }
+      }
+    }
+  });
 }
 
 // ═══════════════ FILTERS ═══════════════
