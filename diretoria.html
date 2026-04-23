@@ -131,7 +131,7 @@ let AUTH_HEADERS = null; // populated after requireAuth
 
 const CANAL_MAP={'Mercado Livre Full FIO':'Mercado Livre','Mercado Livre FIO':'Mercado Livre','Mercado Livre Full Confec':'Mercado Livre','Mercado Livre Confeções':'Mercado Livre','Shopee FIO':'Shopee','Shopee':'Shopee','tiktok':'TikTok Shop','web':'Site Próprio','Site Próprio':'Site Próprio','Shein Confecções':'Shein'};
 const CANAL_CORES={'Mercado Livre':'#F59E0B','Shopee':'#EF4444','TikTok Shop':'#EC4899','Site Próprio':'#3B82F6','Shein':'#8B5CF6'};
-const LOJA_CORES={'Loja Oriente':'#3B82F6','Loja Marcolina':'#10B981','Loja São Bernardo':'#F59E0B','Loja Vautier':'#8B5CF6','Loja Polo Plaza':'#EC4899','Atacado WhatsApp':'#06B6D4'};
+const LOJA_CORES={'Oriente':'#3B82F6','Marcolina':'#10B981','São Bernardo':'#F59E0B','Vautier':'#8B5CF6','Polo Plaza':'#EC4899','Atacado WhatsApp':'#06B6D4','Outras Receitas Lojas':'#EF4444'};
 const ORIGEM_CONFIG={'fio_e_trama':{nome:'Fio e Trama',cor:'#3B82F6'},'confeccoes':{nome:'Confecções',cor:'#10B981'},'shopify':{nome:'Shopify',cor:'#8B5CF6'},'kwid':{nome:'Lojas Físicas',cor:'#F59E0B'},'flecha':{nome:'Atacado',cor:'#06B6D4'}};
 
 function nomCanal(r){ return CANAL_MAP[r]||r||'Outros'; }
@@ -188,7 +188,7 @@ async function carregar(){
     api('pedidos_historico?select=data_pedido,valor_bruto,origem_conta,canal_nome_raw,loja_nome,status&data_pedido=gte.'+DE+'&data_pedido=lte.'+ATE+'&limit=100000'),
   ]);
 
-  const IGNORAR=['Loja Não Identificada','Loja Antiga','Venda Funcionário'];
+  const IGNORAR=[];
   const todos=(opMes||[]).concat(hist||[]);
   const ativos=todos.filter(p=>p.status!=='cancelado');
   const diasP=Math.max(1,Math.round((new Date(ATE)-new Date(DE))/86400000));
@@ -287,7 +287,7 @@ async function carregar(){
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#71717a',maxTicksLimit:8,font:{size:10}},grid:{color:'rgba(255,255,255,0.04)'}},y:{ticks:{color:'#71717a',font:{size:10},callback:function(v){return 'R$'+Math.round(v/1000)+'k';}},grid:{color:'rgba(255,255,255,0.04)'}}}}});
 
   // Lojas por nome
-  const IGNORAR2=['Loja Não Identificada','Loja Antiga','Venda Funcionário'];
+  const IGNORAR2=[];
   const porLoja={};
   ativos.filter(p=>p.origem_conta==='kwid'&&p.loja_nome&&!IGNORAR2.includes(p.loja_nome)).forEach(p=>{
     const l=p.loja_nome;
@@ -297,7 +297,7 @@ async function carregar(){
   });
   const lojas=Object.values(porLoja).sort((a,b)=>b.fat-a.fat);
   const maxLF=Math.max(...lojas.map(l=>l.fat),1);
-  const LOJA_C={'Loja Oriente':'#3B82F6','Loja Marcolina':'#10B981','Loja São Bernardo':'#F59E0B','Loja Vautier':'#8B5CF6','Loja Polo Plaza':'#EC4899','Atacado WhatsApp':'#06B6D4'};
+  const LOJA_C={'Oriente':'#3B82F6','Marcolina':'#10B981','São Bernardo':'#F59E0B','Vautier':'#8B5CF6','Polo Plaza':'#EC4899','Atacado WhatsApp':'#06B6D4','Outras Receitas Lojas':'#EF4444'};
   const cL=n=>LOJA_C[n]||'#6B7280';
   document.getElementById('loja-bars').innerHTML=lojas.map(l=>`
     <div class="bar-row"><div class="bar-label"><span style="color:var(--txt1);font-weight:500">${l.nome}</span><span style="color:var(--txt2)">${fmt(l.fat)}</span></div>
