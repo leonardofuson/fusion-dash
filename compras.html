@@ -502,7 +502,10 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
     <div class="kpi-grid" id="kpis-custos"></div>
     <div class="grid2">
       <div class="card">
-        <div class="card-header"><span class="card-title">CMV por SKU</span></div>
+        <div class="card-header">
+          <span class="card-title">CMV por SKU<small id="custos-atualizado-em" style="color:var(--txt3);font-weight:400;margin-left:8px"></small></span>
+          <button class="btnf ghost" onclick="acRecalcularCustos(this)" style="font-size:11px;padding:5px 12px">Recalcular</button>
+        </div>
         <div class="card-body" id="cmv-table"></div>
       </div>
       <div class="card">
@@ -555,6 +558,7 @@ var STATE = {
   ops: [], compras: [], costureiros: [], precos: [], cortadores: [],
   insumos: [], consumo: [], planejamento: [], fornecedores: [], produtos: [],
   coresValidas: [],  // produto_cores_validas: fonte da verdade (sku_pai -> cor) ligando producao/compras/estoque ao cadastro
+  custosSku: [],     // custos_sku: snapshot materializado de CMV por SKU pai (populado por recalcular_custos_sku)
   tab: 'pipeline', drawerType: null,
   ganttExpanded: {}  // { sku_pai: true/false } - grupos expandidos
 };
@@ -586,7 +590,7 @@ async function buscarTudo(tab, filtro) {
 
 async function carregar() {
   try {
-    var [ops, compras, costureiros, precos, insumos, consumo, planejamento, fornecedores, produtos, coresValidas] = await Promise.all([
+    var [ops, compras, costureiros, precos, insumos, consumo, planejamento, fornecedores, produtos, coresValidas, custosSku] = await Promise.all([
       buscarTudo('ordens_producao', 'select=*&order=criado_em.desc'),
       buscarTudo('ordens_compra', 'select=*&order=data_faturamento.desc'),
       buscarTudo('costureiros', 'select=*&order=nome'),
@@ -597,6 +601,7 @@ async function carregar() {
       buscarTudo('fornecedores', 'select=*&ativo=eq.true&order=nome'),
       buscarTudo('produtos', 'select=id,sku,sku_pai,nome,categoria,tipo,cor,tamanho,ativo&ativo=eq.true'),
       buscarTudo('produto_cores_validas', 'select=sku_pai,cor,origem&ativo=eq.true&order=sku_pai,cor'),
+      buscarTudo('custos_sku', 'select=*&order=sku_pai'),
     ]);
     STATE.ops = ops;
     STATE.compras = compras;
@@ -608,6 +613,7 @@ async function carregar() {
     STATE.fornecedores = fornecedores;
     STATE.produtos = produtos;
     STATE.coresValidas = coresValidas;
+    STATE.custosSku = custosSku || [];
     popularDatalistCores();
     renderAll();
   } catch (e) {
@@ -1883,87 +1889,49 @@ function populateHistoricoFilters() {
 }
 
 function renderCustos() {
-  var compras = STATE.compras || [];
-
-  // ========== TECIDO/PÇ: MÉDIA DAS 2 ÚLTIMAS COMPRAS POR SKU DESTINO ==========
-  // Fonte: ordens_compra (valor_metro_kg × consumo_por_peca).
-  // Ordena por data_faturamento desc e pega as 2 mais recentes com valores validos.
-  var comprasPorSku = {};
-  compras.forEach(function(c) {
-    var sku = c.sku_destino || c.sku_produto;
-    if (!sku) return;
-    var vm = parseFloat(c.valor_metro_kg);
-    var cons = parseFloat(c.consumo_por_peca);
-    if (!(vm > 0) || !(cons > 0)) return;  // ignora compras sem dados
-    if (!c.data_faturamento) return;        // precisa de data pra ranking
-    if (!comprasPorSku[sku]) comprasPorSku[sku] = [];
-    comprasPorSku[sku].push({ data: c.data_faturamento, valorMetro: vm, consumo: cons, id: c.id });
-  });
-  Object.keys(comprasPorSku).forEach(function(sku) {
-    comprasPorSku[sku].sort(function(a,b){ return b.data.localeCompare(a.data); });
+  // Lê do snapshot custos_sku (fonte única de verdade no Supabase).
+  // Populado por RPC recalcular_custos_sku — rodada diariamente pelo cron MRP
+  // ou manualmente pelo botão "Recalcular" nesta aba.
+  var custos = (STATE.custosSku || []).slice().sort(function(a,b){
+    return (a.sku_pai || '').localeCompare(b.sku_pai || '');
   });
 
-  // ========== COSTUREIRO/PÇ: MÉDIA DAS 2 ÚLTIMAS OPs VÁLIDAS POR SKU PAI ==========
-  // Filtros: status='Entregue', valor_peca > 0 E <= 100 (exclui outliers absurdos),
-  // data_envio_tecido preenchida. Ordena desc.
-  var opsPorSku = {};
-  (STATE.ops || []).forEach(function(o) {
-    if (o.status !== 'Entregue') return;
-    var sku = o.sku_produto;
-    if (!sku) return;
-    var vp = parseFloat(o.valor_peca);
-    if (!(vp > 0) || vp > 100) return;  // exclui null, zero, e outliers (R$>100/pç é erro)
-    if (!o.data_envio_tecido) return;
-    if (!opsPorSku[sku]) opsPorSku[sku] = [];
-    opsPorSku[sku].push({ data: o.data_envio_tecido, valor: vp, id: o.id });
-  });
-  Object.keys(opsPorSku).forEach(function(sku) {
-    opsPorSku[sku].sort(function(a,b){ return b.data.localeCompare(a.data); });
-  });
+  // Mostrar quando o snapshot foi atualizado (maior data entre todos)
+  var maxAt = custos.reduce(function(m, c) {
+    var d = c.atualizado_em || '';
+    return d > m ? d : m;
+  }, '');
+  var atualLbl = document.getElementById('custos-atualizado-em');
+  if (atualLbl && maxAt) {
+    var dt = new Date(maxAt);
+    atualLbl.textContent = '(atualizado ' + dt.toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) + ')';
+  }
 
-  // ========== MONTAR TABELA: união de SKUs que tem dado em qualquer das fontes ==========
-  var skusUnion = {};
-  Object.keys(comprasPorSku).forEach(function(s){ skusUnion[s]=1; });
-  Object.keys(opsPorSku).forEach(function(s){ skusUnion[s]=1; });
-
-  var avg = function(arr) { return arr.length ? arr.reduce(function(s,v){return s+v;},0) / arr.length : 0; };
-
-  var rows = Object.keys(skusUnion).sort().map(function(sku) {
-    var prodInfo = produtosPais().find(function(p){return p.sku_pai===sku;});
-    var nomeProduto = prodInfo ? prodInfo.nome : sku;
-
-    // Tecido/pç = média(valorMetro × consumo) das 2 últimas compras
-    var cs = (comprasPorSku[sku] || []).slice(0, 2);
-    var tecidoPecas = cs.map(function(c){ return c.valorMetro * c.consumo; });
-    var avgTec = avg(tecidoPecas);
-
-    // Costureiro/pç = média valor_peca das 2 últimas OPs válidas
-    var ops2 = (opsPorSku[sku] || []).slice(0, 2);
-    var costPecas = ops2.map(function(o){ return o.valor; });
-    var avgCost = avg(costPecas);
-
-    var avgTotal = avgTec + avgCost;
-    if (avgTotal <= 0) return '';  // sem dado util
-
-    var base = cs.length + ' compra' + (cs.length===1?'':'s') + ' · ' + ops2.length + ' OP' + (ops2.length===1?'':'s');
-
+  var rows = custos.filter(function(c){
+    return c.cmv_total_peca && parseFloat(c.cmv_total_peca) > 0;
+  }).map(function(c) {
+    var tec = parseFloat(c.custo_tecido_peca) || 0;
+    var cost = parseFloat(c.custo_costureiro_peca) || 0;
+    var total = parseFloat(c.cmv_total_peca) || 0;
+    var nome = c.produto_nome || c.sku_pai;
+    var base = (c.base_compras || 0) + ' compra' + (c.base_compras === 1 ? '' : 's') +
+               ' · ' + (c.base_ops || 0) + ' OP' + (c.base_ops === 1 ? '' : 's');
     return '<tr>' +
-      '<td><strong>' + nomeProduto + '</strong> <span style="color:var(--txt3);font-size:11px">('+sku+')</span></td>' +
-      '<td class="r">' + (avgTec > 0 ? fmtR(avgTec) + '/pç' : '<span style="color:var(--txt4)">—</span>') + '</td>' +
-      '<td class="r">' + (avgCost > 0 ? fmtR(avgCost) + '/pç' : '<span style="color:var(--txt4)">—</span>') + '</td>' +
-      '<td class="r" style="font-weight:700;color:var(--indigo)">' + fmtR(avgTotal) + '/pç</td>' +
+      '<td><strong>' + nome + '</strong> <span style="color:var(--txt3);font-size:11px">(' + c.sku_pai + ')</span></td>' +
+      '<td class="r">' + (tec > 0 ? fmtR(tec) + '/pç' : '<span style="color:var(--txt4)">—</span>') + '</td>' +
+      '<td class="r">' + (cost > 0 ? fmtR(cost) + '/pç' : '<span style="color:var(--txt4)">—</span>') + '</td>' +
+      '<td class="r" style="font-weight:700;color:var(--indigo)">' + fmtR(total) + '/pç</td>' +
       '<td class="r" style="color:var(--txt3);font-size:11px">' + base + '</td>' +
     '</tr>';
-  }).filter(function(r){return r;}).join('');
+  }).join('');
 
   document.getElementById('cmv-table').innerHTML =
     '<table class="tb"><thead><tr>' +
       '<th>Produto</th><th class="r">Tecido/pç</th><th class="r">Costureiro/pç</th><th class="r">CMV Total/pç</th><th class="r">Base</th>' +
     '</tr></thead><tbody>' + rows + '</tbody></table>' +
     '<div style="font-size:11px;color:var(--txt3);margin-top:8px">' +
-      'Tecido: média das 2 últimas <strong>compras</strong> (ordens_compra) · ' +
-      'Costureiro: média das 2 últimas <strong>OPs Entregues</strong> com valor_peca válido (≤R$100/pç). ' +
-      'Só entram compras/OPs com data_faturamento/data_envio preenchida.' +
+      'Snapshot materializado em <strong>custos_sku</strong>. Fonte: 2 últimas compras (ordens_compra) + 2 últimas OPs Entregues (valor_peca ≤ R$100). ' +
+      'Propaga pra <strong>produtos.custo_total</strong> automaticamente — usado pelo dash ecommerce.' +
     '</div>';
 
   // KPIs
@@ -2072,6 +2040,29 @@ function renderChartCustos() {
       }
     }
   });
+}
+
+// Botao "Recalcular" — chama RPC no Supabase e recarrega
+async function acRecalcularCustos(btn) {
+  var original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Calculando...';
+  try {
+    var r = await fetch(SB_URL + '/rest/v1/rpc/recalcular_custos_sku', {
+      method: 'POST',
+      headers: Object.assign({'Content-Type':'application/json'}, AUTH_HEADERS),
+      body: '{}'
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status + ': ' + await r.text());
+    var res = await r.json();
+    btn.textContent = '✓ ' + (res.skus_calculados || 0) + ' SKUs';
+    await carregar();
+    setTimeout(function(){ btn.textContent = original; btn.disabled = false; }, 2000);
+  } catch(e) {
+    btn.textContent = original;
+    btn.disabled = false;
+    alert('Erro ao recalcular: ' + e.message);
+  }
 }
 
 // ═══════════════ FILTERS ═══════════════
