@@ -170,17 +170,34 @@ table.tb td.r{text-align:right;font-variant-numeric:tabular-nums;}
 table.tb td.dim{color:var(--txt2);}
 table.tb tr:hover td{background:rgba(99,102,241,0.03);}
 
-/* Tabela do histórico — precisa de scroll horizontal (>1600px).
-   `overflow-y:clip` é moderno (Chrome 90+, FF 81+, Safari 16+): permite
-   overflow-x:auto sem criar contexto de scroll vertical — assim o thead
-   continua sticky em relação à página, não à wrapper. */
-.tb-historico-scroll{width:100%;max-width:100%;overflow-x:auto;overflow-y:clip;border:1px solid var(--bdr);border-radius:10px;-webkit-overflow-scrolling:touch;scrollbar-width:auto;scrollbar-color:var(--indigo) var(--bg3);}
-.tb-historico-scroll::-webkit-scrollbar{height:14px;background:var(--bg3);}
-.tb-historico-scroll::-webkit-scrollbar-thumb{background:var(--indigo);border-radius:7px;border:2px solid var(--bg3);min-width:60px;}
+/* Tabela do histórico — 1600px+ de largura precisa de scroll horizontal.
+   Best practice (Airtable/Notion): container bounded com max-height cria um
+   "viewport" próprio. User rola dentro dele (horizontal E vertical). Thead fica
+   sticky em top:0 do container (não da página). Scrollbar horizontal fica
+   sempre visível no fundo do viewport — não "enterrada" no fim da tabela. */
+.tb-historico-scroll{
+  max-height:calc(100vh - 260px);
+  overflow:auto;
+  border:1px solid var(--bdr);
+  border-radius:10px;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:auto;
+  scrollbar-color:var(--indigo) var(--bg3);
+  position:relative;
+}
+.tb-historico-scroll::-webkit-scrollbar{height:14px;width:12px;background:var(--bg3);}
+.tb-historico-scroll::-webkit-scrollbar-thumb{background:var(--indigo);border-radius:7px;border:2px solid var(--bg3);min-width:60px;min-height:60px;}
 .tb-historico-scroll::-webkit-scrollbar-thumb:hover{background:#818cf8;}
 .tb-historico-scroll::-webkit-scrollbar-track{background:var(--bg3);border-radius:7px;}
-table.tb-historico{min-width:1600px;}
-.tb-historico-scroll table.tb-historico thead th{position:sticky;top:64px;z-index:10;background:var(--bg2);box-shadow:inset 0 -1px 0 var(--bdr);}
+.tb-historico-scroll::-webkit-scrollbar-corner{background:var(--bg3);}
+table.tb-historico{min-width:1600px;border-collapse:separate;border-spacing:0;}
+.tb-historico-scroll table.tb-historico thead th{
+  position:sticky;
+  top:0;
+  z-index:10;
+  background:var(--bg2);
+  box-shadow:inset 0 -2px 0 var(--bdr);
+}
 
 /* ── Filters ── */
 .filtros{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center;}
@@ -497,8 +514,11 @@ table.tb-historico{min-width:1600px;}
   </div>
 </div>
 
-<!-- Datalist global: todas cores conhecidas (produto_cores_validas) — alimenta autocomplete dos inputs -->
+<!-- Datalists globais pra autocomplete com busca por substring (HTML5 nativo) -->
 <datalist id="dl-cores-todas"></datalist>
+<datalist id="dl-produtos-fab"></datalist>
+<datalist id="dl-costureiros"></datalist>
+<datalist id="dl-tecidos-todos"></datalist>
 
 <script>
 // ═══════════════ CONFIG ═══════════════
@@ -1753,11 +1773,17 @@ function exportHistoricoCSV() {
 
 function populateHistoricoFilters() {
   var prods = {}, forns = {}, anos = {}, costIds = {};
+  // Produtos, fornecedores e anos vem de ordens_compra (onde estao os dados de NF)
   (STATE.compras || []).forEach(function(c) {
     if (c.produto) prods[c.produto.trim()] = 1;
     if (c.fornecedor) forns[c.fornecedor.trim()] = 1;
     if (c.data_faturamento) anos[c.data_faturamento.slice(0,4)] = 1;
-    if (c.costureiro_id) costIds[c.costureiro_id] = 1;
+  });
+  // Costureiros vem do HISTORICO de ordens_producao (mesma fonte que alimenta a tabela)
+  (STATE.ops || []).forEach(function(o) {
+    if ((o.status === 'Entregue' || o.status === 'cancelada') && o.costureiro_id) {
+      costIds[o.costureiro_id] = 1;
+    }
   });
   var selP = document.getElementById('flt-hist-produto');
   if (selP) selP.innerHTML = '<option value="">Todos produtos</option>' + Object.keys(prods).sort().map(function(p){return '<option value="'+p+'">'+p+'</option>';}).join('');
@@ -1976,13 +2002,48 @@ function coresDoSKU(skuPai) {
 }
 
 function popularDatalistCores() {
-  // Alimenta <datalist id="dl-cores-todas"> com todas cores distintas conhecidas.
+  // Cores (produto_cores_validas)
   var dl = document.getElementById('dl-cores-todas');
-  if (!dl) return;
-  var set = {};
-  (STATE.coresValidas || []).forEach(function(c){ if (c.cor) set[c.cor] = 1; });
-  var cores = Object.keys(set).sort();
-  dl.innerHTML = cores.map(function(c){ return '<option value="'+c+'">'; }).join('');
+  if (dl) {
+    var set = {};
+    (STATE.coresValidas || []).forEach(function(c){ if (c.cor) set[c.cor] = 1; });
+    dl.innerHTML = Object.keys(set).sort().map(function(c){ return '<option value="'+c.replace(/"/g,'&quot;')+'">'; }).join('');
+  }
+  // Produtos de fabricacao propria — value = "Nome (SKU)" pra extrair SKU no handler
+  var dlP = document.getElementById('dl-produtos-fab');
+  if (dlP) {
+    dlP.innerHTML = produtosFabricacaoPropria().map(function(p){
+      return '<option value="' + (p.nome + ' (' + p.sku_pai + ')').replace(/"/g,'&quot;') + '">';
+    }).join('');
+  }
+  // Costureiros ativos
+  var dlC = document.getElementById('dl-costureiros');
+  if (dlC) {
+    dlC.innerHTML = (STATE.costureiros || []).filter(function(c){return c.ativo;})
+      .map(function(c){ return '<option value="' + c.nome.replace(/"/g,'&quot;') + '">'; }).join('');
+  }
+  // Tecidos conhecidos (de estoque_insumos + ordens_compra)
+  var dlT = document.getElementById('dl-tecidos-todos');
+  if (dlT) {
+    dlT.innerHTML = nomesTecidosCadastrados().map(function(n){
+      return '<option value="' + n.replace(/"/g,'&quot;') + '">';
+    }).join('');
+  }
+}
+
+// Extrai SKU de string "Nome (SKU)" ou retorna a string uppercase direto
+function extrairSkuProduto(texto) {
+  if (!texto) return '';
+  var m = String(texto).match(/\(([^)]+)\)\s*$/);
+  return m ? m[1].trim() : String(texto).trim().toUpperCase();
+}
+
+// Lookup costureiro por nome exato
+function costureiroIdPorNome(nome) {
+  if (!nome) return null;
+  var n = String(nome).trim();
+  var c = (STATE.costureiros || []).find(function(x){ return (x.nome||'').trim() === n && x.ativo; });
+  return c ? c.id : null;
 }
 
 function tamanhosDoSKU(skuPai) {
@@ -2112,24 +2173,16 @@ function produtosFabricacaoPropria() {
 }
 
 function buildOPForm() {
-  var prodOpts = produtosFabricacaoPropria().map(function(p) {
-    return '<option value="' + p.sku_pai + '">' + p.nome + ' (' + p.sku_pai + ')</option>';
-  }).join('');
-  var costOpts = STATE.costureiros.filter(function(c) { return c.ativo; }).map(function(c) {
-    return '<option value="' + c.id + '">' + c.nome + '</option>';
-  }).join('');
-
   STATE.opCorCount = 1;
 
   return '<div style="padding:14px;border:1px solid var(--bdr);border-radius:10px;background:var(--bg);margin-bottom:16px;">' +
     '<div style="font-size:12px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:12px;">Dados da OP</div>' +
-    '<div class="form-group"><label class="form-label">Produto <small style="color:var(--txt3);font-weight:400">(fabricação própria)</small></label>' +
-      '<select class="form-select" id="f-nova-produto" onchange="onProdutoOPChange()">' +
-        '<option value="">Selecione um produto...</option>' + prodOpts +
-      '</select></div>' +
+    '<div class="form-group"><label class="form-label">Produto <small style="color:var(--txt3);font-weight:400">(digite pra buscar — fabricação própria)</small></label>' +
+      '<input class="form-input" id="f-nova-produto" list="dl-produtos-fab" placeholder="ex: CLAF, calça, duna..." oninput="onProdutoOPChange()" autocomplete="off">' +
+    '</div>' +
     '<div class="form-row">' +
-      '<div class="form-group"><label class="form-label">Costureiro</label>' +
-        '<select class="form-select" id="f-nova-costureiro">' + costOpts + '</select></div>' +
+      '<div class="form-group"><label class="form-label">Costureiro <small style="color:var(--txt3);font-weight:400">(digite pra buscar)</small></label>' +
+        '<input class="form-input" id="f-nova-costureiro" list="dl-costureiros" placeholder="ex: GJ, MF, Deb..." autocomplete="off"></div>' +
       '<div class="form-group"><label class="form-label">Valor/Peça (R$)</label>' +
         '<input class="form-input" id="f-valor" type="number" step="0.01" placeholder="18.00"></div>' +
     '</div>' +
@@ -2157,8 +2210,9 @@ function buildOPCorRow(idx, firstRow) {
       '<span style="font-size:11px;font-weight:700;color:var(--indigo);text-transform:uppercase;letter-spacing:0.04em">Cor #'+(idx+1)+'</span>' +
       removeBtn +
     '</div>' +
-    '<div class="form-group"><label class="form-label">Tecido</label>' +
-      '<select class="form-select" data-field="tecido" onchange="atualizarCoresTecidoRow('+idx+')"><option value="">Selecione um produto primeiro</option></select>' +
+    '<div class="form-group"><label class="form-label">Tecido <small style="color:var(--txt3);font-weight:400">(digite pra buscar)</small></label>' +
+      '<input class="form-input" data-field="tecido" list="dl-tecidos-row'+idx+'" placeholder="Selecione um produto primeiro" oninput="atualizarCoresTecidoRow('+idx+')" autocomplete="off">' +
+      '<datalist id="dl-tecidos-row'+idx+'"></datalist>' +
       '<div data-field="tecido-info" style="font-size:11px;color:var(--txt3);margin-top:4px;"></div>' +
     '</div>' +
     '<div class="form-row">' +
@@ -2203,26 +2257,28 @@ function removerOPCorRow(idx) {
 
 // Quando muda o produto, atualiza TODAS as rows (tecidos disponíveis + grade)
 function onProdutoOPChange() {
-  var sku = document.getElementById('f-nova-produto').value;
+  var sku = extrairSkuProduto(document.getElementById('f-nova-produto').value);
   var rows = document.querySelectorAll('.op-cor-row');
   rows.forEach(function(row) {
     var idx = parseInt(row.dataset.idx);
-    // Popular dropdown de tecidos
-    var tecSel = row.querySelector('[data-field="tecido"]');
-    if (!sku) {
-      tecSel.innerHTML = '<option value="">Selecione um produto primeiro</option>';
-    } else {
-      var nomesSet = {};
-      (STATE.insumos || []).forEach(function(i) {
-        if (i.tipo !== 'tecido') return;
-        // Se skus_pai definido: filtra por ele. Se vazio/null: trata como universal (aparece em todo produto).
-        if (i.skus_pai && i.skus_pai.length > 0 && i.skus_pai.indexOf(sku) < 0) return;
-        if (i.nome) nomesSet[i.nome.trim()] = 1;
-      });
-      var nomes = Object.keys(nomesSet).sort();
-      tecSel.innerHTML = nomes.length
-        ? '<option value="">Selecione o tecido...</option>' + nomes.map(function(n){return '<option value="'+n+'">'+n+'</option>';}).join('')
-        : '<option value="">Nenhum tecido cadastrado</option>';
+    // Popular datalist de tecidos da row
+    var dlTec = document.getElementById('dl-tecidos-row' + idx);
+    var tecInput = row.querySelector('[data-field="tecido"]');
+    if (dlTec) {
+      if (!sku) {
+        dlTec.innerHTML = '';
+        if (tecInput) tecInput.placeholder = 'Selecione um produto primeiro';
+      } else {
+        var nomesSet = {};
+        (STATE.insumos || []).forEach(function(i) {
+          if (i.tipo !== 'tecido') return;
+          if (i.skus_pai && i.skus_pai.length > 0 && i.skus_pai.indexOf(sku) < 0) return;
+          if (i.nome) nomesSet[i.nome.trim()] = 1;
+        });
+        var nomes = Object.keys(nomesSet).sort();
+        dlTec.innerHTML = nomes.map(function(n){return '<option value="'+n.replace(/"/g,'&quot;')+'">';}).join('');
+        if (tecInput) tecInput.placeholder = nomes.length ? 'Digite pra buscar tecido...' : 'Nenhum tecido cadastrado';
+      }
     }
     atualizarCoresTecidoRow(idx);
     // Popular grade
@@ -2236,7 +2292,7 @@ function onProdutoOPChange() {
 function atualizarCoresTecidoRow(idx) {
   var row = document.getElementById('op-cor-row-'+idx);
   if (!row) return;
-  var sku = document.getElementById('f-nova-produto').value;
+  var sku = extrairSkuProduto(document.getElementById('f-nova-produto').value);
   var nomeTecido = row.querySelector('[data-field="tecido"]').value;
   var corSel = row.querySelector('[data-field="cor"]');
 
@@ -2301,7 +2357,7 @@ function atualizarSaldoRow(idx) {
   var insumo = STATE.insumos.find(function(i){return i.id===primeiroId;});
   if (!insumo) return;
 
-  var sku = document.getElementById('f-nova-produto').value;
+  var sku = extrairSkuProduto(document.getElementById('f-nova-produto').value);
   var bom = (STATE.consumo || []).find(function(b){
     return b.sku_produto === sku && (b.tecido_nome||'').trim().toUpperCase() === (insumo.nome||'').trim().toUpperCase();
   });
@@ -2316,7 +2372,7 @@ function recalcularPecasRow(idx) {
   if (!row) return;
   var insumoId = parseInt(row.querySelector('[data-field="cor"]').value);
   var metragem = parseFloat(row.querySelector('[data-field="metragem"]').value) || 0;
-  var sku = document.getElementById('f-nova-produto').value;
+  var sku = extrairSkuProduto(document.getElementById('f-nova-produto').value);
   var bom = (STATE.consumo || []).find(function(b){return b.sku_produto === sku;});
   var consumo = bom ? bom.consumo_por_peca : 0;
   var pecas = (metragem > 0 && consumo > 0) ? Math.floor(metragem / consumo) : 0;
@@ -2538,12 +2594,7 @@ function todasCoresConhecidas() {
 }
 
 function buildInsumoRow(idx, firstRow) {
-  var tecidoOpts = nomesTecidosCadastrados().map(function(n) {
-    return '<option value="' + n.replace(/"/g, '&quot;') + '">' + n + '</option>';
-  }).join('');
-  var corOpts = todasCoresConhecidas().map(function(c) {
-    return '<option value="' + c.replace(/"/g, '&quot;') + '">' + c + '</option>';
-  }).join('');
+  // Datalists globais (dl-tecidos-todos, dl-cores-todas) ja populados em popularDatalistCores.
   var pais = produtosFabricacaoPropria();
   var paisHtml = pais.map(function(p) {
     return '<label style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:var(--bg3);border-radius:4px;cursor:pointer;font-size:11px;">' +
@@ -2566,22 +2617,13 @@ function buildInsumoRow(idx, firstRow) {
         '<select class="form-select" data-field="subtipo"><option value="plano">Plano (M)</option><option value="circular">Circular (KG)</option><option value="botao">Botão</option><option value="ziper">Zíper</option><option value="linha">Linha</option></select></div>' +
     '</div>' +
     '<div class="form-group">' +
-      '<label class="form-label">Nome do Tecido</label>' +
-      '<select class="form-select" data-field="nome-select" onchange="onTecidoNomeChange('+idx+')">' +
-        '<option value="">Selecione um tecido...</option>' +
-        '<option value="__novo__" style="color:var(--indigo);font-weight:600">+ Cadastrar novo tecido</option>' +
-        tecidoOpts +
-      '</select>' +
-      '<input class="form-input" data-field="nome" placeholder="Ex: Sarja Senna Plus Vicunha" style="margin-top:8px;display:none;">' +
+      '<label class="form-label">Nome do Tecido <small style="color:var(--txt3);font-weight:400">(digite pra buscar ou criar novo)</small></label>' +
+      '<input class="form-input" data-field="nome" list="dl-tecidos-todos" placeholder="Ex: Sarja Senna Plus Vicunha" oninput="atualizarCoresInsumoRow('+idx+')" autocomplete="off">' +
     '</div>' +
     '<div class="form-row">' +
-      '<div class="form-group"><label class="form-label">Cor <small style="color:var(--txt3);font-weight:400">(será normalizada)</small></label>' +
-        '<select class="form-select" data-field="cor-select" onchange="onCorInsumoChange('+idx+')">' +
-          '<option value="">Selecione uma cor...</option>' +
-          '<option value="__nova__" style="color:var(--indigo);font-weight:600">+ Cadastrar nova cor</option>' +
-          corOpts +
-        '</select>' +
-        '<input class="form-input" data-field="cor" list="dl-cores-todas" placeholder="Ex: PRETO" style="margin-top:8px;display:none;">' +
+      '<div class="form-group"><label class="form-label">Cor <small style="color:var(--txt3);font-weight:400">(digite pra buscar ou criar — será normalizada)</small></label>' +
+        '<input class="form-input" data-field="cor" list="dl-cores-row'+idx+'" placeholder="Ex: PRETO" autocomplete="off">' +
+        '<datalist id="dl-cores-row'+idx+'"></datalist>' +
       '</div>' +
       '<div class="form-group"><label class="form-label">Unidade</label>' +
         '<select class="form-select" data-field="unidade"><option value="M">Metros (M)</option><option value="KG">Quilos (KG)</option><option value="UN">Unidades (UN)</option><option value="ROL">Rolos (ROL)</option></select></div>' +
@@ -2619,94 +2661,46 @@ function removerInsumoRow(idx) {
   if (el) el.remove();
 }
 
-function onTecidoNomeChange(idx) {
-  var row = document.getElementById('insumo-row-'+idx);
-  if (!row) return;
-  var sel = row.querySelector('[data-field="nome-select"]');
-  var input = row.querySelector('[data-field="nome"]');
-  if (sel.value === '__novo__') {
-    input.style.display = 'block';
-    input.focus();
-    input.value = '';
-  } else {
-    input.style.display = 'none';
-    input.value = sel.value;
-  }
-  atualizarCoresInsumoRow(idx);
-}
-
-// Filtra dropdown de cor conforme o tecido escolhido. Tecido conhecido = mostra
-// apenas cores ja compradas pra ele; tecido novo/vazio = todas as cores conhecidas.
+// Filtra datalist de cor da row conforme o tecido digitado.
+// Tecido conhecido → só cores já compradas; novo/vazio → todas conhecidas.
 function atualizarCoresInsumoRow(idx) {
   var row = document.getElementById('insumo-row-'+idx);
   if (!row) return;
-  var selNome = row.querySelector('[data-field="nome-select"]');
   var inputNome = row.querySelector('[data-field="nome"]');
-  var selCor = row.querySelector('[data-field="cor-select"]');
-  if (!selCor) return;
+  var dlCor = document.getElementById('dl-cores-row' + idx);
+  if (!dlCor) return;
 
-  var nomeTecido = '';
-  if (selNome && selNome.value && selNome.value !== '__novo__') {
-    nomeTecido = selNome.value;
-  } else if (inputNome && inputNome.value) {
-    nomeTecido = inputNome.value;
-  }
-
+  var nomeTecido = inputNome ? (inputNome.value || '').trim() : '';
   var cores;
   if (nomeTecido) {
     var set = {};
     (STATE.insumos || []).forEach(function(i) {
-      if (i.tipo === 'tecido' && (i.nome||'').trim() === nomeTecido.trim() && i.cor) {
+      if (i.tipo === 'tecido' && (i.nome||'').trim() === nomeTecido && i.cor) {
         set[i.cor.trim()] = 1;
       }
     });
     cores = Object.keys(set).sort();
-    if (!cores.length) cores = todasCoresConhecidas();  // tecido novo sem historico
+    if (!cores.length) cores = todasCoresConhecidas();
   } else {
     cores = todasCoresConhecidas();
   }
 
-  var corAtual = selCor.value;
-  var corOpts = cores.map(function(c){
-    return '<option value="' + c.replace(/"/g,'&quot;') + '">' + c + '</option>';
+  dlCor.innerHTML = cores.map(function(c){
+    return '<option value="' + c.replace(/"/g,'&quot;') + '">';
   }).join('');
-  selCor.innerHTML = '<option value="">Selecione uma cor...</option>' +
-    '<option value="__nova__" style="color:var(--indigo);font-weight:600">+ Cadastrar nova cor</option>' +
-    corOpts;
-  // Preservar seleção se a cor ainda existe
-  if (corAtual && (cores.indexOf(corAtual) >= 0 || corAtual === '__nova__')) {
-    selCor.value = corAtual;
-  }
-}
-
-function onCorInsumoChange(idx) {
-  var row = document.getElementById('insumo-row-'+idx);
-  if (!row) return;
-  var sel = row.querySelector('[data-field="cor-select"]');
-  var input = row.querySelector('[data-field="cor"]');
-  if (sel.value === '__nova__') {
-    input.style.display = 'block';
-    input.focus();
-    input.value = '';
-  } else {
-    input.style.display = 'none';
-    input.value = sel.value;
-  }
 }
 
 function toggleNomeInsumoField(idx) {
   var row = document.getElementById('insumo-row-'+idx);
   if (!row) return;
   var tipo = row.querySelector('[data-field="tipo"]').value;
-  var sel = row.querySelector('[data-field="nome-select"]');
   var input = row.querySelector('[data-field="nome"]');
   if (tipo === 'aviamento') {
-    sel.style.display = 'none';
-    input.style.display = 'block';
     input.placeholder = 'Ex: Botão preto 4 furos';
+    input.setAttribute('list', '');  // aviamento sem sugestoes de tecido
   } else {
-    sel.style.display = 'block';
-    input.style.display = sel.value === '__novo__' ? 'block' : 'none';
+    input.placeholder = 'Ex: Sarja Senna Plus Vicunha';
+    input.setAttribute('list', 'dl-tecidos-todos');
   }
 }
 
@@ -2715,14 +2709,8 @@ function coletarInsumosRows() {
   var insumos = [];
   rows.forEach(function(row) {
     var tipo = row.querySelector('[data-field="tipo"]').value;
-    var selNome = row.querySelector('[data-field="nome-select"]');
     var inputNome = row.querySelector('[data-field="nome"]');
-    var nome;
-    if (tipo === 'aviamento') {
-      nome = inputNome.value.trim();
-    } else {
-      nome = (selNome.value && selNome.value !== '__novo__') ? selNome.value : inputNome.value.trim();
-    }
+    var nome = inputNome ? inputNome.value.trim() : '';
     if (!nome) return;  // skip linha sem nome
 
     var skusChecked = Array.from(row.querySelectorAll('[data-field="skus"] input:checked')).map(function(el){return el.value;});
@@ -2886,10 +2874,12 @@ async function submitDrawer() {
       };
       await patchSupabase('ordens_producao', op.id, body);
     } else if (type === 'nova-op') {
-      var sku = document.getElementById('f-nova-produto').value;
-      if (!sku) { alert('Selecione um produto'); btn.textContent = 'Salvar'; btn.disabled = false; return; }
+      var sku = extrairSkuProduto(document.getElementById('f-nova-produto').value);
+      if (!sku) { alert('Selecione um produto (digite o nome ou SKU)'); btn.textContent = 'Salvar'; btn.disabled = false; return; }
       var prodInfo = produtosPais().find(function(p) { return p.sku_pai === sku; });
-      var costureiroId = parseInt(document.getElementById('f-nova-costureiro').value);
+      if (!prodInfo) { alert('Produto "'+sku+'" nao encontrado. Selecione da lista.'); btn.textContent = 'Salvar'; btn.disabled = false; return; }
+      var costureiroId = costureiroIdPorNome(document.getElementById('f-nova-costureiro').value);
+      if (!costureiroId) { alert('Costureiro nao encontrado. Digite o nome exato ou escolha da lista.'); btn.textContent = 'Salvar'; btn.disabled = false; return; }
       var valorPeca = parseFloat(document.getElementById('f-valor').value) || null;
       var dataEnvio = document.getElementById('f-data-envio').value || null;
       var dataPrev = document.getElementById('f-data-prevista').value || null;
