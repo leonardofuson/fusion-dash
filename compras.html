@@ -490,6 +490,7 @@ table.tb-historico{min-width:1600px;}
     </div>
     <div class="drawer-body" id="drawer-body"></div>
     <div class="drawer-footer" id="drawer-footer">
+      <button type="button" id="drawer-btn-excluir" class="btnf" style="display:none;margin-right:auto;background:transparent;color:var(--red);border:1px solid rgba(248,113,113,0.3);">Excluir</button>
       <button class="btnf ghost" onclick="closeDrawer()">Cancelar</button>
       <button class="btnf" id="drawer-submit" onclick="submitDrawer()">Salvar</button>
     </div>
@@ -1206,6 +1207,7 @@ function openDrawerEditInsumo(insumoId) {
   document.getElementById('drawer-title').textContent = 'Editar Compra — ' + (insumo.nome || '—');
   document.getElementById('drawer-body').innerHTML = buildEditInsumoForm(insumo);
   document.getElementById('drawer-footer').style.display = 'flex';
+  configurarBtnExcluir(function(){ excluirInsumo(insumoId); }, 'Excluir compra');
   document.getElementById('drawer-overlay').classList.add('open');
 }
 
@@ -1264,9 +1266,6 @@ function buildEditInsumoForm(i) {
     '</div>' +
     '<div class="form-group" style="margin-top:16px;"><label class="form-label">Produtos que usam este tecido</label>' +
       '<div style="display:flex;flex-wrap:wrap;gap:4px;padding:8px;background:var(--bg3);border:1px solid var(--bdr);border-radius:6px;max-height:160px;overflow-y:auto;">' + paisHtml + '</div>' +
-    '</div>' +
-    '<div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--bdr);">' +
-      '<button type="button" class="btnf" style="background:transparent;color:var(--red);border:1px solid rgba(248,113,113,0.3);width:100%;padding:10px;" onclick="excluirInsumo('+i.id+')">Excluir esta compra de tecido</button>' +
     '</div>';
 }
 
@@ -1300,6 +1299,7 @@ function openDrawerEdit(opId) {
   document.getElementById('drawer-title').textContent = 'Editar OP #' + op.id;
   document.getElementById('drawer-body').innerHTML = buildEditOPForm(op);
   document.getElementById('drawer-footer').style.display = 'flex';
+  configurarBtnExcluir(function(){ excluirOP(opId); }, 'Excluir OP');
   overlay.classList.add('open');
 }
 
@@ -1918,12 +1918,28 @@ function openDrawer(type) {
     body.innerHTML = buildInsumoForm();
   }
   document.getElementById('drawer-footer').style.display = 'flex';
+  configurarBtnExcluir(null);  // esconde em forms de criacao
   overlay.classList.add('open');
 }
 
 function closeDrawer() {
   document.getElementById('drawer-overlay').classList.remove('open');
   STATE.drawerType = null;
+  configurarBtnExcluir(null);
+}
+
+// Configura o botao Excluir do drawer-footer. handler=null esconde o botao.
+function configurarBtnExcluir(handler, label) {
+  var btn = document.getElementById('drawer-btn-excluir');
+  if (!btn) return;
+  if (handler) {
+    btn.style.display = 'inline-block';
+    btn.textContent = label || 'Excluir';
+    btn.onclick = handler;
+  } else {
+    btn.style.display = 'none';
+    btn.onclick = null;
+  }
 }
 
 // ═══ Helpers produtos/grades ═══
@@ -2232,12 +2248,24 @@ function atualizarCoresTecidoRow(idx) {
   }
   var variantes = (STATE.insumos || []).filter(function(i) {
     return i.tipo === 'tecido' && (i.nome||'').trim() === nomeTecido &&
-      (!sku || !i.skus_pai || i.skus_pai.indexOf(sku) >= 0);
+      (!sku || !i.skus_pai || i.skus_pai.length === 0 || i.skus_pai.indexOf(sku) >= 0);
   });
-  corSel.innerHTML = variantes.length
-    ? '<option value="">Selecione a cor...</option>' + variantes.map(function(v){
-        var saldo = v.quantidade_atual || 0;
-        return '<option value="'+v.id+'">'+(v.cor || '—')+' — saldo '+fmt(saldo)+' '+(v.unidade||'')+'</option>';
+  // Agrupar por cor: saldo total = soma das compras daquela cor.
+  // Ao salvar, baixa FIFO nos insumo_ids em ordem de data_faturamento.
+  var porCor = {};
+  variantes.forEach(function(v) {
+    var c = (v.cor || '—').trim() || '—';
+    if (!porCor[c]) porCor[c] = { saldo: 0, unidade: v.unidade || '', insumos: [] };
+    porCor[c].saldo += (v.quantidade_atual || 0);
+    porCor[c].insumos.push({ id: v.id, saldo: v.quantidade_atual || 0, data: v.data_faturamento || '' });
+  });
+  var cores = Object.keys(porCor).sort();
+  corSel.innerHTML = cores.length
+    ? '<option value="">Selecione a cor...</option>' + cores.map(function(c){
+        var info = porCor[c];
+        info.insumos.sort(function(a,b){ return (a.data || '').localeCompare(b.data || ''); });
+        var idsStr = info.insumos.map(function(x){return x.id;}).join(',');
+        return '<option value="'+idsStr+'" data-saldo="'+info.saldo+'" data-unidade="'+info.unidade+'" data-cor="'+c.replace(/"/g,'&quot;')+'">'+c+' — saldo '+fmt(info.saldo)+' '+info.unidade+'</option>';
       }).join('')
     : '<option value="">Nenhuma cor cadastrada</option>';
 
@@ -2253,20 +2281,26 @@ function atualizarCoresTecidoRow(idx) {
 function atualizarSaldoRow(idx) {
   var row = document.getElementById('op-cor-row-'+idx);
   if (!row) return;
-  var insumoId = parseInt(row.querySelector('[data-field="cor"]').value);
+  var corSel = row.querySelector('[data-field="cor"]');
+  var opt = corSel && corSel.selectedIndex >= 0 ? corSel.options[corSel.selectedIndex] : null;
   var saldoEl = row.querySelector('[data-field="saldo"]');
   var consumoEl = row.querySelector('[data-field="consumo"]');
 
-  if (!insumoId) {
+  if (!opt || !opt.value) {
     if (saldoEl) saldoEl.value = '';
     if (consumoEl) consumoEl.value = '';
     recalcularPecasRow(idx);
     return;
   }
-  var insumo = STATE.insumos.find(function(i){return i.id===insumoId;});
+  // Saldo agregado (soma das compras daquela cor) vem no data-attribute
+  var saldo = parseFloat(opt.dataset.saldo) || 0;
+  var unidade = opt.dataset.unidade || '';
+  if (saldoEl) saldoEl.value = fmt(saldo) + ' ' + unidade;
+
+  // Pegar primeiro insumo_id pra consulta do BOM (mesmo nome de tecido)
+  var primeiroId = parseInt((opt.value || '').split(',')[0]);
+  var insumo = STATE.insumos.find(function(i){return i.id===primeiroId;});
   if (!insumo) return;
-  var saldo = insumo.quantidade_atual || 0;
-  if (saldoEl) saldoEl.value = fmt(saldo) + ' ' + (insumo.unidade || '');
 
   var sku = document.getElementById('f-nova-produto').value;
   var bom = (STATE.consumo || []).find(function(b){
@@ -2717,9 +2751,6 @@ function buildEditOPForm(op) {
     '<div style="margin-top:16px;padding:12px;background:var(--bg);border-radius:8px;font-size:12px;color:var(--txt3)">' +
       '<strong style="color:var(--txt2)">Resumo:</strong> ' + diasRodando(op) + ' dias rodando · ' +
       'Valor total: ' + fmtR(op.valor_total) + ' · Criado em: ' + (op.criado_em ? op.criado_em.slice(0, 10) : '—') +
-    '</div>' +
-    '<div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--bdr);">' +
-      '<button type="button" class="btnf" style="background:transparent;color:var(--red);border:1px solid rgba(248,113,113,0.3);width:100%;padding:10px;" onclick="excluirOP('+op.id+')">Excluir esta OP</button>' +
     '</div>';
 }
 
@@ -2820,22 +2851,25 @@ async function submitDrawer() {
       var dataPrev = document.getElementById('f-data-prevista').value || null;
       var corteExt = document.getElementById('f-corte').value === 'true';
 
-      // Coletar cada cor (row)
+      // Coletar cada cor (row). Value do <option> agora traz IDs separados
+      // por virgula ordenados FIFO (data_faturamento asc).
       var rows = document.querySelectorAll('.op-cor-row');
       var ops = [];
-      var movimentacoes = [];
+      var baixas = [];  // plano de baixa FIFO por OP index
       for (var r = 0; r < rows.length; r++) {
         var row = rows[r];
         var idx = parseInt(row.dataset.idx);
-        var insumoId = parseInt(row.querySelector('[data-field="cor"]').value) || null;
+        var corSel = row.querySelector('[data-field="cor"]');
+        var opt = corSel && corSel.selectedIndex >= 0 ? corSel.options[corSel.selectedIndex] : null;
+        var idsStr = opt ? opt.value : '';
+        var insumoIdsFifo = idsStr ? idsStr.split(',').map(function(s){return parseInt(s);}).filter(Boolean) : [];
         var metragem = parseFloat(row.querySelector('[data-field="metragem"]').value) || null;
         var pecasFinal = parseInt(row.querySelector('[data-field="pecas-final"]').value) || 0;
-        if (!pecasFinal) continue; // pula rows vazias
+        if (!pecasFinal) continue;
 
-        var insumo = insumoId ? STATE.insumos.find(function(i){return i.id===insumoId;}) : null;
-        var corTexto = insumo ? (insumo.cor || '') : '';
+        var corTexto = opt && opt.dataset.cor ? opt.dataset.cor : '';
+        var insumoPrincipalId = insumoIdsFifo[0] || null;
 
-        // Grade específica dessa row
         var grade = {};
         row.querySelectorAll('.grade-input-row'+idx).forEach(function(inp) {
           var q = parseInt(inp.value) || 0;
@@ -2854,30 +2888,37 @@ async function submitDrawer() {
           data_prevista_entrega: dataPrev,
           corte_externo: corteExt,
           status: 'Produzindo',
-          insumo_id: insumoId,
+          insumo_id: insumoPrincipalId,
           quantidade_tecido_usada: metragem,
         });
-        if (insumoId && metragem && metragem > 0) {
-          movimentacoes.push({ insumoId: insumoId, qtd: metragem });
-        }
+        baixas.push({ insumoIdsFifo: insumoIdsFifo, metragem: (metragem || 0) });
       }
 
       if (!ops.length) { alert('Preencha ao menos uma cor com peças > 0'); btn.textContent = 'Salvar'; btn.disabled = false; return; }
 
-      // Criar OPs em batch
       var opsCriadas = await postSupabase('ordens_producao', ops);
       var opsArr = Array.isArray(opsCriadas) ? opsCriadas : [opsCriadas];
 
-      // Criar movimentações de saída (uma por OP com insumo)
+      // Distribuir baixa em FIFO pelos insumo_ids daquela cor.
       for (var j = 0; j < opsArr.length; j++) {
-        if (!ops[j].insumo_id || !ops[j].quantidade_tecido_usada) continue;
-        await postSupabase('movimentacao_insumos', {
-          insumo_id: ops[j].insumo_id,
-          tipo_mov: 'saida_producao',
-          quantidade: -ops[j].quantidade_tecido_usada,
-          ordem_producao_id: opsArr[j].id,
-          observacao: 'Saída automática pela OP #' + opsArr[j].id,
-        });
+        var plano = baixas[j];
+        if (!plano || !plano.metragem || plano.metragem <= 0 || !plano.insumoIdsFifo.length) continue;
+        var restante = plano.metragem;
+        for (var k = 0; k < plano.insumoIdsFifo.length && restante > 0; k++) {
+          var iid = plano.insumoIdsFifo[k];
+          var ins = STATE.insumos.find(function(x){return x.id===iid;});
+          var disp = ins ? (ins.quantidade_atual || 0) : 0;
+          if (disp <= 0) continue;
+          var usar = Math.min(restante, disp);
+          await postSupabase('movimentacao_insumos', {
+            insumo_id: iid,
+            tipo_mov: 'saida_producao',
+            quantidade: -usar,
+            ordem_producao_id: opsArr[j].id,
+            observacao: 'Saída automática FIFO pela OP #' + opsArr[j].id,
+          });
+          restante -= usar;
+        }
       }
     } else if (type === 'edit-costureiro') {
       var skus = document.getElementById('f-skus').value.split(',').map(function(s) { return s.trim().toUpperCase(); }).filter(Boolean);
