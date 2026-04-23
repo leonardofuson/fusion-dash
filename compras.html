@@ -591,11 +591,10 @@ function fmtR0(n) { return n == null ? '—' : 'R$ ' + Math.round(Number(n)).toL
 function costuName(id) { var c = STATE.costureiros.find(function(x) { return x.id === id; }); return c ? c.nome : '—'; }
 function statusPill(st) {
   var map = {
-    'Entregue': 'pill-ok', 'concluida': 'pill-ok', 'Pronto': 'pill-ok',
-    'Produzindo': 'pill-warning', 'Costureiro - Produzindo': 'pill-warning', 'em_producao': 'pill-warning', 'parcial': 'pill-warning',
-    'atrasada': 'pill-danger', 'Devolvido': 'pill-danger',
-    'aguardando_tecido': 'pill-purple', 'tecido_enviado': 'pill-info',
-    'Costureiro -  Estocado': 'pill-info', 'No CD': 'pill-ok',
+    'Entregue': 'pill-ok',
+    'Produzindo': 'pill-warning',
+    'cancelada': 'pill-neutral',
+    'Cancelada': 'pill-neutral',
   };
   var cls = map[st] || 'pill-neutral';
   return '<span class="pill ' + cls + '">' + (st || '—') + '</span>';
@@ -632,8 +631,8 @@ function corToColor(cor) {
 
 function renderPipeline() {
   var ops = STATE.ops;
-  var ativas = ops.filter(function(o) { return o.status !== 'concluida' && o.status !== 'Entregue'; });
-  var entregues = ops.filter(function(o) { return o.status === 'Entregue' || o.status === 'concluida'; });
+  var ativas = ops.filter(function(o) { return o.status !== 'Entregue'; });
+  var entregues = ops.filter(function(o) { return o.status === 'Entregue'; });
   var totalPecas = ativas.reduce(function(s, o) { return s + (o.qtde_pecas || 0); }, 0);
   var totalEntregues = ativas.reduce(function(s, o) { return s + (o.qtde_pecas_entregues || 0); }, 0);
   var aReceber = totalPecas - totalEntregues;
@@ -671,7 +670,7 @@ function toggleFilterKpi(key) {
   STATE.kpiFilter = (STATE.kpiFilter === key) ? null : key;
   // Quando ativa, expande todos os grupos para a pessoa ver
   if (STATE.kpiFilter) {
-    var ativas = STATE.ops.filter(function(o){return o.status !== 'Entregue' && o.status !== 'concluida';});
+    var ativas = STATE.ops.filter(function(o){return o.status !== 'Entregue';});
     ativas.forEach(function(o) {
       var p = (o.produto || o.sku_produto || 'Sem produto').trim();
       STATE.ganttExpanded[p] = true;
@@ -708,7 +707,7 @@ function weekLabel(d) {
 function renderOPsLista() {
   // Lista de Ordens mostra apenas OPs ATIVAS (Produzindo / parcial / atrasada / aguardando_tecido / tecido_enviado)
   var ops = STATE.ops.filter(function(o) {
-    return ['concluida','Entregue','cancelada'].indexOf(o.status) < 0;
+    return ['Entregue','cancelada'].indexOf(o.status) < 0;
   });
   var fSt = document.getElementById('flt-status-op').value;
   var fProd = document.getElementById('flt-produto-gantt').value;
@@ -807,7 +806,7 @@ function toggleGruposGantt(prodNome) {
 function expandTodosGantt() {
   Object.keys(STATE.ganttExpanded).forEach(function(k) { STATE.ganttExpanded[k] = true; });
   // Pegar todos os produtos ativos
-  var ativas = STATE.ops.filter(function(o) { return o.status !== 'Entregue' && o.status !== 'concluida'; });
+  var ativas = STATE.ops.filter(function(o) { return o.status !== 'Entregue'; });
   ativas.forEach(function(o) {
     var p = (o.produto || o.sku_produto || 'Sem produto').trim();
     STATE.ganttExpanded[p] = true;
@@ -832,7 +831,7 @@ function renderGantt() {
   if (fCost) ops = ops.filter(function(o) { return o.costureiro_id == fCost; });
 
   // Excluir concluídas/entregues do gantt
-  var ativas = ops.filter(function(o) { return o.status !== 'Entregue' && o.status !== 'concluida'; });
+  var ativas = ops.filter(function(o) { return o.status !== 'Entregue'; });
 
   // Aplicar filtro de KPI (se ativo)
   if (STATE.kpiFilter === 'atrasadas') {
@@ -1345,7 +1344,7 @@ function renderCostureiros() {
 }
 
 function renderPagamentos(ops, costureiros) {
-  var ativas = ops.filter(function(o) { return o.status !== 'Entregue' && o.status !== 'concluida'; });
+  var ativas = ops.filter(function(o) { return o.status !== 'Entregue'; });
   var html = ativas.map(function(o) {
     var c = costureiros.find(function(x) { return x.id === o.costureiro_id; });
     var tipoNf = c ? (c.tipo_nf || 'com_nf') : 'com_nf';
@@ -1371,7 +1370,7 @@ function renderInsumos() {
   // IDs de insumos que têm OPs ATIVAS (produzindo/parcial/etc) consumindo eles
   var insumosEmUso = {};
   (STATE.ops || []).forEach(function(op) {
-    if (op.insumo_id && ['concluida','Entregue','cancelada'].indexOf(op.status) < 0) {
+    if (op.insumo_id && ['Entregue','cancelada'].indexOf(op.status) < 0) {
       insumosEmUso[op.insumo_id] = true;
     }
   });
@@ -1627,7 +1626,7 @@ function renderHistorico() {
   (STATE.compras || []).forEach(function(c) { comprasMap[c.id] = c; });
 
   var historico = (STATE.ops || []).filter(function(o) {
-    return o.status === 'concluida' || o.status === 'cancelada' || o.status === 'Entregue';
+    return o.status === 'Entregue' || o.status === 'cancelada';
   }).map(function(o) {
     var compra = o.ordem_compra_id ? comprasMap[o.ordem_compra_id] : null;
     var insumo = o.insumo_id ? STATE.insumos.find(function(i){return i.id===o.insumo_id;}) : null;
@@ -1787,7 +1786,7 @@ function renderCustos() {
   // Agrupar OPs concluidas por SKU pai, ordenado por data desc
   var opsPorSku = {};
   (STATE.ops || []).forEach(function(o) {
-    if (o.status !== 'concluida' && o.status !== 'Entregue') return;
+    if (o.status !== 'Entregue') return;
     var sku = o.sku_produto;
     if (!sku) return;
     if (!opsPorSku[sku]) opsPorSku[sku] = [];
@@ -2764,7 +2763,7 @@ function buildEditOPForm(op) {
     var faz = (c.skus_habilitados || []).indexOf(op.sku_produto) >= 0;
     return '<option value="' + c.id + '"' + sel + '>' + c.nome + (faz ? ' ✓' : '') + '</option>';
   }).join('');
-  var statusOpts = ['Produzindo','Costureiro - Produzindo','parcial','concluida','atrasada','aguardando_tecido','Entregue'].map(function(s) {
+  var statusOpts = ['Produzindo','Entregue'].map(function(s) {
     var sel = s === op.status ? ' selected' : '';
     return '<option value="' + s + '"' + sel + '>' + s + '</option>';
   }).join('');
