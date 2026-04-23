@@ -721,9 +721,21 @@ function renderOPsLista() {
     return blob.indexOf(q) >= 0;
   });
 
+  // Filtros de KPI (ativos via clique): aplicam AQUI tambem pra lista e cronograma ficarem sincronizados
+  if (STATE.kpiFilter === 'atrasadas') {
+    ops = ops.filter(function(o) { return diasRodando(o) > 40; });
+  } else if (STATE.kpiFilter === 'sem_data') {
+    ops = ops.filter(function(o) { return !o.data_prevista_entrega && !o.data_pagamento; });
+  }
+
+  // Ordenacao desc por data de recebimento das pecas (data_prevista_entrega),
+  // com data_envio_tecido como fallback. OPs sem data vao pro fim.
   ops.sort(function(a, b) {
     var aD = a.data_prevista_entrega || a.data_envio_tecido || '';
     var bD = b.data_prevista_entrega || b.data_envio_tecido || '';
+    if (!aD && !bD) return 0;
+    if (!aD) return 1;
+    if (!bD) return -1;
     return bD.localeCompare(aD);
   });
 
@@ -854,12 +866,23 @@ function renderGantt() {
   var grupos = {};
   ativas.forEach(function(o) {
     var prod = (o.produto || o.sku_produto || 'Sem produto').trim();
-    if (!grupos[prod]) grupos[prod] = { ops: [], totalPecas: 0, totalEntregues: 0 };
+    if (!grupos[prod]) grupos[prod] = { ops: [], totalPecas: 0, totalEntregues: 0, maxPrevEntrega: null };
     grupos[prod].ops.push(o);
     grupos[prod].totalPecas += (o.qtde_pecas || 0);
     grupos[prod].totalEntregues += (o.qtde_pecas_entregues || 0);
+    var dt = o.data_prevista_entrega || o.data_envio_tecido || null;
+    if (dt && (!grupos[prod].maxPrevEntrega || dt > grupos[prod].maxPrevEntrega)) {
+      grupos[prod].maxPrevEntrega = dt;
+    }
   });
-  var gruposSorted = Object.entries(grupos).sort(function(a, b) { return b[1].totalPecas - a[1].totalPecas; });
+  // Ordenacao desc por data de recebimento das pecas. Grupos sem data vao pro fim.
+  var gruposSorted = Object.entries(grupos).sort(function(a, b) {
+    var aD = a[1].maxPrevEntrega, bD = b[1].maxPrevEntrega;
+    if (!aD && !bD) return b[1].totalPecas - a[1].totalPecas;
+    if (!aD) return 1;
+    if (!bD) return -1;
+    return bD.localeCompare(aD);
+  });
 
   // ── Header semanas ──
   var monthLabels = {};
@@ -944,8 +967,15 @@ function renderGantt() {
       if (fimDate && (!sg.maiorFim || fimDate > sg.maiorFim)) sg.maiorFim = fimDate;
     });
 
-    // Ordenar subgrupos por totalPecas desc
-    var sgArr = Object.values(subgrupos).sort(function(a,b){return b.totalPecas - a.totalPecas;});
+    // Ordenar subgrupos por data de recebimento das pecas desc (maiorFim).
+    // Fallback pra totalPecas quando nao houver data. Sem-data vai pro fim.
+    var sgArr = Object.values(subgrupos).sort(function(a,b){
+      var aD = a.maiorFim, bD = b.maiorFim;
+      if (!aD && !bD) return b.totalPecas - a.totalPecas;
+      if (!aD) return 1;
+      if (!bD) return -1;
+      return bD - aD;
+    });
 
     var opRows = sgArr.map(function(sg) {
       var pecas = Math.round(sg.totalPecas);
