@@ -8,7 +8,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
 :root{--bg:#09090b;--bg2:#111113;--bg3:#1a1a1e;--bdr:#2a2a2e;--bdr-hover:#3f3f46;
-  --txt1:#fafafa;--txt2:#a1a1aa;--txt3:#71717a;--txt4:#52525b;
+  --txt1:#fafafa;--txt2:#d4d4d8;--txt3:#a1a1aa;--txt4:#71717a;
   --indigo:#6366f1;--green:#4ade80;--red:#f87171;--amber:#facc15;--orange:#fb923c;--purple:#a78bfa;--cyan:#22d3ee;--pink:#ec4899;}
 *{margin:0;padding:0;box-sizing:border-box;font-family:'Inter',sans-serif;}
 body{background:var(--bg);color:var(--txt1);min-height:100vh;}
@@ -39,15 +39,19 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
 
 /* ── KPIs ── */
 .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:24px;}
-.kpi{background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;padding:18px;position:relative;overflow:hidden;transition:transform 0.2s,box-shadow 0.2s;}
+.kpi{background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;padding:18px;position:relative;overflow:hidden;transition:transform 0.2s,box-shadow 0.2s,border-color 0.2s;}
 .kpi:hover{transform:translateY(-2px);box-shadow:0 4px 20px rgba(0,0,0,0.3);}
+.kpi.clickable{cursor:pointer;}
+.kpi.clickable:hover{border-color:var(--kpi-accent,var(--indigo));}
+.kpi.active{border-color:var(--kpi-accent,var(--indigo));box-shadow:0 0 0 2px var(--kpi-accent,var(--indigo)),0 4px 20px rgba(99,102,241,0.2);}
+.kpi.active::after{content:'✓ filtro ativo';position:absolute;top:6px;right:10px;font-size:9px;font-weight:700;color:var(--kpi-accent,var(--indigo));text-transform:uppercase;letter-spacing:0.05em;}
 .kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--kpi-accent,var(--indigo));opacity:0.7;}
 .kpi-lbl{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--txt3);margin-bottom:8px;}
 .kpi-val{font-size:1.5rem;font-weight:800;color:var(--txt1);line-height:1;font-variant-numeric:tabular-nums;}
 .kpi-sub{font-size:12px;color:var(--txt3);margin-top:6px;}
 
 /* ── Cards ── */
-.card{background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;overflow:hidden;margin-bottom:16px;}
+.card{background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;overflow:visible;margin-bottom:16px;}
 .card-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--bdr);}
 .card-title{font-size:15px;font-weight:600;color:var(--txt1);}
 .card-title small{font-size:12px;font-weight:400;color:var(--txt3);margin-left:8px;}
@@ -56,7 +60,22 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
 .chart-wrap{position:relative;height:280px;}
 
 /* ── Gantt Timeline ── */
-.gantt-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--bdr);border-radius:10px;background:var(--bg);}
+.gantt-wrap{position:relative;}
+.gantt-scroll{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;border:1px solid var(--bdr);border-radius:0 0 10px 10px;border-top:none;background:var(--bg);scrollbar-width:none;}
+.gantt-scroll::-webkit-scrollbar{display:none;}
+
+/* Scrollbar + header de semanas sticky na página */
+.gantt-sticky-head{position:sticky;top:64px;z-index:20;background:var(--bg);}
+.gantt-scroll-top{overflow-x:scroll;overflow-y:hidden;height:16px;border:1px solid var(--bdr);border-bottom:none;border-radius:10px 10px 0 0;background:var(--bg2);scrollbar-width:auto;scrollbar-color:var(--indigo) var(--bg3);}
+.gantt-scroll-top::-webkit-scrollbar{height:14px;background:var(--bg3);}
+.gantt-scroll-top::-webkit-scrollbar-thumb{background:var(--indigo);border-radius:7px;border:2px solid var(--bg3);min-width:60px;}
+.gantt-scroll-top::-webkit-scrollbar-thumb:hover{background:#818cf8;}
+.gantt-scroll-top::-webkit-scrollbar-track{background:var(--bg3);border-radius:7px;}
+.gantt-scroll-top .scroll-ghost{height:1px;}
+
+/* Header externo de semanas (espelho do g-header) */
+.gantt-weeks-header-wrap{overflow-x:hidden;border-left:1px solid var(--bdr);border-right:1px solid var(--bdr);background:var(--bg2);}
+
 .gantt-inner{min-width:max-content;position:relative;}
 
 /* Header semanas */
@@ -68,13 +87,27 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
 
 /* Grupo de produto */
 .g-group{border-bottom:1px solid var(--bdr);}
-.g-group-header{display:flex;position:sticky;left:0;z-index:5;background:var(--bg3);border-bottom:1px solid rgba(255,255,255,0.06);cursor:pointer;}
-.g-group-header:hover{background:rgba(99,102,241,0.06);}
-.g-group-label{position:sticky;left:0;z-index:6;min-width:200px;max-width:200px;padding:10px 14px;display:flex;align-items:center;gap:10px;background:inherit;border-right:1px solid var(--bdr);}
-.g-group-name{font-size:13px;font-weight:700;color:var(--txt1);}
-.g-group-badge{font-size:10px;font-weight:600;padding:2px 8px;border-radius:9px;background:rgba(99,102,241,0.15);color:var(--indigo);}
-.g-group-stats{flex:1;display:flex;align-items:center;gap:16px;padding:0 14px;font-size:11px;color:var(--txt3);}
-.g-group-stats strong{color:var(--txt2);}
+.g-group-header{display:flex;position:sticky;left:0;z-index:5;background:linear-gradient(to right, var(--bg3), var(--bg3) 60%, rgba(26,26,30,0.95));border-bottom:1px solid rgba(255,255,255,0.08);cursor:pointer;user-select:none;min-height:52px;transition:background 0.15s;}
+.g-group-header:hover{background:linear-gradient(to right, rgba(99,102,241,0.1), rgba(99,102,241,0.06));}
+.g-group-toggle{color:var(--txt2);font-size:10px;transition:transform 0.15s;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;flex-shrink:0;}
+.g-group-header.expanded .g-group-toggle{transform:rotate(90deg);}
+.g-group.collapsed .g-row{display:none;}
+.g-cores-summary-wrap{display:flex;background:rgba(255,255,255,0.02);border-bottom:1px solid rgba(255,255,255,0.03);min-height:40px;}
+.g-cores-summary-label{position:sticky;left:0;z-index:4;min-width:220px;max-width:220px;background:var(--bg2);border-right:1px solid var(--bdr);}
+.g-cores-summary{display:flex;flex-wrap:wrap;gap:6px;padding:8px 14px;align-items:center;position:sticky;left:220px;z-index:3;width:max-content;max-width:calc(100vw - 240px);}
+.g-group.expanded .g-cores-summary{display:none;}
+.g-cor-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 8px 3px 5px;border-radius:5px;background:var(--bg3);border:1px solid var(--bdr);font-size:11px;}
+.g-cor-chip-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0;}
+.g-cor-chip-nome{color:var(--txt2);font-weight:600;}
+.g-cor-chip-qtd{color:var(--txt1);font-weight:700;margin-left:2px;}
+.g-cor-chip-pct{color:var(--txt3);font-size:10px;margin-left:2px;}
+.g-group-label{position:sticky;left:0;z-index:6;min-width:220px;max-width:220px;padding:10px 14px;display:flex;align-items:center;gap:8px;background:var(--bg3);border-right:1px solid var(--bdr);}
+.g-group-name{font-size:13px;font-weight:700;color:var(--txt1);line-height:1.2;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.g-group-badge{font-size:10px;font-weight:600;padding:2px 8px;border-radius:9px;background:rgba(99,102,241,0.15);color:var(--indigo);flex-shrink:0;}
+.g-group-stats{flex:1;display:flex;align-items:center;gap:20px;padding:0 14px;font-size:11px;color:var(--txt3);white-space:nowrap;overflow:hidden;}
+.g-group-stats > span{display:inline-flex;flex-direction:column;gap:1px;}
+.g-group-stats strong{color:var(--txt1);font-weight:700;font-size:13px;}
+.g-group-stats small{color:var(--txt3);font-size:10px;text-transform:uppercase;letter-spacing:0.04em;}
 
 /* Linha de OP individual */
 .g-row{display:flex;min-height:48px;border-bottom:1px solid rgba(255,255,255,0.025);}
@@ -119,11 +152,15 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
 .pill-neutral{background:rgba(161,161,170,0.12);color:var(--txt2);}.pill-neutral::before{background:var(--txt2);}
 .pill-purple{background:rgba(167,139,250,0.12);color:var(--purple);}.pill-purple::before{background:var(--purple);}
 
-/* ── Tables ── */
-.tb-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:0 0 12px 12px;}
-.tb-wrap-scroll{max-height:60vh;overflow:auto;-webkit-overflow-scrolling:touch;}
-table.tb{width:100%;border-collapse:collapse;font-size:13px;min-width:820px;}
-table.tb th{background:rgba(255,255,255,0.03);color:var(--txt3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;padding:10px 14px;border-bottom:1px solid var(--bdr);text-align:left;white-space:nowrap;cursor:pointer;user-select:none;}
+/* ── Tables ──
+   Best practice: para sticky thead travar ao rolar a PÁGINA, nenhum ancestral
+   pode criar um scroll container. Portanto NÃO usar overflow:auto no wrapper.
+   `border-collapse:separate` é obrigatório — `collapse` quebra sticky em Chrome/Safari. */
+.tb-wrap{border-radius:0 0 12px 12px;}
+.tb-wrap-scroll{}
+table.tb{width:100%;border-collapse:separate;border-spacing:0;font-size:13px;}
+table.tb thead th{position:sticky;top:64px;z-index:10;background:var(--bg2);box-shadow:inset 0 -1px 0 var(--bdr);}
+table.tb th{background:var(--bg2);color:var(--txt3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;padding:12px 14px;text-align:left;white-space:normal;cursor:pointer;user-select:none;vertical-align:middle;line-height:1.3;}
 table.tb th.r{text-align:right;}
 table.tb th:hover{color:var(--txt2);}
 table.tb th.sort-asc::after{content:' ↑';color:var(--indigo);}
@@ -132,6 +169,18 @@ table.tb td{padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.04);col
 table.tb td.r{text-align:right;font-variant-numeric:tabular-nums;}
 table.tb td.dim{color:var(--txt2);}
 table.tb tr:hover td{background:rgba(99,102,241,0.03);}
+
+/* Tabela do histórico — precisa de scroll horizontal (>1600px).
+   `overflow-y:clip` é moderno (Chrome 90+, FF 81+, Safari 16+): permite
+   overflow-x:auto sem criar contexto de scroll vertical — assim o thead
+   continua sticky em relação à página, não à wrapper. */
+.tb-historico-scroll{width:100%;max-width:100%;overflow-x:auto;overflow-y:clip;border:1px solid var(--bdr);border-radius:10px;-webkit-overflow-scrolling:touch;scrollbar-width:auto;scrollbar-color:var(--indigo) var(--bg3);}
+.tb-historico-scroll::-webkit-scrollbar{height:14px;background:var(--bg3);}
+.tb-historico-scroll::-webkit-scrollbar-thumb{background:var(--indigo);border-radius:7px;border:2px solid var(--bg3);min-width:60px;}
+.tb-historico-scroll::-webkit-scrollbar-thumb:hover{background:#818cf8;}
+.tb-historico-scroll::-webkit-scrollbar-track{background:var(--bg3);border-radius:7px;}
+table.tb-historico{min-width:1600px;}
+.tb-historico-scroll table.tb-historico thead th{position:sticky;top:64px;z-index:10;background:var(--bg2);box-shadow:inset 0 -1px 0 var(--bdr);}
 
 /* ── Filters ── */
 .filtros{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center;}
@@ -231,10 +280,11 @@ table.tb tr:hover td{background:rgba(99,102,241,0.03);}
   <!-- Tab Navigation -->
   <nav class="tab-nav" id="tab-nav">
     <button class="tab-btn active" data-tab="pipeline">Pipeline <span class="badge" id="badge-pipeline">0</span></button>
-    <button class="tab-btn" data-tab="costureiros">Costureiros</button>
     <button class="tab-btn" data-tab="insumos">Insumos</button>
+    <button class="tab-btn" data-tab="historico">Histórico</button>
     <button class="tab-btn" data-tab="planejamento">Planejamento</button>
     <button class="tab-btn" data-tab="custos">Custos</button>
+    <button class="tab-btn" data-tab="costureiros">Costureiros</button>
   </nav>
 
   <!-- ═══════════════ TAB: PIPELINE ═══════════════ -->
@@ -243,22 +293,53 @@ table.tb tr:hover td{background:rgba(99,102,241,0.03);}
       <div class="kpi"><div class="kpi-lbl">Carregando...</div><div class="spin"></div></div>
     </div>
 
-    <div class="card">
-      <div class="card-header">
-        <span class="card-title">Cronograma de Produção<small id="op-count"></small></span>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <button class="btnf ghost" onclick="exportCSV('op')">CSV</button>
-          <button class="btnf" onclick="openDrawer('nova-op')">+ Nova OP</button>
+    <div class="card" style="overflow:visible">
+      <div class="gantt-sticky-head">
+        <div class="card-header">
+          <span class="card-title">Cronograma de Produção<small id="op-count"></small></span>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btnf ghost" onclick="exportCSV('op')">CSV</button>
+            <button class="btnf" onclick="openDrawer('nova-op')">+ Nova OP</button>
+          </div>
+        </div>
+        <div style="padding:12px;">
+          <div class="gantt-filters" style="margin-bottom:12px">
+            <select id="flt-produto-gantt" class="dselect" onchange="renderGantt();renderOPsLista()"><option value="">Todos produtos</option></select>
+            <select id="flt-costureiro-gantt" class="dselect" onchange="renderGantt();renderOPsLista()"><option value="">Todos costureiros</option></select>
+            <select id="flt-status-op" class="dselect" onchange="renderGantt();renderOPsLista()"><option value="">Todos status</option></select>
+            <button class="btnf ghost" onclick="document.getElementById('flt-produto-gantt').value='';document.getElementById('flt-costureiro-gantt').value='';document.getElementById('flt-status-op').value='';renderGantt();renderOPsLista()">Limpar</button>
+            <span style="margin-left:auto;display:flex;gap:4px;">
+              <button class="btnf ghost" onclick="expandTodosGantt()" style="font-size:11px;padding:6px 10px;">Expandir tudo</button>
+              <button class="btnf ghost" onclick="colapsarTodosGantt()" style="font-size:11px;padding:6px 10px;">Colapsar tudo</button>
+            </span>
+          </div>
+          <div class="gantt-scroll-top" id="gantt-scroll-top"><div class="scroll-ghost"></div></div>
+          <div class="gantt-weeks-header-wrap" id="gantt-weeks-header-wrap"></div>
         </div>
       </div>
-      <div class="card-body" style="padding:12px;">
-        <div class="gantt-filters">
-          <select id="flt-produto-gantt" class="dselect" onchange="renderGantt()"><option value="">Todos produtos</option></select>
-          <select id="flt-costureiro-gantt" class="dselect" onchange="renderGantt()"><option value="">Todos costureiros</option></select>
-          <select id="flt-status-op" class="dselect" onchange="renderGantt()"><option value="">Todos status</option></select>
-          <button class="btnf ghost" onclick="document.getElementById('flt-produto-gantt').value='';document.getElementById('flt-costureiro-gantt').value='';document.getElementById('flt-status-op').value='';renderGantt()">Limpar</button>
+      <div style="padding:0 12px 12px 12px;">
+        <div class="gantt-wrap">
+          <div class="gantt-scroll" id="gantt-scroll"></div>
         </div>
-        <div class="gantt-scroll" id="gantt-scroll"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Lista de Ordens<small id="op-list-count"></small></span>
+        <input type="text" id="flt-busca-op" class="dinput" placeholder="Buscar produto, costureiro, cor..." style="min-width:240px" oninput="renderOPsLista()">
+      </div>
+      <div class="tb-wrap tb-wrap-scroll">
+        <table class="tb"><thead><tr>
+          <th>Produto</th>
+          <th>Cor</th>
+          <th>Costureiro</th>
+          <th class="r">Peças</th>
+          <th class="r">Entregues</th>
+          <th>Recebimento</th>
+          <th>Entrega Prev.</th>
+          <th>Status</th>
+        </tr></thead><tbody id="tbody-ops-lista"></tbody></table>
       </div>
     </div>
   </div>
@@ -295,20 +376,68 @@ table.tb tr:hover td{background:rgba(99,102,241,0.03);}
         <button class="chip" data-tipo="aviamento" onclick="toggleInsumoTipo(this)">Aviamentos</button>
       </div>
       <input type="text" id="flt-insumo-busca" class="dinput" placeholder="Buscar tecido, cor..." oninput="renderInsumos()">
+      <button class="btnf ghost" style="font-size:11px;padding:6px 10px" onclick="expandirTodosInsumos()">Expandir tudo</button>
+      <button class="btnf ghost" style="font-size:11px;padding:6px 10px" onclick="colapsarTodosInsumos()">Colapsar tudo</button>
       <button class="btnf" onclick="openDrawer('novo-insumo')">+ Cadastrar Insumo</button>
     </div>
     <div class="card">
-      <div class="card-header"><span class="card-title">Estoque de Insumos<small id="insumo-count"></small></span></div>
+      <div class="card-header"><span class="card-title">Estoque de Insumos<small id="insumo-count"></small><small style="color:var(--txt3);margin-left:6px">(ordenado por NF mais recente)</small></span></div>
       <div class="tb-wrap tb-wrap-scroll">
         <table class="tb"><thead><tr>
-          <th data-sort="nome">Nome</th>
-          <th data-sort="cor">Cor</th>
-          <th class="r" data-sort="quantidade_atual">Qtde Atual</th>
-          <th>Unidade</th>
-          <th class="r" data-sort="quantidade_minima">Mínimo</th>
-          <th class="r" data-sort="valor_unitario_referencia">R$/Unid</th>
-          <th data-sort="status">Status</th>
+          <th style="width:40px"></th>
+          <th>Tecido / Cor</th>
+          <th class="r">Total</th>
+          <th class="r">Destinado</th>
+          <th class="r">Saldo</th>
+          <th>Un.</th>
+          <th>Produtos</th>
+          <th>Preço/Un.</th>
         </tr></thead><tbody id="tbody-insumos"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ TAB: HISTÓRICO ═══════════════ -->
+  <div class="tab-panel" id="panel-historico">
+    <div class="kpi-grid" id="kpis-historico"></div>
+    <div class="filtros">
+      <select id="flt-hist-status" class="dselect" onchange="renderHistorico()">
+        <option value="">Todos status</option>
+        <option value="Entregue">Entregue</option>
+        <option value="Cancelada">Cancelada</option>
+      </select>
+      <select id="flt-hist-produto" class="dselect" onchange="renderHistorico()"><option value="">Todos produtos</option></select>
+      <select id="flt-hist-fornecedor" class="dselect" onchange="renderHistorico()"><option value="">Todos fornecedores</option></select>
+      <select id="flt-hist-ano" class="dselect" onchange="renderHistorico()"><option value="">Todos anos</option></select>
+      <input type="text" id="flt-hist-busca" class="dinput" placeholder="Buscar..." oninput="renderHistorico()">
+      <button class="btnf ghost" onclick="limparFiltrosHist()">Limpar</button>
+      <button class="btnf ghost" onclick="exportHistoricoCSV()" style="margin-left:auto">CSV</button>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Histórico de Compras + Produções<small id="hist-count"></small></span>
+        <small style="color:var(--txt3)">cada linha = compra de tecido + produção correspondente</small>
+      </div>
+      <div class="tb-historico-scroll">
+        <table class="tb tb-historico">
+        <thead><tr>
+          <th>Dt. Faturamento</th>
+          <th>NF</th>
+          <th>Fornecedor</th>
+          <th>Tecido</th>
+          <th>Cor</th>
+          <th class="r">Qtde</th>
+          <th>Un.</th>
+          <th>Produto</th>
+          <th>Costureiro</th>
+          <th class="r">Projetadas</th>
+          <th class="r">Entregues</th>
+          <th class="r">Valor Tecido (NF)</th>
+          <th class="r">Custo Costureiro</th>
+          <th class="r">Total Lote</th>
+          <th class="r">Total/pç</th>
+          <th>Status</th>
+        </tr></thead><tbody id="tbody-historico"></tbody></table>
       </div>
     </div>
   </div>
@@ -374,8 +503,9 @@ var MAX_PAGES = 20;
 // ═══════════════ STATE ═══════════════
 var STATE = {
   ops: [], compras: [], costureiros: [], precos: [], cortadores: [],
-  insumos: [], consumo: [], planejamento: [], fornecedores: [],
-  tab: 'pipeline', drawerType: null
+  insumos: [], consumo: [], planejamento: [], fornecedores: [], produtos: [],
+  tab: 'pipeline', drawerType: null,
+  ganttExpanded: {}  // { sku_pai: true/false } - grupos expandidos
 };
 
 // ═══════════════ INIT ═══════════════
@@ -407,7 +537,7 @@ async function carregar() {
   try {
     var [ops, compras, costureiros, precos, insumos, consumo, planejamento, fornecedores, produtos] = await Promise.all([
       buscarTudo('ordens_producao', 'select=*&order=criado_em.desc'),
-      buscarTudo('ordens_compra', 'select=*&order=data_faturamento.desc&limit=500'),
+      buscarTudo('ordens_compra', 'select=*&order=data_faturamento.desc'),
       buscarTudo('costureiros', 'select=*&order=nome'),
       buscarTudo('costureiro_precos', 'select=*&vigencia_fim=is.null'),
       buscarTudo('estoque_insumos', 'select=*&ativo=eq.true&order=nome'),
@@ -437,14 +567,17 @@ function renderAll() {
   renderPipeline();
   renderCostureiros();
   renderInsumos();
+  renderHistorico();
   renderPlanejamento();
   renderCustos();
   populateFilters();
+  populateHistoricoFilters();
 }
 
 // ═══════════════ HELPERS ═══════════════
 function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('pt-BR'); }
 function fmtR(n) { return n == null ? '—' : 'R$ ' + Number(n).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
+function fmtR0(n) { return n == null ? '—' : 'R$ ' + Math.round(Number(n)).toLocaleString('pt-BR'); }
 function costuName(id) { var c = STATE.costureiros.find(function(x) { return x.id === id; }); return c ? c.nome : '—'; }
 function statusPill(st) {
   var map = {
@@ -497,19 +630,49 @@ function renderPipeline() {
   var semData = ativas.filter(function(o) { return !o.data_prevista_entrega && !o.data_pagamento; }).length;
 
   document.getElementById('badge-pipeline').textContent = ativas.length;
-  document.getElementById('kpis-pipeline').innerHTML = [
+  var atrasadasCount = ativas.filter(function(o){return diasRodando(o)>40;}).length;
+  var kpis = [
     kpiHtml('Ordens Ativas', ativas.length, '', '--kpi-accent:var(--indigo)'),
     kpiHtml('Peças a Receber', fmt(Math.round(aReceber)), 'pendentes dos costureiros', '--kpi-accent:var(--purple)'),
     kpiHtml('Já Entregues', fmt(Math.round(totalEntregues)), Math.round(totalPecas ? totalEntregues/totalPecas*100 : 0) + '% do total', '--kpi-accent:var(--green)'),
-    kpiHtml('Ordens >40 dias', ativas.filter(function(o){return diasRodando(o)>40;}).length, 'além do lead time', '--kpi-accent:var(--red)'),
-    kpiHtml('Sem Data Prevista', semData, semData > 0 ? 'atenção — sem previsão de entrega!' : 'todas com data', '--kpi-accent:' + (semData > 0 ? 'var(--orange)' : 'var(--green)')),
-  ].join('');
+    kpiClickable('atrasadas', 'Ordens >40 dias', atrasadasCount, 'clique para filtrar', '--kpi-accent:var(--red)'),
+    kpiClickable('sem_data', 'Sem Data Prevista', semData, semData > 0 ? 'clique para filtrar' : 'todas com data', '--kpi-accent:' + (semData > 0 ? 'var(--orange)' : 'var(--green)')),
+  ];
+  document.getElementById('kpis-pipeline').innerHTML = kpis.join('');
 
   renderGantt();
+  renderOPsLista();
 }
 
 function kpiHtml(lbl, val, sub, accent) {
   return '<div class="kpi" style="' + accent + '"><div class="kpi-lbl">' + lbl + '</div><div class="kpi-val">' + val + '</div>' + (sub ? '<div class="kpi-sub">' + sub + '</div>' : '') + '</div>';
+}
+
+function kpiClickable(filterKey, lbl, val, sub, accent) {
+  var active = STATE.kpiFilter === filterKey;
+  return '<div class="kpi clickable ' + (active?'active':'') + '" style="' + accent + '" onclick="toggleFilterKpi(\'' + filterKey + '\')">' +
+    '<div class="kpi-lbl">' + lbl + '</div>' +
+    '<div class="kpi-val">' + val + '</div>' +
+    (sub ? '<div class="kpi-sub">' + sub + '</div>' : '') +
+  '</div>';
+}
+
+function toggleFilterKpi(key) {
+  STATE.kpiFilter = (STATE.kpiFilter === key) ? null : key;
+  // Quando ativa, expande todos os grupos para a pessoa ver
+  if (STATE.kpiFilter) {
+    var ativas = STATE.ops.filter(function(o){return o.status !== 'Entregue' && o.status !== 'concluida';});
+    ativas.forEach(function(o) {
+      var p = (o.produto || o.sku_produto || 'Sem produto').trim();
+      STATE.ganttExpanded[p] = true;
+    });
+  }
+  renderPipeline();
+  // Scroll pra zona do Gantt
+  setTimeout(function() {
+    var el = document.querySelector('#panel-pipeline .gantt-scroll');
+    if (el) el.scrollIntoView({behavior:'smooth', block:'center'});
+  }, 50);
 }
 
 function diasRodando(op) {
@@ -532,6 +695,109 @@ function weekLabel(d) {
   return (dt.getDate() < 10 ? '0' : '') + dt.getDate() + '/' + (dt.getMonth() < 9 ? '0' : '') + (dt.getMonth()+1);
 }
 
+function renderOPsLista() {
+  // Lista de Ordens mostra apenas OPs ATIVAS (Produzindo / parcial / atrasada / aguardando_tecido / tecido_enviado)
+  var ops = STATE.ops.filter(function(o) {
+    return ['concluida','Entregue','cancelada'].indexOf(o.status) < 0;
+  });
+  var fSt = document.getElementById('flt-status-op').value;
+  var fProd = document.getElementById('flt-produto-gantt').value;
+  var fCost = document.getElementById('flt-costureiro-gantt').value;
+  var q = ((document.getElementById('flt-busca-op') || {}).value || '').toLowerCase();
+
+  if (fSt) ops = ops.filter(function(o) { return o.status === fSt; });
+  if (fProd) ops = ops.filter(function(o) { return (o.produto||'').trim() === fProd || o.sku_produto === fProd; });
+  if (fCost) ops = ops.filter(function(o) { return o.costureiro_id == fCost; });
+  if (q) ops = ops.filter(function(o) {
+    var blob = [(o.produto||''), (o.sku_produto||''), (o.cor||''), costuName(o.costureiro_id)].join(' ').toLowerCase();
+    return blob.indexOf(q) >= 0;
+  });
+
+  ops.sort(function(a, b) {
+    var aD = a.data_prevista_entrega || a.data_envio_tecido || '';
+    var bD = b.data_prevista_entrega || b.data_envio_tecido || '';
+    return bD.localeCompare(aD);
+  });
+
+  document.getElementById('op-list-count').textContent = ' — ' + ops.length + ' ordens';
+
+  var html = ops.map(function(o) {
+    var entregues = o.qtde_pecas_entregues || 0;
+    var pecas = o.qtde_pecas || 0;
+    var pct = pecas > 0 ? Math.round(entregues/pecas*100) : 0;
+    return '<tr style="cursor:pointer" onclick="openDrawerEdit('+o.id+')">' +
+      '<td><strong>'+(o.produto||o.sku_produto||'—')+'</strong></td>' +
+      '<td class="dim">'+((o.cor||'').trim()||'—')+'</td>' +
+      '<td>'+costuName(o.costureiro_id)+'</td>' +
+      '<td class="r">'+fmt(Math.round(pecas))+'</td>' +
+      '<td class="r">'+fmt(entregues)+' <span style="color:var(--txt3);font-size:11px">('+pct+'%)</span></td>' +
+      '<td class="dim">'+(o.data_envio_tecido?formatDate(o.data_envio_tecido):'—')+'</td>' +
+      '<td class="dim">'+(o.data_prevista_entrega?formatDate(o.data_prevista_entrega):'—')+'</td>' +
+      '<td>'+statusPill(o.status)+'</td></tr>';
+  }).join('');
+  document.getElementById('tbody-ops-lista').innerHTML = html || '<tr><td colspan="8" class="empty">Nenhuma ordem</td></tr>';
+}
+
+function scrollGantt(dx) {
+  var el = document.getElementById('gantt-scroll');
+  if (el) el.scrollBy({ left: dx, behavior: 'smooth' });
+}
+
+// Sincroniza scroll entre: scrollbar top, header de semanas (fora) e gantt-scroll (body)
+function sincronizarScrollbars() {
+  var topBar = document.getElementById('gantt-scroll-top');
+  var weeksWrap = document.getElementById('gantt-weeks-header-wrap');
+  var main = document.getElementById('gantt-scroll');
+  if (!topBar || !main) return;
+
+  topBar.style.display = '';
+
+  var inner = main.querySelector('.gantt-inner');
+  if (inner) {
+    var w = inner.scrollWidth;
+    var ghost = topBar.querySelector('.scroll-ghost');
+    if (ghost) ghost.style.width = w + 'px';
+  }
+
+  // Sincronia tripla
+  if (!topBar.dataset.synced) {
+    topBar.dataset.synced = '1';
+    var syncing = false;
+    function syncFrom(src) {
+      if (syncing) return;
+      syncing = true;
+      if (src !== topBar) topBar.scrollLeft = src.scrollLeft;
+      if (src !== weeksWrap && weeksWrap) weeksWrap.scrollLeft = src.scrollLeft;
+      if (src !== main) main.scrollLeft = src.scrollLeft;
+      syncing = false;
+    }
+    topBar.addEventListener('scroll', function(){syncFrom(topBar);});
+    if (weeksWrap) weeksWrap.addEventListener('scroll', function(){syncFrom(weeksWrap);});
+    main.addEventListener('scroll', function(){syncFrom(main);});
+  }
+}
+
+function toggleGruposGantt(prodNome) {
+  STATE.ganttExpanded[prodNome] = !STATE.ganttExpanded[prodNome];
+  renderGantt();
+}
+
+function expandTodosGantt() {
+  Object.keys(STATE.ganttExpanded).forEach(function(k) { STATE.ganttExpanded[k] = true; });
+  // Pegar todos os produtos ativos
+  var ativas = STATE.ops.filter(function(o) { return o.status !== 'Entregue' && o.status !== 'concluida'; });
+  ativas.forEach(function(o) {
+    var p = (o.produto || o.sku_produto || 'Sem produto').trim();
+    STATE.ganttExpanded[p] = true;
+  });
+  renderGantt();
+}
+
+function colapsarTodosGantt() {
+  STATE.ganttExpanded = {};
+  renderGantt();
+}
+
 function renderGantt() {
   var ops = STATE.ops.slice();
 
@@ -545,10 +811,23 @@ function renderGantt() {
 
   // Excluir concluídas/entregues do gantt
   var ativas = ops.filter(function(o) { return o.status !== 'Entregue' && o.status !== 'concluida'; });
-  document.getElementById('op-count').textContent = ' — ' + ativas.length + ' ordens ativas';
+
+  // Aplicar filtro de KPI (se ativo)
+  if (STATE.kpiFilter === 'atrasadas') {
+    ativas = ativas.filter(function(o) { return diasRodando(o) > 40; });
+  } else if (STATE.kpiFilter === 'sem_data') {
+    ativas = ativas.filter(function(o) { return !o.data_prevista_entrega && !o.data_pagamento; });
+  }
+
+  var filtroLabel = STATE.kpiFilter === 'atrasadas' ? ' (filtro: atrasadas >40d)' :
+                    STATE.kpiFilter === 'sem_data' ? ' (filtro: sem data prevista)' : '';
+  document.getElementById('op-count').textContent = ' — ' + ativas.length + ' ordens ativas' + filtroLabel;
 
   if (!ativas.length) {
     document.getElementById('gantt-scroll').innerHTML = '<div class="g-empty">Nenhuma ordem ativa encontrada</div>';
+    var topBar = document.getElementById('gantt-scroll-top');
+    if (topBar) topBar.style.display = 'none';
+    return;
     return;
   }
 
@@ -593,79 +872,185 @@ function renderGantt() {
     var pendente = Math.round(grupo.totalPecas - grupo.totalEntregues);
     var numOps = grupo.ops.length;
 
-    // Group header
-    var ghLabel = '<div class="g-group-label"><span class="g-group-name">' + prodNome + '</span><span class="g-group-badge">' + numOps + ' OP' + (numOps>1?'s':'') + '</span></div>';
-    var ghStats = '<div class="g-group-stats"><span><strong>' + fmt(Math.round(grupo.totalPecas)) + '</strong> peças total</span>' +
-      '<span><strong>' + fmt(Math.round(grupo.totalEntregues)) + '</strong> entregues</span>' +
-      '<span style="color:' + (pendente > 0 ? 'var(--amber)' : 'var(--green)') + '"><strong>' + fmt(pendente) + '</strong> a receber</span></div>';
-    var groupHeader = '<div class="g-group-header">' + ghLabel + ghStats + '</div>';
+    // Group header (expandivel, dropdown style)
+    var expanded = STATE.ganttExpanded[prodNome] === true;
+    var ghLabel = '<div class="g-group-label">' +
+      '<span class="g-group-toggle">▶</span>' +
+      '<span class="g-group-name">' + prodNome + '</span>' +
+      '<span class="g-group-badge">' + numOps + '</span>' +
+    '</div>';
+    var ghStats = '<div class="g-group-stats">' +
+      '<span><strong>' + fmt(Math.round(grupo.totalPecas)) + '</strong><small>total</small></span>' +
+      '<span><strong style="color:var(--green)">' + fmt(Math.round(grupo.totalEntregues)) + '</strong><small>entregues</small></span>' +
+      '<span><strong style="color:' + (pendente > 0 ? 'var(--amber)' : 'var(--green)') + '">' + fmt(pendente) + '</strong><small>a receber</small></span>' +
+    '</div>';
+    var groupHeader = '<div class="g-group-header' + (expanded ? ' expanded' : '') + '" onclick="toggleGruposGantt(\'' + prodNome.replace(/'/g, "\\'") + '\')">' + ghLabel + ghStats + '</div>';
 
-    // Rows individuais por OP (cada cor = uma linha)
-    var opRows = grupo.ops.map(function(o) {
-      var cor = (o.cor || '').trim();
-      var corColor = corToColor(cor);
-      var pecas = Math.round(o.qtde_pecas || 0);
-      var entregues = Math.round(o.qtde_pecas_entregues || 0);
-      var pendOp = pecas - entregues;
-      var costureiro = costuName(o.costureiro_id);
+    // Consolidar por cor (summary quando colapsado)
+    var coresAgg = {};
+    grupo.ops.forEach(function(o) {
+      var c = (o.cor || '—').trim().toUpperCase() || '—';
+      if (!coresAgg[c]) coresAgg[c] = { pecas: 0, entregues: 0, pendentes: 0, ops: 0 };
+      var pecas = o.qtde_pecas || 0;
+      var ent = o.qtde_pecas_entregues || 0;
+      coresAgg[c].pecas += pecas;
+      coresAgg[c].entregues += ent;
+      coresAgg[c].pendentes += (pecas - ent);
+      coresAgg[c].ops += 1;
+    });
+    var coresSorted = Object.entries(coresAgg).sort(function(a,b){return b[1].pendentes - a[1].pendentes;});
+    var coresSummary = '<div class="g-cores-summary-wrap">' +
+      '<div class="g-cores-summary-label"></div>' +
+      '<div class="g-cores-summary">' + coresSorted.map(function(e) {
+        var cor = e[0], d = e[1];
+        var pctEnt = d.pecas > 0 ? Math.round(d.entregues / d.pecas * 100) : 0;
+        return '<span class="g-cor-chip" title="' + cor + ' — ' + d.ops + ' OP(s), ' + fmt(Math.round(d.pecas)) + ' projetadas, ' + fmt(Math.round(d.entregues)) + ' entregues">' +
+          '<span class="g-cor-chip-dot" style="background:' + corToColor(cor) + '"></span>' +
+          '<span class="g-cor-chip-nome">' + cor + '</span>' +
+          '<span class="g-cor-chip-qtd">' + fmt(Math.round(d.pendentes)) + '</span>' +
+          '<span class="g-cor-chip-pct">pend.</span>' +
+        '</span>';
+      }).join('') + '</div>' +
+    '</div>';
+
+    // Consolidar OPs por (costureiro_id + semana de envio) — OPs com datas próximas no mesmo costureiro = 1 linha
+    var subgrupos = {};
+    grupo.ops.forEach(function(o) {
+      var inicio = o.data_envio_tecido || o.data_pagamento || (o.criado_em && o.criado_em.slice(0,10)) || '';
+      var semKey = inicio ? getWeekStart(new Date(inicio)).toISOString().slice(0,10) : 'sem-data';
+      var key = (o.costureiro_id || 'none') + '__' + semKey;
+      if (!subgrupos[key]) {
+        subgrupos[key] = {
+          costureiro_id: o.costureiro_id, costureiro: costuName(o.costureiro_id),
+          ops: [], totalPecas: 0, totalEntregues: 0, menorInicio: null, maiorFim: null,
+        };
+      }
+      var sg = subgrupos[key];
+      sg.ops.push(o);
+      sg.totalPecas += (o.qtde_pecas || 0);
+      sg.totalEntregues += (o.qtde_pecas_entregues || 0);
+      var iniDate = inicio ? new Date(inicio) : null;
+      var fimDate = o.data_prevista_entrega ? new Date(o.data_prevista_entrega)
+                  : (iniDate ? new Date(iniDate.getTime() + 40*86400000) : null);
+      if (iniDate && (!sg.menorInicio || iniDate < sg.menorInicio)) sg.menorInicio = iniDate;
+      if (fimDate && (!sg.maiorFim || fimDate > sg.maiorFim)) sg.maiorFim = fimDate;
+    });
+
+    // Ordenar subgrupos por totalPecas desc
+    var sgArr = Object.values(subgrupos).sort(function(a,b){return b.totalPecas - a.totalPecas;});
+
+    var opRows = sgArr.map(function(sg) {
+      var pecas = Math.round(sg.totalPecas);
+      var entregues = Math.round(sg.totalEntregues);
+      var pendente = pecas - entregues;
       var pctEnt = pecas > 0 ? Math.round(entregues / pecas * 100) : 0;
-      var envioData = o.data_envio_tecido || null;
+
+      var envioData = sg.menorInicio ? sg.menorInicio.toISOString().slice(0,10) : null;
       var envioLabel = envioData ? formatDate(envioData) : '<span style="color:var(--orange)">—</span>';
-      var prevData = o.data_prevista_entrega || null;
+      var prevData = sg.maiorFim ? sg.maiorFim.toISOString().slice(0,10) : null;
       var prevLabel = prevData ? formatDate(prevData) : '<span style="color:var(--orange)">—</span>';
+
+      // Agregar cores dentro do subgrupo
+      var coresAgg = {};
+      sg.ops.forEach(function(o) {
+        var c = (o.cor || '—').trim().toUpperCase() || '—';
+        if (!coresAgg[c]) coresAgg[c] = { pecas: 0, entregues: 0, ops: [] };
+        coresAgg[c].pecas += (o.qtde_pecas || 0);
+        coresAgg[c].entregues += (o.qtde_pecas_entregues || 0);
+        coresAgg[c].ops.push(o);
+      });
+      var coresArr = Object.entries(coresAgg).sort(function(a,b){return b[1].pecas - a[1].pecas;});
+      var numCores = coresArr.length;
+      var numOps = sg.ops.length;
+
+      // Dias rodando baseado na menor data de envio
+      var dias = envioData ? Math.floor((hoje - sg.menorInicio) / 86400000) : 0;
+      var isLate = dias > 40 && entregues < pecas;
 
       // Cells background
       var cellsHtml = semanas.map(function(s) {
         return '<div class="g-cell' + (s.getTime()===semanaHoje.getTime()?' now':'') + '" style="width:'+COL_W+'px"></div>';
       }).join('');
 
-      // Calcular posicao da barra
-      var inicio = new Date(o.data_envio_tecido || o.data_pagamento || o.criado_em || hoje);
-      var fim = o.data_prevista_entrega ? new Date(o.data_prevista_entrega) : new Date(inicio.getTime() + 40*86400000);
+      // Posição da barra (usando menor-inicio/maior-fim)
+      var inicio = sg.menorInicio ? new Date(sg.menorInicio) : new Date(hoje);
+      var fim = sg.maiorFim ? new Date(sg.maiorFim) : new Date(inicio.getTime() + 40*86400000);
       if (inicio < inicioRange) inicio = new Date(inicioRange);
-
       var leftPx = Math.max(0, Math.round((inicio - inicioRange) / 86400000 / 7 * COL_W));
       var widthPx = Math.max(24, Math.round((fim - inicio) / 86400000 / 7 * COL_W));
       if (leftPx + widthPx > totalW) widthPx = totalW - leftPx;
 
-      var dias = diasRodando(o);
-      var isLate = dias > 40;
+      // Barra segmentada por cor (proporcional às peças) — com nome+qtde quando couber
+      var totalSeg = pecas || 1;
+      var segmentsHtml = coresArr.map(function(e) {
+        var cor = e[0];
+        var qtdSeg = Math.round(e[1].pecas);
+        var pctSeg = e[1].pecas / totalSeg * 100;
+        // Calcula largura aproximada em pixels desse segmento
+        var larguraPx = widthPx * (pctSeg / 100);
+        var txt = '';
+        if (larguraPx >= 120) txt = cor + ' · ' + fmt(qtdSeg);
+        else if (larguraPx >= 60) txt = fmt(qtdSeg);
+        return '<div style="flex:'+e[1].pecas+';background:'+corToColor(cor)+';display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;overflow:hidden;white-space:nowrap;text-shadow:0 1px 2px rgba(0,0,0,0.7)" title="'+cor+': '+fmt(qtdSeg)+' pç">' + txt + '</div>';
+      }).join('');
 
-      // Texto da barra
-      var barLabel = fmt(pecas) + 'pç';
-      if (entregues > 0) barLabel = fmt(entregues) + '/' + fmt(pecas) + ' (' + pctEnt + '%)';
+      var tituloTooltip = prodNome + ' — ' + sg.costureiro + '\n' +
+        coresArr.map(function(e){return e[0]+': '+fmt(Math.round(e[1].pecas))+' pç';}).join('\n');
+      var barHtml = '<div class="g-bar" style="left:'+leftPx+'px;width:'+widthPx+'px;background:var(--bg3);padding:0;display:flex;overflow:hidden;' + (isLate?'outline:2px solid var(--red);':'') + '" ' +
+        'onclick="event.stopPropagation();abrirSubgrupoOps(\''+(sg.ops.map(function(o){return o.id;}).join(',')).replace(/"/g,'')+'\')" ' +
+        'title="'+tituloTooltip+'">' +
+        segmentsHtml +
+        (pctEnt > 0 ? '<div class="g-bar-fill" style="width:'+pctEnt+'%;"></div>' : '') +
+      '</div>';
 
-      var barHtml = '<div class="g-bar" style="left:'+leftPx+'px;width:'+widthPx+'px;background:'+corColor+(isLate?';outline:2px solid var(--red)':'')+'" ' +
-        'onclick="event.stopPropagation();openDrawerEdit('+o.id+')" ' +
-        'title="'+prodNome+' — '+cor+'\nCostureiro: '+costureiro+'\nPrevisão: '+(prevData||'SEM DATA')+'\n'+fmt(pecas)+' peças ('+entregues+' entregues)\n'+dias+' dias rodando">' +
-        (pctEnt > 0 ? '<div class="g-bar-fill" style="width:'+pctEnt+'%"></div>' : '') +
-        '<span class="g-bar-lbl">'+barLabel+'</span></div>';
+      // Label da linha com dots para cada cor
+      var corDots = coresArr.slice(0, 4).map(function(e) {
+        return '<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:'+corToColor(e[0])+';" title="'+e[0]+'"></span>';
+      }).join('');
+      if (numCores > 4) corDots += '<span style="color:var(--txt3);font-size:10px;margin-left:2px">+'+(numCores-4)+'</span>';
 
-      return '<div class="g-row"><div class="g-row-label" title="'+costureiro+' — '+(cor||'—')+'\nOP: '+(envioData||'—')+'\nEntrega: '+(prevData||'—')+'">' +
-        '<div class="g-row-cor" style="background:'+corColor+'"></div>' +
-        '<div class="g-row-info">' +
-          '<div class="g-row-costureiro">'+costureiro+' <span style="color:var(--txt3);font-weight:500;font-size:11px">· '+(cor||'—')+'</span></div>' +
-          '<div class="g-row-datas"><span>OP: <strong>'+envioLabel+'</strong></span><span class="arrow">·</span><span>ENTREGA: <strong>'+prevLabel+'</strong></span></div>' +
+      var coresLabel = numCores === 1
+        ? coresArr[0][0]
+        : numCores + ' cores';
+      var qtdLabel = fmt(pecas) + 'pç';
+
+      return '<div class="g-row" title="'+tituloTooltip+'">' +
+        '<div class="g-row-label">' +
+          '<div style="display:flex;gap:2px;flex-shrink:0;align-items:center">'+corDots+'</div>' +
+          '<div class="g-row-info">' +
+            '<div class="g-row-costureiro">'+sg.costureiro+' <span style="color:var(--txt3);font-weight:500;font-size:11px;font-variant-numeric:tabular-nums">· '+coresLabel+' · '+qtdLabel+'</span></div>' +
+            '<div class="g-row-datas"><span>OP: <strong>'+envioLabel+'</strong></span><span class="arrow">·</span><span>ENTREGA: <strong>'+prevLabel+'</strong></span></div>' +
+          '</div>' +
+          (isLate ? '<div class="g-row-late">'+dias+'d</div>' : '') +
         '</div>' +
-        (isLate ? '<div class="g-row-late">'+dias+'d</div>' : '') +
-        '</div>' +
-        '<div class="g-row-bars" style="width:'+totalW+'px;position:relative">'+cellsHtml+barHtml+'</div></div>';
+        '<div class="g-row-bars" style="width:'+totalW+'px;position:relative">'+cellsHtml+barHtml+'</div>' +
+      '</div>';
     }).join('');
 
-    return '<div class="g-group">' + groupHeader + opRows + '</div>';
+    return '<div class="g-group' + (expanded ? ' expanded' : ' collapsed') + '">' + groupHeader + coresSummary + opRows + '</div>';
   }).join('');
 
   // Linha do hoje
   var todayPx = Math.round((hoje - inicioRange) / 86400000 / 7 * COL_W) + 200; // +200 pra compensar label col
 
+  // Header de semanas: fora do gantt-scroll, sticky na página
+  var weeksWrap = document.getElementById('gantt-weeks-header-wrap');
+  if (weeksWrap) {
+    weeksWrap.innerHTML = '<div class="gantt-inner">' + headerHtml + '</div>';
+  }
+
+  // Body: só conteúdo (sem header)
   document.getElementById('gantt-scroll').innerHTML =
-    '<div class="gantt-inner">' + headerHtml + '<div style="position:relative">' +
+    '<div class="gantt-inner"><div style="position:relative">' +
     '<div class="g-today" style="left:'+todayPx+'px"></div>' +
     bodyHtml + '</div></div>';
 
-  // Scroll para semana atual
+  // Sincronizar scroll horizontal entre scrollbar-top + weeks-header + body
+  sincronizarScrollbars();
+
+  // Scroll sempre começa pela esquerda
   var el = document.getElementById('gantt-scroll');
-  el.scrollLeft = Math.max(0, todayPx - 300);
+  el.scrollLeft = 0;
 }
 
 function formatDate(d) {
@@ -673,6 +1058,174 @@ function formatDate(d) {
   var parts = String(d).slice(0, 10).split('-');
   if (parts.length !== 3) return d;
   return parts[2] + '/' + parts[1];
+}
+
+// Abre um drawer listando as OPs do subgrupo (cor) para o usuario escolher qual editar ou registrar entrega
+function abrirSubgrupoOps(idsCsv) {
+  var ids = (idsCsv || '').split(',').map(function(s){return parseInt(s);}).filter(Boolean);
+  if (!ids.length) return;
+
+  STATE.drawerType = 'escolher-op';
+  document.getElementById('drawer-title').textContent = ids.length === 1 ? 'OP — ações' : 'OPs consolidadas';
+
+  var ops = ids.map(function(id){return STATE.ops.find(function(o){return o.id===id;});}).filter(Boolean);
+  var html = '<div style="display:flex;flex-direction:column;gap:8px">' + ops.map(function(o) {
+    var cor = (o.cor || '—').trim();
+    var pecas = Math.round(o.qtde_pecas || 0);
+    var entregues = Math.round(o.qtde_pecas_entregues || 0);
+    var pendente = pecas - entregues;
+    var pct = pecas > 0 ? Math.round(entregues/pecas*100) : 0;
+    var prevData = o.data_prevista_entrega ? formatDate(o.data_prevista_entrega) : '—';
+    return '<div style="padding:14px;background:var(--bg3);border:1px solid var(--bdr);border-radius:10px;">' +
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">' +
+        '<span style="width:16px;height:16px;border-radius:3px;background:'+corToColor(cor)+';flex-shrink:0"></span>' +
+        '<div style="flex:1">' +
+          '<div style="font-weight:700;color:var(--txt1);font-size:14px">'+cor+'</div>' +
+          '<div style="font-size:11px;color:var(--txt3);margin-top:2px">OP #'+o.id+' · '+fmt(pecas)+' pç projetadas · Entrega prev: '+prevData+'</div>' +
+        '</div>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">' +
+        '<div style="flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden;"><div style="width:'+pct+'%;height:100%;background:var(--green)"></div></div>' +
+        '<span style="font-size:11px;font-weight:700;color:var(--txt2);min-width:90px;text-align:right">'+fmt(entregues)+' / '+fmt(pecas)+' ('+pct+'%)</span>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px">' +
+        (pendente > 0 ? '<button type="button" class="btnf" style="flex:1;background:var(--green);color:#000" onclick="abrirRegistrarEntrega('+o.id+')">📦 Registrar entrega</button>' : '') +
+        '<button type="button" class="btnf ghost" style="flex:1" onclick="openDrawerEdit('+o.id+')">Editar OP</button>' +
+      '</div>' +
+    '</div>';
+  }).join('') + '</div>';
+
+  document.getElementById('drawer-body').innerHTML = html;
+  document.getElementById('drawer-footer').style.display = 'none';
+  document.getElementById('drawer-overlay').classList.add('open');
+}
+
+// Drawer para registrar entrega parcial
+function abrirRegistrarEntrega(opId) {
+  var op = STATE.ops.find(function(o){return o.id===opId;});
+  if (!op) return;
+
+  STATE.drawerType = 'registrar-entrega';
+  STATE.entregaOp = op;
+
+  var cor = (op.cor || '—').trim();
+  var pecas = op.qtde_pecas || 0;
+  var jaEntregues = op.qtde_pecas_entregues || 0;
+  var pendente = pecas - jaEntregues;
+
+  // Grade: mostra tamanhos com saldo pendente
+  var gradeProj = op.grade_projetada || {};
+  var gradeEnt = op.grade_entregue || {};
+  var tamanhos = Object.keys(gradeProj);
+  if (!tamanhos.length) tamanhos = tamanhosDoSKU(op.sku_produto);
+
+  var gradeInputs = tamanhos.map(function(t) {
+    var proj = gradeProj[t] || 0;
+    var ent = gradeEnt[t] || 0;
+    var pend = proj - ent;
+    return '<div class="grade-cell">' +
+      '<label>' + t + '</label>' +
+      '<input type="number" min="0" max="' + pend + '" data-tamanho="' + t + '" class="grade-input-ent" value="0" oninput="atualizarEntregaTotal()">' +
+      '<div style="font-size:9px;color:var(--txt3);text-align:center;margin-top:2px">pend: '+pend+'</div>' +
+    '</div>';
+  }).join('');
+
+  document.getElementById('drawer-title').textContent = 'Registrar entrega — ' + cor;
+  document.getElementById('drawer-body').innerHTML =
+    '<div style="padding:12px;background:var(--bg);border-radius:8px;margin-bottom:16px;font-size:12px;color:var(--txt2)">' +
+      '<div style="font-weight:700;color:var(--txt1);margin-bottom:4px">' + (op.produto || '') + ' — ' + cor + '</div>' +
+      '<div>OP #' + op.id + ' · Costureiro: ' + costuName(op.costureiro_id) + '</div>' +
+      '<div style="margin-top:6px">Já entregue: <strong>' + fmt(jaEntregues) + '</strong> / ' + fmt(pecas) + ' · <span style="color:var(--amber)">Pendente: ' + fmt(pendente) + '</span></div>' +
+    '</div>' +
+    '<div class="form-group"><label class="form-label">Data da entrega</label>' +
+      '<input type="date" class="form-input" id="f-ent-data" value="' + new Date().toISOString().slice(0,10) + '"></div>' +
+    '<div class="form-group"><label class="form-label">Quantidade por tamanho</label>' +
+      '<div class="grade-grid">' + gradeInputs + '</div>' +
+      '<div class="grade-total"><span>Total entregue nesta baixa</span><strong id="ent-total">0</strong></div>' +
+    '</div>' +
+    '<div class="form-group"><label class="form-label">Observação</label>' +
+      '<textarea class="form-textarea" id="f-ent-obs" placeholder="Opcional..."></textarea></div>';
+  document.getElementById('drawer-footer').style.display = 'flex';
+  document.getElementById('drawer-overlay').classList.add('open');
+}
+
+function atualizarEntregaTotal() {
+  var inputs = document.querySelectorAll('.grade-input-ent');
+  var total = 0;
+  inputs.forEach(function(inp) { total += parseInt(inp.value) || 0; });
+  var el = document.getElementById('ent-total');
+  if (el) el.textContent = total.toLocaleString('pt-BR');
+}
+
+// Abre drawer pra editar um insumo (compra de tecido / aviamento)
+function openDrawerEditInsumo(insumoId) {
+  var insumo = STATE.insumos.find(function(i) { return i.id === insumoId; });
+  if (!insumo) return;
+  STATE.drawerType = 'edit-insumo';
+  STATE.editingInsumo = insumo;
+
+  document.getElementById('drawer-title').textContent = 'Editar Compra — ' + (insumo.nome || '—');
+  document.getElementById('drawer-body').innerHTML = buildEditInsumoForm(insumo);
+  document.getElementById('drawer-footer').style.display = 'flex';
+  document.getElementById('drawer-overlay').classList.add('open');
+}
+
+function buildEditInsumoForm(i) {
+  var pais = produtosFabricacaoPropria();
+  var paisSelected = i.skus_pai || [];
+  var paisHtml = pais.map(function(p) {
+    var checked = paisSelected.indexOf(p.sku_pai) >= 0 ? ' checked' : '';
+    return '<label style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:var(--bg3);border-radius:4px;cursor:pointer;font-size:11px;">' +
+      '<input type="checkbox" class="f-edit-insumo-sku" value="' + p.sku_pai + '" style="accent-color:var(--indigo);"' + checked + '>' +
+      '<span>' + p.nome + '</span></label>';
+  }).join('');
+
+  var destinado = (STATE.ops || []).filter(function(o) { return o.insumo_id === i.id && o.quantidade_tecido_usada; })
+    .reduce(function(s, o) { return s + (o.quantidade_tecido_usada || 0); }, 0);
+  var saldo = i.quantidade_atual || 0;
+  var totalComprado = saldo + destinado;
+
+  return '<div style="padding:12px;background:var(--bg);border-radius:8px;margin-bottom:16px;font-size:12px;color:var(--txt2)">' +
+      '<div><strong>Total comprado:</strong> ' + fmt(totalComprado) + ' ' + (i.unidade||'') + ' · <span style="color:var(--amber)">Destinado: ' + fmt(destinado) + '</span> · <span style="color:var(--green)">Saldo: ' + fmt(saldo) + '</span></div>' +
+    '</div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label class="form-label">Tipo</label>' +
+        '<select class="form-select" id="f-ei-tipo"><option value="tecido"' + (i.tipo==='tecido'?' selected':'') + '>Tecido</option><option value="aviamento"' + (i.tipo==='aviamento'?' selected':'') + '>Aviamento</option></select></div>' +
+      '<div class="form-group"><label class="form-label">Subtipo</label>' +
+        '<select class="form-select" id="f-ei-subtipo">' +
+          ['plano','circular','botao','ziper','linha'].map(function(s) { return '<option value="'+s+'"' + (i.subtipo===s?' selected':'') + '>' + s + '</option>'; }).join('') +
+        '</select></div>' +
+    '</div>' +
+    '<div class="form-group"><label class="form-label">Nome do Tecido</label>' +
+      '<input class="form-input" id="f-ei-nome" value="' + (i.nome || '').replace(/"/g, '&quot;') + '"></div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label class="form-label">Cor</label>' +
+        '<input class="form-input" id="f-ei-cor" value="' + (i.cor || '').replace(/"/g, '&quot;') + '"></div>' +
+      '<div class="form-group"><label class="form-label">Unidade</label>' +
+        '<select class="form-select" id="f-ei-unidade">' +
+          ['M','KG','UN','ROL'].map(function(u) { return '<option value="'+u+'"' + (i.unidade===u?' selected':'') + '>' + u + '</option>'; }).join('') +
+        '</select></div>' +
+    '</div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label class="form-label">Quantidade em estoque (saldo atual)</label>' +
+        '<input class="form-input" id="f-ei-qtd" type="number" step="0.01" value="' + (i.quantidade_atual || 0) + '"></div>' +
+      '<div class="form-group"><label class="form-label">Valor Unitário (R$/un)</label>' +
+        '<input class="form-input" id="f-ei-valor" type="number" step="0.01" value="' + (i.valor_unitario_referencia || '') + '"></div>' +
+    '</div>' +
+    '<div style="margin-top:8px;padding:12px;border:1px solid var(--bdr);border-radius:8px;background:var(--bg);">' +
+      '<div style="font-size:13px;font-weight:600;color:var(--txt2);margin-bottom:10px;">Nota Fiscal</div>' +
+      '<div class="form-row">' +
+        '<div class="form-group"><label class="form-label">Número NF</label>' +
+          '<input class="form-input" id="f-ei-nf" value="' + (i.numero_nf || '') + '"></div>' +
+        '<div class="form-group"><label class="form-label">Data Faturamento</label>' +
+          '<input class="form-input" id="f-ei-data-fat" type="date" value="' + (i.data_faturamento || '') + '"></div>' +
+      '</div>' +
+      '<div class="form-group"><label class="form-label">Data Entrega do Tecido</label>' +
+        '<input class="form-input" id="f-ei-data-ent" type="date" value="' + (i.data_entrega || '') + '"></div>' +
+    '</div>' +
+    '<div class="form-group" style="margin-top:16px;"><label class="form-label">Produtos que usam este tecido</label>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:4px;padding:8px;background:var(--bg3);border:1px solid var(--bdr);border-radius:6px;max-height:160px;overflow-y:auto;">' + paisHtml + '</div>' +
+    '</div>';
 }
 
 function openDrawerEdit(opId) {
@@ -684,6 +1237,7 @@ function openDrawerEdit(opId) {
   var overlay = document.getElementById('drawer-overlay');
   document.getElementById('drawer-title').textContent = 'Editar OP #' + op.id;
   document.getElementById('drawer-body').innerHTML = buildEditOPForm(op);
+  document.getElementById('drawer-footer').style.display = 'flex';
   overlay.classList.add('open');
 }
 
@@ -752,8 +1306,19 @@ function renderInsumos() {
   var tipoFilt = document.querySelector('.chip[data-tipo].on');
   var tipo = tipoFilt ? tipoFilt.dataset.tipo : 'tecido';
 
+  // IDs de insumos que têm OPs ATIVAS (produzindo/parcial/etc) consumindo eles
+  var insumosEmUso = {};
+  (STATE.ops || []).forEach(function(op) {
+    if (op.insumo_id && ['concluida','Entregue','cancelada'].indexOf(op.status) < 0) {
+      insumosEmUso[op.insumo_id] = true;
+    }
+  });
+
   var filtered = insumos.filter(function(i) {
     if (i.tipo !== tipo) return false;
+    // Mostrar só os que: têm saldo > 0 OU estão sendo usados em OP ativa
+    var saldo = i.quantidade_atual || 0;
+    if (saldo <= 0 && !insumosEmUso[i.id]) return false;
     if (busca) {
       var q = busca.toLowerCase();
       return (i.nome || '').toLowerCase().includes(q) || (i.cor || '').toLowerCase().includes(q);
@@ -763,33 +1328,128 @@ function renderInsumos() {
 
   // KPIs
   var total = filtered.length;
-  var abaixo = filtered.filter(function(i) { return i.quantidade_minima && i.quantidade_atual < i.quantidade_minima; }).length;
+  var zerados = filtered.filter(function(i) { return (i.quantidade_atual || 0) <= 0; }).length;
   var valorTotal = filtered.reduce(function(s, i) { return s + (i.quantidade_atual || 0) * (i.valor_unitario_referencia || 0); }, 0);
 
   document.getElementById('kpis-insumos').innerHTML = [
     kpiHtml('Total Cadastrados', total, tipo === 'tecido' ? 'tecidos' : 'aviamentos', '--kpi-accent:var(--indigo)'),
-    kpiHtml('Abaixo do Mínimo', abaixo, abaixo > 0 ? 'atenção!' : 'ok', '--kpi-accent:' + (abaixo > 0 ? 'var(--red)' : 'var(--green)')),
+    kpiHtml('Zerados', zerados, zerados > 0 ? 'sem estoque' : 'todos com estoque', '--kpi-accent:' + (zerados > 0 ? 'var(--red)' : 'var(--green)')),
     kpiHtml('Valor em Estoque', fmtR(valorTotal), 'estimado', '--kpi-accent:var(--purple)'),
   ].join('');
 
   document.getElementById('insumo-count').textContent = ' — ' + filtered.length + ' itens';
 
-  var html = filtered.slice(0, 100).map(function(i) {
-    var status = '';
-    if (!i.quantidade_minima) status = '<span class="pill pill-neutral">Sem mín.</span>';
-    else if (i.quantidade_atual <= 0) status = '<span class="pill pill-danger">Zerado</span>';
-    else if (i.quantidade_atual < i.quantidade_minima) status = '<span class="pill pill-delayed">Baixo</span>';
-    else status = '<span class="pill pill-ok">OK</span>';
+  // Calcular destinado (soma de OPs com insumo_id = este)
+  var destinadoPorInsumo = {};
+  (STATE.ops || []).forEach(function(op) {
+    if (op.insumo_id && op.quantidade_tecido_usada) {
+      destinadoPorInsumo[op.insumo_id] = (destinadoPorInsumo[op.insumo_id] || 0) + (op.quantidade_tecido_usada || 0);
+    }
+  });
 
-    return '<tr><td><strong>' + (i.nome || '').trim() + '</strong></td>' +
-      '<td class="dim">' + (i.cor || '—').trim() + '</td>' +
-      '<td class="r">' + fmt(i.quantidade_atual) + '</td>' +
-      '<td>' + (i.unidade || '') + '</td>' +
-      '<td class="r">' + (i.quantidade_minima ? fmt(i.quantidade_minima) : '—') + '</td>' +
-      '<td class="r">' + (i.valor_unitario_referencia ? fmtR(i.valor_unitario_referencia) : '—') + '</td>' +
-      '<td>' + status + '</td></tr>';
+  if (!STATE.insumoExpanded) STATE.insumoExpanded = {};
+
+  // Agrupar por NF + Tecido (agrupa variantes de cor da mesma compra)
+  var grupos = {};
+  filtered.forEach(function(i) {
+    var nf = (i.numero_nf || '').trim() || '__sem_nf__';
+    var tec = (i.nome || '').trim().toUpperCase();
+    var key = nf + '::' + tec;
+    if (!grupos[key]) {
+      grupos[key] = {
+        key: key, nf: i.numero_nf, tecido: i.nome, unidade: i.unidade,
+        data_faturamento: i.data_faturamento, fornecedor_id: i.fornecedor_id,
+        skus_pai: i.skus_pai || [],
+        variantes: [], total: 0, destinado: 0, saldo: 0,
+      };
+    }
+    var destinado = destinadoPorInsumo[i.id] || 0;
+    var saldo = i.quantidade_atual || 0;
+    grupos[key].variantes.push({ item: i, destinado: destinado, saldo: saldo, total: saldo + destinado });
+    grupos[key].total += saldo + destinado;
+    grupos[key].destinado += destinado;
+    grupos[key].saldo += saldo;
+  });
+
+  // Ordenar grupos por data_faturamento DESC (NF mais recente primeiro)
+  var gruposArr = Object.values(grupos).sort(function(a, b) {
+    var da = a.data_faturamento || '0000-00-00';
+    var db = b.data_faturamento || '0000-00-00';
+    return db.localeCompare(da);
+  });
+
+  var html = gruposArr.slice(0, 200).map(function(g) {
+    var dataTxt = g.data_faturamento ? formatDate(g.data_faturamento) : '—';
+    var fornecedor = g.fornecedor_id ? (STATE.fornecedores.find(function(f){return f.id===g.fornecedor_id;}) || {}).nome : null;
+    var corTotal = g.saldo <= 0 ? 'var(--red)' : g.saldo < 50 ? 'var(--orange)' : 'var(--green)';
+    var skusHtml = (g.skus_pai || []).map(function(s) {
+      return '<span style="display:inline-block;padding:1px 6px;margin:1px 2px;border-radius:3px;background:rgba(99,102,241,0.15);color:var(--indigo);font-size:10px;font-weight:600">'+s+'</span>';
+    }).join('') || '<span style="color:var(--txt4);font-size:11px">—</span>';
+
+    var expanded = STATE.insumoExpanded[g.key] === true;
+    var toggleIcon = expanded ? '▼' : '▶';
+
+    // Header da NF (clicavel)
+    var htmlGrupo = '<tr style="background:rgba(99,102,241,0.06);border-top:2px solid var(--bdr);cursor:pointer;user-select:none" onclick="toggleInsumoGrupo(\'' + g.key.replace(/'/g, "\\'") + '\')">' +
+      '<td style="text-align:center;color:var(--txt3);font-size:10px">' + toggleIcon + '</td>' +
+      '<td><strong style="color:var(--txt1)">' + (g.tecido || '—').trim() + '</strong>' +
+        '<div style="font-size:10px;color:var(--txt3);margin-top:2px">' +
+          'NF: <strong style="color:var(--indigo)">' + (g.nf || '—') + '</strong>' +
+          (fornecedor ? ' · ' + fornecedor : '') +
+          (g.data_faturamento ? ' · ' + dataTxt : '') +
+          ' · ' + g.variantes.length + ' cor' + (g.variantes.length>1?'es':'') +
+        '</div>' +
+      '</td>' +
+      '<td class="r" style="font-weight:700">' + fmt(g.total) + '</td>' +
+      '<td class="r" style="color:var(--amber);font-weight:700">' + fmt(g.destinado) + '</td>' +
+      '<td class="r" style="color:'+corTotal+';font-weight:800;font-size:14px">' + fmt(g.saldo) + '</td>' +
+      '<td>' + (g.unidade || '') + '</td>' +
+      '<td>' + skusHtml + '</td>' +
+      '<td></td>' +
+    '</tr>';
+
+    // Linhas filhas (só se expanded) — cada uma clicável para editar
+    if (expanded) {
+      g.variantes.sort(function(a,b){return (b.saldo||0) - (a.saldo||0);});
+      g.variantes.forEach(function(v) {
+        var i = v.item;
+        var corSaldo = v.saldo <= 0 ? 'var(--red)' : v.saldo < 50 ? 'var(--orange)' : 'var(--txt2)';
+        htmlGrupo += '<tr style="background:rgba(255,255,255,0.01);cursor:pointer" onclick="event.stopPropagation();openDrawerEditInsumo('+i.id+')" title="Click para editar">' +
+          '<td></td>' +
+          '<td style="padding-left:24px" class="dim">↳ ' + ((i.cor || '—').trim()) + '<span style="color:var(--txt4);font-size:10px;margin-left:6px">(editar)</span></td>' +
+          '<td class="r">' + fmt(v.total) + '</td>' +
+          '<td class="r" style="color:var(--amber)">' + fmt(v.destinado) + '</td>' +
+          '<td class="r" style="color:'+corSaldo+';font-weight:600">' + fmt(v.saldo) + '</td>' +
+          '<td class="dim">' + (i.unidade || '') + '</td>' +
+          '<td></td>' +
+          '<td class="dim" style="font-size:10px">' + (i.valor_unitario_referencia ? fmtR(i.valor_unitario_referencia) : '') + '</td>' +
+        '</tr>';
+      });
+    }
+    return htmlGrupo;
   }).join('');
-  document.getElementById('tbody-insumos').innerHTML = html || '<tr><td colspan="7" class="empty">Nenhum insumo encontrado</td></tr>';
+  document.getElementById('tbody-insumos').innerHTML = html || '<tr><td colspan="8" class="empty">Nenhum insumo encontrado</td></tr>';
+}
+
+function toggleInsumoGrupo(key) {
+  if (!STATE.insumoExpanded) STATE.insumoExpanded = {};
+  STATE.insumoExpanded[key] = !STATE.insumoExpanded[key];
+  renderInsumos();
+}
+
+function expandirTodosInsumos() {
+  if (!STATE.insumoExpanded) STATE.insumoExpanded = {};
+  STATE.insumos.forEach(function(i) {
+    var nf = (i.numero_nf || '').trim() || '__sem_nf__';
+    var tec = (i.nome || '').trim().toUpperCase();
+    STATE.insumoExpanded[nf + '::' + tec] = true;
+  });
+  renderInsumos();
+}
+
+function colapsarTodosInsumos() {
+  STATE.insumoExpanded = {};
+  renderInsumos();
 }
 
 function toggleInsumoTipo(el) {
@@ -849,29 +1509,268 @@ function renderPlanejamento() {
 }
 
 // ═══════════════ TAB: CUSTOS ═══════════════
-function renderCustos() {
-  var compras = STATE.compras;
-  var precos = STATE.precos;
+// ═══════════════ TAB: HISTÓRICO ═══════════════
 
-  // CMV por SKU: tecido + costureiro
-  var cmv = {};
-  compras.forEach(function(c) {
-    if (!c.produto || !c.valor_pago_tecido || !c.valor_pago_costureiro) return;
-    var key = c.produto.trim();
-    if (!cmv[key]) cmv[key] = { tecido: [], costureiro: [], total: [] };
-    cmv[key].tecido.push(c.valor_pago_tecido);
-    cmv[key].costureiro.push(c.valor_pago_costureiro);
-    cmv[key].total.push(c.valor_peca || 0);
+// Cache: último valor_peca conhecido por costureiro + SKU pai (via sku_produto e via produto textual)
+function construirLookupValorCosturaPeca() {
+  var bySku = {};       // {costureiro_id::sku_produto: [{data,valor}]}
+  var byProduto = {};   // {costureiro_id::produto_normalizado: [{data,valor}]}
+  (STATE.ops || []).forEach(function(o) {
+    var v = o.valor_peca || o.valor_unitario;
+    if (!v || v <= 0 || !o.costureiro_id) return;
+    var data = o.data_envio_tecido || o.data_pagamento || o.criado_em || '';
+    if (o.sku_produto) {
+      var k1 = o.costureiro_id + '::' + o.sku_produto.trim().toUpperCase();
+      if (!bySku[k1]) bySku[k1] = [];
+      bySku[k1].push({ data: data, valor: v });
+    }
+    var prodN = (o.produto || '').trim().toUpperCase();
+    if (prodN) {
+      var k2 = o.costureiro_id + '::' + prodN;
+      if (!byProduto[k2]) byProduto[k2] = [];
+      byProduto[k2].push({ data: data, valor: v });
+    }
+  });
+  Object.keys(bySku).forEach(function(k) { bySku[k].sort(function(a,b){return (b.data||'').localeCompare(a.data||'');}); });
+  Object.keys(byProduto).forEach(function(k) { byProduto[k].sort(function(a,b){return (b.data||'').localeCompare(a.data||'');}); });
+  STATE._lookupBySku = bySku;
+  STATE._lookupByProduto = byProduto;
+}
+
+function valorCosturaPecaComFallback(o) {
+  var v = o.valor_peca || o.valor_unitario;
+  if (v && v > 0) return v;
+  if (!o.costureiro_id) return 0;
+  if (!STATE._lookupBySku) construirLookupValorCosturaPeca();
+  // 1) Match por sku_produto + costureiro (SKU pai)
+  if (o.sku_produto) {
+    var arr = STATE._lookupBySku[o.costureiro_id + '::' + o.sku_produto.trim().toUpperCase()];
+    if (arr && arr.length) return arr[0].valor;
+  }
+  // 2) Match por produto textual + costureiro
+  var prodN = (o.produto || '').trim().toUpperCase();
+  if (prodN) {
+    var arr2 = STATE._lookupByProduto[o.costureiro_id + '::' + prodN];
+    if (arr2 && arr2.length) return arr2[0].valor;
+  }
+  return 0;
+}
+
+function renderHistorico() {
+  construirLookupValorCosturaPeca();
+
+  // Fonte única: ordens_producao com status concluida/cancelada (historico)
+  // Cruza com ordens_compra via ordem_compra_id para resgatar dados de NF/fornecedor
+  var comprasMap = {};
+  (STATE.compras || []).forEach(function(c) { comprasMap[c.id] = c; });
+
+  var historico = (STATE.ops || []).filter(function(o) {
+    return o.status === 'concluida' || o.status === 'cancelada' || o.status === 'Entregue';
+  }).map(function(o) {
+    var compra = o.ordem_compra_id ? comprasMap[o.ordem_compra_id] : null;
+    var insumo = o.insumo_id ? STATE.insumos.find(function(i){return i.id===o.insumo_id;}) : null;
+    return {
+      id: o.id,
+      data_faturamento: (compra ? compra.data_faturamento : null) || o.data_envio_tecido,
+      nota: compra ? compra.nota : (insumo ? insumo.numero_nf : null),
+      fornecedor: compra ? compra.fornecedor : null,
+      tecido: (compra ? compra.tecido : null) || (insumo ? insumo.nome : null) || o.tecido,
+      cor: o.cor || (compra ? compra.cor : null),
+      quantidade_metros_kg: o.metros_kg || (compra ? compra.quantidade_metros_kg : null),
+      unidade: o.unidade || (compra ? compra.unidade : null) || (insumo ? insumo.unidade : null),
+      valor_nf: compra ? compra.valor_nf : null,
+      valor_metro_kg: compra ? compra.valor_metro_kg : null,
+      consumo_por_peca: o.consumo_por_peca || (compra ? compra.consumo_por_peca : null),
+      produto: o.produto,
+      costureiro_id: o.costureiro_id,
+      qtde_projetada: o.qtde_pecas,
+      qtde_entregue: o.qtde_pecas_entregues,
+      valor_peca_costureiro: valorCosturaPecaComFallback(o),  // R$ por peça com fallback do último valor daquele costureiro+produto
+      status: o.status === 'cancelada' ? 'Cancelada' : 'Entregue',
+    };
   });
 
-  var cmvRows = Object.keys(cmv).sort().map(function(k) {
-    var d = cmv[k];
-    var avgTec = d.tecido.reduce(function(s, v) { return s + v; }, 0) / d.tecido.length;
-    var avgCos = d.costureiro.reduce(function(s, v) { return s + v; }, 0) / d.costureiro.length;
-    var avgTot = d.total.reduce(function(s, v) { return s + v; }, 0) / d.total.length;
-    return '<tr><td><strong>' + k + '</strong></td><td class="r">' + fmtR(avgTec) + '</td><td class="r">' + fmtR(avgCos) + '</td><td class="r"><strong>' + fmtR(avgTot) + '</strong></td></tr>';
+  var fSt = (document.getElementById('flt-hist-status') || {}).value || '';
+  var fProd = (document.getElementById('flt-hist-produto') || {}).value || '';
+  var fForn = (document.getElementById('flt-hist-fornecedor') || {}).value || '';
+  var fAno = (document.getElementById('flt-hist-ano') || {}).value || '';
+  var q = ((document.getElementById('flt-hist-busca') || {}).value || '').toLowerCase();
+
+  var filtered = historico.filter(function(c) {
+    if (fSt && c.status !== fSt) return false;
+    if (fProd && (c.produto||'').trim() !== fProd) return false;
+    if (fForn && (c.fornecedor||'').trim() !== fForn) return false;
+    if (fAno && (c.data_faturamento || '').slice(0, 4) !== fAno) return false;
+    if (q) {
+      var blob = [(c.tecido||''),(c.cor||''),(c.produto||''),(c.fornecedor||''),(c.nota||''),costuName(c.costureiro_id)].join(' ').toLowerCase();
+      if (blob.indexOf(q) < 0) return false;
+    }
+    return true;
+  });
+
+  // KPIs
+  var totalNF = filtered.reduce(function(s, c) { return s + (c.valor_nf || 0); }, 0);
+  var totalQtde = filtered.reduce(function(s, c) { return s + (c.quantidade_metros_kg || 0); }, 0);
+  var totalPecasEnt = filtered.reduce(function(s, c) { return s + (c.qtde_entregue || 0); }, 0);
+  var totalCustoCost = filtered.reduce(function(s, c) {
+    return s + ((c.valor_peca_costureiro || 0) * (c.qtde_entregue || 0));
+  }, 0);
+  var totalLote = totalNF + totalCustoCost;
+
+  document.getElementById('kpis-historico').innerHTML = [
+    kpiHtml('Total de Registros', fmt(filtered.length), 'compras + produções', '--kpi-accent:var(--indigo)'),
+    kpiHtml('Valor Tecido (NF)', fmtR0(totalNF), 'soma das notas fiscais', '--kpi-accent:var(--amber)'),
+    kpiHtml('Custo Costureiro', fmtR0(totalCustoCost), 'valor/peça × entregues', '--kpi-accent:var(--purple)'),
+    kpiHtml('Total (tecido + costureiro)', fmtR0(totalLote), 'custo total do filtro', '--kpi-accent:var(--green)'),
+    kpiHtml('Peças Entregues', fmt(Math.round(totalPecasEnt)), 'produção concluída', '--kpi-accent:var(--cyan)'),
+  ].join('');
+
+  var temFiltroTop = fSt || fProd || fForn || fAno || q;
+  var limiteTop = temFiltroTop ? null : 50;
+  var countTxt = ' — ' + filtered.length + ' registros';
+  if (limiteTop && filtered.length > limiteTop) countTxt += ' (mostrando últimos ' + limiteTop + ' — use filtros para ver mais)';
+  document.getElementById('hist-count').textContent = countTxt;
+
+  // Ordenar por data_faturamento desc
+  filtered.sort(function(a, b) {
+    return (b.data_faturamento || '').localeCompare(a.data_faturamento || '');
+  });
+
+  // Ordenar por data mais recente e limitar a 50 (a menos que tenha filtro ativo)
+  var temFiltro = fSt || fProd || fForn || fAno || q;
+  var limite = temFiltro ? 2000 : 50;
+  var html = filtered.slice(0, limite).map(function(c) {
+    var entregues = Math.round(c.qtde_entregue || 0);
+    var valorNF = c.valor_nf || 0;  // total do tecido (NF inteira)
+    var custoCostTotal = (c.valor_peca_costureiro || 0) * entregues;  // valor/peça × entregues
+    var totalLote = valorNF + custoCostTotal;
+    var totalPorPeca = entregues > 0 ? (totalLote / entregues) : 0;
+
+    return '<tr>' +
+      '<td class="dim" style="white-space:nowrap">' + (c.data_faturamento ? formatDate(c.data_faturamento) + '/' + c.data_faturamento.slice(2,4) : '—') + '</td>' +
+      '<td class="dim" style="font-size:11px;white-space:nowrap">' + (c.nota || '—') + '</td>' +
+      '<td style="font-size:12px">' + ((c.fornecedor||'').trim() || '—') + '</td>' +
+      '<td style="font-size:12px">' + ((c.tecido||'').trim() || '—') + '</td>' +
+      '<td class="dim">' + ((c.cor||'').trim() || '—') + '</td>' +
+      '<td class="r" style="white-space:nowrap">' + fmt(Math.round(c.quantidade_metros_kg || 0)) + '</td>' +
+      '<td class="dim">' + (c.unidade || '—') + '</td>' +
+      '<td style="font-size:12px"><strong>' + ((c.produto||'').trim() || '—') + '</strong></td>' +
+      '<td style="font-size:12px">' + costuName(c.costureiro_id) + '</td>' +
+      '<td class="r" style="white-space:nowrap">' + fmt(Math.round(c.qtde_projetada || 0)) + '</td>' +
+      '<td class="r" style="white-space:nowrap">' + fmt(entregues) + '</td>' +
+      '<td class="r" style="white-space:nowrap">' + (valorNF > 0 ? fmtR0(valorNF) : '—') + '</td>' +
+      '<td class="r" style="white-space:nowrap">' + (custoCostTotal > 0 ? fmtR0(custoCostTotal) : '—') + '</td>' +
+      '<td class="r" style="color:var(--amber);font-weight:700;white-space:nowrap">' + (totalLote > 0 ? fmtR0(totalLote) : '—') + '</td>' +
+      '<td class="r" style="font-weight:700;color:var(--indigo);white-space:nowrap">' + (totalPorPeca > 0 ? fmtR0(totalPorPeca) : '—') + '</td>' +
+      '<td>' + statusPill(c.status) + '</td></tr>';
   }).join('');
-  document.getElementById('cmv-table').innerHTML = '<table class="tb"><thead><tr><th>Produto</th><th class="r">Tecido/pç</th><th class="r">Costureiro/pç</th><th class="r">CMV Total</th></tr></thead><tbody>' + cmvRows + '</tbody></table>';
+  document.getElementById('tbody-historico').innerHTML = html || '<tr><td colspan="16" class="empty">Nenhum registro</td></tr>';
+}
+
+function limparFiltrosHist() {
+  ['flt-hist-status','flt-hist-produto','flt-hist-fornecedor','flt-hist-ano','flt-hist-busca'].forEach(function(id) {
+    var el = document.getElementById(id); if (el) el.value = '';
+  });
+  renderHistorico();
+}
+
+function exportHistoricoCSV() {
+  var rows = [['Dt Faturamento','NF','Fornecedor','Tecido','Cor','Qtde','Un','Produto','Costureiro','Projetadas','Entregues','Valor NF','Status']];
+  (STATE.compras || []).forEach(function(c) {
+    rows.push([
+      c.data_faturamento || '', c.nota || '', c.fornecedor || '', c.tecido || '', c.cor || '',
+      c.quantidade_metros_kg || 0, c.unidade || '', c.produto || '', costuName(c.costureiro_id),
+      Math.round(c.qtde_projetada || 0), Math.round(c.qtde_entregue || 0), c.valor_nf || 0, c.status || ''
+    ]);
+  });
+  var csv = rows.map(function(r) { return r.map(function(v) { return '"' + String(v||'').replace(/"/g, '""') + '"'; }).join(','); }).join('\n');
+  var blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'historico-compras.csv'; a.click();
+}
+
+function populateHistoricoFilters() {
+  var prods = {}, forns = {}, anos = {};
+  (STATE.compras || []).forEach(function(c) {
+    if (c.produto) prods[c.produto.trim()] = 1;
+    if (c.fornecedor) forns[c.fornecedor.trim()] = 1;
+    if (c.data_faturamento) anos[c.data_faturamento.slice(0,4)] = 1;
+  });
+  var selP = document.getElementById('flt-hist-produto');
+  if (selP) selP.innerHTML = '<option value="">Todos produtos</option>' + Object.keys(prods).sort().map(function(p){return '<option value="'+p+'">'+p+'</option>';}).join('');
+  var selF = document.getElementById('flt-hist-fornecedor');
+  if (selF) selF.innerHTML = '<option value="">Todos fornecedores</option>' + Object.keys(forns).sort().map(function(f){return '<option value="'+f+'">'+f+'</option>';}).join('');
+  var selA = document.getElementById('flt-hist-ano');
+  if (selA) selA.innerHTML = '<option value="">Todos anos</option>' + Object.keys(anos).sort().reverse().map(function(a){return '<option value="'+a+'">'+a+'</option>';}).join('');
+}
+
+function renderCustos() {
+  var compras = STATE.compras;
+
+  // CMV por SKU pai: pegar as 2 OPs MAIS RECENTES concluídas de cada SKU pai e fazer média
+  // Cruzar com ordens_compra (valor_nf / quantidade_metros_kg = custo tecido por metro) × consumo_por_peca
+
+  var comprasMap = {};
+  (compras || []).forEach(function(c) { comprasMap[c.id] = c; });
+
+  // Agrupar OPs concluidas por SKU pai, ordenado por data desc
+  var opsPorSku = {};
+  (STATE.ops || []).forEach(function(o) {
+    if (o.status !== 'concluida' && o.status !== 'Entregue') return;
+    var sku = o.sku_produto;
+    if (!sku) return;
+    if (!opsPorSku[sku]) opsPorSku[sku] = [];
+    opsPorSku[sku].push(o);
+  });
+
+  var rows = Object.keys(opsPorSku).sort().map(function(sku) {
+    var ops = opsPorSku[sku];
+    // Ordenar por data mais recente
+    ops.sort(function(a, b) {
+      var da = a.data_envio_tecido || a.data_pagamento || a.criado_em || '';
+      var db = b.data_envio_tecido || b.data_pagamento || b.criado_em || '';
+      return db.localeCompare(da);
+    });
+    // Pegar os 2 mais recentes
+    var ultimos = ops.slice(0, 2);
+
+    // Nome do produto pai
+    var prodInfo = produtosPais().find(function(p){return p.sku_pai===sku;});
+    var nomeProduto = prodInfo ? prodInfo.nome : sku;
+
+    // Calcular custos por peça desses 2 últimos
+    var tecidoPecas = [], costPecas = [], totalPecas = [];
+    ultimos.forEach(function(o) {
+      var compra = o.ordem_compra_id ? comprasMap[o.ordem_compra_id] : null;
+      var valorMetro = compra ? parseFloat(compra.valor_metro_kg) : 0;
+      var consumo = parseFloat(o.consumo_por_peca) || (compra ? parseFloat(compra.consumo_por_peca) : 0);
+      var custoTec = (valorMetro > 0 && consumo > 0) ? valorMetro * consumo : 0;
+      var custoCost = parseFloat(valorCosturaPecaComFallback(o)) || 0;
+      if (custoTec > 0) tecidoPecas.push(custoTec);
+      if (custoCost > 0) costPecas.push(custoCost);
+      if (custoTec > 0 || custoCost > 0) totalPecas.push(custoTec + custoCost);
+    });
+
+    if (!totalPecas.length) return '';  // nada a mostrar
+
+    var avg = function(arr) { return arr.length ? arr.reduce(function(s,v){return s+v;},0) / arr.length : 0; };
+    var avgTec = avg(tecidoPecas);
+    var avgCost = avg(costPecas);
+    var avgTotal = avg(totalPecas);
+
+    return '<tr>' +
+      '<td><strong>' + nomeProduto + '</strong> <span style="color:var(--txt3);font-size:11px">('+sku+')</span></td>' +
+      '<td class="r">' + fmtR(avgTec) + '/pç</td>' +
+      '<td class="r">' + fmtR(avgCost) + '/pç</td>' +
+      '<td class="r" style="font-weight:700;color:var(--indigo)">' + fmtR(avgTotal) + '/pç</td>' +
+      '<td class="r" style="color:var(--txt3);font-size:11px">' + ultimos.length + ' OP' + (ultimos.length>1?'s':'') + '</td>' +
+    '</tr>';
+  }).filter(function(r){return r;}).join('');
+
+  document.getElementById('cmv-table').innerHTML =
+    '<table class="tb"><thead><tr>' +
+      '<th>Produto</th><th class="r">Tecido/pç</th><th class="r">Costureiro/pç</th><th class="r">CMV Total/pç</th><th class="r">Base</th>' +
+    '</tr></thead><tbody>' + rows + '</tbody></table>' +
+    '<div style="font-size:11px;color:var(--txt3);margin-top:8px">Média das 2 últimas OPs concluídas por SKU pai</div>';
 
   // KPIs
   var totalGasto = compras.reduce(function(s, c) { return s + (c.valor_nf || 0); }, 0);
@@ -946,6 +1845,7 @@ function openDrawer(type) {
     title.textContent = 'Cadastrar Insumo';
     body.innerHTML = buildInsumoForm();
   }
+  document.getElementById('drawer-footer').style.display = 'flex';
   overlay.classList.add('open');
 }
 
@@ -1059,32 +1959,73 @@ function atualizarCamposProduto(prefixo) {
       return '<option value="' + c.id + '">' + c.nome + (faz ? ' ✓' : '') + '</option>';
     }).join('');
   }
+  // Filtrar tecidos (nomes unicos) que atendem esse SKU
+  var tecSel = document.getElementById('f-' + prefixo + '-tecido');
+  if (tecSel) {
+    var nomesSet = {};
+    (STATE.insumos || []).forEach(function(i) {
+      if (i.tipo !== 'tecido') return;
+      if (sku && (!i.skus_pai || i.skus_pai.indexOf(sku) < 0)) return;
+      if (i.nome) nomesSet[i.nome.trim()] = 1;
+    });
+    var nomes = Object.keys(nomesSet).sort();
+    if (!nomes.length) {
+      tecSel.innerHTML = '<option value="">Nenhum tecido cadastrado para este produto</option>';
+    } else {
+      tecSel.innerHTML = '<option value="">Selecione o tecido...</option>' +
+        nomes.map(function(n) { return '<option value="' + n + '">' + n + '</option>'; }).join('');
+    }
+    atualizarCoresTecido(prefixo);
+  }
+
+  // Mantido pra compatibilidade com edit form
+  var insSel = document.getElementById('f-' + prefixo + '-insumo');
+  if (insSel) {
+    var insumosMatch = (STATE.insumos || []).filter(function(i) {
+      if (i.tipo !== 'tecido') return false;
+      if (!sku) return true;
+      return (i.skus_pai || []).indexOf(sku) >= 0;
+    });
+    if (!insumosMatch.length) {
+      insSel.innerHTML = '<option value="">Nenhum tecido cadastrado</option>';
+    } else {
+      insSel.innerHTML = '<option value="">Selecione o tecido...</option>' +
+        insumosMatch.map(function(i) {
+          var saldo = i.quantidade_atual || 0;
+          var label = i.nome + (i.cor ? ' · ' + i.cor : '') + ' (saldo: ' + fmt(saldo) + ')';
+          return '<option value="' + i.id + '">' + label + '</option>';
+        }).join('');
+    }
+    if (typeof atualizarInsumoInfo === 'function') atualizarInsumoInfo(prefixo);
+  }
+}
+
+// Lista de SKUs fabricação própria
+var SKU_FINALIZADOS = ['CLAFEL01','CLAF01','CLTECH','CLMALHA','CLSJ01','CLMC01','CLOX01','CMBB','CMINDIANO','CMMC','CMEL01','CMLS01','CMPL01'];
+
+function produtosFabricacaoPropria() {
+  return produtosPais().filter(function(p) { return SKU_FINALIZADOS.indexOf(p.sku_pai) >= 0; });
 }
 
 function buildOPForm() {
-  var prodOpts = produtosPais().map(function(p) {
+  var prodOpts = produtosFabricacaoPropria().map(function(p) {
     return '<option value="' + p.sku_pai + '">' + p.nome + ' (' + p.sku_pai + ')</option>';
   }).join('');
   var costOpts = STATE.costureiros.filter(function(c) { return c.ativo; }).map(function(c) {
     return '<option value="' + c.id + '">' + c.nome + '</option>';
   }).join('');
 
-  return '<div class="form-group"><label class="form-label">Produto</label>' +
-      '<select class="form-select" id="f-nova-produto" onchange="atualizarCamposProduto(\'nova\')">' +
+  STATE.opCorCount = 1;
+
+  return '<div style="padding:14px;border:1px solid var(--bdr);border-radius:10px;background:var(--bg);margin-bottom:16px;">' +
+    '<div style="font-size:12px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:12px;">Dados da OP</div>' +
+    '<div class="form-group"><label class="form-label">Produto <small style="color:var(--txt3);font-weight:400">(fabricação própria)</small></label>' +
+      '<select class="form-select" id="f-nova-produto" onchange="onProdutoOPChange()">' +
         '<option value="">Selecione um produto...</option>' + prodOpts +
       '</select></div>' +
     '<div class="form-row">' +
-      '<div class="form-group"><label class="form-label">Cor</label>' +
-        '<select class="form-select" id="f-nova-cor"><option value="">Selecione um produto primeiro</option></select></div>' +
       '<div class="form-group"><label class="form-label">Costureiro</label>' +
         '<select class="form-select" id="f-nova-costureiro">' + costOpts + '</select></div>' +
-    '</div>' +
-    '<div class="form-group"><label class="form-label">Grade por tamanho <small style="color:var(--txt3);font-weight:400">(peças por grade)</small></label>' +
-      '<div id="grade-container-nova"><div class="grade-empty">Selecione um produto para ver a grade</div></div>' +
-    '</div>' +
-    '<div class="form-row">' +
-      '<div class="form-group"><label class="form-label">Total de Peças <small style="color:var(--txt3);font-weight:400">(automático)</small></label>' +
-        '<input class="form-input" id="f-pecas" type="number" readonly placeholder="0"></div>' +
       '<div class="form-group"><label class="form-label">Valor/Peça (R$)</label>' +
         '<input class="form-input" id="f-valor" type="number" step="0.01" placeholder="18.00"></div>' +
     '</div>' +
@@ -1096,8 +2037,337 @@ function buildOPForm() {
     '</div>' +
     '<div class="form-group"><label class="form-label">Corte Externo?</label>' +
       '<select class="form-select" id="f-corte"><option value="false">Não</option><option value="true">Sim</option></select></div>' +
-    '<div class="form-group"><label class="form-label">Observações</label>' +
-      '<textarea class="form-textarea" id="f-obs" placeholder="Opcional..."></textarea></div>';
+    '</div>' +
+
+    '<div style="font-size:12px;font-weight:700;color:var(--indigo);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px;">Cores a produzir</div>' +
+    '<div id="op-cores-rows">' + buildOPCorRow(0, true) + '</div>' +
+    '<button type="button" class="btnf ghost" style="width:100%;margin-top:4px;padding:12px;border-style:dashed;" onclick="adicionarOPCorRow()">+ Adicionar outra cor</button>';
+}
+
+function buildOPCorRow(idx, firstRow) {
+  var removeBtn = firstRow ? '' :
+    '<button type="button" class="btnf ghost" style="font-size:11px;padding:4px 10px;color:var(--red);border-color:rgba(248,113,113,0.3)" onclick="removerOPCorRow('+idx+')">✕ Remover</button>';
+
+  return '<div class="op-cor-row" id="op-cor-row-'+idx+'" data-idx="'+idx+'" style="padding:14px;border:1px solid var(--bdr);border-radius:10px;background:var(--bg);margin-bottom:10px;">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">' +
+      '<span style="font-size:11px;font-weight:700;color:var(--indigo);text-transform:uppercase;letter-spacing:0.04em">Cor #'+(idx+1)+'</span>' +
+      removeBtn +
+    '</div>' +
+    '<div class="form-group"><label class="form-label">Tecido</label>' +
+      '<select class="form-select" data-field="tecido" onchange="atualizarCoresTecidoRow('+idx+')"><option value="">Selecione um produto primeiro</option></select>' +
+      '<div data-field="tecido-info" style="font-size:11px;color:var(--txt3);margin-top:4px;"></div>' +
+    '</div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label class="form-label">Cor</label>' +
+        '<select class="form-select" data-field="cor" onchange="atualizarSaldoRow('+idx+')"><option value="">Selecione um tecido primeiro</option></select></div>' +
+      '<div class="form-group"><label class="form-label">Metragem disponível</label>' +
+        '<input class="form-input" data-field="saldo" type="text" readonly style="background:var(--bg3);color:var(--green);font-weight:700"></div>' +
+    '</div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label class="form-label">Metragem a produzir</label>' +
+        '<input class="form-input" data-field="metragem" type="number" step="0.01" placeholder="ex: 150" oninput="recalcularPecasRow('+idx+')"></div>' +
+      '<div class="form-group"><label class="form-label">Consumo/peça</label>' +
+        '<input class="form-input" data-field="consumo" type="text" readonly style="background:var(--bg3)"></div>' +
+    '</div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label class="form-label">Peças projetadas (sistema)</label>' +
+        '<input class="form-input" data-field="pecas-sist" type="number" readonly style="background:var(--bg3);color:var(--indigo);font-weight:700"></div>' +
+      '<div class="form-group"><label class="form-label">Peças do cortador <small style="color:var(--txt3);font-weight:400">(opcional)</small></label>' +
+        '<input class="form-input" data-field="pecas-cortador" type="number" placeholder="sobrescreve o sistema" oninput="atualizarPecasFinaisRow('+idx+')"></div>' +
+    '</div>' +
+    '<div class="form-group"><label class="form-label">Total de Peças <small style="color:var(--txt3);font-weight:400">(final)</small></label>' +
+      '<input class="form-input" data-field="pecas-final" type="number" readonly style="background:var(--bg3);font-weight:700;color:var(--txt1)"></div>' +
+    '<div class="form-group"><label class="form-label">Grade por tamanho</label>' +
+      '<div data-field="grade-container"><div class="grade-empty">Selecione um produto para ver a grade</div></div>' +
+    '</div>' +
+  '</div>';
+}
+
+function adicionarOPCorRow() {
+  var idx = STATE.opCorCount++;
+  var div = document.createElement('div');
+  div.innerHTML = buildOPCorRow(idx, false);
+  document.getElementById('op-cores-rows').appendChild(div.firstChild);
+  // Popular tecido com base no produto já selecionado
+  onProdutoOPChange();
+}
+
+function removerOPCorRow(idx) {
+  var el = document.getElementById('op-cor-row-'+idx);
+  if (el) el.remove();
+}
+
+// Quando muda o produto, atualiza TODAS as rows (tecidos disponíveis + grade)
+function onProdutoOPChange() {
+  var sku = document.getElementById('f-nova-produto').value;
+  var rows = document.querySelectorAll('.op-cor-row');
+  rows.forEach(function(row) {
+    var idx = parseInt(row.dataset.idx);
+    // Popular dropdown de tecidos
+    var tecSel = row.querySelector('[data-field="tecido"]');
+    if (!sku) {
+      tecSel.innerHTML = '<option value="">Selecione um produto primeiro</option>';
+    } else {
+      var nomesSet = {};
+      (STATE.insumos || []).forEach(function(i) {
+        if (i.tipo !== 'tecido') return;
+        if (!i.skus_pai || i.skus_pai.indexOf(sku) < 0) return;
+        if (i.nome) nomesSet[i.nome.trim()] = 1;
+      });
+      var nomes = Object.keys(nomesSet).sort();
+      tecSel.innerHTML = nomes.length
+        ? '<option value="">Selecione o tecido...</option>' + nomes.map(function(n){return '<option value="'+n+'">'+n+'</option>';}).join('')
+        : '<option value="">Nenhum tecido cadastrado</option>';
+    }
+    atualizarCoresTecidoRow(idx);
+    // Popular grade
+    var gradeWrap = row.querySelector('[data-field="grade-container"]');
+    if (gradeWrap) {
+      gradeWrap.innerHTML = sku ? renderGradeInputs(sku, 'row'+idx) : '<div class="grade-empty">Selecione um produto para ver a grade</div>';
+    }
+  });
+}
+
+function atualizarCoresTecidoRow(idx) {
+  var row = document.getElementById('op-cor-row-'+idx);
+  if (!row) return;
+  var sku = document.getElementById('f-nova-produto').value;
+  var nomeTecido = row.querySelector('[data-field="tecido"]').value;
+  var corSel = row.querySelector('[data-field="cor"]');
+
+  if (!nomeTecido) {
+    corSel.innerHTML = '<option value="">Selecione um tecido primeiro</option>';
+    atualizarSaldoRow(idx);
+    return;
+  }
+  var variantes = (STATE.insumos || []).filter(function(i) {
+    return i.tipo === 'tecido' && (i.nome||'').trim() === nomeTecido &&
+      (!sku || !i.skus_pai || i.skus_pai.indexOf(sku) >= 0);
+  });
+  corSel.innerHTML = variantes.length
+    ? '<option value="">Selecione a cor...</option>' + variantes.map(function(v){
+        var saldo = v.quantidade_atual || 0;
+        return '<option value="'+v.id+'">'+(v.cor || '—')+' — saldo '+fmt(saldo)+' '+(v.unidade||'')+'</option>';
+      }).join('')
+    : '<option value="">Nenhuma cor cadastrada</option>';
+
+  var info = row.querySelector('[data-field="tecido-info"]');
+  var bom = (STATE.consumo || []).find(function(b){
+    return b.sku_produto === sku && (b.tecido_nome||'').trim().toUpperCase() === (nomeTecido||'').trim().toUpperCase();
+  });
+  if (info && bom) info.innerHTML = 'Consumo padrão: <strong>'+bom.consumo_por_peca+' '+bom.unidade+'/peça</strong>';
+  else if (info) info.textContent = '';
+  atualizarSaldoRow(idx);
+}
+
+function atualizarSaldoRow(idx) {
+  var row = document.getElementById('op-cor-row-'+idx);
+  if (!row) return;
+  var insumoId = parseInt(row.querySelector('[data-field="cor"]').value);
+  var saldoEl = row.querySelector('[data-field="saldo"]');
+  var consumoEl = row.querySelector('[data-field="consumo"]');
+
+  if (!insumoId) {
+    if (saldoEl) saldoEl.value = '';
+    if (consumoEl) consumoEl.value = '';
+    recalcularPecasRow(idx);
+    return;
+  }
+  var insumo = STATE.insumos.find(function(i){return i.id===insumoId;});
+  if (!insumo) return;
+  var saldo = insumo.quantidade_atual || 0;
+  if (saldoEl) saldoEl.value = fmt(saldo) + ' ' + (insumo.unidade || '');
+
+  var sku = document.getElementById('f-nova-produto').value;
+  var bom = (STATE.consumo || []).find(function(b){
+    return b.sku_produto === sku && (b.tecido_nome||'').trim().toUpperCase() === (insumo.nome||'').trim().toUpperCase();
+  });
+  if (!bom) bom = (STATE.consumo || []).find(function(b){return b.sku_produto === sku;});
+  if (consumoEl && bom) consumoEl.value = bom.consumo_por_peca + ' ' + bom.unidade + '/pç';
+  else if (consumoEl) consumoEl.value = '—';
+  recalcularPecasRow(idx);
+}
+
+function recalcularPecasRow(idx) {
+  var row = document.getElementById('op-cor-row-'+idx);
+  if (!row) return;
+  var insumoId = parseInt(row.querySelector('[data-field="cor"]').value);
+  var metragem = parseFloat(row.querySelector('[data-field="metragem"]').value) || 0;
+  var sku = document.getElementById('f-nova-produto').value;
+  var bom = (STATE.consumo || []).find(function(b){return b.sku_produto === sku;});
+  var consumo = bom ? bom.consumo_por_peca : 0;
+  var pecas = (metragem > 0 && consumo > 0) ? Math.floor(metragem / consumo) : 0;
+  row.querySelector('[data-field="pecas-sist"]').value = pecas;
+  atualizarPecasFinaisRow(idx);
+}
+
+function atualizarPecasFinaisRow(idx) {
+  var row = document.getElementById('op-cor-row-'+idx);
+  if (!row) return;
+  var cortador = parseInt(row.querySelector('[data-field="pecas-cortador"]').value) || 0;
+  var sist = parseInt(row.querySelector('[data-field="pecas-sist"]').value) || 0;
+  var final = cortador > 0 ? cortador : sist;
+  row.querySelector('[data-field="pecas-final"]').value = final;
+
+  // Redistribuir grade
+  var inputs = row.querySelectorAll('.grade-input-row'+idx);
+  if (inputs.length) {
+    var somaAtual = 0;
+    inputs.forEach(function(inp){ somaAtual += parseInt(inp.value) || 0; });
+    if (somaAtual === 0 && final > 0) {
+      var perSize = Math.floor(final / inputs.length);
+      var resto = final - perSize * inputs.length;
+      inputs.forEach(function(inp, i) { inp.value = perSize + (i < resto ? 1 : 0); });
+    }
+  }
+}
+
+// Atualiza dropdown de cores quando troca o tecido
+function atualizarCoresTecido(prefixo) {
+  var sku = document.getElementById('f-' + prefixo + '-produto').value;
+  var nomeSel = document.getElementById('f-' + prefixo + '-tecido');
+  var nomeTecido = nomeSel.value;
+  var corSel = document.getElementById('f-' + prefixo + '-cor');
+
+  if (!nomeTecido) {
+    corSel.innerHTML = '<option value="">Selecione um tecido primeiro</option>';
+    atualizarSaldoTecido(prefixo);
+    return;
+  }
+
+  // Busca registros de estoque_insumos com esse nome de tecido E que atendam o produto
+  var variantes = (STATE.insumos || []).filter(function(i) {
+    return i.tipo === 'tecido' && (i.nome||'').trim() === nomeTecido &&
+      (!sku || !i.skus_pai || i.skus_pai.indexOf(sku) >= 0);
+  });
+
+  if (!variantes.length) {
+    corSel.innerHTML = '<option value="">Nenhuma cor cadastrada</option>';
+  } else {
+    corSel.innerHTML = '<option value="">Selecione a cor...</option>' +
+      variantes.map(function(v) {
+        var saldo = v.quantidade_atual || 0;
+        return '<option value="' + v.id + '">' + (v.cor || '—') + ' — saldo ' + fmt(saldo) + ' ' + (v.unidade||'') + '</option>';
+      }).join('');
+  }
+
+  // Info do tecido (BOM)
+  var info = document.getElementById('f-' + prefixo + '-tecido-info');
+  var bom = (STATE.consumo || []).find(function(b) {
+    return b.sku_produto === sku && (b.tecido_nome||'').trim().toUpperCase() === (nomeTecido||'').trim().toUpperCase();
+  });
+  if (info && bom) {
+    info.innerHTML = 'Consumo padrão: <strong>' + bom.consumo_por_peca + ' ' + bom.unidade + '/peça</strong> (' + bom.tipo_tecido + ')';
+  } else if (info) {
+    info.textContent = '';
+  }
+
+  atualizarSaldoTecido(prefixo);
+}
+
+// Atualiza saldo, consumo e peças projetadas quando escolhe cor
+function atualizarSaldoTecido(prefixo) {
+  var corSel = document.getElementById('f-' + prefixo + '-cor');
+  var insumoId = parseInt(corSel.value);
+  var saldoEl = document.getElementById('f-' + prefixo + '-saldo');
+  var consumoEl = document.getElementById('f-' + prefixo + '-consumo');
+
+  if (!insumoId) {
+    if (saldoEl) saldoEl.value = '';
+    if (consumoEl) consumoEl.value = '';
+    recalcularPecasProjetadas();
+    return;
+  }
+
+  var insumo = STATE.insumos.find(function(i) { return i.id === insumoId; });
+  if (!insumo) return;
+
+  var saldo = insumo.quantidade_atual || 0;
+  if (saldoEl) saldoEl.value = fmt(saldo) + ' ' + (insumo.unidade || '');
+
+  // Consumo por peça do BOM
+  var sku = document.getElementById('f-' + prefixo + '-produto').value;
+  var bom = (STATE.consumo || []).find(function(b) {
+    return b.sku_produto === sku && (b.tecido_nome||'').trim().toUpperCase() === (insumo.nome||'').trim().toUpperCase();
+  });
+  if (!bom) {
+    // Fallback: pega o BOM pelo sku
+    bom = (STATE.consumo || []).find(function(b) { return b.sku_produto === sku; });
+  }
+  if (consumoEl && bom) consumoEl.value = bom.consumo_por_peca + ' ' + bom.unidade + '/peça';
+  else if (consumoEl) consumoEl.value = '— sem ficha —';
+
+  recalcularPecasProjetadas();
+}
+
+// Recalcula peças projetadas = metragem a produzir / consumo
+function recalcularPecasProjetadas() {
+  var prefixo = 'nova';
+  var corSel = document.getElementById('f-' + prefixo + '-cor');
+  var insumoId = parseInt(corSel ? corSel.value : '');
+  var qtdInput = document.getElementById('f-' + prefixo + '-qtd-tecido');
+  var pecasSistEl = document.getElementById('f-' + prefixo + '-pecas-sistema');
+  if (!insumoId || !qtdInput || !pecasSistEl) return;
+
+  var metragem = parseFloat(qtdInput.value) || 0;
+  var sku = document.getElementById('f-' + prefixo + '-produto').value;
+  var bom = (STATE.consumo || []).find(function(b) { return b.sku_produto === sku; });
+  var consumo = bom ? bom.consumo_por_peca : 0;
+
+  var pecas = (metragem > 0 && consumo > 0) ? Math.floor(metragem / consumo) : 0;
+  pecasSistEl.value = pecas;
+  atualizarPecasFinais();
+}
+
+// Peças finais = cortador (se preenchido) senão sistema
+function atualizarPecasFinais() {
+  var prefixo = 'nova';
+  var pecasCortador = parseInt((document.getElementById('f-' + prefixo + '-pecas-cortador') || {}).value) || 0;
+  var pecasSist = parseInt((document.getElementById('f-' + prefixo + '-pecas-sistema') || {}).value) || 0;
+  var final = pecasCortador > 0 ? pecasCortador : pecasSist;
+  var pecasEl = document.getElementById('f-pecas');
+  if (pecasEl) pecasEl.value = final;
+  // Redistribuir grade proporcionalmente ao total
+  redistribuirGrade(final);
+}
+
+function redistribuirGrade(total) {
+  // Se grade já preenchida, mantém. Senão distribui igualmente nos tamanhos
+  var inputs = document.querySelectorAll('.grade-input-nova');
+  if (!inputs.length) return;
+  var somaAtual = 0;
+  inputs.forEach(function(inp) { somaAtual += parseInt(inp.value) || 0; });
+  if (somaAtual > 0) return;  // usuário já mexeu manualmente
+  var perSize = Math.floor(total / inputs.length);
+  var resto = total - perSize * inputs.length;
+  inputs.forEach(function(inp, idx) {
+    inp.value = perSize + (idx < resto ? 1 : 0);
+  });
+  atualizarGradeTotal('nova');
+}
+
+// Mostra info do insumo selecionado (saldo disponível)
+function atualizarInsumoInfo(prefixo) {
+  var sel = document.getElementById('f-' + prefixo + '-insumo');
+  var info = document.getElementById('f-' + prefixo + '-insumo-info');
+  if (!sel || !info) return;
+  var id = parseInt(sel.value);
+  if (!id) { info.textContent = ''; return; }
+  var insumo = STATE.insumos.find(function(i) { return i.id === id; });
+  if (!insumo) { info.textContent = ''; return; }
+  var q = insumo.quantidade_atual || 0;
+  info.innerHTML = 'Saldo: <strong style="color:' + (q<=0?'var(--red)':'var(--green)') + '">' + fmt(q) + ' ' + (insumo.unidade||'') + '</strong>' +
+    (insumo.cor ? ' · Cor: <strong>'+insumo.cor+'</strong>' : '') +
+    (insumo.valor_unitario_referencia ? ' · R$ '+fmt(insumo.valor_unitario_referencia)+'/'+(insumo.unidade||'') : '');
+}
+
+function usarTodoInsumo(prefixo) {
+  var sel = document.getElementById('f-' + prefixo + '-insumo');
+  var qty = document.getElementById('f-' + prefixo + '-qtd-tecido');
+  var id = parseInt(sel.value);
+  if (!id) return;
+  var insumo = STATE.insumos.find(function(i) { return i.id === id; });
+  if (insumo && qty) qty.value = insumo.quantidade_atual || 0;
 }
 
 function sugerirDataEntrega(prefixo) {
@@ -1122,14 +2392,156 @@ function buildCostureiroForm() {
     '<div class="form-group"><label class="form-label">Contato</label><input class="form-input" id="f-contato" placeholder="Telefone ou WhatsApp"></div>';
 }
 
+// Retorna nomes únicos de TECIDO (apenas insumos tipo='tecido' + ordens_compra.tecido)
+function nomesTecidosCadastrados() {
+  var set = {};
+  // Fonte 1: estoque_insumos com tipo='tecido' (estrutura correta)
+  (STATE.insumos || []).forEach(function(i) {
+    if (i.nome && i.tipo === 'tecido') set[i.nome.trim()] = 1;
+  });
+  // Fonte 2: ordens_compra.tecido (nomes reais de tecido, tipo "SENNA PLUS SARJA")
+  (STATE.compras || []).forEach(function(c) {
+    if (c.tecido && (!c.tipo_ordem || c.tipo_ordem === 'tecido')) {
+      set[c.tecido.trim()] = 1;
+    }
+  });
+  return Object.keys(set).filter(function(n) { return n.length > 0; }).sort();
+}
+
+function buildInsumoRow(idx, firstRow) {
+  var tecidoOpts = nomesTecidosCadastrados().map(function(n) {
+    return '<option value="' + n.replace(/"/g, '&quot;') + '">' + n + '</option>';
+  }).join('');
+  var pais = produtosFabricacaoPropria();
+  var paisHtml = pais.map(function(p) {
+    return '<label style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:var(--bg3);border-radius:4px;cursor:pointer;font-size:11px;">' +
+      '<input type="checkbox" class="f-insumo-sku-'+idx+'" value="' + p.sku_pai + '" style="accent-color:var(--indigo);">' +
+      '<span>' + p.nome + '</span></label>';
+  }).join('');
+
+  var removeBtn = firstRow ? '' :
+    '<button type="button" class="btnf ghost" style="font-size:11px;padding:4px 10px;color:var(--red);border-color:rgba(248,113,113,0.3)" onclick="removerInsumoRow('+idx+')">✕ Remover</button>';
+
+  return '<div class="insumo-row" id="insumo-row-'+idx+'" style="padding:16px;border:1px solid var(--bdr);border-radius:10px;background:var(--bg);margin-bottom:12px;position:relative;">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">' +
+      '<span style="font-size:12px;font-weight:700;color:var(--indigo);text-transform:uppercase;letter-spacing:0.04em">Tecido #'+(idx+1)+'</span>' +
+      removeBtn +
+    '</div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label class="form-label">Tipo</label>' +
+        '<select class="form-select" data-field="tipo" onchange="toggleNomeInsumoField('+idx+')"><option value="tecido">Tecido</option><option value="aviamento">Aviamento</option></select></div>' +
+      '<div class="form-group"><label class="form-label">Subtipo</label>' +
+        '<select class="form-select" data-field="subtipo"><option value="plano">Plano (M)</option><option value="circular">Circular (KG)</option><option value="botao">Botão</option><option value="ziper">Zíper</option><option value="linha">Linha</option></select></div>' +
+    '</div>' +
+    '<div class="form-group">' +
+      '<label class="form-label">Nome do Tecido</label>' +
+      '<select class="form-select" data-field="nome-select" onchange="onTecidoNomeChange('+idx+')">' +
+        '<option value="">Selecione um tecido cadastrado...</option>' + tecidoOpts +
+        '<option value="__outro__">— Outro (digitar novo) —</option>' +
+      '</select>' +
+      '<input class="form-input" data-field="nome" placeholder="Ex: Sarja Senna Plus Vicunha" style="margin-top:8px;display:none;">' +
+    '</div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label class="form-label">Cor</label><input class="form-input" data-field="cor" placeholder="Ex: PRETO"></div>' +
+      '<div class="form-group"><label class="form-label">Unidade</label>' +
+        '<select class="form-select" data-field="unidade"><option value="M">Metros (M)</option><option value="KG">Quilos (KG)</option><option value="UN">Unidades (UN)</option><option value="ROL">Rolos (ROL)</option></select></div>' +
+    '</div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label class="form-label">Quantidade comprada</label><input class="form-input" data-field="qtd" type="number" step="0.01" placeholder="500"></div>' +
+      '<div class="form-group"><label class="form-label">Valor Unitário (R$)</label><input class="form-input" data-field="valor" type="number" step="0.01" placeholder="25.00"></div>' +
+    '</div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label class="form-label">Número NF</label><input class="form-input" data-field="nf" placeholder="Ex: 060054"></div>' +
+      '<div class="form-group"><label class="form-label">Data Faturamento</label><input class="form-input" data-field="data_fat" type="date"></div>' +
+    '</div>' +
+    '<div class="form-group"><label class="form-label">Data Entrega do Tecido</label><input class="form-input" data-field="data_ent" type="date"></div>' +
+    '<div class="form-group"><label class="form-label">Produtos que usam este tecido <small style="color:var(--txt3);font-weight:400">(fabricação própria)</small></label>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:4px;padding:8px;background:var(--bg3);border:1px solid var(--bdr);border-radius:6px;max-height:160px;overflow-y:auto;" data-field="skus">' + paisHtml + '</div>' +
+    '</div>' +
+  '</div>';
+}
+
 function buildInsumoForm() {
-  return '<div class="form-row"><div class="form-group"><label class="form-label">Tipo</label><select class="form-select" id="f-tipo-insumo"><option value="tecido">Tecido</option><option value="aviamento">Aviamento</option></select></div>' +
-    '<div class="form-group"><label class="form-label">Subtipo</label><select class="form-select" id="f-subtipo"><option value="plano">Plano (metros)</option><option value="circular">Circular (kg)</option><option value="botao">Botão</option><option value="ziper">Zíper</option><option value="linha">Linha</option></select></div></div>' +
-    '<div class="form-group"><label class="form-label">Nome</label><input class="form-input" id="f-nome-insumo" placeholder="Ex: Sarja Senna Plus Vicunha"></div>' +
-    '<div class="form-row"><div class="form-group"><label class="form-label">Cor</label><input class="form-input" id="f-cor-insumo" placeholder="Ex: PRETO"></div>' +
-    '<div class="form-group"><label class="form-label">Unidade</label><select class="form-select" id="f-unidade"><option value="M">Metros (M)</option><option value="KG">Quilos (KG)</option><option value="UN">Unidades (UN)</option><option value="ROL">Rolos (ROL)</option></select></div></div>' +
-    '<div class="form-row"><div class="form-group"><label class="form-label">Quantidade Mínima</label><input class="form-input" id="f-qtd-min" type="number" placeholder="100"></div>' +
-    '<div class="form-group"><label class="form-label">Valor Unitário Ref. (R$)</label><input class="form-input" id="f-valor-ref" type="number" step="0.01" placeholder="25.00"></div></div>';
+  STATE.insumoRowCount = 1;
+  return '<div id="insumos-rows">' + buildInsumoRow(0, true) + '</div>' +
+    '<button type="button" class="btnf ghost" style="width:100%;margin-top:4px;padding:12px;border-style:dashed;" onclick="adicionarInsumoRow()">+ Adicionar mais um tecido</button>';
+}
+
+function adicionarInsumoRow() {
+  var idx = STATE.insumoRowCount++;
+  var div = document.createElement('div');
+  div.innerHTML = buildInsumoRow(idx, false);
+  document.getElementById('insumos-rows').appendChild(div.firstChild);
+}
+
+function removerInsumoRow(idx) {
+  var el = document.getElementById('insumo-row-'+idx);
+  if (el) el.remove();
+}
+
+function onTecidoNomeChange(idx) {
+  var row = document.getElementById('insumo-row-'+idx);
+  if (!row) return;
+  var sel = row.querySelector('[data-field="nome-select"]');
+  var input = row.querySelector('[data-field="nome"]');
+  if (sel.value === '__outro__') {
+    input.style.display = 'block';
+    input.focus();
+    input.value = '';
+  } else {
+    input.style.display = 'none';
+    input.value = sel.value;
+  }
+}
+
+function toggleNomeInsumoField(idx) {
+  var row = document.getElementById('insumo-row-'+idx);
+  if (!row) return;
+  var tipo = row.querySelector('[data-field="tipo"]').value;
+  var sel = row.querySelector('[data-field="nome-select"]');
+  var input = row.querySelector('[data-field="nome"]');
+  if (tipo === 'aviamento') {
+    sel.style.display = 'none';
+    input.style.display = 'block';
+    input.placeholder = 'Ex: Botão preto 4 furos';
+  } else {
+    sel.style.display = 'block';
+    input.style.display = sel.value === '__outro__' ? 'block' : 'none';
+  }
+}
+
+function coletarInsumosRows() {
+  var rows = document.querySelectorAll('.insumo-row');
+  var insumos = [];
+  rows.forEach(function(row) {
+    var tipo = row.querySelector('[data-field="tipo"]').value;
+    var selNome = row.querySelector('[data-field="nome-select"]');
+    var inputNome = row.querySelector('[data-field="nome"]');
+    var nome;
+    if (tipo === 'aviamento') {
+      nome = inputNome.value.trim();
+    } else {
+      nome = (selNome.value && selNome.value !== '__outro__') ? selNome.value : inputNome.value.trim();
+    }
+    if (!nome) return;  // skip linha sem nome
+
+    var skusChecked = Array.from(row.querySelectorAll('[data-field="skus"] input:checked')).map(function(el){return el.value;});
+
+    insumos.push({
+      tipo: tipo,
+      subtipo: row.querySelector('[data-field="subtipo"]').value,
+      nome: nome,
+      cor: (row.querySelector('[data-field="cor"]').value || '').trim() || null,
+      unidade: row.querySelector('[data-field="unidade"]').value,
+      quantidade_atual: parseFloat(row.querySelector('[data-field="qtd"]').value) || 0,
+      valor_unitario_referencia: parseFloat(row.querySelector('[data-field="valor"]').value) || null,
+      numero_nf: (row.querySelector('[data-field="nf"]').value || '').trim() || null,
+      data_faturamento: row.querySelector('[data-field="data_fat"]').value || null,
+      data_entrega: row.querySelector('[data-field="data_ent"]').value || null,
+      skus_pai: skusChecked.length ? skusChecked : null,
+    });
+  });
+  return insumos;
 }
 
 function buildEditOPForm(op) {
@@ -1193,7 +2605,49 @@ async function submitDrawer() {
   btn.disabled = true;
 
   try {
-    if (type === 'edit-op') {
+    if (type === 'edit-insumo') {
+      var ei = STATE.editingInsumo;
+      var skusSelecionados = Array.from(document.querySelectorAll('.f-edit-insumo-sku:checked')).map(function(el) { return el.value; });
+      var body = {
+        tipo: document.getElementById('f-ei-tipo').value,
+        subtipo: document.getElementById('f-ei-subtipo').value,
+        nome: (document.getElementById('f-ei-nome').value || '').trim(),
+        cor: (document.getElementById('f-ei-cor').value || '').trim() || null,
+        unidade: document.getElementById('f-ei-unidade').value,
+        quantidade_atual: parseFloat(document.getElementById('f-ei-qtd').value) || 0,
+        valor_unitario_referencia: parseFloat(document.getElementById('f-ei-valor').value) || null,
+        numero_nf: (document.getElementById('f-ei-nf').value || '').trim() || null,
+        data_faturamento: document.getElementById('f-ei-data-fat').value || null,
+        data_entrega: document.getElementById('f-ei-data-ent').value || null,
+        skus_pai: skusSelecionados.length ? skusSelecionados : null,
+        atualizado_em: new Date().toISOString(),
+      };
+      await patchSupabase('estoque_insumos', ei.id, body);
+    } else if (type === 'registrar-entrega') {
+      var op = STATE.entregaOp;
+      var data = document.getElementById('f-ent-data').value;
+      if (!data) { alert('Informe a data da entrega'); btn.textContent='Salvar'; btn.disabled=false; return; }
+
+      var grade = {};
+      var totalEntrega = 0;
+      document.querySelectorAll('.grade-input-ent').forEach(function(inp) {
+        var q = parseInt(inp.value) || 0;
+        if (q > 0) {
+          grade[inp.dataset.tamanho] = q;
+          totalEntrega += q;
+        }
+      });
+      if (totalEntrega === 0) { alert('Informe as quantidades entregues'); btn.textContent='Salvar'; btn.disabled=false; return; }
+
+      await postSupabase('producao_entregas', {
+        ordem_producao_id: op.id,
+        data_entrega: data,
+        quantidade: totalEntrega,
+        grade_entregue: Object.keys(grade).length ? grade : null,
+        observacao: (document.getElementById('f-ent-obs').value || '').trim() || null,
+      });
+      // Trigger do banco atualiza ordens_producao automaticamente
+    } else if (type === 'edit-op') {
       var op = STATE.editingOp;
       var skuEdit = document.getElementById('f-edit-produto').value;
       var prodInfoEdit = produtosPais().find(function(p) { return p.sku_pai === skuEdit; });
@@ -1218,27 +2672,72 @@ async function submitDrawer() {
     } else if (type === 'nova-op') {
       var sku = document.getElementById('f-nova-produto').value;
       if (!sku) { alert('Selecione um produto'); btn.textContent = 'Salvar'; btn.disabled = false; return; }
-      var grade = coletarGrade('nova');
-      var totalPecas = parseInt(document.getElementById('f-pecas').value) || 0;
-      if (totalPecas === 0) { alert('Informe as quantidades na grade'); btn.textContent = 'Salvar'; btn.disabled = false; return; }
-
-      // Buscar nome do produto pai
       var prodInfo = produtosPais().find(function(p) { return p.sku_pai === sku; });
-      var body = {
-        costureiro_id: parseInt(document.getElementById('f-nova-costureiro').value),
-        sku_produto: sku,
-        produto: prodInfo ? prodInfo.nome : sku,
-        cor: document.getElementById('f-nova-cor').value.trim(),
-        qtde_pecas: totalPecas,
-        valor_peca: parseFloat(document.getElementById('f-valor').value) || null,
-        valor_unitario: parseFloat(document.getElementById('f-valor').value) || null,
-        grade_projetada: grade,
-        data_envio_tecido: document.getElementById('f-data-envio').value || null,
-        data_prevista_entrega: document.getElementById('f-data-prevista').value || null,
-        corte_externo: document.getElementById('f-corte').value === 'true',
-        status: 'Produzindo',
-      };
-      await postSupabase('ordens_producao', body);
+      var costureiroId = parseInt(document.getElementById('f-nova-costureiro').value);
+      var valorPeca = parseFloat(document.getElementById('f-valor').value) || null;
+      var dataEnvio = document.getElementById('f-data-envio').value || null;
+      var dataPrev = document.getElementById('f-data-prevista').value || null;
+      var corteExt = document.getElementById('f-corte').value === 'true';
+
+      // Coletar cada cor (row)
+      var rows = document.querySelectorAll('.op-cor-row');
+      var ops = [];
+      var movimentacoes = [];
+      for (var r = 0; r < rows.length; r++) {
+        var row = rows[r];
+        var idx = parseInt(row.dataset.idx);
+        var insumoId = parseInt(row.querySelector('[data-field="cor"]').value) || null;
+        var metragem = parseFloat(row.querySelector('[data-field="metragem"]').value) || null;
+        var pecasFinal = parseInt(row.querySelector('[data-field="pecas-final"]').value) || 0;
+        if (!pecasFinal) continue; // pula rows vazias
+
+        var insumo = insumoId ? STATE.insumos.find(function(i){return i.id===insumoId;}) : null;
+        var corTexto = insumo ? (insumo.cor || '') : '';
+
+        // Grade específica dessa row
+        var grade = {};
+        row.querySelectorAll('.grade-input-row'+idx).forEach(function(inp) {
+          var q = parseInt(inp.value) || 0;
+          if (q > 0) grade[inp.dataset.tamanho] = q;
+        });
+
+        ops.push({
+          costureiro_id: costureiroId,
+          sku_produto: sku,
+          produto: prodInfo ? prodInfo.nome : sku,
+          cor: corTexto,
+          qtde_pecas: pecasFinal,
+          valor_peca: valorPeca, valor_unitario: valorPeca,
+          grade_projetada: Object.keys(grade).length ? grade : null,
+          data_envio_tecido: dataEnvio,
+          data_prevista_entrega: dataPrev,
+          corte_externo: corteExt,
+          status: 'Produzindo',
+          insumo_id: insumoId,
+          quantidade_tecido_usada: metragem,
+        });
+        if (insumoId && metragem && metragem > 0) {
+          movimentacoes.push({ insumoId: insumoId, qtd: metragem });
+        }
+      }
+
+      if (!ops.length) { alert('Preencha ao menos uma cor com peças > 0'); btn.textContent = 'Salvar'; btn.disabled = false; return; }
+
+      // Criar OPs em batch
+      var opsCriadas = await postSupabase('ordens_producao', ops);
+      var opsArr = Array.isArray(opsCriadas) ? opsCriadas : [opsCriadas];
+
+      // Criar movimentações de saída (uma por OP com insumo)
+      for (var j = 0; j < opsArr.length; j++) {
+        if (!ops[j].insumo_id || !ops[j].quantidade_tecido_usada) continue;
+        await postSupabase('movimentacao_insumos', {
+          insumo_id: ops[j].insumo_id,
+          tipo_mov: 'saida_producao',
+          quantidade: -ops[j].quantidade_tecido_usada,
+          ordem_producao_id: opsArr[j].id,
+          observacao: 'Saída automática pela OP #' + opsArr[j].id,
+        });
+      }
     } else if (type === 'edit-costureiro') {
       var skus = document.getElementById('f-skus').value.split(',').map(function(s) { return s.trim().toUpperCase(); }).filter(Boolean);
       var body = {
@@ -1252,16 +2751,10 @@ async function submitDrawer() {
       };
       await postSupabase('costureiros', body);
     } else if (type === 'novo-insumo') {
-      var body = {
-        tipo: document.getElementById('f-tipo-insumo').value,
-        subtipo: document.getElementById('f-subtipo').value,
-        nome: document.getElementById('f-nome-insumo').value.trim(),
-        cor: document.getElementById('f-cor-insumo').value.trim() || null,
-        unidade: document.getElementById('f-unidade').value,
-        quantidade_minima: parseFloat(document.getElementById('f-qtd-min').value) || null,
-        valor_unitario_referencia: parseFloat(document.getElementById('f-valor-ref').value) || null,
-      };
-      await postSupabase('estoque_insumos', body);
+      var insumos = coletarInsumosRows();
+      if (!insumos.length) { alert('Preencha ao menos um tecido/insumo'); btn.textContent='Salvar'; btn.disabled=false; return; }
+      // Insert em batch (array)
+      await postSupabase('estoque_insumos', insumos);
     }
     closeDrawer();
     await carregar();

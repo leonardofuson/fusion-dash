@@ -41,8 +41,11 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
 .origem-nome{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;}
 .origem-fat{font-size:1.3rem;font-weight:700;margin-bottom:4px;}
 .origem-info{font-size:11px;color:var(--txt2);}
-table.tb{width:100%;border-collapse:collapse;font-size:12px;}
-table.tb th{background:rgba(255,255,255,0.03);color:var(--txt2);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;padding:8px 12px;border-bottom:1px solid var(--bdr);text-align:left;}
+/* Best practice: border-collapse:separate (collapse quebra sticky em Chrome/Safari).
+   Nenhum ancestral cria scroll container, então sticky trava contra o viewport. */
+table.tb{width:100%;border-collapse:separate;border-spacing:0;font-size:12px;}
+table.tb thead th{position:sticky;top:64px;z-index:10;background:var(--bg2);box-shadow:inset 0 -1px 0 var(--bdr);}
+table.tb th{background:var(--bg2);color:var(--txt2);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;padding:8px 12px;text-align:left;}
 table.tb th.r{text-align:right;}
 table.tb td{padding:9px 12px;border-bottom:1px solid var(--bdr);color:var(--txt1);}
 table.tb td.r{text-align:right;color:var(--txt2);}

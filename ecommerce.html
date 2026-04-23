@@ -3,81 +3,177 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Fusion — Vendas E-commerce</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<title>Fusion — E-commerce v2</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
-:root{--bg:#0a0a0b;--bg2:#18181b;--bg3:#27272a;--bdr:#27272a;--txt1:#ffffff;--txt2:#a1a1aa;--txt3:#52525b;--blue:#3b82f6;--green:#10b981;--red:#ef4444;--amber:#f59e0b;}
+:root{--bg:#09090b;--bg2:#18181b;--bg3:#27272a;--bdr:#2a2a2e;--txt1:#fafafa;--txt2:#a1a1aa;--txt3:#52525b;
+  --blue:#6366f1;--green:#22c55e;--red:#f43f5e;--amber:#eab308;--purple:#a855f7;--pink:#ec4899;--cyan:#06b6d4;}
 *{margin:0;padding:0;box-sizing:border-box;font-family:'Inter',sans-serif;}
 body{background:var(--bg);color:var(--txt1);min-height:100vh;}
-.topbar{background:rgba(18,18,20,0.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--bdr);height:64px;padding:0 1.5rem;display:flex;align-items:center;padding:0 1.5rem;gap:16px;position:sticky;top:0;z-index:100;}
+
+/* Topbar */
+.topbar{background:rgba(9,9,11,0.92);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--bdr);height:64px;display:flex;align-items:center;padding:0 1.5rem;gap:16px;position:sticky;top:0;z-index:1000;isolation:isolate;}
 .topbar img{height:32px;object-fit:contain;}
 .topbar-div{width:1px;height:18px;background:var(--bdr);}
-.topbar-label{font-size:15px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--txt1);}
-.nav{display:flex;gap:4px;margin-left:auto;}
-.nav a{font-size:11px;font-weight:500;padding:5px 12px;border-radius:6px;text-decoration:none;color:var(--txt2);transition:all 0.15s;}
-.nav a:hover{background:var(--bg3);color:var(--txt1);}
-.nav a.ativo{background:var(--blue);color:#fff;}
-.main{max-width:1400px;margin:0 auto;padding:1.5rem;}
-.filtros{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:1.5rem;align-items:center;}
+.topbar-label{font-size:15px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--txt1);}
+.main{max-width:1440px;margin:0 auto;padding:1.5rem;}
+
+/* Filters */
+.filtros{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:1rem;align-items:center;}
 .chips{display:flex;gap:6px;flex-wrap:wrap;}
-.chip{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:500;border:1px solid var(--bdr);background:var(--bg2);color:var(--txt2);cursor:pointer;transition:all 0.15s;}
+.chip{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;border:1px solid var(--bdr);background:transparent;color:var(--txt2);cursor:pointer;transition:all 0.2s;}
 .chip:hover{border-color:var(--blue);color:var(--blue);}
-.chip.on{background:var(--blue);border-color:var(--blue);color:#fff;}
+.chip.on{background:var(--blue);border-color:var(--blue);color:#fff;box-shadow:0 0 12px rgba(99,102,241,0.3);}
+.chip-sm{padding:4px 11px;border-radius:14px;font-size:11px;font-weight:600;border:1px solid var(--bdr);background:transparent;color:var(--txt2);cursor:pointer;transition:all 0.2s;white-space:nowrap;}
+.chip-sm:hover{border-color:var(--blue);color:var(--blue);}
+.chip-sm.on{color:#fff!important;background:var(--blue);border-color:var(--blue);}
 .drange{display:flex;gap:8px;align-items:center;}
 .dinput{background:var(--bg2);border:1px solid var(--bdr);border-radius:8px;padding:7px 12px;font-size:12px;color:var(--txt1);font-family:inherit;outline:none;}
 .btnf{background:var(--blue);border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;color:#fff;cursor:pointer;}
-.kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:1.5rem;}
-.kpi{background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;padding:16px;transition:transform 0.2s;}
+.toggle{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--txt2);cursor:pointer;user-select:none;}
+.toggle input{accent-color:var(--blue);}
+.filter-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:1rem;padding:10px 14px;background:var(--bg2);border:1px solid var(--bdr);border-radius:10px;}
+.filter-label{font-size:10px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:0.06em;white-space:nowrap;}
+.btn-ghost{background:transparent;border:1px solid var(--bdr);color:var(--txt2);padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer;font-family:inherit;}
+
+/* Cards */
+.card{background:var(--bg2);border:1px solid var(--bdr);border-radius:14px;padding:18px;margin-bottom:14px;}
+.card-title{font-size:13px;font-weight:700;color:var(--txt1);margin-bottom:14px;letter-spacing:0.02em;display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;}
+.sku-badge{display:inline-block;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;}
+
+/* P&L Waterfall */
+.wf-wrap{display:flex;align-items:flex-end;gap:4px;height:180px;padding:20px 0 0 0;position:relative;}
+.wf-bar{display:flex;flex-direction:column;align-items:center;flex:1;gap:4px;position:relative;}
+.wf-bar-inner{width:100%;border-radius:6px;transition:height 0.6s cubic-bezier(0.4,0,0.2,1);min-height:4px;position:relative;}
+.wf-bar-lbl{font-size:10px;font-weight:700;color:#d4d4d8;text-transform:uppercase;letter-spacing:0.05em;text-align:center;white-space:nowrap;}
+.wf-bar-val{font-size:14px;font-weight:800;color:var(--txt1);font-variant-numeric:tabular-nums;text-align:center;}
+.wf-bar-delta{font-size:10px;font-weight:700;text-align:center;}
+.wf-connector{position:absolute;top:0;right:-4px;width:8px;border-top:1.5px dashed rgba(255,255,255,0.15);z-index:1;}
+
+/* KPI Strip */
+.kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:1.25rem;}
+.kpi{background:linear-gradient(145deg,var(--bg2) 0%,#141417 100%);border:1px solid var(--bdr);border-radius:14px;padding:18px;position:relative;overflow:hidden;transition:transform 0.2s;}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--kpi-accent,var(--blue));opacity:0.7;}
 .kpi:hover{transform:translateY(-2px);}
-.kpi-lbl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.07em;color:var(--txt2);margin-bottom:8px;}
-.kpi-val{font-size:1.6rem;font-weight:700;color:var(--txt1);line-height:1;}
-.kpi-sub{font-size:11px;color:var(--txt3);margin-top:5px;}
-.kv-blue{color:var(--blue)!important;}
-.kv-green{color:var(--green)!important;}
-.kv-red{color:var(--red)!important;}
-.kv-amber{color:var(--amber)!important;}
-.canais-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;}
-.canal-card{background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;padding:16px;border-left:3px solid;}
-.canal-nome{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;}
-.canal-fat{font-size:1.3rem;font-weight:700;margin-bottom:4px;}
-.canal-info{display:flex;gap:12px;font-size:11px;color:var(--txt2);}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
-.card{background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;padding:20px;}
-.card-title{font-size:13px;font-weight:600;color:var(--txt1);margin-bottom:16px;}
-.chart-wrap{position:relative;height:220px;}
-table.tb{width:100%;border-collapse:collapse;font-size:12px;}
-table.tb th{background:rgba(255,255,255,0.03);color:var(--txt2);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;padding:8px 12px;border-bottom:1px solid var(--bdr);text-align:left;}
+.kpi-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#d4d4d8;margin-bottom:8px;}
+.kpi-val{font-size:1.5rem;font-weight:800;color:var(--txt1);line-height:1;font-variant-numeric:tabular-nums;}
+.kpi-sub{font-size:10px;color:#d4d4d8;margin-top:5px;}
+.kpi-delta{font-size:11px;font-weight:700;margin-top:8px;}
+.d-up{color:var(--green);}.d-dn{color:var(--red);}.d-flat{color:var(--txt3);}
+.delta-badge{display:inline-block;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:700;}
+.delta-badge.up{background:rgba(34,197,94,0.12);color:var(--green);}
+.delta-badge.down{background:rgba(244,63,94,0.12);color:var(--red);}
+.delta-badge.flat{background:rgba(161,161,170,0.1);color:var(--txt3);}
+
+/* Canal Table */
+.canal-tbl{width:100%;border-collapse:separate;border-spacing:0 4px;font-size:12px;}
+.canal-tbl th{font-size:10px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:0.05em;padding:8px 10px;text-align:right;white-space:nowrap;cursor:pointer;user-select:none;}
+.canal-tbl th:first-child{text-align:left;}
+.canal-tbl th:hover{color:var(--blue);}
+.canal-tbl th.sorted::after{content:' ▼';color:var(--blue);}
+.canal-tbl th.sorted.asc::after{content:' ▲';}
+.canal-tbl tr.canal-row{background:var(--bg3);border-radius:10px;cursor:pointer;transition:all 0.15s;}
+.canal-tbl tr.canal-row:hover{background:rgba(99,102,241,0.1);}
+.canal-tbl tr.canal-row.focused{background:rgba(99,102,241,0.2);box-shadow:inset 3px 0 0 var(--blue);}
+.canal-tbl tr.canal-row.dimmed{opacity:0.4;}
+.canal-tbl td{padding:10px;font-variant-numeric:tabular-nums;}
+.canal-tbl td:first-child{border-radius:10px 0 0 10px;font-weight:600;}
+.canal-tbl td:last-child{border-radius:0 10px 10px 0;}
+.canal-tbl td.r{text-align:right;}
+.canal-tbl td.val{text-align:right;font-weight:700;}
+.canal-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;box-shadow:0 0 6px currentColor;}
+.canal-spark{width:80px;height:24px;}
+.margem-pill{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;}
+.margem-pill.good{background:rgba(34,197,94,0.15);color:#22c55e;}
+.margem-pill.mid{background:rgba(234,179,8,0.15);color:#eab308;}
+.margem-pill.bad{background:rgba(244,63,94,0.15);color:#f43f5e;}
+
+/* Chart */
+.chart-hero{position:relative;height:340px;}
+.chart-sm{position:relative;height:220px;}
+.small-title{font-size:10px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;}
+
+/* Geography */
+.geo-bar{display:flex;align-items:center;gap:10px;margin-bottom:6px;cursor:pointer;padding:4px 6px;border-radius:6px;transition:background 0.15s;}
+.geo-bar:hover{background:rgba(255,255,255,0.04);}
+.geo-bar.active{background:rgba(99,102,241,0.15);}
+.geo-rank{font-size:10px;font-weight:700;color:var(--txt3);width:18px;text-align:right;}
+.geo-name{font-size:12px;font-weight:600;color:var(--txt1);min-width:50px;}
+.geo-track{flex:1;background:var(--bg);border-radius:4px;height:8px;overflow:hidden;}
+.geo-fill{height:100%;border-radius:4px;transition:width 0.5s;}
+.geo-val{font-size:11px;font-weight:600;color:var(--txt2);font-variant-numeric:tabular-nums;width:80px;text-align:right;}
+.geo-pct{font-size:10px;font-weight:700;color:var(--txt3);width:40px;text-align:right;}
+.geo-empty{padding:30px;text-align:center;color:var(--txt3);font-size:12px;}
+
+/* Payments */
+.pay-bar{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.pay-name{font-size:12px;font-weight:600;color:var(--txt1);min-width:120px;}
+.pay-track{flex:1;background:var(--bg);border-radius:4px;height:10px;overflow:hidden;}
+.pay-fill{height:100%;border-radius:4px;}
+.pay-val{font-size:11px;font-weight:600;color:var(--txt2);font-variant-numeric:tabular-nums;width:55px;text-align:right;}
+
+/* Alerts */
+.alert-row{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;margin-bottom:6px;font-size:12px;font-weight:600;}
+.alert-row.red{background:rgba(244,63,94,0.1);color:#f43f5e;border:1px solid rgba(244,63,94,0.2);}
+.alert-row.amber{background:rgba(234,179,8,0.1);color:#eab308;border:1px solid rgba(234,179,8,0.2);}
+.alert-row.green{background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.2);}
+.alert-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.alert-dot.red{background:#f43f5e;box-shadow:0 0 6px #f43f5e;}
+.alert-dot.amber{background:#eab308;box-shadow:0 0 6px #eab308;}
+.alert-dot.green{background:#22c55e;box-shadow:0 0 6px #22c55e;}
+
+/* TACOS placeholder */
+.tacos-placeholder{padding:40px;text-align:center;border:2px dashed var(--bdr);border-radius:12px;color:var(--txt3);}
+.tacos-placeholder .tp-icon{font-size:32px;margin-bottom:10px;}
+.tacos-placeholder .tp-title{font-size:14px;font-weight:700;color:var(--txt2);margin-bottom:6px;}
+.tacos-placeholder .tp-sub{font-size:11px;}
+
+/* Heatmap */
+.heat-grid{display:grid;gap:3px;font-size:10px;align-items:center;}
+.heat-lbl{color:var(--txt2);padding:2px 6px;font-weight:600;font-size:10px;white-space:nowrap;}
+.heat-lbl.col{text-align:center;color:var(--txt3);font-size:9px;padding:2px 0;}
+
+/* Tables — best practice: border-collapse:separate (collapse quebra sticky).
+   Sem overflow wrapper: sticky trava no viewport da página. */
+table.tb{width:100%;border-collapse:separate;border-spacing:0;font-size:12px;}
+table.tb thead th{position:sticky;top:64px;z-index:10;background:var(--bg2);box-shadow:inset 0 -1px 0 var(--bdr);}
+table.tb th{background:var(--bg2);color:var(--txt2);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;padding:8px 10px;text-align:left;white-space:nowrap;}
 table.tb th.r{text-align:right;}
-table.tb td{padding:9px 12px;border-bottom:1px solid var(--bdr);color:var(--txt1);}
+table.tb td{padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.04);color:var(--txt1);}
 table.tb td.r{text-align:right;color:var(--txt2);}
-table.tb td.val{text-align:right;font-weight:600;}
-table.tb tr:last-child td{border-bottom:none;}
-table.tb tr:hover td{background:rgba(255,255,255,0.02);}
-.bar-row{margin-bottom:10px;}
-.bar-lbl{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;}
-.bar-track{background:var(--bg3);border-radius:4px;height:6px;overflow:hidden;}
-.bar-fill{height:100%;border-radius:4px;transition:width 0.6s;}
+table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nums;}
+
+/* Misc */
 .spin{width:24px;height:24px;border:2px solid var(--bdr);border-top-color:var(--blue);border-radius:50%;animation:spin 0.7s linear infinite;margin:0 auto;}
 @keyframes spin{to{transform:rotate(360deg)}}
-@media(max-width:768px){.kpi-grid{grid-template-columns:repeat(2,1fr);}.grid2,.canais-grid{grid-template-columns:1fr;}}
-
-.btn-back, .btn-logout-tb{
-  background:transparent;border:1px solid var(--bdr);color:var(--txt2);
-  padding:7px 14px;border-radius:6px;font-size:13px;cursor:pointer;
-  font-family:inherit;text-decoration:none;display:inline-block;
-}
+.btn-back,.btn-logout-tb{background:transparent;border:1px solid var(--bdr);color:var(--txt2);padding:7px 14px;border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit;}
 .btn-back:hover{border-color:var(--blue);color:var(--blue);}
 .btn-logout-tb:hover{border-color:var(--red);color:var(--red);}
 #user-info-tb{font-size:13px;color:var(--txt2);}
 .topbar-actions{display:flex;align-items:center;gap:14px;margin-left:auto;}
+
+/* Product ranking */
+.prod-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;margin-bottom:4px;transition:background 0.15s;cursor:pointer;}
+.prod-row:hover{background:rgba(255,255,255,0.03);}
+.prod-rank{font-size:11px;font-weight:800;color:var(--txt3);width:22px;text-align:right;}
+.prod-info{flex:1;min-width:0;}
+.prod-name{font-size:12px;font-weight:600;color:var(--txt1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.prod-meta{font-size:10px;color:var(--txt3);margin-top:2px;}
+.prod-val{font-size:13px;font-weight:700;color:var(--txt1);font-variant-numeric:tabular-nums;text-align:right;min-width:80px;}
+.prod-pct{font-size:10px;font-weight:700;text-align:right;min-width:45px;}
+
+@media(max-width:1100px){.kpi-grid{grid-template-columns:repeat(3,1fr);}}
 @media(max-width:768px){
-  .btn-back, .btn-logout-tb{padding:5px 10px;font-size:11px;}
+  .kpi-grid{grid-template-columns:1fr 1fr;}
+  .grid2{grid-template-columns:1fr;}
+  .wf-wrap{height:auto;flex-wrap:wrap;}
+  .btn-back,.btn-logout-tb{padding:5px 10px;font-size:11px;}
   #user-info-tb{display:none;}
-  .topbar-actions{gap:8px;}
-  .nav{display:none;}
+  .topbar{height:56px!important;padding:0 1rem!important;}
+  .canal-tbl{font-size:11px;}
 }
-@media(max-width:768px){.topbar{height:56px!important;padding:0 1rem!important;}.topbar img{height:26px!important;}.topbar-label{font-size:12px!important;}}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="/auth.js"></script>
@@ -87,18 +183,23 @@ table.tb tr:hover td{background:rgba(255,255,255,0.02);}
 <header class="topbar">
   <img src="/logo-urso.png" alt="Fusion">
   <div class="topbar-div"></div>
-  <span class="topbar-label">Vendas</span>
+  <span class="topbar-label">E-commerce</span>
   <div class="topbar-actions"><span id="user-info-tb"></span><a href="/index.html" class="btn-back">Menu</a><button class="btn-logout-tb" onclick="fusionAuth.signOut()">Sair</button></div>
 </header>
 
 <div class="main">
+
+  <!-- FILTROS -->
   <div class="filtros">
     <div class="chips">
-      <button class="chip" onclick="setPeriodo(1,this)">Hoje</button>
-      <button class="chip" onclick="setPeriodo(2,this)">Ontem</button>
-      <button class="chip" onclick="setPeriodo(7,this)">7 dias</button>
-      <button class="chip on" onclick="setPeriodo(30,this)">30 dias</button>
-      <button class="chip" onclick="setPeriodo(365,this)">12 meses</button>
+      <button class="chip" data-preset="hoje" onclick="setPeriodo('hoje',this)">Hoje</button>
+      <button class="chip" data-preset="ontem" onclick="setPeriodo('ontem',this)">Ontem</button>
+      <button class="chip" data-preset="7d" onclick="setPeriodo('7d',this)">7d</button>
+      <button class="chip on" data-preset="30d" onclick="setPeriodo('30d',this)">30d</button>
+      <button class="chip" data-preset="mtd" onclick="setPeriodo('mtd',this)">MTD</button>
+      <button class="chip" data-preset="qtd" onclick="setPeriodo('qtd',this)">QTD</button>
+      <button class="chip" data-preset="ytd" onclick="setPeriodo('ytd',this)">YTD</button>
+      <button class="chip" data-preset="12m" onclick="setPeriodo('12m',this)">12m</button>
     </div>
     <div class="drange">
       <input type="date" id="dt-de" class="dinput">
@@ -106,262 +207,785 @@ table.tb tr:hover td{background:rgba(255,255,255,0.02);}
       <input type="date" id="dt-ate" class="dinput">
       <button class="btnf" onclick="aplicarFiltro()">Filtrar</button>
     </div>
+    <label class="toggle"><input type="checkbox" id="chk-compare" checked onchange="carregar()"> vs anterior</label>
+    <label class="toggle"><input type="checkbox" id="chk-canc" onchange="carregar()"> cancelados</label>
+    <label class="toggle" style="margin-left:8px;"><input type="checkbox" id="chk-ml-teste" onchange="carregar()"> ML direto (teste)</label>
     <span id="upd" style="margin-left:auto;font-size:11px;color:var(--txt3);"></span>
   </div>
 
+  <div class="filter-row">
+    <span class="filter-label">Canais:</span>
+    <div class="chips" id="canal-chips"></div>
+    <button class="btn-ghost" onclick="selAllCanais()">Todos</button>
+    <button class="btn-ghost" onclick="clearCanais()">Limpar</button>
+  </div>
+
+  <!-- 1. P&L WATERFALL -->
+  <div class="card">
+    <div class="card-title">P&L — Decomposição do Lucro</div>
+    <div id="waterfall" class="wf-wrap"><div class="spin"></div></div>
+  </div>
+
+  <!-- 2. KPI STRIP -->
   <div class="kpi-grid" id="kpis">
     <div class="kpi"><div class="kpi-lbl">Carregando...</div><div class="spin"></div></div>
   </div>
-  <div class="canais-grid" id="canais-cards"></div>
 
-  <div class="grid2">
-    <div class="card"><div class="card-title">Faturamento diário</div><div class="chart-wrap"><canvas id="chart-fat"></canvas></div></div>
-    <div class="card"><div class="card-title">Faturamento por canal</div><div id="canal-bars"></div></div>
-  </div>
-  <div class="grid2">
-    <div class="card"><div class="card-title">Pedidos por dia</div><div class="chart-wrap"><canvas id="chart-ped"></canvas></div></div>
-    <div class="card"><div class="card-title">Ticket médio por canal</div><div id="ticket-bars"></div></div>
+  <!-- 3. TABELA DE CANAIS -->
+  <div class="card">
+    <div class="card-title">Performance por canal</div>
+    <div style="overflow-x:auto;">
+      <table class="canal-tbl" id="canal-table">
+        <thead><tr>
+          <th>Canal</th>
+          <th class="r">Receita</th>
+          <th class="r">Pedidos</th>
+          <th class="r">Ticket</th>
+          <th class="r">Comissão</th>
+          <th class="r">CMV</th>
+          <th class="r">Margem</th>
+          <th class="r">Margem %</th>
+          <th class="r">% Total</th>
+          <th class="r">Δ%</th>
+          <th>Trend</th>
+        </tr></thead>
+        <tbody id="canal-tbody"></tbody>
+      </table>
+    </div>
   </div>
 
-  <div class="card" style="margin-bottom:16px;">
-    <div class="card-title">Detalhamento por canal</div>
-    <table class="tb">
-      <thead><tr>
-        <th>Canal</th><th class="r">Pedidos</th><th class="r">Faturamento</th>
-        <th class="r">Ticket Médio</th><th class="r">Cancelados</th><th class="r">% Total</th>
-      </tr></thead>
-      <tbody id="tabela-canais"></tbody>
-    </table>
+  <!-- 4. PRODUTOS — TOP 5 RECEITA vs TOP 5 LUCRO -->
+  <div class="card">
+    <div class="card-title">Produtos — Top 5 receita vs Top 5 lucro</div>
+    <div class="grid2">
+      <div>
+        <div class="small-title">Top 5 por receita</div>
+        <div id="top-receita"></div>
+      </div>
+      <div>
+        <div class="small-title">Top 5 por lucro líquido (R$)</div>
+        <div id="top-margem"></div>
+      </div>
+    </div>
   </div>
+
+  <!-- 5. RECEITA DIÁRIA -->
+  <div class="card">
+    <div class="card-title">
+      <span>Receita diária por canal</span>
+      <div class="chips" style="gap:4px;">
+        <button class="chip-sm on" id="stk-abs" onclick="setStack('abs')">R$</button>
+        <button class="chip-sm" id="stk-pct" onclick="setStack('pct')">100%</button>
+      </div>
+    </div>
+    <div class="chart-hero"><canvas id="chart-hero"></canvas></div>
+  </div>
+
+  <!-- 6. GEOGRAFIA -->
+  <div class="card">
+    <div class="card-title">Geografia de vendas <span class="sku-badge" style="background:rgba(34,197,94,0.15);color:#86efac">por endereço de entrega</span></div>
+    <div class="grid2">
+      <div>
+        <div class="small-title">Top UFs por receita</div>
+        <div id="geo-ufs"></div>
+      </div>
+      <div>
+        <div class="small-title" id="geo-city-title">Top cidades</div>
+        <div id="geo-cities"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. PAGAMENTOS -->
+  <div class="card">
+    <div class="card-title">Análise de pagamentos</div>
+    <div class="grid2">
+      <div>
+        <div class="small-title">Mix de pagamento</div>
+        <div id="pay-methods"></div>
+      </div>
+      <div>
+        <div class="small-title">Parcelamento</div>
+        <div id="pay-installments"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7. RECEBÍVEIS ML -->
+  <div class="card">
+    <div class="card-title">Agenda de recebíveis <span class="sku-badge" style="background:rgba(250,204,21,0.15);color:#fde047">Mercado Livre — net após taxa MP</span></div>
+    <div id="recv-kpis" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px"></div>
+    <div class="grid2">
+      <div>
+        <div class="small-title">Cash-in por semana (sáb→sex)</div>
+        <div class="chart-sm" style="height:240px"><canvas id="chart-recv-weeks"></canvas></div>
+      </div>
+      <div>
+        <div class="small-title">Próximas liberações</div>
+        <div id="recv-next" style="max-height:240px;overflow-y:auto"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 8. DOW HEATMAP -->
+  <div class="card">
+    <div class="card-title">Performance por canal × dia da semana</div>
+    <div id="canal-dow-heat"></div>
+  </div>
+
+  <!-- 9. PARETO -->
+  <div class="card">
+    <div class="card-title">Pareto 80/20 — SKU pai</div>
+    <div class="chart-sm" style="height:280px"><canvas id="chart-pareto"></canvas></div>
+  </div>
+
+  <!-- 10. TACOS/ACOS placeholder -->
+  <div class="card">
+    <div class="card-title">Eficiência publicitária — TACOS / ACOS</div>
+    <div class="tacos-placeholder">
+      <div class="tp-icon">📊</div>
+      <div class="tp-title">Em breve — Conecte Meta Ads, Google Ads e ML Ads</div>
+      <div class="tp-sub">TACOS = gasto total em ads / receita total. Será preenchido quando as APIs de publicidade forem conectadas.</div>
+    </div>
+  </div>
+
+  <!-- 11. ALERTAS -->
+  <div class="card">
+    <div class="card-title">Alertas operacionais</div>
+    <div id="alerts"></div>
+  </div>
+
 </div>
 
 <script>
-var SB_URL = 'https://spulbhnmkomvgohzhfvj.supabase.co';
-let AUTH_HEADERS = null; // populated after requireAuth
+var SB_URL='https://spulbhnmkomvgohzhfvj.supabase.co';
+var MAX_PAGES=50, BATCH_SZ=400;
+let AUTH_HEADERS=null;
 
-var CMAP = {
-  // ML Fio e Trama
-  'Mercado Livre Full FIO':    {n:'ML Fio',        c:'#F59E0B'},
-  'Mercado Livre FIO':         {n:'ML Fio',        c:'#F59E0B'},
-  // ML Confecções
-  'Mercado Livre Full Confec': {n:'ML Confecções', c:'#F97316'},
-  'Mercado Livre Confeções':   {n:'ML Confecções', c:'#F97316'},
-  'Mercado Livre Confecções':  {n:'ML Confecções', c:'#F97316'},
-  'ML Full Confecções':        {n:'ML Confecções', c:'#F97316'},
-  'Mercado Livre (conta 3)':   {n:'ML Confecções', c:'#F97316'},
-  // Shopee
-  'Shopee FIO':                {n:'Shopee',        c:'#EF4444'},
-  'Shopee Fio':                {n:'Shopee',        c:'#EF4444'},
-  'Shopee Confecções':         {n:'Shopee',        c:'#EF4444'},
-  'Shopee':                    {n:'Shopee',        c:'#EF4444'},
-  // TikTok
-  'tiktok':                    {n:'TikTok Shop',   c:'#EC4899'},
-  'TikTok':                    {n:'TikTok Shop',   c:'#EC4899'},
-  'TikTok Shop':               {n:'TikTok Shop',   c:'#EC4899'},
-  'shopify':                   {n:'TikTok Shop',   c:'#EC4899'},
-  // Site Próprio
-  'Online Store':              {n:'Site Próprio',  c:'#3B82F6'},
-  'web':                       {n:'Site Próprio',  c:'#3B82F6'},
-  'Site Próprio':              {n:'Site Próprio',  c:'#3B82F6'},
-  // Shein
-  'Shein Confecções':          {n:'Shein',         c:'#8B5CF6'},
-  'Shein ConfecÃ§Ãµes':       {n:'Shein',         c:'#8B5CF6'}
+// Chart.js defaults
+Chart.defaults.font.family="'Inter',sans-serif";
+Chart.defaults.font.size=11;
+Chart.defaults.font.weight='400';
+Chart.defaults.font.lineHeight=1.6;
+Chart.defaults.color='#a1a1aa';
+
+// ── Channel normalization ──
+var CMAP={
+  'Mercado Livre Full FIO':{n:'ML Fio',c:'#F59E0B'},'Mercado Livre FIO':{n:'ML Fio',c:'#F59E0B'},
+  'Mercado Livre Full Confec':{n:'ML Confecções',c:'#F97316'},'Mercado Livre Confeções':{n:'ML Confecções',c:'#F97316'},
+  'Mercado Livre Confecções':{n:'ML Confecções',c:'#F97316'},'ML Full Confecções':{n:'ML Confecções',c:'#F97316'},
+  'Mercado Livre (conta 3)':{n:'ML Confecções',c:'#F97316'},
+  'Shopee FIO':{n:'Shopee',c:'#EF4444'},'Shopee Fio':{n:'Shopee',c:'#EF4444'},
+  'Shopee Confecções':{n:'Shopee',c:'#EF4444'},'Shopee':{n:'Shopee',c:'#EF4444'},
+  'tiktok':{n:'TikTok Shop',c:'#EC4899'},'TikTok':{n:'TikTok Shop',c:'#EC4899'},'TikTok Shop':{n:'TikTok Shop',c:'#EC4899'},
+  'Online Store':{n:'Site Próprio',c:'#3B82F6'},'web':{n:'Site Próprio',c:'#3B82F6'},'Site Próprio':{n:'Site Próprio',c:'#3B82F6'},
+  'Shein Confecções':{n:'Shein',c:'#8B5CF6'},'Shein':{n:'Shein',c:'#8B5CF6'}
 };
-
-function getNome(raw, orig) {
-  var r = (raw || '').trim();
-  if (r && CMAP[r]) return CMAP[r].n;
-  if (!r || r === '') {
-    if (orig === 'shopify') return 'Site Próprio';
-    if (orig === 'confeccoes') return 'ML Confecções';
-    if (orig === 'fio_e_trama') return 'ML Fio';
-    return 'Outros';
-  }
+function getNome(raw,orig){
+  var r=(raw||'').trim();
+  if(r&&CMAP[r]) return CMAP[r].n;
+  if(!r){if(orig==='shopify')return 'Site Próprio';if(orig==='confeccoes')return 'ML Confecções';if(orig==='fio_e_trama')return 'ML Fio';return 'Outros';}
   return r;
 }
-function getCor(raw, orig) {
-  var r = (raw || '').trim();
-  if (r && CMAP[r]) return CMAP[r].c;
-  if (!r || r === '') {
-    if (orig === 'shopify') return '#3B82F6';
-    if (orig === 'confeccoes') return '#F97316';
-    return '#F59E0B';
-  }
-  return '#6B7280';
+function getCor(nome){for(var k in CMAP){if(CMAP[k].n===nome)return CMAP[k].c;}return '#6B7280';}
+function shouldDedup(p){
+  var raw=(p.canal_nome_raw||'').toLowerCase();
+  if(p.origem_conta==='fio_e_trama'&&raw.indexOf('tiktok')>=0) return true;
+  if(p.origem_conta==='confeccoes'&&(raw.indexOf('shopify')>=0||raw.indexOf('online store')>=0)) return true;
+  return false;
 }
+var CANAL_CUSTO={'ML Fio':0.22,'ML Confecções':0.22,'Shopee':0.22,'Shein':0.20,'TikTok Shop':0.24,'Site Próprio':0.12,'Outros':0.20};
+function custoPct(n){return CANAL_CUSTO[n]!==undefined?CANAL_CUSTO[n]:0.20;}
 
-async function buscarTudo(tabela, filtro) {
-  var todos = [], offset = 0, tam = 1000;
-  while (true) {
-    var url = SB_URL + '/rest/v1/' + tabela + '?' + filtro + '&limit=' + tam + '&offset=' + offset;
-    var r = await fetch(url, {headers: AUTH_HEADERS});
-    var lote = await r.json();
-    if (!Array.isArray(lote) || lote.length === 0) break;
-    todos = todos.concat(lote);
-    if (lote.length < tam) break;
-    offset += tam;
+// ── Helpers ──
+function fmt(n){return 'R$ '+Math.round(n||0).toLocaleString('pt-BR');}
+function fmtK(n){n=n||0;if(Math.abs(n)>=1e6)return 'R$ '+(n/1e6).toFixed(1)+'M';if(Math.abs(n)>=1e3)return 'R$ '+Math.round(n/1e3)+'k';return 'R$ '+Math.round(n);}
+function fmtN(n){return Math.round(n||0).toLocaleString('pt-BR');}
+function fmtP(n){return(n||0).toFixed(1)+'%';}
+function fmtD(n){return(n||0).toFixed(1);}
+function hojeSP(){return new Date().toLocaleString('sv-SE',{timeZone:'America/Sao_Paulo'}).slice(0,10);}
+function somaDias(ds,d){var t=new Date(ds+'T00:00:00Z');t.setUTCDate(t.getUTCDate()+d);return t.toISOString().slice(0,10);}
+function daysBetween(a,b){return Math.round((new Date(b+'T00:00:00Z')-new Date(a+'T00:00:00Z'))/86400000)+1;}
+function inicioPedidos(){var h=hojeSP();var y=parseInt(h.slice(0,4));var m=parseInt(h.slice(5,7))-1;if(m<1){m=12;y--;}return y+'-'+String(m).padStart(2,'0')+'-01';}
+function inicioMesSP(){return hojeSP().slice(0,7)+'-01';}
+function inicioTrimestre(){var h=hojeSP();var m=parseInt(h.slice(5,7));var q=Math.floor((m-1)/3)*3+1;return h.slice(0,4)+'-'+String(q).padStart(2,'0')+'-01';}
+function inicioAno(){return hojeSP().slice(0,4)+'-01-01';}
+function delta(a,b){if(!b)return null;return(a-b)/b*100;}
+function deltaBadge(d){if(d===null||isNaN(d))return'<span class="delta-badge flat">—</span>';var c=d>=0.5?'up':(d<=-0.5?'down':'flat');var s=d>=0?'+':'';return'<span class="delta-badge '+c+'">'+s+d.toFixed(1)+'%</span>';}
+
+var UF_CORES={'SP':'#6366f1','RJ':'#8b5cf6','MG':'#a855f7','PR':'#22c55e','RS':'#06b6d4','SC':'#3b82f6','BA':'#f59e0b','GO':'#f97316','DF':'#ec4899','PE':'#ef4444','CE':'#eab308','PA':'#14b8a6','MA':'#f43f5e','MT':'#84cc16','MS':'#0ea5e9','ES':'#a3e635'};
+function corUF(u){return UF_CORES[u]||'#6b7280';}
+
+// ── Fetch ──
+async function buscarTudo(tab,filtro){
+  var todos=[],off=0,tam=1000,pag=0;
+  while(pag<MAX_PAGES){
+    var url=SB_URL+'/rest/v1/'+tab+'?'+filtro+'&limit='+tam+'&offset='+off;
+    var r=await fetch(url,{headers:AUTH_HEADERS});
+    if(!r.ok) throw new Error(tab+' HTTP '+r.status);
+    var lote=await r.json();
+    if(!Array.isArray(lote)||lote.length===0) break;
+    todos=todos.concat(lote);
+    if(lote.length<tam) break;
+    off+=tam;pag++;
   }
   return todos;
 }
-
-function fmt(n)  { return 'R$ ' + Math.round(n || 0).toLocaleString('pt-BR'); }
-function fmtN(n) { return Math.round(n || 0).toLocaleString('pt-BR'); }
-function fmtP(n) { return (n || 0).toFixed(1) + '%'; }
-
-var chartFat = null, chartPed = null;
-var DE = null, ATE = null;
-
-function setPeriodo(dias, el) {
-  document.querySelectorAll('.chip').forEach(function(c) { c.classList.remove('on'); });
-  el.classList.add('on');
-  var ate = new Date(), de = new Date();
-  de.setDate(de.getDate() - dias);
-  DE  = de.toISOString().split('T')[0];
-  ATE = ate.toISOString().split('T')[0];
-  document.getElementById('dt-de').value  = DE;
-  document.getElementById('dt-ate').value = ATE;
-  carregar();
+var SEL_PED='id,data_pedido,valor_bruto,canal_nome_raw,origem_conta,status,frete,desconto,valor_liquido,uf,cidade,fee_canal,metodo_pagamento,parcelas';
+var SEL_HIST='id,id_tiny_origem,data_pedido,valor_bruto,canal_nome_raw,origem_conta,status,uf';
+function buildFilt(de,ate,cols){
+  return'select='+cols+'&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&origem_conta=in.(fio_e_trama,confeccoes,shopify,tiktok_shop)';
+}
+async function fetchPedidos(de,ate){
+  var useTeste=(document.getElementById('chk-ml-teste')||{}).checked;
+  if(useTeste){
+    // Tabela teste só tem abril — ajustar range mínimo
+    var deTest=de<'2026-04-01'?'2026-04-01':de;
+    return buscarTudo('pedidos_ml_teste','select='+SEL_PED+'&data_pedido=gte.'+deTest+'&data_pedido=lte.'+ate);
+  }
+  var inicio=inicioPedidos();
+  if(de>=inicio) return buscarTudo('pedidos',buildFilt(de,ate,SEL_PED));
+  if(ate<inicio){var h=await buscarTudo('pedidos_historico',buildFilt(de,ate,SEL_HIST));return h.map(function(p){p.id=p.id_tiny_origem||p.id;return p;});}
+  var fimH=somaDias(inicio,-1);
+  var r=await Promise.all([buscarTudo('pedidos_historico',buildFilt(de,fimH,SEL_HIST)),buscarTudo('pedidos',buildFilt(inicio,ate,SEL_PED))]);
+  var h=r[0].map(function(p){p.id=p.id_tiny_origem||p.id;return p;});
+  return h.concat(r[1]);
+}
+async function fetchItensForIds(ids,tabela){
+  if(!ids.length)return[];
+  var tab=tabela||'itens_pedido';
+  var limitedIds=ids.slice(-3000);
+  var batches=[];
+  for(var i=0;i<limitedIds.length;i+=BATCH_SZ){var chunk=limitedIds.slice(i,i+BATCH_SZ);batches.push(buscarTudo(tab,'select=pedido_id,quantidade,preco_unitario,desconto_item,produto_id&pedido_id=in.('+chunk.join(',')+')'));}
+  var all=[];
+  for(var g=0;g<batches.length;g+=5){
+    var grupo=batches.slice(g,g+5);
+    var res=await Promise.all(grupo);
+    for(var r=0;r<res.length;r++) all=all.concat(res[r]);
+  }
+  return all;
+}
+var PROD_CACHE=null;
+async function fetchProdutos(){
+  if(PROD_CACHE) return PROD_CACHE;
+  var lista=await buscarTudo('produtos','select=id,sku,sku_pai,nome,categoria,cor,tamanho,tipo,custo_total&ativo=eq.true');
+  var byId={},bySku={},paiCusto={};
+  // Primeiro pass: mapear custo dos pais
+  lista.forEach(function(p){
+    if(p.tipo==='pai'&&p.custo_total) paiCusto[p.sku]=parseFloat(p.custo_total);
+  });
+  // Segundo pass: filhos herdam custo do pai
+  lista.forEach(function(p){
+    var custo=parseFloat(p.custo_total||0);
+    if(custo===0&&p.sku_pai) custo=paiCusto[p.sku_pai]||0;
+    byId[p.id]={sku:p.sku,sku_pai:p.sku_pai||p.sku,nome:p.nome||p.sku,cat:p.categoria||'OUTROS',cor:p.cor||'',tam:p.tamanho||'',custo:custo};
+    bySku[p.sku]={nome:p.nome||p.sku,cat:p.categoria||'OUTROS',custo:custo};
+  });
+  PROD_CACHE={byId:byId,bySku:bySku};return PROD_CACHE;
 }
 
-function aplicarFiltro() {
-  DE  = document.getElementById('dt-de').value;
-  ATE = document.getElementById('dt-ate').value;
-  document.querySelectorAll('.chip').forEach(function(c) { c.classList.remove('on'); });
-  carregar();
+async function fetchRecebiveis(){
+  // Todos os releases futuros (a partir de hoje) — filtra status approved + data_liberacao>=today
+  var hoje=hojeSP();
+  var filt='select=conta,valor,fee,valor_liquido,data_liberacao,data_criacao,tipo,descricao,order_id&data_liberacao=gte.'+hoje+'&order=data_liberacao.asc';
+  return buscarTudo('recebiveis_ml',filt);
 }
 
-async function carregar() {
-  if (!DE || !ATE) return;
-  document.getElementById('kpis').innerHTML = '<div class="kpi"><div class="kpi-lbl">Carregando...</div><div class="spin"></div></div>';
-  document.getElementById('canais-cards').innerHTML = '';
+// ── State ──
+var DE=null,ATE=null;
+var STATE={pedidos:[],pedidosFull:[],anteriores:[],anterioresFull:[],itens:[],itensFocus:[],canais:[],canaisSel:{},stackMode:'abs',focusCanal:null,skuGroups:[],recebiveis:[]};
+var CHARTS={hero:null,pareto:null,recvWeeks:null};
+var GEO_UF_SEL=null;
 
-  var filtro = 'select=data_pedido,valor_bruto,canal_nome_raw,origem_conta,status' +
-    '&data_pedido=gte.' + DE +
-    '&data_pedido=lte.' + ATE +
-    '&origem_conta=in.(fio_e_trama,confeccoes,shopify)';
+function periodoAnterior(de,ate){var d=daysBetween(de,ate);var novoAte=somaDias(de,-1);var novoDe=somaDias(novoAte,-(d-1));return{de:novoDe,ate:novoAte};}
 
-  try {
-    var res = await Promise.all([
-      buscarTudo('pedidos', filtro),
-      buscarTudo('pedidos_historico', filtro)
-    ]);
+function setPeriodo(preset,el){
+  var h=hojeSP(),de,ate=h;
+  switch(preset){case'hoje':de=h;break;case'ontem':de=somaDias(h,-1);ate=de;break;case'7d':de=somaDias(h,-6);break;case'30d':de=somaDias(h,-29);break;case'mtd':de=inicioMesSP();break;case'qtd':de=inicioTrimestre();break;case'ytd':de=inicioAno();break;case'12m':de=somaDias(h,-364);break;default:de=somaDias(h,-29);}
+  DE=de;ATE=ate;document.getElementById('dt-de').value=DE;document.getElementById('dt-ate').value=ATE;
+  document.querySelectorAll('.chip[data-preset]').forEach(function(c){c.classList.remove('on');});if(el)el.classList.add('on');carregar();
+}
+function aplicarFiltro(){DE=document.getElementById('dt-de').value;ATE=document.getElementById('dt-ate').value;document.querySelectorAll('.chip[data-preset]').forEach(function(c){c.classList.remove('on');});carregar();}
+function setStack(m){STATE.stackMode=m;document.getElementById('stk-abs').classList.toggle('on',m==='abs');document.getElementById('stk-pct').classList.toggle('on',m==='pct');renderHero();}
 
-    var todos = res[0].concat(res[1]);
-    var CANC = ['cancelado', 'devolvido'];
-    var ativos    = todos.filter(function(p) { return CANC.indexOf((p.status || '').toLowerCase()) < 0; });
-    var cancelados = todos.filter(function(p) { return CANC.indexOf((p.status || '').toLowerCase()) >= 0; });
+function filtrarPedidos(lista){
+  var incCanc=document.getElementById('chk-canc').checked;var CANC=['cancelado','devolvido'];var ativos=[];
+  lista.forEach(function(p){if(shouldDedup(p))return;var st=(p.status||'').toLowerCase();var isCanc=CANC.indexOf(st)>=0;if(isCanc&&!incCanc)return;
+    p._nome=getNome(p.canal_nome_raw,p.origem_conta);p._cor=getCor(p._nome);p._canc=isCanc;
+    if(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[p._nome])return;ativos.push(p);});
+  return ativos;
+}
 
-    var porCanal = {};
-    ativos.forEach(function(p) {
-      var nome = getNome(p.canal_nome_raw, p.origem_conta);
-      var cor  = getCor(p.canal_nome_raw, p.origem_conta);
-      if (!porCanal[nome]) porCanal[nome] = {nome: nome, cor: cor, fat: 0, ped: 0, canc: 0};
-      porCanal[nome].fat += parseFloat(p.valor_bruto || 0);
-      porCanal[nome].ped++;
-    });
-    cancelados.forEach(function(p) {
-      var nome = getNome(p.canal_nome_raw, p.origem_conta);
-      if (!porCanal[nome]) porCanal[nome] = {nome: nome, cor: getCor(p.canal_nome_raw, p.origem_conta), fat: 0, ped: 0, canc: 0};
-      porCanal[nome].canc++;
-    });
+async function carregar(){
+  if(!DE||!ATE)return;
+  document.getElementById('kpis').innerHTML='<div class="kpi"><div class="kpi-lbl">Carregando...</div><div class="spin"></div></div>';
+  try{
+    var usarComp=document.getElementById('chk-compare').checked;var ant=periodoAnterior(DE,ATE);
+    var fetches=[fetchPedidos(DE,ATE)];if(usarComp)fetches.push(fetchPedidos(ant.de,ant.ate));
+    // Recebíveis só na 1ª carga da sessão (independente do período)
+    var rcvIdx=-1;
+    if(!STATE.recebiveisLoaded){rcvIdx=fetches.length;fetches.push(fetchRecebiveis().catch(function(){return[];}));}
+    var res=await Promise.all(fetches);
+    STATE.pedidosRaw=res[0];STATE.anterioresRaw=usarComp?res[1]:[];
+    if(rcvIdx>=0){STATE.recebiveis=res[rcvIdx]||[];STATE.recebiveisLoaded=true;}
+    if(STATE.canais.length===0){var seen={};STATE.pedidosRaw.forEach(function(p){if(shouldDedup(p))return;var n=getNome(p.canal_nome_raw,p.origem_conta);if(!seen[n]){seen[n]=true;STATE.canaisSel[n]=true;}});STATE.canais=Object.keys(seen).sort();renderCanalChips();}
 
-    var canais   = Object.values(porCanal).sort(function(a, b) { return b.fat - a.fat; });
-    var fatTotal = canais.reduce(function(s, c) { return s + c.fat; }, 0);
-    var pedTotal = canais.reduce(function(s, c) { return s + c.ped; }, 0);
-    var cancTotal = cancelados.length;
-    var tm = pedTotal > 0 ? fatTotal / pedTotal : 0;
+    // RENDER IMEDIATO — sem itens (waterfall, canais, geo, pagamentos, alertas)
+    STATE.itens=[];STATE.itensFocus=[];
+    renderAll();
+    document.getElementById('upd').textContent='Carregando produtos...';
 
-    document.getElementById('kpis').innerHTML =
-      '<div class="kpi"><div class="kpi-lbl">Faturamento</div><div class="kpi-val">' + fmt(fatTotal) + '</div><div class="kpi-sub">' + fmtN(pedTotal) + ' pedidos</div></div>' +
-      '<div class="kpi"><div class="kpi-lbl">Ticket Médio</div><div class="kpi-val kv-blue">' + fmt(tm) + '</div><div class="kpi-sub">por pedido</div></div>' +
-      '<div class="kpi"><div class="kpi-lbl">Pedidos Ativos</div><div class="kpi-val kv-green">' + fmtN(pedTotal) + '</div><div class="kpi-sub">no período</div></div>' +
-      '<div class="kpi"><div class="kpi-lbl">Cancelados</div><div class="kpi-val ' + (cancTotal > 0 ? 'kv-red' : 'kv-green') + '">' + fmtN(cancTotal) + '</div><div class="kpi-sub">' + (pedTotal + cancTotal > 0 ? ((cancTotal / (pedTotal + cancTotal)) * 100).toFixed(1) : 0) + '% do total</div></div>' +
-      '<div class="kpi"><div class="kpi-lbl">Canais Ativos</div><div class="kpi-val kv-amber">' + canais.length + '</div><div class="kpi-sub">plataformas</div></div>';
+    // BACKGROUND — itens + produtos (pra rankings)
+    var inicio=inicioPedidos();var skuDisponivel=(DE>=inicio)||(ATE>=inicio);
+    if(skuDisponivel){
+      var recentes=STATE.pedidosRaw.filter(function(p){return p.data_pedido>=inicio&&!shouldDedup(p);});
+      var ids=recentes.map(function(p){return p.id;}).filter(function(x){return x;});
+      var useTeste=(document.getElementById('chk-ml-teste')||{}).checked;
+      var itensTab=useTeste?'itens_pedido_ml_teste':'itens_pedido';
+      var itens=await fetchItensForIds(ids,itensTab);var prods=await fetchProdutos();
+      var pedById={};recentes.forEach(function(p){pedById[p.id]=p;});
+      itens.forEach(function(it){var ped=pedById[it.pedido_id];if(!ped)return;var prod=prods.byId[it.produto_id];if(!prod)return;
+        var skuPai=prod.sku_pai;var pai;
+        if(/^MAT-/i.test(skuPai)){skuPai=prod.sku;pai={nome:prod.nome,cat:prod.cat,custo:prod.custo};}else{pai=prods.bySku[skuPai]||{nome:prod.nome,cat:prod.cat,custo:prod.custo};}
+        var nomePai=pai.nome;if(!nomePai||nomePai==='Material/Insumo'||nomePai==='Desconhecido')nomePai=skuPai;
+        it._sku_pai=skuPai;it._nome=nomePai;it._cat=pai.cat||prod.cat;it._cor=prod.cor;it._tam=prod.tam;it._custoUn=parseFloat(pai.custo||prod.custo||0);
+        it._canal=getNome(ped.canal_nome_raw,ped.origem_conta);it._data=ped.data_pedido;
+        it._receita=(parseFloat(it.preco_unitario)||0)*(parseFloat(it.quantidade)||0)-(parseFloat(it.desconto_item)||0);
+        it._qtd=parseFloat(it.quantidade)||0;it._canc=(ped.status||'').toLowerCase();
+      });
+      STATE.itens=itens.filter(function(it){return it._sku_pai&&(!['cancelado','devolvido'].includes(it._canc));});
+    }else{STATE.itens=[];}
+    // Só atualizar seções de produto (não re-filtrar pedidos)
+    STATE.itensFocus=STATE.focusCanal?STATE.itens.filter(function(it){return it._canal===STATE.focusCanal;}):STATE.itens;
+    agruparSkus(STATE.itensFocus);
+    try{renderTopProdutos();}catch(e){console.error('renderTopProdutos:',e);}
+    try{renderPareto();}catch(e){console.error('renderPareto:',e);}
+    document.getElementById('upd').textContent='Atualizado '+new Date().toLocaleTimeString('pt-BR');
+  }catch(err){console.error(err);document.getElementById('kpis').innerHTML='<div class="kpi"><div class="kpi-lbl">Erro</div><div class="kpi-val d-dn">!</div><div class="kpi-sub">'+err.message+'</div></div>';}
+}
 
-    document.getElementById('canais-cards').innerHTML = canais.map(function(canal) {
-      return '<div class="canal-card" style="border-left-color:' + canal.cor + '">' +
-        '<div class="canal-nome" style="color:' + canal.cor + '">' + canal.nome + '</div>' +
-        '<div class="canal-fat" style="color:' + canal.cor + '">' + fmt(canal.fat) + '</div>' +
-        '<div class="canal-info"><span>' + fmtN(canal.ped) + ' pedidos</span><span>TM ' + fmt(canal.ped > 0 ? canal.fat / canal.ped : 0) + '</span><span>' + fmtP(fatTotal > 0 ? canal.fat / fatTotal * 100 : 0) + '</span></div>' +
-        '</div>';
+function renderCanalChips(){
+  var el=document.getElementById('canal-chips');
+  el.innerHTML=STATE.canais.map(function(n){var on=STATE.canaisSel[n];var c=getCor(n);
+    return'<button class="chip-sm'+(on?' on':'')+'" data-canal="'+n+'" style="'+(on?'background:'+c+';border-color:'+c:'')+'" onclick="toggleCanal(\''+n.replace(/'/g,"\\'")+'\',this)">'+n+'</button>';}).join('');
+}
+function toggleCanal(n,el){STATE.canaisSel[n]=!STATE.canaisSel[n];var c=getCor(n);if(STATE.canaisSel[n]){el.classList.add('on');el.style.background=c;el.style.borderColor=c;}else{el.classList.remove('on');el.style.background='';el.style.borderColor='';}renderAll();}
+function selAllCanais(){STATE.canais.forEach(function(n){STATE.canaisSel[n]=true;});renderCanalChips();renderAll();}
+function clearCanais(){STATE.canais.forEach(function(n){STATE.canaisSel[n]=false;});renderCanalChips();renderAll();}
+function focusCanal(n){STATE.focusCanal=STATE.focusCanal===n?null:n;renderAll();}
+
+function renderAll(){
+  STATE.pedidos=filtrarPedidos(STATE.pedidosRaw||[]);
+  STATE.anteriores=filtrarPedidos(STATE.anterioresRaw||[]);
+  STATE.pedidosFull=STATE.pedidos;STATE.anterioresFull=STATE.anteriores;
+  if(STATE.focusCanal){
+    STATE.pedidos=STATE.pedidos.filter(function(p){return p._nome===STATE.focusCanal;});
+    STATE.anteriores=STATE.anteriores.filter(function(p){return p._nome===STATE.focusCanal;});
+    STATE.itensFocus=STATE.itens.filter(function(it){return it._canal===STATE.focusCanal;});
+  }else{STATE.itensFocus=STATE.itens;}
+  agruparSkus(STATE.itensFocus);
+  var fns=[renderWaterfall,renderKPIs,renderCanalTable,renderTopProdutos,renderHero,renderGeo,renderPayments,renderRecebiveis,renderDowHeat,renderPareto,renderAlerts];
+  fns.forEach(function(fn){try{fn();}catch(e){console.error(fn.name+':',e);}});
+}
+
+// ── P&L WATERFALL ──
+function renderWaterfall(){
+  var cur=calcPnL(STATE.pedidos,STATE.itensFocus);
+  var prev=calcPnL(STATE.anteriores,[]);
+  var items=[
+    {lbl:'Receita Bruta',val:cur.receita,color:'#22c55e',prev:prev.receita},
+    {lbl:'− Devoluções',val:-cur.devolucoes,color:'#f43f5e',prev:-prev.devolucoes},
+    {lbl:'− Comissão',val:-cur.comissao,color:'#f97316',prev:-prev.comissao},
+    {lbl:'− CMV',val:-cur.cmv,color:'#ec4899',prev:-prev.cmv},
+    {lbl:'− Frete',val:-cur.frete,color:'#8b5cf6',prev:-prev.frete},
+    {lbl:'= Lucro Op.',val:cur.lucro,color:cur.lucro>=0?'#22c55e':'#f43f5e',prev:prev.lucro}
+  ];
+  var maxVal=Math.max.apply(null,items.map(function(i){return Math.abs(i.val);}));
+  if(maxVal===0) maxVal=1;
+  var html=items.map(function(item){
+    var h=Math.max(Math.abs(item.val)/maxVal*140,8);
+    var d=delta(Math.abs(item.val),Math.abs(item.prev));
+    return'<div class="wf-bar">'+
+      '<div class="wf-bar-val">'+fmtK(Math.abs(item.val))+'</div>'+
+      '<div class="wf-bar-inner" style="height:'+h+'px;background:'+item.color+'"></div>'+
+      '<div class="wf-bar-lbl">'+item.lbl+'</div>'+
+      '<div class="wf-bar-delta">'+deltaBadge(d)+'</div>'+
+    '</div>';
+  }).join('');
+  document.getElementById('waterfall').innerHTML=html;
+}
+function calcPnL(pedidos,itens){
+  var receita=0,devolucoes=0,frete=0,comissao=0,cmv=0;
+  pedidos.forEach(function(p){
+    var v=parseFloat(p.valor_bruto||0);
+    if(p._canc){devolucoes+=v;return;}
+    receita+=v;
+    frete+=parseFloat(p.frete||0);
+    var fee=parseFloat(p.fee_canal||0);
+    comissao+=fee>0?fee:v*custoPct(p._nome);
+  });
+  if(itens&&itens.length>0){itens.forEach(function(it){cmv+=(it._custoUn||0)*it._qtd;});}
+  else{cmv=receita*0.45;} // placeholder CMV
+  var lucro=receita-comissao-cmv-frete;
+  return{receita:receita,devolucoes:devolucoes,comissao:comissao,cmv:cmv,frete:frete,lucro:lucro};
+}
+
+// ── KPIs ──
+function renderKPIs(){
+  var cur=calcPnL(STATE.pedidos,STATE.itensFocus);
+  var prev=calcPnL(STATE.anteriores,[]);
+  var pedAtivos=STATE.pedidos.filter(function(p){return!p._canc;});
+  var pedAntAtivos=STATE.anteriores.filter(function(p){return!p._canc;});
+  var tm=pedAtivos.length>0?cur.receita/pedAtivos.length:0;
+  var tmAnt=pedAntAtivos.length>0?prev.receita/pedAntAtivos.length:0;
+  var mp=cur.receita>0?cur.lucro/cur.receita*100:0;
+  var html='';
+  html+='<div class="kpi" style="--kpi-accent:'+(cur.lucro>=0?'#22c55e':'#f43f5e')+'"><div class="kpi-lbl">Lucro Operacional</div><div class="kpi-val" style="color:'+(cur.lucro>=0?'#22c55e':'#f43f5e')+'">'+fmt(cur.lucro)+'</div><div class="kpi-sub">margem '+fmtD(mp)+'%</div><div class="kpi-delta">'+deltaBadge(delta(cur.lucro,prev.lucro))+'</div></div>';
+  html+='<div class="kpi" style="--kpi-accent:#6366f1"><div class="kpi-lbl">Receita Bruta</div><div class="kpi-val">'+fmt(cur.receita)+'</div><div class="kpi-delta">'+deltaBadge(delta(cur.receita,prev.receita))+'</div></div>';
+  html+='<div class="kpi" style="--kpi-accent:#22c55e"><div class="kpi-lbl">Pedidos</div><div class="kpi-val">'+fmtN(pedAtivos.length)+'</div><div class="kpi-delta">'+deltaBadge(delta(pedAtivos.length,pedAntAtivos.length))+'</div></div>';
+  html+='<div class="kpi" style="--kpi-accent:#06b6d4"><div class="kpi-lbl">Ticket Médio</div><div class="kpi-val">'+fmt(tm)+'</div><div class="kpi-delta">'+deltaBadge(delta(tm,tmAnt))+'</div></div>';
+  html+='<div class="kpi" style="--kpi-accent:#a855f7"><div class="kpi-lbl">TACOS</div><div class="kpi-val" style="color:var(--txt3)">—</div><div class="kpi-sub">em breve</div></div>';
+  document.getElementById('kpis').innerHTML=html;
+}
+
+// ── CANAL TABLE ──
+function renderCanalTable(){
+  var ped=STATE.pedidosFull||STATE.pedidos;
+  var ant=STATE.anterioresFull||STATE.anteriores;
+  var byCanal={};
+  ped.forEach(function(p){
+    var n=p._nome;if(!byCanal[n])byCanal[n]={r:0,ped:0,canc:0,frete:0,fee:0,cor:p._cor,diario:{}};
+    if(p._canc){byCanal[n].canc++;return;}
+    var v=parseFloat(p.valor_bruto||0);
+    byCanal[n].r+=v;byCanal[n].ped++;byCanal[n].frete+=parseFloat(p.frete||0);
+    var f=parseFloat(p.fee_canal||0);byCanal[n].fee+=f>0?f:v*custoPct(n);
+    var d=(p.data_pedido||'').slice(0,10);byCanal[n].diario[d]=(byCanal[n].diario[d]||0)+v;
+  });
+  var byCanAlAnt={};
+  ant.forEach(function(p){if(p._canc)return;var n=p._nome;if(!byCanAlAnt[n])byCanAlAnt[n]={r:0};byCanAlAnt[n].r+=parseFloat(p.valor_bruto||0);});
+
+  // CMV por canal from itens
+  var cmvByCanal={};
+  (STATE.itens||[]).forEach(function(it){
+    if(!cmvByCanal[it._canal])cmvByCanal[it._canal]=0;
+    cmvByCanal[it._canal]+=(it._custoUn||0)*it._qtd;
+  });
+
+  var totalR=Object.values(byCanal).reduce(function(s,c){return s+c.r;},0);
+  var rows=Object.keys(byCanal).map(function(n){
+    var c=byCanal[n];var cmv=cmvByCanal[n]||c.r*0.45;
+    var margem=c.r-c.fee-cmv;var margemPct=c.r>0?margem/c.r*100:0;
+    var prevR=(byCanAlAnt[n]||{}).r||0;
+    return{nome:n,cor:c.cor||getCor(n),r:c.r,ped:c.ped,tm:c.ped>0?c.r/c.ped:0,fee:c.fee,feePct:c.r>0?c.fee/c.r*100:0,cmv:cmv,margem:margem,margemPct:margemPct,pct:totalR>0?c.r/totalR*100:0,delta:delta(c.r,prevR),diario:c.diario};
+  }).sort(function(a,b){return b.r-a.r;});
+
+  var html=rows.map(function(r){
+    var cls='canal-row';
+    if(STATE.focusCanal===r.nome)cls+=' focused';
+    else if(STATE.focusCanal)cls+=' dimmed';
+    var mCls=r.margemPct>=30?'good':(r.margemPct>=15?'mid':'bad');
+    // Sparkline data
+    var dias=Object.keys(r.diario).sort();
+    var sparkId='spark-'+r.nome.replace(/[^a-z0-9]/gi,'');
+    return'<tr class="'+cls+'" onclick="focusCanal(\''+r.nome.replace(/'/g,"\\'")+'\')">' +
+      '<td><span class="canal-dot" style="color:'+r.cor+';background:'+r.cor+'"></span>'+r.nome+'</td>'+
+      '<td class="val">'+fmt(r.r)+'</td>'+
+      '<td class="val">'+fmtN(r.ped)+'</td>'+
+      '<td class="val">'+fmt(r.tm)+'</td>'+
+      '<td class="r">'+Math.round(r.feePct)+'%</td>'+
+      '<td class="r">'+fmtK(r.cmv)+'</td>'+
+      '<td class="val" style="color:'+(r.margem>=0?'#22c55e':'#f43f5e')+'">'+fmt(r.margem)+'</td>'+
+      '<td class="r"><span class="margem-pill '+mCls+'">'+Math.round(r.margemPct)+'%</span></td>'+
+      '<td class="r">'+Math.round(r.pct)+'%</td>'+
+      '<td class="r">'+deltaBadge(r.delta)+'</td>'+
+      '<td><canvas class="canal-spark" id="'+sparkId+'"></canvas></td>'+
+    '</tr>';
+  }).join('');
+  document.getElementById('canal-tbody').innerHTML=html;
+
+  // Render sparklines
+  rows.forEach(function(r){
+    var sparkId='spark-'+r.nome.replace(/[^a-z0-9]/gi,'');
+    var cv=document.getElementById(sparkId);if(!cv)return;
+    var dias=Object.keys(r.diario).sort().slice(-14);
+    var vals=dias.map(function(d){return r.diario[d]||0;});
+    new Chart(cv,{type:'line',data:{labels:dias,datasets:[{data:vals,borderColor:r.cor,backgroundColor:r.cor+'25',fill:true,tension:0.4,pointRadius:0,borderWidth:1.5}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{enabled:false}},scales:{x:{display:false},y:{display:false}}}});
+  });
+}
+
+// ── HERO STACKED AREA ──
+function renderHero(){
+  var diario={};var canais={};
+  STATE.pedidos.forEach(function(p){if(p._canc)return;var d=(p.data_pedido||'').slice(0,10);if(!d)return;if(!diario[d])diario[d]={};diario[d][p._nome]=(diario[d][p._nome]||0)+parseFloat(p.valor_bruto||0);canais[p._nome]=p._cor;});
+  var dias=Object.keys(diario).sort();
+  var canaisL=Object.keys(canais).sort(function(a,b){var sa=0,sb=0;dias.forEach(function(d){sa+=diario[d][a]||0;sb+=diario[d][b]||0;});return sb-sa;});
+  var showPts=dias.length<=45;
+  var datasets=canaisL.map(function(n){
+    var vals=dias.map(function(d){return diario[d][n]||0;});
+    if(STATE.stackMode==='pct'){vals=vals.map(function(v,i){var tot=0;canaisL.forEach(function(m){tot+=diario[dias[i]][m]||0;});return tot>0?(v/tot*100):0;});}
+    return{label:n,data:vals,borderColor:canais[n],backgroundColor:canais[n]+'55',fill:true,tension:0.35,pointRadius:showPts?2:0,pointBackgroundColor:canais[n],pointBorderColor:'#09090b',pointBorderWidth:1,pointHoverRadius:5,borderWidth:2,stack:'A'};
+  });
+  var labels=dias.map(function(d){return new Date(d+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});});
+  if(CHARTS.hero)CHARTS.hero.destroy();
+  CHARTS.hero=new Chart(document.getElementById('chart-hero'),{type:'line',data:{labels:labels,datasets:datasets},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{intersect:false,mode:'index'},
+      plugins:{legend:{position:'bottom',labels:{color:'#a1a1aa',font:{size:11},boxWidth:10,padding:12,usePointStyle:true,pointStyle:'circle'}},
+        tooltip:{backgroundColor:'rgba(24,24,27,0.96)',titleColor:'#fafafa',bodyColor:'#fafafa',footerColor:'#6366f1',borderColor:'#2a2a2e',borderWidth:1,padding:12,cornerRadius:10,boxPadding:6,usePointStyle:true,bodySpacing:5,footerFont:{weight:'800',size:12},
+          callbacks:{label:function(ctx){return' '+ctx.dataset.label+': '+(STATE.stackMode==='pct'?fmtD(ctx.parsed.y)+'%':fmt(ctx.parsed.y));},footer:function(items){if(STATE.stackMode==='pct')return'';var t=0;items.forEach(function(i){t+=i.parsed.y||0;});return'Total: '+fmt(t);}}}},
+      scales:{x:{ticks:{color:'#71717a',maxTicksLimit:10,font:{size:10}},grid:{color:'rgba(255,255,255,0.03)'}},y:{stacked:true,ticks:{color:'#71717a',font:{size:10},callback:function(v){return STATE.stackMode==='pct'?v+'%':fmtK(v);}},grid:{color:'rgba(255,255,255,0.03)'}}}}
+  });
+}
+
+// ── GEOGRAPHY ──
+function renderGeo(){
+  var ufWrap=document.getElementById('geo-ufs');var cityWrap=document.getElementById('geo-cities');
+  var byUF={},byCity={};
+  STATE.pedidos.forEach(function(p){if(p._canc)return;var uf=(p.uf||'').trim().toUpperCase();if(!uf||uf.length!==2)return;var cidade=(p.cidade||'').trim();var v=parseFloat(p.valor_bruto||0);
+    if(!byUF[uf])byUF[uf]={r:0,n:0};byUF[uf].r+=v;byUF[uf].n++;
+    if(cidade){var ck=uf+'|'+cidade;if(!byCity[ck])byCity[ck]={uf:uf,cidade:cidade,r:0,n:0};byCity[ck].r+=v;byCity[ck].n++;}
+  });
+  var ufs=Object.keys(byUF).sort(function(a,b){return byUF[b].r-byUF[a].r;});
+  if(ufs.length===0){ufWrap.innerHTML='<div class="geo-empty">Dados de UF/cidade serão populados nas próximas sincronizações via API direta.</div>';cityWrap.innerHTML='';return;}
+  var maxR=byUF[ufs[0]].r;var totalR=ufs.reduce(function(s,u){return s+byUF[u].r;},0);
+  ufWrap.innerHTML=ufs.slice(0,15).map(function(uf,i){var d=byUF[uf];var pct=totalR>0?d.r/totalR*100:0;var w=maxR>0?d.r/maxR*100:0;var active=GEO_UF_SEL===uf?' active':'';
+    return'<div class="geo-bar'+active+'" onclick="geoSelectUF(\''+uf+'\')"><span class="geo-rank">'+(i+1)+'</span><span class="geo-name">'+uf+'</span><div class="geo-track"><div class="geo-fill" style="width:'+w.toFixed(1)+'%;background:'+corUF(uf)+'"></div></div><span class="geo-val">'+fmt(d.r)+'</span><span class="geo-pct">'+Math.round(pct)+'%</span></div>';}).join('');
+  var cityList;
+  if(GEO_UF_SEL){document.getElementById('geo-city-title').textContent='Cidades — '+GEO_UF_SEL;cityList=Object.values(byCity).filter(function(c){return c.uf===GEO_UF_SEL;}).sort(function(a,b){return b.r-a.r;});}
+  else{document.getElementById('geo-city-title').textContent='Top cidades';cityList=Object.values(byCity).sort(function(a,b){return b.r-a.r;});}
+  if(cityList.length===0){cityWrap.innerHTML='<div class="geo-empty">Sem dados de cidade.</div>';return;}
+  var maxC=cityList[0].r;
+  cityWrap.innerHTML=cityList.slice(0,15).map(function(c,i){var w=maxC>0?c.r/maxC*100:0;
+    return'<div class="geo-bar"><span class="geo-rank">'+(i+1)+'</span><span class="geo-name" style="min-width:100px">'+c.cidade+'</span><div class="geo-track"><div class="geo-fill" style="width:'+w.toFixed(1)+'%;background:'+corUF(c.uf)+'"></div></div><span class="geo-val">'+fmt(c.r)+'</span></div>';}).join('');
+}
+function geoSelectUF(uf){GEO_UF_SEL=GEO_UF_SEL===uf?null:uf;renderGeo();}
+
+// ── PAYMENTS ──
+function renderPayments(){
+  var methods={},installments={};
+  STATE.pedidos.forEach(function(p){if(p._canc)return;var m=p.metodo_pagamento||'';var parc=parseInt(p.parcelas||0);var v=parseFloat(p.valor_bruto||0);
+    if(m){if(!methods[m])methods[m]={r:0,n:0};methods[m].r+=v;methods[m].n++;}
+    if(parc>0){var faixa=parc===1?'1x':(parc<=3?'2-3x':(parc<=6?'4-6x':'7-12x'));if(!installments[faixa])installments[faixa]={r:0,n:0};installments[faixa].r+=v;installments[faixa].n++;}
+  });
+  var mKeys=Object.keys(methods).sort(function(a,b){return methods[b].r-methods[a].r;});
+  var mEl=document.getElementById('pay-methods');
+  if(mKeys.length===0){mEl.innerHTML='<div class="geo-empty">Dados de método de pagamento serão populados via API direta.</div>';}
+  else{var maxM=methods[mKeys[0]].r;mEl.innerHTML=mKeys.map(function(m){var d=methods[m];var w=maxM>0?d.r/maxM*100:0;var nomesPay={'credit_card':'Cartão de Crédito','account_money':'Mercado Pago','debit_card':'Débito','pix':'Pix','bolbradesco':'Boleto','ticket':'Boleto'};
+    return'<div class="pay-bar"><span class="pay-name">'+(nomesPay[m]||m)+'</span><div class="pay-track"><div class="pay-fill" style="width:'+w.toFixed(1)+'%;background:#6366f1"></div></div><span class="pay-val">'+fmtN(d.n)+'</span></div>';}).join('');}
+
+  var iKeys=['1x','2-3x','4-6x','7-12x'];
+  var iEl=document.getElementById('pay-installments');
+  var hasInst=iKeys.some(function(k){return installments[k];});
+  if(!hasInst){iEl.innerHTML='<div class="geo-empty">Dados de parcelamento serão populados via API direta.</div>';}
+  else{var maxI=Math.max.apply(null,iKeys.map(function(k){return(installments[k]||{}).r||0;}));
+    iEl.innerHTML=iKeys.map(function(k){var d=installments[k]||{r:0,n:0};var w=maxI>0?d.r/maxI*100:0;
+      return'<div class="pay-bar"><span class="pay-name">'+k+'</span><div class="pay-track"><div class="pay-fill" style="width:'+w.toFixed(1)+'%;background:#a855f7"></div></div><span class="pay-val">'+fmtN(d.n)+'</span></div>';}).join('');}
+}
+
+// ── RECEBÍVEIS ML ──
+function weekStartSat(ds){
+  // Semana operacional Fusion: sábado → sexta. offset = (weekday+1) % 7
+  var dt=new Date(ds+'T12:00:00Z');
+  var wd=dt.getUTCDay(); // 0=dom, 6=sáb
+  var off=(wd+1)%7;
+  dt.setUTCDate(dt.getUTCDate()-off);
+  return dt.toISOString().slice(0,10);
+}
+function rcvContaCanal(conta){
+  if(conta==='fio_e_trama') return 'Mercado Livre FIO';
+  if(conta==='confeccoes') return 'Mercado Livre Confeccoes';
+  return conta;
+}
+function renderRecebiveis(){
+  var host=document.getElementById('recv-kpis');
+  if(!host) return;
+  var raw=STATE.recebiveis||[];
+  // Filtra por chips de canal (respeita seleção atual)
+  var dados=raw.filter(function(r){
+    var canal=rcvContaCanal(r.conta);
+    if(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0){
+      // só filtra se o canal ML existe nos chips; se não, deixa passar
+      if(STATE.canais.indexOf(canal)>=0 && !STATE.canaisSel[canal]) return false;
+    }
+    if(STATE.focusCanal && STATE.focusCanal!==canal) return false;
+    return true;
+  });
+  if(dados.length===0){
+    host.innerHTML='<div class="kpi" style="grid-column:1/-1"><div class="kpi-lbl">Sem recebíveis futuros — rode o sync ou aguarde backfill</div></div>';
+    document.getElementById('recv-next').innerHTML='<div class="geo-empty">Sem liberações futuras.</div>';
+    if(CHARTS.recvWeeks){CHARTS.recvWeeks.destroy();CHARTS.recvWeeks=null;}
+    return;
+  }
+  var hoje=hojeSP();
+  var total=0, d7=0, d30=0, fees=0, gross=0;
+  var in7=somaDias(hoje,7), in30=somaDias(hoje,30);
+  dados.forEach(function(r){
+    var v=parseFloat(r.valor_liquido||0);
+    var vb=parseFloat(r.valor||0);
+    var fe=parseFloat(r.fee||0);
+    total+=v; gross+=vb; fees+=fe;
+    var dl=(r.data_liberacao||'').slice(0,10);
+    if(dl<=in7) d7+=v;
+    if(dl<=in30) d30+=v;
+  });
+  var taxaPct=gross>0?(fees/gross*100):0;
+  host.innerHTML=
+    '<div class="kpi"><div class="kpi-lbl">Total a receber</div><div class="kpi-val">'+fmtK(total)+'</div><div class="kpi-sub">'+fmtN(dados.length)+' liberações</div></div>'+
+    '<div class="kpi"><div class="kpi-lbl">Próximos 7 dias</div><div class="kpi-val">'+fmtK(d7)+'</div><div class="kpi-sub">até '+in7.slice(8)+'/'+in7.slice(5,7)+'</div></div>'+
+    '<div class="kpi"><div class="kpi-lbl">Próximos 30 dias</div><div class="kpi-val">'+fmtK(d30)+'</div><div class="kpi-sub">até '+in30.slice(8)+'/'+in30.slice(5,7)+'</div></div>'+
+    '<div class="kpi"><div class="kpi-lbl">Taxa MP média</div><div class="kpi-val">'+fmtP(taxaPct)+'</div><div class="kpi-sub">'+fmtK(fees)+' em taxas</div></div>';
+
+  // Chart: cash-in por semana (sáb→sex), próximas 8 semanas
+  var porSem={}; // week_start -> {fio: x, confec: x}
+  dados.forEach(function(r){
+    var dl=(r.data_liberacao||'').slice(0,10);
+    if(!dl||dl<hoje) return;
+    var ws=weekStartSat(dl);
+    if(!porSem[ws]) porSem[ws]={fio_e_trama:0,confeccoes:0};
+    porSem[ws][r.conta]=(porSem[ws][r.conta]||0)+parseFloat(r.valor_liquido||0);
+  });
+  var semanas=Object.keys(porSem).sort().slice(0,8);
+  var labels=semanas.map(function(ws){
+    var fim=somaDias(ws,6);
+    return ws.slice(8)+'/'+ws.slice(5,7)+'–'+fim.slice(8)+'/'+fim.slice(5,7);
+  });
+  var dsFio=semanas.map(function(w){return Math.round(porSem[w].fio_e_trama||0);});
+  var dsConfec=semanas.map(function(w){return Math.round(porSem[w].confeccoes||0);});
+  var ctx=document.getElementById('chart-recv-weeks');
+  if(CHARTS.recvWeeks) CHARTS.recvWeeks.destroy();
+  if(ctx){
+    CHARTS.recvWeeks=new Chart(ctx,{type:'bar',data:{labels:labels,datasets:[
+      {label:'Fio e Trama',data:dsFio,backgroundColor:'#6366f1',stack:'s'},
+      {label:'Confecções',data:dsConfec,backgroundColor:'#a855f7',stack:'s'}
+    ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{color:'#94a3b8',boxWidth:10}},tooltip:{callbacks:{label:function(c){return c.dataset.label+': '+fmtK(c.parsed.y);}}}},scales:{x:{stacked:true,ticks:{color:'#94a3b8',font:{size:10}},grid:{display:false}},y:{stacked:true,ticks:{color:'#94a3b8',callback:function(v){return fmtK(v);}},grid:{color:'rgba(148,163,184,0.08)'}}}}});
+  }
+
+  // Lista próximas liberações (próximos 30d, agrupado por data)
+  var porDia={};
+  dados.forEach(function(r){
+    var dl=(r.data_liberacao||'').slice(0,10);
+    if(!dl||dl>in30) return;
+    if(!porDia[dl]) porDia[dl]={total:0,contas:{}};
+    porDia[dl].total+=parseFloat(r.valor_liquido||0);
+    var c=r.conta;
+    porDia[dl].contas[c]=(porDia[dl].contas[c]||0)+parseFloat(r.valor_liquido||0);
+  });
+  var dias=Object.keys(porDia).sort().slice(0,20);
+  var nextEl=document.getElementById('recv-next');
+  if(dias.length===0){nextEl.innerHTML='<div class="geo-empty">Sem liberações nos próximos 30 dias.</div>';}
+  else{
+    nextEl.innerHTML=dias.map(function(d){
+      var info=porDia[d];
+      var breakdown=Object.keys(info.contas).map(function(c){
+        var lbl=c==='fio_e_trama'?'Fio':(c==='confeccoes'?'Confec':c);
+        var cor=c==='fio_e_trama'?'#6366f1':'#a855f7';
+        return '<span style="color:'+cor+';font-weight:600;font-size:10px;margin-right:6px">'+lbl+' '+fmtK(info.contas[c])+'</span>';
+      }).join('');
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid rgba(148,163,184,0.08)"><div><div style="font-size:11px;color:var(--txt2)">'+d.slice(8)+'/'+d.slice(5,7)+'</div><div style="margin-top:2px">'+breakdown+'</div></div><div style="font-weight:700;color:var(--txt1)">'+fmtK(info.total)+'</div></div>';
     }).join('');
-
-    var maxFat = Math.max.apply(null, canais.map(function(c) { return c.fat; }).concat([1]));
-    document.getElementById('canal-bars').innerHTML = canais.map(function(canal) {
-      return '<div class="bar-row"><div class="bar-lbl"><span style="color:var(--txt1);font-weight:500">' + canal.nome + '</span><span style="color:var(--txt2)">' + fmt(canal.fat) + '</span></div>' +
-        '<div class="bar-track"><div class="bar-fill" style="width:' + Math.round(canal.fat / maxFat * 100) + '%;background:' + canal.cor + '"></div></div></div>';
-    }).join('');
-
-    var tms = canais.map(function(c) { return c.ped > 0 ? c.fat / c.ped : 0; });
-    var maxTm = Math.max.apply(null, tms.concat([1]));
-    document.getElementById('ticket-bars').innerHTML = canais.map(function(canal, i) {
-      var tmC = tms[i];
-      return '<div class="bar-row"><div class="bar-lbl"><span style="color:var(--txt1);font-weight:500">' + canal.nome + '</span><span style="color:var(--txt2)">' + fmt(tmC) + '</span></div>' +
-        '<div class="bar-track"><div class="bar-fill" style="width:' + Math.round(tmC / maxTm * 100) + '%;background:' + canal.cor + '"></div></div></div>';
-    }).join('');
-
-    document.getElementById('tabela-canais').innerHTML = canais.map(function(canal) {
-      return '<tr><td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + canal.cor + ';margin-right:8px;"></span>' + canal.nome + '</td>' +
-        '<td class="val">' + fmtN(canal.ped) + '</td><td class="val">' + fmt(canal.fat) + '</td>' +
-        '<td class="val">' + fmt(canal.ped > 0 ? canal.fat / canal.ped : 0) + '</td>' +
-        '<td class="r">' + fmtN(canal.canc) + '</td><td class="r">' + fmtP(fatTotal > 0 ? canal.fat / fatTotal * 100 : 0) + '</td></tr>';
-    }).join('');
-
-    var porDia = {};
-    ativos.forEach(function(p) {
-      var d = p.data_pedido;
-      if (!d) return;
-      if (!porDia[d]) porDia[d] = {fat: 0, ped: 0};
-      porDia[d].fat += parseFloat(p.valor_bruto || 0);
-      porDia[d].ped++;
-    });
-    var dias = Object.keys(porDia).sort();
-    var labels = dias.map(function(d) {
-      return new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'});
-    });
-
-    if (chartFat) chartFat.destroy();
-    chartFat = new Chart(document.getElementById('chart-fat'), {
-      type: 'line',
-      data: {labels: labels, datasets: [{label: 'Fat.', data: dias.map(function(d) { return porDia[d].fat; }),
-        borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.08)', fill: true, tension: 0.4, pointRadius: 2, borderWidth: 2}]},
-      options: {responsive: true, maintainAspectRatio: false, plugins: {legend: {display: false}},
-        scales: {x: {ticks: {color: '#71717a', maxTicksLimit: 8, font: {size: 10}}, grid: {color: 'rgba(255,255,255,0.04)'}},
-          y: {ticks: {color: '#71717a', font: {size: 10}, callback: function(v) { return 'R$' + Math.round(v / 1000) + 'k'; }}, grid: {color: 'rgba(255,255,255,0.04)'}}}}
-    });
-
-    if (chartPed) chartPed.destroy();
-    chartPed = new Chart(document.getElementById('chart-ped'), {
-      type: 'bar',
-      data: {labels: labels, datasets: [{label: 'Pedidos', data: dias.map(function(d) { return porDia[d].ped; }),
-        backgroundColor: 'rgba(16,185,129,0.6)', borderColor: '#10b981', borderWidth: 1, borderRadius: 3}]},
-      options: {responsive: true, maintainAspectRatio: false, plugins: {legend: {display: false}},
-        scales: {x: {ticks: {color: '#71717a', maxTicksLimit: 8, font: {size: 10}}, grid: {color: 'rgba(255,255,255,0.04)'}},
-          y: {ticks: {color: '#71717a', font: {size: 10}}, grid: {color: 'rgba(255,255,255,0.04)'}}}}
-    });
-
-    document.getElementById('upd').textContent = 'Atualizado ' + new Date().toLocaleTimeString('pt-BR');
-  } catch(err) {
-    console.error(err);
-    document.getElementById('kpis').innerHTML = '<div class="kpi"><div class="kpi-lbl">Erro</div><div class="kpi-val kv-red">!</div><div class="kpi-sub">' + err.message + '</div></div>';
   }
 }
 
-var hoje = new Date();
-DE  = hoje.toISOString().split('T')[0];
-ATE = hoje.toISOString().split('T')[0];
-document.getElementById('dt-de').value  = DE;
-document.getElementById('dt-ate').value = ATE;
-// Marca chip "Hoje" como ativo
-document.querySelectorAll('.chip').forEach(function(c) { c.classList.remove('on'); });
-var chips = document.querySelectorAll('.chip');
-if (chips.length > 0) chips[0].classList.add('on');
-(async () => {
-  const auth = await fusionAuth.requireAuth('ecommerce');
-  if (!auth) return;
-  AUTH_HEADERS = auth.headers;
-  const ui = document.getElementById('user-info-tb');
-  if (ui) ui.textContent = (auth.role.nome || auth.role.email);
+// ── DOW HEATMAP ──
+var DIAS_SEM=['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
+function dowIdx(dstr){var dt=new Date(dstr+'T12:00:00Z');return(dt.getUTCDay()+6)%7;}
+function renderDowHeat(){
+  var ped=STATE.pedidosFull||STATE.pedidos;var matrix={};
+  ped.forEach(function(p){if(p._canc)return;var d=(p.data_pedido||'').slice(0,10);if(!d)return;if(!matrix[p._nome])matrix[p._nome]=new Array(7).fill(0);matrix[p._nome][dowIdx(d)]+=parseFloat(p.valor_bruto||0);});
+  var canais=Object.keys(matrix).sort(function(a,b){var sa=matrix[a].reduce(function(s,v){return s+v;},0);var sb=matrix[b].reduce(function(s,v){return s+v;},0);return sb-sa;});
+  if(canais.length===0){document.getElementById('canal-dow-heat').innerHTML='<div class="geo-empty">Sem dados.</div>';return;}
+  var nCols=7+1;var gridCols='80px repeat(7,1fr) 80px';
+  var html='<div class="heat-grid" style="grid-template-columns:'+gridCols+'"><div class="heat-lbl"></div>';
+  DIAS_SEM.forEach(function(d){html+='<div class="heat-lbl col">'+d+'</div>';});
+  html+='<div class="heat-lbl col" style="color:var(--amber)">Total</div>';
+  canais.forEach(function(c){
+    var row=matrix[c];var max=Math.max.apply(null,row);var tot=row.reduce(function(s,v){return s+v;},0);
+    html+='<div class="heat-lbl" style="color:'+getCor(c)+'">'+c+'</div>';
+    row.forEach(function(v,di){var pct=max>0?v/max:0;var pctSem=tot>0?v/tot*100:0;var bg=v>0?'rgba(99,102,241,'+(0.18+pct*0.72)+')':'var(--bg3)';var lbl=v>0?Math.round(pctSem)+'%':'';
+      html+='<div style="background:'+bg+';border-radius:4px;height:28px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#fafafa;text-shadow:0 1px 2px rgba(0,0,0,0.5)" title="'+DIAS_SEM[di]+': '+fmtK(v)+' ('+Math.round(pctSem)+'%)">'+lbl+'</div>';});
+    html+='<div style="text-align:center;font-size:11px;font-weight:700;color:var(--amber);display:flex;align-items:center;justify-content:center">100%</div>';
+  });
+  html+='</div>';document.getElementById('canal-dow-heat').innerHTML=html;
+}
+
+// ── TOP PRODUTOS (dual ranking) ──
+function agruparSkus(itens){
+  var map={};(itens||STATE.itens).forEach(function(it){var k=it._sku_pai;
+    if(!map[k])map[k]={sku_pai:k,nome:it._nome,cat:it._cat,custoUn:it._custoUn||0,receita:0,qtd:0,custoTotal:0};
+    map[k].receita+=it._receita;map[k].qtd+=it._qtd;map[k].custoTotal+=(it._custoUn||0)*it._qtd;});
+  STATE.skuGroups=Object.values(map).sort(function(a,b){return b.receita-a.receita;});
+}
+function renderTopProdutos(){
+  var groups=STATE.skuGroups;
+  // Top by revenue
+  var topRev=groups.slice(0,5);
+  var recEl=document.getElementById('top-receita');
+  if(topRev.length===0){recEl.innerHTML='<div class="geo-empty">Sem dados de itens no período.</div>';}
+  else{recEl.innerHTML=topRev.map(function(s,i){
+    return'<div class="prod-row"><span class="prod-rank">'+(i+1)+'</span><div class="prod-info"><div class="prod-name">'+(s.nome||s.sku_pai)+'</div><div class="prod-meta">'+s.cat+' · '+fmtN(s.qtd)+' un</div></div><span class="prod-val">'+fmt(s.receita)+'</span></div>';}).join('');}
+  // Top by margin %
+  var topMarg=groups.filter(function(s){return s.receita>100&&s.custoTotal>0;}).map(function(s){
+    var m=s.receita-s.custoTotal;var mp=s.receita>0?m/s.receita*100:0;return{nome:s.nome,sku_pai:s.sku_pai,cat:s.cat,receita:s.receita,qtd:s.qtd,margem:m,margemPct:mp};
+  }).sort(function(a,b){return b.margem-a.margem;}).slice(0,5);
+  var margEl=document.getElementById('top-margem');
+  if(topMarg.length===0){margEl.innerHTML='<div class="geo-empty">Sem dados de custo.</div>';}
+  else{margEl.innerHTML=topMarg.map(function(s,i){var cls=s.margemPct>=50?'good':(s.margemPct>=25?'mid':'bad');
+    return'<div class="prod-row"><span class="prod-rank">'+(i+1)+'</span><div class="prod-info"><div class="prod-name">'+(s.nome||s.sku_pai)+'</div><div class="prod-meta">'+s.cat+' · '+fmtN(s.qtd)+' un · <span class="margem-pill '+cls+'">'+Math.round(s.margemPct)+'%</span></div></div><span class="prod-val" style="color:#22c55e">'+fmt(s.margem)+'</span></div>';}).join('');}
+}
+
+// ── PARETO ──
+function renderPareto(){
+  var top=STATE.skuGroups.slice(0,20);
+  var labels=top.map(function(s){var n=s.nome||s.sku_pai;return n.length>24?n.slice(0,22)+'…':n;});
+  var fullNames=top.map(function(s){return s.nome||s.sku_pai;});
+  var receita=top.map(function(s){return s.receita;});
+  var tot=STATE.skuGroups.reduce(function(s,x){return s+x.receita;},0);
+  var cum=0;var cumPct=receita.map(function(v){cum+=v;return tot>0?cum/tot*100:0;});
+  if(CHARTS.pareto)CHARTS.pareto.destroy();
+  var paretoEl=document.getElementById('chart-pareto');
+  if(top.length===0){if(paretoEl)paretoEl.parentElement.innerHTML='<div class="geo-empty" id="pareto-empty">Sem dados de itens.</div>';return;}
+  if(!paretoEl){var pe=document.getElementById('pareto-empty');if(pe)pe.outerHTML='<div class="chart-sm" style="height:280px"><canvas id="chart-pareto"></canvas></div>';paretoEl=document.getElementById('chart-pareto');}
+  if(!paretoEl)return;
+  CHARTS.pareto=new Chart(document.getElementById('chart-pareto'),{
+    data:{labels:labels,datasets:[
+      {type:'bar',label:'Receita',data:receita,backgroundColor:'#6366f1',borderRadius:4,yAxisID:'y'},
+      {type:'line',label:'Cumulativo %',data:cumPct,borderColor:'#eab308',tension:0.35,pointRadius:2,borderWidth:2,yAxisID:'y1'}
+    ]},options:{responsive:true,maintainAspectRatio:false,interaction:{intersect:false,mode:'index'},
+      plugins:{legend:{labels:{color:'#a1a1aa',font:{size:11},usePointStyle:true,pointStyle:'circle'}},
+        tooltip:{backgroundColor:'rgba(24,24,27,0.96)',titleColor:'#fafafa',bodyColor:'#fafafa',borderColor:'#2a2a2e',borderWidth:1,padding:12,cornerRadius:10,
+          callbacks:{title:function(ctx){return fullNames[ctx[0].dataIndex];},label:function(ctx){var v=ctx.parsed.y;return' '+ctx.dataset.label+': '+(ctx.dataset.yAxisID==='y1'?fmtD(v)+'%':fmt(v));}}}},
+      scales:{x:{ticks:{color:'#71717a',font:{size:9},maxRotation:55},grid:{display:false}},y:{ticks:{color:'#71717a',font:{size:10},callback:function(v){return fmtK(v);}},grid:{color:'rgba(255,255,255,0.03)'}},
+        y1:{position:'right',min:0,max:100,ticks:{color:'#eab308',font:{size:10},callback:function(v){return v+'%';}},grid:{display:false}}}}
+  });
+}
+
+// ── ALERTS ──
+function renderAlerts(){
+  var pedAtivos=STATE.pedidos.filter(function(p){return!p._canc;});
+  var totalPed=STATE.pedidos.length;var cancPed=STATE.pedidos.filter(function(p){return p._canc;}).length;
+  var cancRate=totalPed>0?cancPed/totalPed*100:0;
+  var alerts=[];
+  if(cancRate>=5)alerts.push({level:'red',text:'Taxa de cancelamento alta: '+fmtD(cancRate)+'% ('+fmtN(cancPed)+' pedidos)'});
+  else if(cancRate>=2)alerts.push({level:'amber',text:'Taxa de cancelamento: '+fmtD(cancRate)+'%'});
+
+  // Margem por canal
+  var ped=STATE.pedidosFull||STATE.pedidos;
+  var byCanal={};ped.forEach(function(p){if(p._canc)return;var n=p._nome;if(!byCanal[n])byCanal[n]=0;byCanal[n]+=parseFloat(p.valor_bruto||0);});
+  Object.keys(byCanal).forEach(function(n){var r=byCanal[n];var fee=r*custoPct(n);var cmv=r*0.45;var m=r-fee-cmv;var mp=r>0?m/r*100:0;
+    if(mp<15)alerts.push({level:mp<5?'red':'amber',text:n+': margem estimada '+Math.round(mp)+'% — verificar custos'});});
+
+  if(alerts.length===0)alerts.push({level:'green',text:'Tudo operando normalmente — sem alertas no período'});
+  document.getElementById('alerts').innerHTML=alerts.map(function(a){
+    return'<div class="alert-row '+a.level+'"><span class="alert-dot '+a.level+'"></span>'+a.text+'</div>';}).join('');
+}
+
+// ── Init ──
+(async()=>{
+  const auth=await fusionAuth.requireAuth('ecommerce');if(!auth)return;
+  AUTH_HEADERS=auth.headers;
+  var ui=document.getElementById('user-info-tb');if(ui)ui.textContent=(auth.role.nome||auth.role.email);
+  var h=hojeSP();DE=somaDias(h,-29);ATE=h;
+  document.getElementById('dt-de').value=DE;document.getElementById('dt-ate').value=ATE;
   carregar();
 })();
 </script>

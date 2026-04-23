@@ -77,10 +77,13 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
 .chart-hero{position:relative;height:360px;}
 .chart-sm{position:relative;height:220px;}
 
-.tb-wrap-scroll{max-height:70vh;overflow:auto;border-radius:10px;}
-table.tb{width:100%;border-collapse:collapse;font-size:12px;}
-table.tb th{background:rgba(255,255,255,0.03);color:var(--txt2);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;padding:8px 10px;border-bottom:1px solid var(--bdr);text-align:left;white-space:nowrap;position:sticky;top:0;z-index:2;}
-#sku-list table.tb th,.tb-wrap-scroll table.tb th{position:sticky;top:0;z-index:3;background:var(--bg2);padding-top:10px;padding-bottom:16px;border-bottom:2px solid var(--bdr);box-shadow:0 2px 0 var(--bg2);}
+/* `.tb-wrap-scroll` e `#sku-list` têm max-height inline → são scroll containers internos.
+   Sticky thead aqui deve travar em top:0 (topo do container), NÃO top:64px (que seria pra página). */
+.tb-wrap-scroll{overflow:auto;border-radius:10px;}
+table.tb{width:100%;border-collapse:separate;border-spacing:0;font-size:12px;}
+table.tb thead th{position:sticky;top:0;z-index:10;background:var(--bg2);}
+table.tb th{background:var(--bg2);color:var(--txt2);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;padding:8px 10px;text-align:left;white-space:nowrap;}
+#sku-list table.tb thead th,.tb-wrap-scroll table.tb thead th{position:sticky;top:0;z-index:10;background:var(--bg2);padding-top:10px;padding-bottom:16px;box-shadow:inset 0 -2px 0 var(--bdr);}
 table.tb th.r{text-align:right;}
 table.tb th.sortable{cursor:pointer;user-select:none;}
 table.tb th.sortable:hover{color:var(--green);}

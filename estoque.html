@@ -6,200 +6,215 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Fusion — Estoque</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
-:root{--bg:#0a0a0b;--bg2:#18181b;--bg3:#27272a;--bdr:#27272a;--txt1:#ffffff;--txt2:#a1a1aa;--txt3:#52525b;--blue:#3b82f6;--green:#10b981;--red:#ef4444;--amber:#f59e0b;--purple:#8b5cf6;--cyan:#06b6d4;--pink:#ec4899;}
+:root{--bg:#09090b;--bg2:#18181b;--bg3:#27272a;--bdr:#2a2a2e;--txt1:#fafafa;--txt2:#a1a1aa;--txt3:#8b8b95;
+  --blue:#6366f1;--green:#22c55e;--red:#f43f5e;--amber:#eab308;--purple:#a855f7;--pink:#ec4899;--cyan:#06b6d4;}
 *{margin:0;padding:0;box-sizing:border-box;font-family:'Inter',sans-serif;}
 body{background:var(--bg);color:var(--txt1);min-height:100vh;-webkit-text-size-adjust:100%;}
 
-/* ── TOPBAR (lojas pattern) ── */
-.topbar{background:rgba(18,18,20,0.95);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--bdr);height:64px;padding:0 1.5rem;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:100;}
+/* ── TOPBAR ── */
+.topbar{background:rgba(9,9,11,0.92);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--bdr);height:64px;padding:0 1.5rem;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:1000;isolation:isolate;}
 .topbar img{height:32px;object-fit:contain;}
 .topbar-div{width:1px;height:18px;background:var(--bdr);}
-.topbar-label{font-size:15px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--txt1);}
+.topbar-label{font-size:15px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--txt1);}
 .topbar-actions{display:flex;align-items:center;gap:14px;margin-left:auto;}
 #user-info-tb{font-size:13px;color:var(--txt2);}
-#upd{font-size:11px;color:var(--txt3);}
-.btn-back,.btn-logout-tb{background:transparent;border:1px solid var(--bdr);color:var(--txt2);padding:7px 14px;border-radius:6px;font-size:13px;cursor:pointer;font-family:inherit;text-decoration:none;display:inline-block;}
+#upd{font-size:11px;color:var(--txt3);font-weight:600;}
+.btn-back,.btn-logout-tb{background:transparent;border:1px solid var(--bdr);color:var(--txt2);padding:7px 14px;border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit;text-decoration:none;display:inline-block;transition:all 0.15s;}
 .btn-back:hover{border-color:var(--blue);color:var(--blue);}
 .btn-logout-tb:hover{border-color:var(--red);color:var(--red);}
 
 /* ── TABS ── */
 .tabs{display:flex;gap:4px;padding:0 1.5rem;background:var(--bg);border-bottom:1px solid var(--bdr);}
-.tab{padding:12px 20px;font-size:13px;font-weight:600;color:var(--txt2);cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s;letter-spacing:0.02em;}
+.tab{padding:12px 20px;font-size:13px;font-weight:700;color:var(--txt2);cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s;letter-spacing:0.02em;}
 .tab:hover{color:var(--txt1);}
-.tab.on{color:var(--blue);border-bottom-color:var(--blue);}
-@media(max-width:768px){.tabs{padding:0 1rem;}.tab{padding:10px 14px;font-size:12px;}}
+.tab.on{color:var(--green);border-bottom-color:var(--green);}
 
 /* ── MAIN ── */
-.main{max-width:1400px;margin:0 auto;padding:1.5rem;}
+.main{max-width:1440px;margin:0 auto;padding:1.5rem;}
 
 /* ── INSUMOS STUB ── */
 .stub{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;gap:16px;color:var(--txt3);}
 .stub-icon{font-size:48px;opacity:0.3;}
-.stub-title{font-size:18px;font-weight:600;color:var(--txt2);}
+.stub-title{font-size:18px;font-weight:700;color:var(--txt2);}
 .stub-sub{font-size:13px;}
 
-/* ── FILTROS (lojas chip pattern) ── */
-.filtros{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:1.5rem;align-items:center;}
+/* ── FILTROS ── */
+.filtros{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:1.25rem;align-items:center;}
 .chips{display:flex;gap:6px;flex-wrap:wrap;}
-.chip{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:500;border:1px solid var(--bdr);background:var(--bg2);color:var(--txt2);cursor:pointer;transition:all 0.15s;white-space:nowrap;}
-.chip:hover{border-color:var(--blue);color:var(--blue);}
-.chip.on{background:var(--blue);border-color:var(--blue);color:#fff;}
-.fpill{background:var(--bg2);border:1px solid var(--bdr);border-radius:8px;padding:7px 12px;display:flex;align-items:center;gap:6px;transition:border-color 0.2s;}
-.fpill:focus-within{border-color:var(--blue);}
-.fpill label{color:var(--txt3);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;white-space:nowrap;}
+.chip{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;border:1px solid var(--bdr);background:transparent;color:var(--txt2);cursor:pointer;transition:all 0.2s;white-space:nowrap;}
+.chip:hover{border-color:var(--green);color:var(--green);}
+.chip.on{background:var(--green);border-color:var(--green);color:#fff;box-shadow:0 0 12px rgba(34,197,94,0.3);}
+.fpill{background:var(--bg2);border:1px solid var(--bdr);border-radius:8px;padding:7px 12px;display:flex;align-items:center;gap:6px;transition:all 0.2s;}
+.fpill:focus-within{border-color:var(--green);box-shadow:0 0 0 2px rgba(34,197,94,0.2);}
+.fpill label{color:var(--txt3);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;white-space:nowrap;}
 .fpill select,.fpill input{border:none;outline:none;font-size:12px;font-family:inherit;color:var(--txt1);background:transparent;min-width:0;}
 .fpill select option{background:var(--bg2);}
-.fbtn{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:500;border:1px solid var(--bdr);background:var(--bg2);color:var(--txt2);cursor:pointer;transition:all 0.15s;white-space:nowrap;}
-.fbtn:hover{border-color:var(--blue);color:var(--blue);}
-.fbtn.on{background:var(--blue);border-color:var(--blue);color:#fff;}
 
 /* ── BOTÕES DESTAQUE ── */
-.btn-fab{
-  display:flex;align-items:center;gap:10px;
-  padding:8px 18px;border-radius:10px;
-  border:1px solid;cursor:pointer;
-  font-family:inherit;transition:all 0.2s;
-  white-space:nowrap;
-}
+.btn-fab{display:flex;align-items:center;gap:10px;padding:8px 18px;border-radius:10px;border:1px solid;cursor:pointer;font-family:inherit;transition:all 0.2s;white-space:nowrap;}
 .btn-fab-icon{font-size:18px;line-height:1;flex-shrink:0;}
-.btn-fab-txt{display:flex;flex-direction:column;line-height:1.2;text-align:left;font-size:12px;font-weight:500;}
-.btn-fab-txt small{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;opacity:0.7;}
+.btn-fab-txt{display:flex;flex-direction:column;line-height:1.2;text-align:left;font-size:12px;font-weight:600;}
+.btn-fab-txt small{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;opacity:0.7;}
+.btn-fab-blue{border-color:var(--blue);background:rgba(99,102,241,0.08);color:var(--blue);}
+.btn-fab-blue:hover{background:rgba(99,102,241,0.15);border-color:#818cf8;}
+.btn-fab-blue.on{background:var(--blue);border-color:var(--blue);color:#fff;box-shadow:0 0 16px rgba(99,102,241,0.3);}
+.btn-fab-amber{border-color:var(--amber);background:rgba(234,179,8,0.08);color:var(--amber);}
+.btn-fab-amber:hover{background:rgba(234,179,8,0.15);border-color:#facc15;}
+.btn-fab-amber.on{background:var(--amber);border-color:var(--amber);color:#000;box-shadow:0 0 16px rgba(234,179,8,0.3);}
+.btn-ghost{background:transparent;border:1px solid var(--bdr);color:var(--txt2);padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all 0.15s;white-space:nowrap;}
+.btn-ghost:hover{border-color:var(--green);color:var(--green);}
+.btn-ghost.on{background:var(--green);border-color:var(--green);color:#fff;}
+.btn-export{background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);color:var(--green);padding:6px 14px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;transition:all 0.2s;letter-spacing:0.02em;}
+.btn-export:hover{background:rgba(34,197,94,0.2);border-color:var(--green);box-shadow:0 0 12px rgba(34,197,94,0.2);}
 
-/* Fabricação Própria — azul */
-.btn-fab-blue{border-color:var(--blue);background:rgba(59,130,246,0.08);color:var(--blue);}
-.btn-fab-blue:hover{background:rgba(59,130,246,0.15);border-color:#60a5fa;}
-.btn-fab-blue.on{background:var(--blue);border-color:var(--blue);color:#fff;box-shadow:0 0 16px rgba(59,130,246,0.3);}
+/* ── KPIs ── */
+.kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:1.25rem;}
+.kpi{background:var(--bg2);border:1px solid var(--bdr);border-radius:14px;padding:16px;transition:transform 0.2s,box-shadow 0.2s;position:relative;overflow:hidden;}
+.kpi:hover{transform:translateY(-2px);box-shadow:0 4px 20px rgba(0,0,0,0.3);}
+.kpi-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#d4d4d8;margin-bottom:6px;}
+.kpi-val{font-size:1.35rem;font-weight:800;color:var(--txt1);line-height:1;font-variant-numeric:tabular-nums;}
+.kpi-sub{font-size:10px;color:var(--txt3);margin-top:4px;}
+.kpi-icon{position:absolute;top:14px;right:14px;font-size:18px;opacity:0.15;}
 
-/* Grades Quebradas — amber */
-.btn-fab-amber{border-color:var(--amber);background:rgba(245,158,11,0.08);color:var(--amber);}
-.btn-fab-amber:hover{background:rgba(245,158,11,0.15);border-color:#fbbf24;}
-.btn-fab-amber.on{background:var(--amber);border-color:var(--amber);color:#000;box-shadow:0 0 16px rgba(245,158,11,0.3);}
+/* ── LOCATION CANAL-CARDS ── */
+.loc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:1.25rem;}
+.loc-card{background:var(--bg3);border:1px solid var(--bdr);border-radius:14px;padding:16px;position:relative;overflow:hidden;cursor:pointer;transition:transform 0.2s,box-shadow 0.2s;}
+.loc-card:hover{transform:translateY(-2px);box-shadow:0 6px 24px rgba(0,0,0,0.35);}
+.loc-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--loc-cor);}
+.loc-card.active{outline:2px solid var(--loc-cor);outline-offset:-2px;box-shadow:0 0 20px rgba(255,255,255,0.05);}
+.loc-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+.loc-dot{width:10px;height:10px;border-radius:50%;background:var(--loc-cor);box-shadow:0 0 10px var(--loc-cor);}
+.loc-nome{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--loc-cor);}
+.loc-val{font-size:1.55rem;font-weight:800;color:var(--txt1);line-height:1;font-variant-numeric:tabular-nums;margin-bottom:4px;}
+.loc-val-sub{font-size:10px;color:var(--txt3);margin-bottom:12px;}
+.loc-bar-wrap{background:var(--bg);border-radius:4px;height:6px;overflow:hidden;margin-bottom:12px;}
+.loc-bar-fill{height:100%;border-radius:4px;background:var(--loc-cor);transition:width 0.6s cubic-bezier(0.4,0,0.2,1);box-shadow:0 0 8px var(--loc-cor);}
+.loc-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.05);}
+.loc-stat{text-align:center;}
+.loc-stat-lbl{font-size:10px;font-weight:700;color:#d4d4d8;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;}
+.loc-stat-val{font-size:13px;font-weight:700;color:var(--txt1);font-variant-numeric:tabular-nums;}
 
-/* ── KPIs (lojas pattern) ── */
-.kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:1.5rem;}
-.kpi{background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;padding:16px;transition:transform 0.2s;}
-.kpi:hover{transform:translateY(-2px);}
-.kpi-lbl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.07em;color:var(--txt2);margin-bottom:8px;}
-.kpi-val{font-size:1.6rem;font-weight:700;color:var(--txt1);line-height:1;}
-.kpi-sub{font-size:11px;color:var(--txt3);margin-top:5px;}
-
-/* ── LOCATION CARDS (adapted from loja-cards) ── */
-.loc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:1.5rem;}
-.loc-card{background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;padding:16px;border-left:3px solid;cursor:pointer;transition:transform 0.2s,border-color 0.2s;}
-.loc-card:hover{transform:translateY(-2px);}
-.loc-card.active{border-color:var(--blue);box-shadow:0 0 0 1px var(--blue);}
-.loc-nome{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;}
-.loc-val{font-size:1.3rem;font-weight:700;margin-bottom:4px;}
-.loc-info{display:flex;gap:12px;font-size:11px;color:var(--txt2);}
-
-/* ── DISTRIBUTION CARDS & BARS (lojas pattern) ── */
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:1.5rem;}
-.card{background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;padding:20px;}
-.card-title{font-size:13px;font-weight:600;color:var(--txt1);margin-bottom:16px;}
-.bar-row{margin-bottom:10px;}
-.bar-row:last-child{margin-bottom:0;}
-.bar-lbl{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;}
-.bar-track{background:var(--bg3);border-radius:4px;height:6px;overflow:hidden;}
-.bar-fill{height:100%;border-radius:4px;transition:width 0.6s;}
+/* ── CARDS & CHARTS ── */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:1.25rem;}
+.card{background:var(--bg2);border:1px solid var(--bdr);border-radius:14px;padding:18px;font-variant-numeric:tabular-nums;}
+.card-title{font-size:13px;font-weight:700;color:var(--txt1);margin-bottom:14px;letter-spacing:0.02em;display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.chart-wrap{position:relative;height:220px;}
 
 /* ── SECTION HEAD ── */
 .section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding:0 2px;}
-.section-title{font-size:14px;font-weight:600;color:var(--txt1);}
+.section-title{font-size:14px;font-weight:700;color:var(--txt1);}
 .section-count{font-size:12px;color:var(--txt3);}
 
 /* ── PRODUCT BLOCKS ── */
-.prod{background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;margin-bottom:8px;overflow:hidden;transition:border-color 0.2s;}
+.prod{background:var(--bg2);border:1px solid var(--bdr);border-radius:14px;margin-bottom:8px;overflow:hidden;transition:border-color 0.2s;}
 .prod:hover{border-color:#3f3f46;}
 .prod-head{display:flex;align-items:center;gap:10px;padding:14px 16px;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;}
 .prod-head:active{background:rgba(255,255,255,0.02);}
+.prod-health{width:10px;height:10px;border-radius:50%;flex-shrink:0;box-shadow:0 0 6px currentColor;}
 .prod-info{flex:1;min-width:0;}
-.prod-name{font-size:13px;font-weight:600;color:var(--txt1);line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.prod-name{font-size:13px;font-weight:700;color:var(--txt1);line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .prod-sku{font-size:10px;color:var(--txt3);margin-top:2px;display:block;}
 .prod-cat{font-size:9px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#71717a;background:rgba(255,255,255,0.06);padding:3px 7px;border-radius:4px;white-space:nowrap;}
 .prod-locs{display:flex;gap:3px;align-items:center;}
 .prod-loc-dot{width:7px;height:7px;border-radius:50%;opacity:0.9;}
 .prod-loc-dot.off{opacity:0.15;}
-.prod-tot{font-size:15px;font-weight:700;color:var(--blue);white-space:nowrap;min-width:50px;text-align:right;}
+.prod-vals{display:flex;flex-direction:column;align-items:flex-end;gap:2px;min-width:70px;}
+.prod-tot{font-size:15px;font-weight:800;color:var(--blue);white-space:nowrap;font-variant-numeric:tabular-nums;}
+.prod-val{font-size:10px;color:var(--txt3);font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums;}
 .prod-arrow{font-size:9px;color:var(--txt3);transition:transform 0.2s;}
-.prod-arrow.open{transform:rotate(90deg);color:var(--blue);}
+.prod-arrow.open{transform:rotate(90deg);color:var(--green);}
 .prod-body{display:none;border-top:1px solid var(--bdr);}
 .prod-body.open{display:block;}
 
-/* ── CHANNEL PILLS (inside expanded product) ── */
+/* ── CHANNEL PILLS ── */
 .ch-pills{display:flex;gap:6px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--bdr);}
-.ch-pill{display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:500;background:rgba(255,255,255,0.04);border:1px solid var(--bdr);}
+.ch-pill{display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;background:rgba(255,255,255,0.04);border:1px solid var(--bdr);}
 .ch-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
 
 /* ── MATRIX TABLE ── */
 .mwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
 table.mtz{width:100%;border-collapse:collapse;font-size:12px;}
-table.mtz th{background:rgba(255,255,255,0.02);color:var(--txt2);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;padding:10px 12px;border-bottom:1px solid var(--bdr);white-space:nowrap;text-align:center;}
+table.mtz th{background:rgba(255,255,255,0.02);color:var(--txt2);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;padding:10px 12px;border-bottom:1px solid var(--bdr);white-space:nowrap;text-align:center;}
 table.mtz th.thc{text-align:left;min-width:130px;position:sticky;left:0;background:var(--bg2);z-index:2;}
-table.mtz td{padding:9px 12px;border-bottom:1px solid var(--bdr);text-align:center;color:#d4d4d8;transition:background 0.15s;}
-table.mtz td.tdc{text-align:left;white-space:nowrap;font-weight:500;color:#f4f4f5;position:sticky;left:0;background:var(--bg2);z-index:1;}
-table.mtz td.tot{font-weight:700;background:rgba(255,255,255,0.03)!important;border-left:1px solid var(--bdr);color:#f4f4f5;}
+table.mtz td{padding:9px 12px;border-bottom:1px solid var(--bdr);text-align:center;color:#d4d4d8;transition:background 0.15s;font-variant-numeric:tabular-nums;}
+table.mtz td.tdc{text-align:left;white-space:nowrap;font-weight:600;color:#f4f4f5;position:sticky;left:0;background:var(--bg2);z-index:1;}
+table.mtz td.tot{font-weight:800;background:rgba(255,255,255,0.03)!important;border-left:1px solid var(--bdr);color:#f4f4f5;}
 table.mtz tr:hover td{background:rgba(255,255,255,0.03);}
 table.mtz tr:hover td.tdc{background:#1f1f23;}
-table.mtz tfoot td{background:rgba(255,255,255,0.04)!important;font-weight:700;font-size:11px;color:#fff;border-top:1px solid #3f3f46;}
+table.mtz tfoot td{background:rgba(255,255,255,0.04)!important;font-weight:800;font-size:11px;color:#fff;border-top:1px solid #3f3f46;}
 table.mtz tfoot td.tdc{background:rgba(255,255,255,0.04)!important;}
 .cor-dot{width:10px;height:10px;border-radius:50%;border:1px solid rgba(255,255,255,0.1);flex-shrink:0;display:inline-block;vertical-align:middle;margin-right:6px;}
 
 /* ── HEATMAP CELLS ── */
-table.mtz td.h0{background:rgba(239,68,68,0.12);color:#f87171;}
-table.mtz td.h1{background:rgba(245,158,11,0.10);color:#fbbf24;}
-table.mtz td.h3{background:rgba(16,185,129,0.08);color:#34d399;}
+table.mtz td.h0{background:rgba(244,63,94,0.12);color:#fb7185;}
+table.mtz td.h1{background:rgba(234,179,8,0.10);color:#facc15;}
+table.mtz td.h3{background:rgba(34,197,94,0.08);color:#4ade80;}
 
 /* ── SIZE RUN BADGE ── */
-.run{font-size:9px;padding:1px 5px;border-radius:3px;margin-left:6px;font-weight:600;vertical-align:middle;}
-.run-ok{background:rgba(16,185,129,0.15);color:#10b981;}
-.run-broken{background:rgba(245,158,11,0.15);color:#f59e0b;}
-.run-empty{background:rgba(239,68,68,0.15);color:#ef4444;}
+.run{font-size:9px;padding:1px 5px;border-radius:3px;margin-left:6px;font-weight:700;vertical-align:middle;}
+.run-ok{background:rgba(34,197,94,0.15);color:var(--green);}
+.run-broken{background:rgba(234,179,8,0.15);color:var(--amber);}
+.run-empty{background:rgba(244,63,94,0.15);color:var(--red);}
+
+/* ── GRADE COMPLETENESS BAR ── */
+.grade-bar{display:inline-flex;align-items:center;gap:4px;margin-left:6px;vertical-align:middle;}
+.grade-track{width:32px;height:4px;border-radius:2px;background:var(--bg);overflow:hidden;display:inline-block;vertical-align:middle;}
+.grade-fill{height:100%;border-radius:2px;transition:width 0.4s;}
 
 /* ── HIGHLIGHT ROW (grade quebrada) ── */
-table.mtz tr.row-broken{background:rgba(245,158,11,0.06);}
-table.mtz tr.row-broken td.tdc{background:rgba(245,158,11,0.08);}
-table.mtz tr.row-broken:hover td{background:rgba(245,158,11,0.10);}
-table.mtz tr.row-broken:hover td.tdc{background:rgba(245,158,11,0.12);}
+table.mtz tr.row-broken{background:rgba(234,179,8,0.06);}
+table.mtz tr.row-broken td.tdc{background:rgba(234,179,8,0.08);}
+table.mtz tr.row-broken:hover td{background:rgba(234,179,8,0.10);}
+table.mtz tr.row-broken:hover td.tdc{background:rgba(234,179,8,0.12);}
 .prod.prod-quebrada{border-color:var(--amber);}
 
 /* ── CHANNEL DETAIL TOGGLE ── */
 .ch-toggle{display:flex;align-items:center;gap:8px;padding:11px 16px;cursor:pointer;background:rgba(255,255,255,0.02);border-top:1px solid var(--bdr);-webkit-tap-highlight-color:transparent;}
 .ch-toggle:hover{background:rgba(255,255,255,0.04);}
 .ch-toggle-arrow{font-size:9px;color:#71717a;transition:transform 0.2s;}
-.ch-toggle-arrow.open{transform:rotate(90deg);color:var(--blue);}
-.ch-toggle-txt{font-size:11px;font-weight:500;color:var(--txt2);}
+.ch-toggle-arrow.open{transform:rotate(90deg);color:var(--green);}
+.ch-toggle-txt{font-size:11px;font-weight:600;color:var(--txt2);}
 .ch-body{display:none;}
 .ch-body.open{display:block;}
 .ch-bloco{border-top:1px solid var(--bdr);}
 .ch-head{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:rgba(255,255,255,0.02);border-bottom:1px solid var(--bdr);}
-.tag-ch{display:inline-flex;align-items:center;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;letter-spacing:0.03em;}
-.ch-units{font-size:12px;font-weight:600;color:var(--txt2);background:rgba(255,255,255,0.05);padding:3px 10px;border-radius:6px;border:1px solid var(--bdr);}
+.tag-ch{display:inline-flex;align-items:center;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;letter-spacing:0.03em;}
+.ch-units{font-size:12px;font-weight:700;color:var(--txt2);background:rgba(255,255,255,0.05);padding:3px 10px;border-radius:6px;border:1px solid var(--bdr);}
 
 /* ── LOADING & EMPTY ── */
 .loading{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;gap:12px;color:var(--txt2);}
-.spin{width:24px;height:24px;border:2px solid var(--bdr);border-top-color:var(--blue);border-radius:50%;animation:spin 0.7s linear infinite;}
+.spin{width:24px;height:24px;border:2px solid var(--bdr);border-top-color:var(--green);border-radius:50%;animation:spin 0.7s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg)}}
 .empty{text-align:center;padding:30px;color:var(--txt2);font-size:13px;}
 
-/* ── RESPONSIVE ── */
+/* ── RESPONSIVE: Tablet ── */
+@media(max-width:1100px){
+  .kpi-grid{grid-template-columns:repeat(3,1fr);}
+  .loc-grid{grid-template-columns:repeat(2,1fr);}
+}
+/* ── RESPONSIVE: Small tablet / Large phone ── */
 @media(max-width:768px){
-  .topbar{height:56px;padding:0 1rem;}
-  .topbar img{height:26px;}
-  .topbar-label{font-size:12px;}
+  .topbar{height:56px!important;padding:0 1rem!important;}
+  .topbar img{height:26px!important;}
+  .topbar-label{font-size:12px!important;}
   .topbar-actions{gap:8px;}
   .btn-back,.btn-logout-tb{padding:5px 10px;font-size:11px;}
   #user-info-tb{display:none;}
+  .tabs{padding:0 1rem;}
+  .tab{padding:10px 14px;font-size:12px;}
   .main{padding:1rem;}
-  .kpi-grid{grid-template-columns:repeat(2,1fr);gap:8px;}
-  .loc-grid{grid-template-columns:repeat(2,1fr);gap:8px;}
+  .kpi-grid{grid-template-columns:1fr 1fr;gap:8px;}
+  .kpi-val{font-size:1.2rem!important;}
+  .loc-grid{grid-template-columns:1fr 1fr;gap:10px;}
+  .loc-val{font-size:1.3rem!important;}
   .grid2{grid-template-columns:1fr;}
-  .filtros{gap:6px;}
-  .chips{gap:4px;}
-  .chip{padding:5px 10px;font-size:11px;}
-  .fpill{padding:6px 10px;}
-  .fpill label{font-size:9px;}
+  .filtros{flex-direction:column;align-items:stretch;gap:8px;}
+  .chips{justify-content:center;}
+  .fpill{width:100%;}
   .btn-fab{padding:6px 12px;border-radius:8px;gap:6px;}
   .btn-fab-icon{font-size:14px;}
   .btn-fab-txt{font-size:10px;}
@@ -212,6 +227,21 @@ table.mtz tr.row-broken:hover td.tdc{background:rgba(245,158,11,0.12);}
   .ch-toggle,.ch-head{padding:10px 14px;}
   table.mtz th,table.mtz td{padding:7px 8px;font-size:11px;}
   table.mtz th.thc{min-width:100px;}
+}
+/* ── RESPONSIVE: Phone ── */
+@media(max-width:480px){
+  .main{padding:0.75rem;}
+  .kpi-grid{grid-template-columns:1fr;gap:8px;}
+  .loc-grid{grid-template-columns:1fr;gap:10px;}
+  .grid2{gap:10px;}
+  .card{padding:12px;}
+  .card-title{font-size:12px;flex-wrap:wrap;gap:6px;}
+  .chip{padding:8px 12px;font-size:11px;}
+  .chart-wrap{height:180px;}
+  .prod-health{width:8px;height:8px;}
+  .prod-vals{min-width:50px;}
+  .prod-tot{font-size:13px;}
+  .prod-val{display:none;}
 }
 
 /* Safari safe area */
@@ -243,6 +273,7 @@ table.mtz tr.row-broken:hover td.tdc{background:rgba(245,158,11,0.12);}
 </div>
 
 <div class="main" id="tab-finalizados">
+
   <!-- Filtros -->
   <div class="filtros">
     <div class="fpill" style="flex:1;min-width:140px;max-width:260px;">
@@ -254,9 +285,12 @@ table.mtz tr.row-broken:hover td.tdc{background:rgba(245,158,11,0.12);}
       <select id="sel-cat"><option value="">Todas</option></select>
     </div>
     <div class="fpill">
-      <label>Local</label>
-      <select id="sel-loc">
-        <option value="">Todos</option>
+      <label>Ordenar</label>
+      <select id="sel-sort">
+        <option value="nome">Nome A→Z</option>
+        <option value="est-desc">Estoque ↓</option>
+        <option value="est-asc">Estoque ↑</option>
+        <option value="val-desc">Valor ↓</option>
       </select>
     </div>
     <div class="chips" id="chips-nivel">
@@ -266,21 +300,13 @@ table.mtz tr.row-broken:hover td.tdc{background:rgba(245,158,11,0.12);}
     </div>
     <button class="btn-fab btn-fab-blue" id="btn-fabprop" onclick="toggleFab('fabprop')">
       <svg class="btn-fab-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 20V8l4-4h4l2 2h8v14z"/><path d="M6 12v4"/><path d="M10 12v4"/><path d="M14 12v4"/><path d="M18 12v4"/></svg>
-      <span class="btn-fab-txt">Fabricação Própria<small>13 produtos</small></span>
+      <span class="btn-fab-txt">Fabricação Própria<small id="fab-count">13 produtos</small></span>
     </button>
     <button class="btn-fab btn-fab-amber" id="btn-quebrada" onclick="toggleFab('quebrada')">
       <span class="btn-fab-icon" style="font-size:16px">⚠</span>
       <span class="btn-fab-txt">Grades Quebradas<small>tamanhos com furo</small></span>
     </button>
-    <div class="fpill">
-      <label>Ordenar</label>
-      <select id="sel-sort">
-        <option value="nome">Nome A→Z</option>
-        <option value="est-desc">Estoque ↓</option>
-        <option value="est-asc">Estoque ↑</option>
-      </select>
-    </div>
-    <button class="fbtn" id="btn-exp" onclick="toggleExpandAll()">Expandir todos</button>
+    <button class="btn-ghost" id="btn-exp" onclick="toggleExpandAll()">Expandir todos</button>
   </div>
 
   <!-- KPIs -->
@@ -291,25 +317,37 @@ table.mtz tr.row-broken:hover td.tdc{background:rgba(245,158,11,0.12);}
   <!-- Location cards -->
   <div class="loc-grid" id="loc-cards"></div>
 
-  <!-- Distribution -->
+  <!-- Distribution Charts -->
   <div class="grid2">
     <div class="card">
-      <div class="card-title">Estoque por Canal</div>
-      <div id="bars-canal"></div>
+      <div class="card-title">Distribuição por Canal</div>
+      <div class="chart-wrap"><canvas id="chart-canal"></canvas></div>
     </div>
     <div class="card">
-      <div class="card-title">Estoque por Categoria</div>
-      <div id="bars-cat"></div>
+      <div class="card-title">Distribuição por Categoria</div>
+      <div class="chart-wrap"><canvas id="chart-cat"></canvas></div>
     </div>
   </div>
 
-  <!-- Product list -->
-  <div class="section-head">
-    <span class="section-title">Produtos</span>
-    <span class="section-count" id="prod-count"></span>
+  <!-- Product chart (drill-down from category) -->
+  <div class="card" id="card-prods-chart">
+    <div class="card-title">
+      <span id="prods-chart-title">Top Produtos por Estoque</span>
+      <button class="btn-ghost" id="btn-prods-back" style="display:none;padding:4px 10px;font-size:11px;" onclick="clearCatDrill()">← Voltar</button>
+    </div>
+    <div style="position:relative;height:320px;"><canvas id="chart-prods"></canvas></div>
   </div>
-  <div id="prod-list">
-    <div class="loading"><div class="spin"></div><span>Carregando dados...</span></div>
+
+  <!-- Product list -->
+  <div class="card" style="padding-bottom:12px;">
+    <div class="card-title">
+      <span>Produtos</span>
+      <span id="prod-count" style="font-size:12px;color:var(--txt3);font-weight:600;"></span>
+      <button class="btn-export" onclick="exportImage('produtos')">Compartilhar</button>
+    </div>
+    <div id="prod-list">
+      <div class="loading"><div class="spin"></div><span>Carregando dados...</span></div>
+    </div>
   </div>
 </div>
 
@@ -327,30 +365,24 @@ table.mtz tr.row-broken:hover td.tdc{background:rgba(245,158,11,0.12);}
 // ═══════════════════════════════════════════
 const SB_URL = 'https://spulbhnmkomvgohzhfvj.supabase.co';
 
+Chart.defaults.font.family = "'Inter', sans-serif";
+Chart.defaults.font.size = 11;
+Chart.defaults.font.weight = '400';
+Chart.defaults.font.lineHeight = 1.6;
+Chart.defaults.color = '#a1a1aa';
+
 const LOCS = [
-  { key:'olist_fio',     label:'Olist Fio',     cor:'#3b82f6' },
-  { key:'olist_kwid',    label:'KWID CD',        cor:'#10b981' },
-  { key:'mlfull_fio',    label:'ML Full Fio',    cor:'#f59e0b' },
-  { key:'mlfull_confec', label:'ML Full Confec', cor:'#8b5cf6' },
-  { key:'shopee',        label:'Shopee',         cor:'#ef4444' },
+  { key:'olist_fio',     label:'Olist Fio',     cor:'#6366f1' },
+  { key:'olist_kwid',    label:'KWID CD',        cor:'#22c55e' },
+  { key:'mlfull_fio',    label:'ML Full Fio',    cor:'#eab308' },
+  { key:'mlfull_confec', label:'ML Full Confec', cor:'#a855f7' },
+  { key:'shopee',        label:'Shopee',         cor:'#f43f5e' },
   { key:'shopify',       label:'Shopify',        cor:'#06b6d4' },
 ];
 
-// SKUs dos produtos finalizados (fase 1)
 const SKU_FINALIZADOS = new Set([
-  'CLAFEL01',   // Calça Alfaiataria Com Elastano
-  'CLAF01',     // Calça Alfaiataria Liso
-  'CLTECH',     // Calça Alfaitaria Tech Stretch
-  'CLMALHA',    // Calça De Malha
-  'CLSJ01',     // Calça De Sarja
-  'CLMC01',     // Calça Microfibra
-  'CLOX01',     // Calça Oxford
-  'CMBB',       // Camisa Bambu Nacional
-  'CMINDIANO',  // Camisa ML Indiano
-  'CMMC',       // Camisa ML Microleve
-  'CMEL01',     // Camisa ML Passa Fácil C/Elastano
-  'CMLS01',     // Camisa ML Passa Fácil Lisa
-  'CMPL01',     // Camisa ML Poliamida
+  'CLAFEL01','CLAF01','CLTECH','CLMALHA','CLSJ01','CLMC01','CLOX01',
+  'CMBB','CMINDIANO','CMMC','CMEL01','CMLS01','CMPL01',
 ]);
 
 const ORDEM_TAM = ['PP','P','M','G','G1','GG','GG1','XG','XGG','EG','EGG','36','38','40','42','44','46','48','50','52','54','56','Único','UN'];
@@ -367,6 +399,11 @@ const COR_MAP = {
   'OFF WHITE':'#F0EEE8',
 };
 
+const CAT_CORES = {
+  'CALÇA':'#6366f1','CAMISA':'#22c55e','CAMISETA':'#eab308','BLAZER':'#a855f7',
+  'BERMUDA':'#ec4899','ACESSÓRIOS':'#f97316','CALÇADOS':'#f43f5e','INVERNO':'#06b6d4',
+};
+
 // ═══════════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════════
@@ -374,14 +411,18 @@ let AUTH_HEADERS = null;
 let DADOS = null;
 let EXP = {}, CH_EXP = {};
 let expAll = false;
+let activeLoc = '';
+let CHARTS = { canal: null, cat: null, prods: null };
 
 // ═══════════════════════════════════════════
 // HELPERS
 // ═══════════════════════════════════════════
 function fmt(n)  { return Math.round(n || 0).toLocaleString('pt-BR'); }
-function fmtR(n) { return 'R$ ' + Math.round(n || 0).toLocaleString('pt-BR'); }
+function fmtR(n) { return 'R$\u00A0' + Math.round(n || 0).toLocaleString('pt-BR'); }
+function fmtK(n) { n=n||0; if(Math.abs(n)>=1e6) return 'R$\u00A0'+(n/1e6).toFixed(1)+'M'; if(Math.abs(n)>=1e3) return 'R$\u00A0'+Math.round(n/1e3)+'k'; return 'R$\u00A0'+Math.round(n); }
 function fmtP(n) { return (n || 0).toFixed(1) + '%'; }
 function safe(s) { return (s||'').replace(/[^a-zA-Z0-9]/g, '_'); }
+function corCat(c) { for (const [k,v] of Object.entries(CAT_CORES)) { if ((c||'').toUpperCase().includes(k)) return v; } return '#64748b'; }
 
 function corV(n) {
   if (!n) return '#CCC';
@@ -401,6 +442,14 @@ function hcls(qty) {
 function hexRgb(hex) {
   const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
   return `${r},${g},${b}`;
+}
+
+// Health status: red (no stock), amber (broken grade), green (healthy)
+function healthColor(p, locKey) {
+  const t = totPai(p, locKey);
+  if (t === 0) return 'var(--red)';
+  if (isQuebrada(p, locKey)) return 'var(--amber)';
+  return 'var(--green)';
 }
 
 // ═══════════════════════════════════════════
@@ -434,7 +483,6 @@ async function carregar() {
       apiAll('estoque?select=produto_id,sku,quantidade,localizacao'),
     ]);
 
-    // ── Index estoque by SKU and by produto_id ──
     const eBySku = {}, eById = {};
     est.forEach(e => {
       if (e.sku) {
@@ -448,14 +496,12 @@ async function carregar() {
       }
     });
 
-    // ── Index all products by SKU ──
     const prodsBySku = {};
     prods.forEach(p => {
       const k = (p.sku || '').trim().toUpperCase();
       if (k && !prodsBySku[k]) prodsBySku[k] = p;
     });
 
-    // ── Determine parent SKU set ──
     const skuPaiSet = new Set();
     prods.forEach(p => {
       if (p.tipo === 'pai') {
@@ -468,14 +514,12 @@ async function carregar() {
       }
     });
 
-    // ── Build parent map ──
     const pBySku = {};
     skuPaiSet.forEach(skuU => {
       const meta = prodsBySku[skuU];
       if (!meta) return;
       pBySku[skuU] = {
-        id: meta.id,
-        sku: meta.sku,
+        id: meta.id, sku: meta.sku,
         nome: meta.descricao || meta.nome || meta.sku,
         categoria: meta.categoria || '',
         preco: meta.preco_venda || 0,
@@ -483,7 +527,6 @@ async function carregar() {
       };
     });
 
-    // ── Umbrella SKUs (modelo único) ──
     const COR_GC = '(Modelo único)';
     Object.values(pBySku).forEach(pai => {
       const skuU = pai.sku.trim().toUpperCase();
@@ -495,12 +538,10 @@ async function carregar() {
       }
     });
 
-    // ── Distribute children ──
     prods.filter(p => p.tipo === 'filho').forEach(p => {
       const skuU = (p.sku || '').trim().toUpperCase();
       const spU  = (p.sku_pai || '').trim().toUpperCase();
-      if (skuU && skuU === spU) return; // auto-ref
-
+      if (skuU && skuU === spU) return;
       let pai = null;
       if (spU) pai = pBySku[spU];
       if (!pai && skuU) {
@@ -508,25 +549,18 @@ async function carregar() {
         if (parts.length > 1) pai = pBySku[parts.slice(0, -1).join('-')];
       }
       if (!pai) return;
-
-      // Use child preco if parent doesn't have one
       if (!pai.preco && p.preco_venda) pai.preco = p.preco_venda;
-
       const rawCor = (p.cor || '').replace(/[¨"'`]/g, '').trim();
       const cor = rawCor || 'Sem cor';
       const tam = (p.tamanho || 'Único').trim();
       if (!pai.cores[cor]) pai.cores[cor] = {};
       if (!pai.cores[cor][tam]) pai.cores[cor][tam] = {};
-
       const e = eBySku[skuU] || eById[p.id] || {};
       LOCS.forEach(l => {
         pai.cores[cor][tam][l.key] = (pai.cores[cor][tam][l.key] || 0) + (e[l.key] || 0);
       });
     });
 
-    // Correções já aplicadas no Supabase (ativo=false + rename).
-    // Filtro ativo=eq.true na query garante que não aparecem.
-    // Safety net: excluir "Sem cor" (cor NULL → 'Sem cor' no JS) de todos os finalizados.
     Object.values(pBySku).forEach(pai => {
       if (SKU_FINALIZADOS.has(pai.sku.trim().toUpperCase())) {
         delete pai.cores['Sem cor'];
@@ -535,16 +569,10 @@ async function carregar() {
 
     const pais = Object.values(pBySku).filter(p => Object.keys(p.cores).length > 0);
 
-    // ── Populate category filter ──
     const cats = [...new Set(pais.map(p => p.categoria).filter(Boolean))].sort();
     const selCat = document.getElementById('sel-cat');
     selCat.innerHTML = '<option value="">Todas</option>';
     cats.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; selCat.appendChild(o); });
-
-    // ── Populate location filter ──
-    const selLoc = document.getElementById('sel-loc');
-    selLoc.innerHTML = '<option value="">Todos</option>';
-    LOCS.forEach(l => { const o = document.createElement('option'); o.value = l.key; o.textContent = l.label; selLoc.appendChild(o); });
 
     DADOS = { pais };
     document.getElementById('upd').textContent = 'Atualizado ' + new Date().toLocaleTimeString('pt-BR');
@@ -566,8 +594,8 @@ function totPai(p, locKey) {
   return t;
 }
 
-function valPai(p) {
-  return totPai(p) * (p.preco || 0);
+function valPai(p, locKey) {
+  return totPai(p, locKey) * (p.preco || 0);
 }
 
 function totByLocPai(p) {
@@ -603,14 +631,14 @@ function sizeRunInfo(corObj, locKey) {
 }
 
 // ═══════════════════════════════════════════
-// RENDER
+// RENDER MAIN
 // ═══════════════════════════════════════════
 function render() {
   if (!DADOS) return;
 
   const busca  = document.getElementById('busca').value.trim().toLowerCase();
   const cat    = document.getElementById('sel-cat').value;
-  const locF   = document.getElementById('sel-loc').value;
+  const locF   = activeLoc;
   const fabPropAtivo = document.getElementById('btn-fabprop').classList.contains('on');
   const quebradaAtivo = document.getElementById('btn-quebrada').classList.contains('on');
   const nivel = fabPropAtivo ? 'fabprop' : (quebradaAtivo ? 'quebrada' : (document.querySelector('#chips-nivel .chip.on')?.dataset?.nivel || 'todos'));
@@ -618,9 +646,7 @@ function render() {
 
   let pais = DADOS.pais.filter(p => {
     const skuU = p.sku.trim().toUpperCase();
-    // Fabricação Própria: só os 13 SKUs fabricados
     if (nivel === 'fabprop' && !SKU_FINALIZADOS.has(skuU)) return false;
-    // Grades Quebradas: qualquer produto com grade quebrada
     if (nivel === 'quebrada' && !isQuebrada(p, locF || undefined)) return false;
     if (cat && p.categoria !== cat) return false;
     if (busca && !p.sku.toLowerCase().includes(busca) && !p.nome.toLowerCase().includes(busca)) return false;
@@ -630,23 +656,26 @@ function render() {
     return true;
   });
 
-  // Sort
   if (sort === 'nome') {
     pais.sort((a, b) => a.categoria.localeCompare(b.categoria) || a.nome.localeCompare(b.nome));
   } else if (sort === 'est-desc') {
     pais.sort((a, b) => totPai(b) - totPai(a));
   } else if (sort === 'est-asc') {
     pais.sort((a, b) => totPai(a) - totPai(b));
+  } else if (sort === 'val-desc') {
+    pais.sort((a, b) => valPai(b) - valPai(a));
   }
 
   renderKPIs(pais, locF);
   renderLocCards(pais, locF);
-  renderBars(pais, locF);
+  renderCharts(pais, locF);
   renderProdList(pais, locF, nivel);
 }
 
+// ═══════════════════════════════════════════
+// RENDER KPIs
+// ═══════════════════════════════════════════
 function renderKPIs(filtrados, locF) {
-  const locLabel = locF ? LOCS.find(l => l.key === locF)?.label : null;
   let tg = 0, val = 0, com = 0, sem = 0, quebradas = 0;
   filtrados.forEach(p => {
     const t = totPai(p, locF || undefined);
@@ -655,103 +684,359 @@ function renderKPIs(filtrados, locF) {
     if (t > 0) com++; else sem++;
     if (isQuebrada(p, locF || undefined)) quebradas++;
   });
-
   const total = filtrados.length;
   const stockoutPct = total > 0 ? (sem / total * 100) : 0;
-  const subLocal = locLabel ? locLabel : `${LOCS.length} locais`;
 
   document.getElementById('kpis').innerHTML = `
     <div class="kpi">
       <div class="kpi-lbl">Total em Estoque</div>
       <div class="kpi-val">${fmt(tg)}</div>
-      <div class="kpi-sub">peças — ${subLocal}</div>
+      <div class="kpi-sub">peças${locF ? ' — ' + LOCS.find(l=>l.key===locF)?.label : ''}</div>
+      <div class="kpi-icon">📦</div>
     </div>
     <div class="kpi">
       <div class="kpi-lbl">Valor Estimado</div>
-      <div class="kpi-val" style="color:var(--green)">${fmtR(val)}</div>
+      <div class="kpi-val" style="color:var(--green)">${fmtK(val)}</div>
       <div class="kpi-sub">preço de venda</div>
+      <div class="kpi-icon">💰</div>
     </div>
     <div class="kpi">
-      <div class="kpi-lbl">Produtos Ativos</div>
+      <div class="kpi-lbl">SKUs Ativos</div>
       <div class="kpi-val" style="color:var(--blue)">${fmt(com)}</div>
       <div class="kpi-sub">de ${fmt(total)} com estoque</div>
+      <div class="kpi-icon">📊</div>
     </div>
     <div class="kpi">
-      <div class="kpi-lbl">Sem Estoque</div>
-      <div class="kpi-val" style="color:${sem > 0 ? 'var(--red)' : 'var(--green)'}">${fmt(sem)}</div>
-      <div class="kpi-sub">${fmtP(stockoutPct)} stockout rate</div>
+      <div class="kpi-lbl">Stockout Rate</div>
+      <div class="kpi-val" style="color:${sem > 0 ? 'var(--red)' : 'var(--green)'}">${fmtP(stockoutPct)}</div>
+      <div class="kpi-sub">${fmt(sem)} sem estoque</div>
+      <div class="kpi-icon">⚠</div>
     </div>
     <div class="kpi">
       <div class="kpi-lbl">Grades Quebradas</div>
       <div class="kpi-val" style="color:${quebradas > 0 ? 'var(--amber)' : 'var(--green)'}">${fmt(quebradas)}</div>
       <div class="kpi-sub">tamanhos com furo</div>
+      <div class="kpi-icon">🔗</div>
     </div>`;
 }
 
-function renderLocCards(filtrados, activeLoc) {
-  const tl = {};
+// ═══════════════════════════════════════════
+// RENDER LOCATION CARDS (Canal-Card pattern)
+// ═══════════════════════════════════════════
+function renderLocCards(filtrados, activeLocKey) {
+  const tl = {}, skuCount = {};
   let tg = 0;
-  LOCS.forEach(l => { tl[l.key] = 0; });
+  LOCS.forEach(l => { tl[l.key] = 0; skuCount[l.key] = 0; });
   filtrados.forEach(p => {
     const bl = totByLocPai(p);
-    LOCS.forEach(l => { tl[l.key] += bl[l.key]; tg += bl[l.key]; });
-  });
-
-  // Count SKUs per location
-  const skuCount = {};
-  LOCS.forEach(l => { skuCount[l.key] = 0; });
-  filtrados.forEach(p => {
-    const bl = totByLocPai(p);
-    LOCS.forEach(l => { if (bl[l.key] > 0) skuCount[l.key]++; });
+    LOCS.forEach(l => {
+      tl[l.key] += bl[l.key];
+      tg += bl[l.key];
+      if (bl[l.key] > 0) skuCount[l.key]++;
+    });
   });
 
   document.getElementById('loc-cards').innerHTML = LOCS.map(l => {
-    const isActive = activeLoc === l.key;
-    return `<div class="loc-card${isActive ? ' active' : ''}" style="border-left-color:${l.cor}" onclick="selectLoc('${l.key}')">
-      <div class="loc-nome" style="color:${l.cor}">${l.label}</div>
-      <div class="loc-val" style="color:${l.cor}">${fmt(tl[l.key])}</div>
-      <div class="loc-info">
-        <span>${fmt(skuCount[l.key])} SKUs</span>
-        <span>${tg > 0 ? fmtP(tl[l.key] / tg * 100) : '0%'}</span>
+    const isActive = activeLocKey === l.key;
+    const pct = tg > 0 ? (tl[l.key] / tg * 100) : 0;
+    const healthPct = filtrados.length > 0 ? (skuCount[l.key] / filtrados.length * 100) : 0;
+    return `<div class="loc-card${isActive ? ' active' : ''}" style="--loc-cor:${l.cor}" onclick="selectLoc('${l.key}')">
+      <div class="loc-head">
+        <span class="loc-dot"></span>
+        <span class="loc-nome">${l.label}</span>
+      </div>
+      <div class="loc-val">${fmt(tl[l.key])}</div>
+      <div class="loc-val-sub">peças</div>
+      <div class="loc-bar-wrap"><div class="loc-bar-fill" style="width:${Math.round(pct)}%"></div></div>
+      <div class="loc-stats">
+        <div class="loc-stat">
+          <div class="loc-stat-lbl">SKUs</div>
+          <div class="loc-stat-val">${fmt(skuCount[l.key])}</div>
+        </div>
+        <div class="loc-stat">
+          <div class="loc-stat-lbl">% Total</div>
+          <div class="loc-stat-val">${fmtP(pct)}</div>
+        </div>
+        <div class="loc-stat">
+          <div class="loc-stat-lbl">Cobertura</div>
+          <div class="loc-stat-val">${fmtP(healthPct)}</div>
+        </div>
       </div>
     </div>`;
   }).join('');
 }
 
-function renderBars(filtrados, locF) {
-  // Channel bars
+// ═══════════════════════════════════════════
+// CHART.JS PLUGIN — Bar Labels
+// ═══════════════════════════════════════════
+const barLabelsPlugin = {
+  id: 'barLabels',
+  afterDatasetsDraw(chart) {
+    const ctx = chart.ctx;
+    const isHoriz = chart.options.indexAxis === 'y';
+    chart.data.datasets.forEach((ds, di) => {
+      const meta = chart.getDatasetMeta(di);
+      meta.data.forEach((bar, i) => {
+        const val = ds.data[i];
+        if (!val) return;
+        ctx.save();
+        ctx.font = '600 10px Inter, sans-serif';
+        ctx.fillStyle = '#fafafa';
+        ctx.textBaseline = 'middle';
+        if (isHoriz) {
+          const x = bar.x + 6;
+          const y = bar.y;
+          const maxX = chart.chartArea.right - 8;
+          // Se a barra é muito larga, coloca dentro
+          if (x > maxX - 40) {
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.textAlign = 'right';
+            ctx.fillText(fmt(val), bar.x - 6, y);
+          } else {
+            ctx.textAlign = 'left';
+            ctx.fillText(fmt(val), x, y);
+          }
+        } else {
+          ctx.textAlign = 'center';
+          ctx.fillText(fmt(val), bar.x, bar.y - 8);
+        }
+        ctx.restore();
+      });
+    });
+  }
+};
+
+// ═══════════════════════════════════════════
+// RENDER CHARTS (Chart.js)
+// ═══════════════════════════════════════════
+const TOOLTIP_STYLE = {
+  backgroundColor: 'rgba(24,24,27,0.96)',
+  titleColor: '#fafafa',
+  bodyColor: '#fafafa',
+  borderColor: '#2a2a2e',
+  borderWidth: 1,
+  padding: 12,
+  cornerRadius: 10,
+};
+
+function renderCharts(filtrados, locF) {
+  // ── Canal chart ──
   const tl = {};
   LOCS.forEach(l => { tl[l.key] = 0; });
   filtrados.forEach(p => {
     const bl = totByLocPai(p);
     LOCS.forEach(l => { tl[l.key] += bl[l.key]; });
   });
-  const barsLocs = locF ? LOCS.filter(l => l.key === locF) : LOCS;
-  const maxL = Math.max(...barsLocs.map(l => tl[l.key]), 1);
-  document.getElementById('bars-canal').innerHTML = barsLocs
-    .slice().sort((a, b) => tl[b.key] - tl[a.key])
-    .map(l => `<div class="bar-row">
-      <div class="bar-lbl"><span style="color:var(--txt1);font-weight:500">${l.label}</span><span style="color:var(--txt2)">${fmt(tl[l.key])}</span></div>
-      <div class="bar-track"><div class="bar-fill" style="width:${Math.round(tl[l.key] / maxL * 100)}%;background:${l.cor}"></div></div>
-    </div>`).join('');
 
-  // Category bars
+  const sortedLocs = [...LOCS].sort((a, b) => tl[b.key] - tl[a.key]);
+  const canalLabels = sortedLocs.map(l => l.label);
+  const canalData = sortedLocs.map(l => tl[l.key]);
+  const canalColors = sortedLocs.map(l => l.cor);
+  const totalUnits = canalData.reduce((s, v) => s + v, 0);
+
+  if (CHARTS.canal) CHARTS.canal.destroy();
+  CHARTS.canal = new Chart(document.getElementById('chart-canal'), {
+    type: 'bar',
+    plugins: [barLabelsPlugin],
+    data: {
+      labels: canalLabels,
+      datasets: [{
+        data: canalData,
+        backgroundColor: canalColors.map(c => c + 'CC'),
+        borderColor: canalColors,
+        borderWidth: 1.5,
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      layout: { padding: { right: 60 } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          ...TOOLTIP_STYLE,
+          callbacks: {
+            label: function(ctx) {
+              const v = ctx.parsed.x;
+              const pct = totalUnits > 0 ? (v / totalUnits * 100).toFixed(1) : 0;
+              return ` ${fmt(v)} peças · ${pct}%`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#a1a1aa', callback: v => fmt(v) }, grid: { color: 'rgba(255,255,255,0.03)' } },
+        y: { ticks: { color: '#a1a1aa', font: { weight: '600' } }, grid: { display: false } }
+      },
+      onClick: function(evt, elems) {
+        if (elems.length > 0) {
+          selectLoc(sortedLocs[elems[0].index].key);
+        }
+      }
+    }
+  });
+
+  // ── Category chart ──
   const tc = {};
   filtrados.forEach(p => {
     const c = p.categoria || 'Outros';
     tc[c] = (tc[c] || 0) + totPai(p, locF || undefined);
   });
   const catArr = Object.entries(tc).sort((a, b) => b[1] - a[1]);
-  const maxC = Math.max(...catArr.map(c => c[1]), 1);
-  const catColors = ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#ef4444','#06b6d4','#ec4899','#84cc16','#f97316'];
-  document.getElementById('bars-cat').innerHTML = catArr.map(([c, v], i) =>
-    `<div class="bar-row">
-      <div class="bar-lbl"><span style="color:var(--txt1);font-weight:500">${c}</span><span style="color:var(--txt2)">${fmt(v)}</span></div>
-      <div class="bar-track"><div class="bar-fill" style="width:${Math.round(v / maxC * 100)}%;background:${catColors[i % catColors.length]}"></div></div>
-    </div>`
-  ).join('');
+  const catLabels = catArr.map(c => c[0]);
+  const catData = catArr.map(c => c[1]);
+  const catColors = catArr.map(c => corCat(c[0]));
+  const catTotal = catData.reduce((s, v) => s + v, 0);
+
+  if (CHARTS.cat) CHARTS.cat.destroy();
+  CHARTS.cat = new Chart(document.getElementById('chart-cat'), {
+    type: 'bar',
+    plugins: [barLabelsPlugin],
+    data: {
+      labels: catLabels,
+      datasets: [{
+        data: catData,
+        backgroundColor: catColors.map(c => c + 'CC'),
+        borderColor: catColors,
+        borderWidth: 1.5,
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      layout: { padding: { right: 60 } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          ...TOOLTIP_STYLE,
+          callbacks: {
+            label: function(ctx) {
+              const v = ctx.parsed.x;
+              const pct = catTotal > 0 ? (v / catTotal * 100).toFixed(1) : 0;
+              return ` ${fmt(v)} peças · ${pct}%`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#a1a1aa', callback: v => fmt(v) }, grid: { color: 'rgba(255,255,255,0.03)' } },
+        y: { ticks: { color: '#a1a1aa', font: { weight: '600' } }, grid: { display: false } }
+      },
+      onClick: function(evt, elems) {
+        if (elems.length > 0) {
+          const catName = catArr[elems[0].index][0];
+          drillCategory(catName);
+        }
+      }
+    }
+  });
+
+  // ── Products chart ──
+  renderProdsChart(filtrados, locF);
 }
 
+function renderProdsChart(filtrados, locF) {
+  const cat = document.getElementById('sel-cat').value;
+  const titleEl = document.getElementById('prods-chart-title');
+  const backBtn = document.getElementById('btn-prods-back');
+
+  if (cat) {
+    titleEl.textContent = `Produtos — ${cat}`;
+    backBtn.style.display = '';
+  } else {
+    titleEl.textContent = 'Top 15 Produtos por Estoque';
+    backBtn.style.display = 'none';
+  }
+
+  // Build product data
+  const prodData = filtrados.map(p => ({
+    nome: p.nome.length > 28 ? p.nome.slice(0, 26) + '…' : p.nome,
+    fullNome: p.nome,
+    sku: p.sku,
+    qty: totPai(p, locF || undefined),
+    cat: p.categoria,
+    color: corCat(p.categoria),
+    health: healthColor(p, locF || undefined),
+  })).filter(d => d.qty > 0).sort((a, b) => b.qty - a.qty);
+
+  const top = prodData.slice(0, 15);
+  const labels = top.map(d => d.nome);
+  const data = top.map(d => d.qty);
+  const colors = top.map(d => d.color);
+
+  if (CHARTS.prods) CHARTS.prods.destroy();
+  CHARTS.prods = new Chart(document.getElementById('chart-prods'), {
+    type: 'bar',
+    plugins: [barLabelsPlugin],
+    data: {
+      labels: labels,
+      datasets: [{
+        data: data,
+        backgroundColor: colors.map(c => c + 'CC'),
+        borderColor: colors,
+        borderWidth: 1.5,
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      layout: { padding: { right: 60 } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          ...TOOLTIP_STYLE,
+          callbacks: {
+            title: function(items) {
+              const i = items[0]?.dataIndex;
+              return i != null ? top[i].fullNome : '';
+            },
+            label: function(ctx) {
+              const i = ctx.dataIndex;
+              return ` ${top[i].sku} · ${fmt(ctx.parsed.x)} peças`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#a1a1aa', callback: v => fmt(v) }, grid: { color: 'rgba(255,255,255,0.03)' } },
+        y: { ticks: { color: '#a1a1aa', font: { weight: '600', size: 10 } }, grid: { display: false } }
+      },
+      onClick: function(evt, elems) {
+        if (elems.length > 0) {
+          const sku = top[elems[0].index].sku;
+          const id = safe(sku);
+          EXP[id] = true;
+          render();
+          // Scroll to the product
+          setTimeout(() => {
+            document.getElementById('body-' + id)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 100);
+        }
+      }
+    }
+  });
+}
+
+function drillCategory(catName) {
+  const sel = document.getElementById('sel-cat');
+  sel.value = sel.value === catName ? '' : catName;
+  render();
+}
+
+function clearCatDrill() {
+  document.getElementById('sel-cat').value = '';
+  render();
+}
+
+// ═══════════════════════════════════════════
+// RENDER PRODUCT LIST
+// ═══════════════════════════════════════════
 function renderProdList(pais, locF, nivel) {
   const modoDestaque = nivel === 'quebrada' || nivel === 'fabprop';
   if (modoDestaque) pais.forEach(p => { EXP[safe(p.sku)] = true; });
@@ -764,16 +1049,16 @@ function renderProdList(pais, locF, nivel) {
 function renderProd(pai, locF, modoQuebrada) {
   const id = safe(pai.sku);
   const tot = totPai(pai, locF || undefined);
+  const val = valPai(pai, locF || undefined);
   const isOpen = !!EXP[id];
   const bl = totByLocPai(pai);
   const prodQuebrada = modoQuebrada && isQuebrada(pai, locF || undefined);
+  const hColor = healthColor(pai, locF || undefined);
 
-  // Location dots for collapsed view
   const locDots = LOCS.map(l =>
     `<span class="prod-loc-dot${bl[l.key] > 0 ? '' : ' off'}" style="background:${l.cor}" title="${l.label}: ${fmt(bl[l.key])}"></span>`
   ).join('');
 
-  // Ordered sizes
   const tamSet = new Set();
   Object.values(pai.cores).forEach(ts => Object.keys(ts).forEach(t => tamSet.add(t)));
   const tams = [...tamSet].sort((a, b) => {
@@ -784,11 +1069,9 @@ function renderProd(pai, locF, modoQuebrada) {
   });
 
   const cors = Object.keys(pai.cores).sort();
-
-  // Choose which locations to render
   const activeLocs = locF ? LOCS.filter(l => l.key === locF) : LOCS;
 
-  // ── Consolidated matrix ──
+  // Consolidated matrix
   const tTam = {}, tCor = {};
   cors.forEach(c => {
     tCor[c] = 0;
@@ -811,6 +1094,14 @@ function renderProd(pai, locF, modoQuebrada) {
       else runBadge = `<span class="run run-ok">✓</span>`;
     }
 
+    // Grade completeness bar
+    let gradeBar = '';
+    if (c !== '(Modelo único)' && run.total > 1) {
+      const pct = Math.round(run.comEstoque / run.total * 100);
+      const barColor = pct === 100 ? 'var(--green)' : pct >= 70 ? 'var(--amber)' : 'var(--red)';
+      gradeBar = `<span class="grade-bar"><span class="grade-track"><span class="grade-fill" style="width:${pct}%;background:${barColor}"></span></span></span>`;
+    }
+
     const cells = tams.map(t => {
       const v = activeLocs.reduce((s, l) => s + ((pai.cores[c][t] || {})[l.key] || 0), 0);
       return `<td class="${hcls(v)}">${v === 0 ? '—' : fmt(v)}</td>`;
@@ -819,7 +1110,7 @@ function renderProd(pai, locF, modoQuebrada) {
     const rowClass = isCorQuebrada ? ' row-broken' : '';
 
     return `<tr class="${rowClass}">
-      <td class="tdc"><span class="cor-dot" style="background:${corV(c)}"></span>${c}${runBadge}</td>
+      <td class="tdc"><span class="cor-dot" style="background:${corV(c)}"></span>${c}${runBadge}${gradeBar}</td>
       ${cells}
       <td class="tot">${tCor[c] > 0 ? fmt(tCor[c]) : '—'}</td>
     </tr>`;
@@ -827,19 +1118,18 @@ function renderProd(pai, locF, modoQuebrada) {
 
   const totCols = tams.map(t => `<td class="tot">${fmt(tTam[t] || 0)}</td>`).join('');
 
-  // ── Channel pills ──
+  // Channel pills
   const chPills = LOCS.map(l => {
     const v = bl[l.key];
     if (!v) return '';
     return `<div class="ch-pill"><span class="ch-dot" style="background:${l.cor}"></span>${l.label}<strong>${fmt(v)}</strong></div>`;
   }).filter(Boolean).join('');
 
-  // ── Per-channel detail matrices ──
+  // Per-channel detail matrices
   const chDetail = LOCS.map(l => {
     const v = bl[l.key];
     if (!v) return '';
     const rgb = hexRgb(l.cor);
-
     const lins = cors.map(c => {
       const cells = tams.map(t => {
         const q = (pai.cores[c][t] || {})[l.key] || 0;
@@ -848,7 +1138,6 @@ function renderProd(pai, locF, modoQuebrada) {
       const rt = tams.reduce((s, t) => s + ((pai.cores[c][t] || {})[l.key] || 0), 0);
       return `<tr><td class="tdc"><span class="cor-dot" style="background:${corV(c)}"></span>${c}</td>${cells}<td class="tot">${rt > 0 ? fmt(rt) : '—'}</td></tr>`;
     }).join('');
-
     return `<div class="ch-bloco">
       <div class="ch-head">
         <span class="tag-ch" style="background:rgba(${rgb},0.15);color:${l.cor};border:1px solid rgba(${rgb},0.3)">
@@ -867,13 +1156,17 @@ function renderProd(pai, locF, modoQuebrada) {
   const temQuebra = isQuebrada(pai, locF || undefined);
   return `<div class="prod${temQuebra ? ' prod-quebrada' : ''}">
     <div class="prod-head" onclick="toggleProd('${id}')">
+      <span class="prod-health" style="color:${hColor};background:${hColor}"></span>
       <div class="prod-info">
         <span class="prod-name">${pai.nome}</span>
         <span class="prod-sku">${pai.sku}</span>
       </div>
       <span class="prod-cat">${pai.categoria || '—'}</span>
       <div class="prod-locs">${locDots}</div>
-      <span class="prod-tot">${fmt(tot)}</span>
+      <div class="prod-vals">
+        <span class="prod-tot">${fmt(tot)}</span>
+        <span class="prod-val">${fmtR(val)}</span>
+      </div>
       <span class="prod-arrow${isOpen ? ' open' : ''}" id="arrow-${id}">▶</span>
     </div>
     <div class="prod-body${isOpen ? ' open' : ''}" id="body-${id}">
@@ -895,6 +1188,55 @@ function renderProd(pai, locF, modoQuebrada) {
 }
 
 // ═══════════════════════════════════════════
+// EXPORT (html2canvas — Lojas pattern)
+// ═══════════════════════════════════════════
+function exportImage(tipo) {
+  const titles = { produtos: 'Estoque — Produtos', kpis: 'Estoque — Resumo' };
+  const src = tipo === 'produtos' ? document.getElementById('prod-list') : document.getElementById('kpis');
+  if (!src) return;
+
+  const wrapper = document.createElement('div');
+  wrapper.style.cssText = 'position:absolute;left:-9999px;top:0;background:#18181b;padding:20px;border-radius:14px;min-width:800px;font-family:Inter,sans-serif;color:#fafafa;';
+  document.body.appendChild(wrapper);
+
+  const header = document.createElement('div');
+  header.style.cssText = 'font-size:14px;font-weight:700;margin-bottom:6px;';
+  header.textContent = titles[tipo] || 'Fusion — Estoque';
+  wrapper.appendChild(header);
+
+  const meta = document.createElement('div');
+  meta.style.cssText = 'font-size:11px;color:#d4d4d8;margin-bottom:14px;';
+  meta.textContent = document.getElementById('upd')?.textContent || '';
+  wrapper.appendChild(meta);
+
+  const clone = src.cloneNode(true);
+  clone.style.maxHeight = 'none';
+  clone.style.overflow = 'visible';
+  wrapper.appendChild(clone);
+
+  const footer = document.createElement('div');
+  footer.style.cssText = 'font-size:9px;color:#8b8b95;margin-top:12px;text-align:right;';
+  footer.textContent = 'Fusion Grupo · ' + new Date().toLocaleDateString('pt-BR');
+  wrapper.appendChild(footer);
+
+  html2canvas(wrapper, {
+    backgroundColor: '#18181b',
+    scale: 2,
+    useCORS: true,
+    logging: false
+  }).then(canvas => {
+    canvas.toBlob(blob => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'fusion-estoque-' + tipo + '.png';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    }, 'image/png');
+    wrapper.remove();
+  }).catch(() => wrapper.remove());
+}
+
+// ═══════════════════════════════════════════
 // INTERACTIONS
 // ═══════════════════════════════════════════
 function toggleProd(id) {
@@ -911,11 +1253,9 @@ function toggleCanal(id) {
 
 function setNivel(nivel, el) {
   const jaAtivo = el.classList.contains('on');
-  // Limpar chips (não toca nos botões fab)
   document.querySelectorAll('#chips-nivel .chip').forEach(c => c.classList.remove('on'));
   document.getElementById('btn-fabprop').classList.remove('on');
   document.getElementById('btn-quebrada').classList.remove('on');
-
   if (jaAtivo && nivel !== 'todos') {
     document.querySelector('#chips-nivel .chip[data-nivel="todos"]').classList.add('on');
     if (!expAll) EXP = {};
@@ -930,14 +1270,10 @@ function toggleFab(modo) {
   const btnQueb = document.getElementById('btn-quebrada');
   const btn = modo === 'fabprop' ? btnProp : btnQueb;
   const jaAtivo = btn.classList.contains('on');
-
-  // Limpar tudo
   document.querySelectorAll('#chips-nivel .chip').forEach(c => c.classList.remove('on'));
   btnProp.classList.remove('on');
   btnQueb.classList.remove('on');
-
   if (jaAtivo) {
-    // Toggle off → volta para Todos
     document.querySelector('#chips-nivel .chip[data-nivel="todos"]').classList.add('on');
     if (!expAll) EXP = {};
   } else {
@@ -947,8 +1283,7 @@ function toggleFab(modo) {
 }
 
 function selectLoc(key) {
-  const sel = document.getElementById('sel-loc');
-  sel.value = sel.value === key ? '' : key;
+  activeLoc = activeLoc === key ? '' : key;
   render();
 }
 
@@ -971,7 +1306,7 @@ function toggleExpandAll() {
 // ═══════════════════════════════════════════
 // EVENT LISTENERS
 // ═══════════════════════════════════════════
-['busca', 'sel-cat', 'sel-loc', 'sel-sort'].forEach(id => {
+['busca', 'sel-cat', 'sel-sort'].forEach(id => {
   const el = document.getElementById(id);
   el.addEventListener('input', render);
   el.addEventListener('change', render);
