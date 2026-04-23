@@ -2633,6 +2633,51 @@ function onTecidoNomeChange(idx) {
     input.style.display = 'none';
     input.value = sel.value;
   }
+  atualizarCoresInsumoRow(idx);
+}
+
+// Filtra dropdown de cor conforme o tecido escolhido. Tecido conhecido = mostra
+// apenas cores ja compradas pra ele; tecido novo/vazio = todas as cores conhecidas.
+function atualizarCoresInsumoRow(idx) {
+  var row = document.getElementById('insumo-row-'+idx);
+  if (!row) return;
+  var selNome = row.querySelector('[data-field="nome-select"]');
+  var inputNome = row.querySelector('[data-field="nome"]');
+  var selCor = row.querySelector('[data-field="cor-select"]');
+  if (!selCor) return;
+
+  var nomeTecido = '';
+  if (selNome && selNome.value && selNome.value !== '__novo__') {
+    nomeTecido = selNome.value;
+  } else if (inputNome && inputNome.value) {
+    nomeTecido = inputNome.value;
+  }
+
+  var cores;
+  if (nomeTecido) {
+    var set = {};
+    (STATE.insumos || []).forEach(function(i) {
+      if (i.tipo === 'tecido' && (i.nome||'').trim() === nomeTecido.trim() && i.cor) {
+        set[i.cor.trim()] = 1;
+      }
+    });
+    cores = Object.keys(set).sort();
+    if (!cores.length) cores = todasCoresConhecidas();  // tecido novo sem historico
+  } else {
+    cores = todasCoresConhecidas();
+  }
+
+  var corAtual = selCor.value;
+  var corOpts = cores.map(function(c){
+    return '<option value="' + c.replace(/"/g,'&quot;') + '">' + c + '</option>';
+  }).join('');
+  selCor.innerHTML = '<option value="">Selecione uma cor...</option>' +
+    '<option value="__nova__" style="color:var(--indigo);font-weight:600">+ Cadastrar nova cor</option>' +
+    corOpts;
+  // Preservar seleção se a cor ainda existe
+  if (corAtual && (cores.indexOf(corAtual) >= 0 || corAtual === '__nova__')) {
+    selCor.value = corAtual;
+  }
 }
 
 function onCorInsumoChange(idx) {
