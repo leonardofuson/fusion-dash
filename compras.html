@@ -407,6 +407,7 @@ table.tb-historico{min-width:1600px;}
         <option value="Cancelada">Cancelada</option>
       </select>
       <select id="flt-hist-produto" class="dselect" onchange="renderHistorico()"><option value="">Todos produtos</option></select>
+      <select id="flt-hist-costureiro" class="dselect" onchange="renderHistorico()"><option value="">Todos costureiros</option></select>
       <select id="flt-hist-fornecedor" class="dselect" onchange="renderHistorico()"><option value="">Todos fornecedores</option></select>
       <select id="flt-hist-ano" class="dselect" onchange="renderHistorico()"><option value="">Todos anos</option></select>
       <input type="text" id="flt-hist-busca" class="dinput" placeholder="Buscar..." oninput="renderHistorico()">
@@ -1653,6 +1654,7 @@ function renderHistorico() {
 
   var fSt = (document.getElementById('flt-hist-status') || {}).value || '';
   var fProd = (document.getElementById('flt-hist-produto') || {}).value || '';
+  var fCost = (document.getElementById('flt-hist-costureiro') || {}).value || '';
   var fForn = (document.getElementById('flt-hist-fornecedor') || {}).value || '';
   var fAno = (document.getElementById('flt-hist-ano') || {}).value || '';
   var q = ((document.getElementById('flt-hist-busca') || {}).value || '').toLowerCase();
@@ -1660,6 +1662,7 @@ function renderHistorico() {
   var filtered = historico.filter(function(c) {
     if (fSt && c.status !== fSt) return false;
     if (fProd && (c.produto||'').trim() !== fProd) return false;
+    if (fCost && String(c.costureiro_id) !== fCost) return false;
     if (fForn && (c.fornecedor||'').trim() !== fForn) return false;
     if (fAno && (c.data_faturamento || '').slice(0, 4) !== fAno) return false;
     if (q) {
@@ -1686,7 +1689,7 @@ function renderHistorico() {
     kpiHtml('Peças Entregues', fmt(Math.round(totalPecasEnt)), 'produção concluída', '--kpi-accent:var(--cyan)'),
   ].join('');
 
-  var temFiltroTop = fSt || fProd || fForn || fAno || q;
+  var temFiltroTop = fSt || fProd || fCost || fForn || fAno || q;
   var limiteTop = temFiltroTop ? null : 50;
   var countTxt = ' — ' + filtered.length + ' registros';
   if (limiteTop && filtered.length > limiteTop) countTxt += ' (mostrando últimos ' + limiteTop + ' — use filtros para ver mais)';
@@ -1698,7 +1701,7 @@ function renderHistorico() {
   });
 
   // Ordenar por data mais recente e limitar a 50 (a menos que tenha filtro ativo)
-  var temFiltro = fSt || fProd || fForn || fAno || q;
+  var temFiltro = fSt || fProd || fCost || fForn || fAno || q;
   var limite = temFiltro ? 2000 : 50;
   var html = filtered.slice(0, limite).map(function(c) {
     var entregues = Math.round(c.qtde_entregue || 0);
@@ -1729,7 +1732,7 @@ function renderHistorico() {
 }
 
 function limparFiltrosHist() {
-  ['flt-hist-status','flt-hist-produto','flt-hist-fornecedor','flt-hist-ano','flt-hist-busca'].forEach(function(id) {
+  ['flt-hist-status','flt-hist-produto','flt-hist-costureiro','flt-hist-fornecedor','flt-hist-ano','flt-hist-busca'].forEach(function(id) {
     var el = document.getElementById(id); if (el) el.value = '';
   });
   renderHistorico();
@@ -1750,14 +1753,22 @@ function exportHistoricoCSV() {
 }
 
 function populateHistoricoFilters() {
-  var prods = {}, forns = {}, anos = {};
+  var prods = {}, forns = {}, anos = {}, costIds = {};
   (STATE.compras || []).forEach(function(c) {
     if (c.produto) prods[c.produto.trim()] = 1;
     if (c.fornecedor) forns[c.fornecedor.trim()] = 1;
     if (c.data_faturamento) anos[c.data_faturamento.slice(0,4)] = 1;
+    if (c.costureiro_id) costIds[c.costureiro_id] = 1;
   });
   var selP = document.getElementById('flt-hist-produto');
   if (selP) selP.innerHTML = '<option value="">Todos produtos</option>' + Object.keys(prods).sort().map(function(p){return '<option value="'+p+'">'+p+'</option>';}).join('');
+  var selC = document.getElementById('flt-hist-costureiro');
+  if (selC) {
+    var costOpts = Object.keys(costIds).map(function(id){ return { id: id, nome: costuName(parseInt(id)) }; })
+      .filter(function(c){ return c.nome && c.nome !== '—'; })
+      .sort(function(a,b){ return a.nome.localeCompare(b.nome); });
+    selC.innerHTML = '<option value="">Todos costureiros</option>' + costOpts.map(function(c){return '<option value="'+c.id+'">'+c.nome+'</option>';}).join('');
+  }
   var selF = document.getElementById('flt-hist-fornecedor');
   if (selF) selF.innerHTML = '<option value="">Todos fornecedores</option>' + Object.keys(forns).sort().map(function(f){return '<option value="'+f+'">'+f+'</option>';}).join('');
   var selA = document.getElementById('flt-hist-ano');
@@ -2109,8 +2120,8 @@ function buildOPForm() {
     '</div>' +
     '<div class="form-row">' +
       '<div class="form-group"><label class="form-label">Data Recebimento do Tecido</label>' +
-        '<input class="form-input" id="f-data-envio" type="date" onchange="sugerirDataEntrega(\'nova\')"></div>' +
-      '<div class="form-group"><label class="form-label">Data Estimada de Entrega</label>' +
+        '<input class="form-input" id="f-data-envio" type="date"></div>' +
+      '<div class="form-group"><label class="form-label">Data Estimada de Entrega <small style="color:var(--txt3);font-weight:400">(opcional)</small></label>' +
         '<input class="form-input" id="f-data-prevista" type="date"></div>' +
     '</div>' +
     '<div class="form-group"><label class="form-label">Corte Externo?</label>' +
@@ -2189,7 +2200,8 @@ function onProdutoOPChange() {
       var nomesSet = {};
       (STATE.insumos || []).forEach(function(i) {
         if (i.tipo !== 'tecido') return;
-        if (!i.skus_pai || i.skus_pai.indexOf(sku) < 0) return;
+        // Se skus_pai definido: filtra por ele. Se vazio/null: trata como universal (aparece em todo produto).
+        if (i.skus_pai && i.skus_pai.length > 0 && i.skus_pai.indexOf(sku) < 0) return;
         if (i.nome) nomesSet[i.nome.trim()] = 1;
       });
       var nomes = Object.keys(nomesSet).sort();
@@ -2697,8 +2709,8 @@ function buildEditOPForm(op) {
       '<div class="form-group"><label class="form-label">Peças Entregues</label>' +
         '<input class="form-input" type="number" id="f-edit-entregues" value="' + (op.qtde_pecas_entregues || 0) + '"></div>' +
     '</div>' +
-    '<div class="form-row"><div class="form-group"><label class="form-label">Data Recebimento do Tecido</label><input class="form-input" type="date" id="f-edit-envio" value="' + (op.data_envio_tecido || '') + '" onchange="sugerirDataEntrega(\'edit\')"></div>' +
-    '<div class="form-group"><label class="form-label">Data Estimada de Entrega</label><input class="form-input" type="date" id="f-edit-prevista" value="' + (op.data_prevista_entrega || '') + '"></div></div>' +
+    '<div class="form-row"><div class="form-group"><label class="form-label">Data Recebimento do Tecido</label><input class="form-input" type="date" id="f-edit-envio" value="' + (op.data_envio_tecido || '') + '"></div>' +
+    '<div class="form-group"><label class="form-label">Data Estimada de Entrega <small style="color:var(--txt3);font-weight:400">(opcional)</small></label><input class="form-input" type="date" id="f-edit-prevista" value="' + (op.data_prevista_entrega || '') + '"></div></div>' +
     '<div class="form-row"><div class="form-group"><label class="form-label">Status</label><select class="form-select" id="f-edit-status">' + statusOpts + '</select></div>' +
     '<div class="form-group"><label class="form-label">Valor/Peça (R$)</label><input class="form-input" type="number" step="0.01" id="f-edit-valor" value="' + (op.valor_unitario || op.valor_peca || '') + '"></div></div>' +
     '<div class="form-group"><label class="form-label">Corte Externo?</label><select class="form-select" id="f-edit-corte"><option value="false"' + (!op.corte_externo ? ' selected' : '') + '>Não</option><option value="true"' + (op.corte_externo ? ' selected' : '') + '>Sim</option></select></div>' +
