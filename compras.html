@@ -1883,65 +1883,76 @@ function populateHistoricoFilters() {
 }
 
 function renderCustos() {
-  var compras = STATE.compras;
+  var compras = STATE.compras || [];
 
-  // CMV por SKU pai: pegar as 2 OPs MAIS RECENTES concluídas de cada SKU pai e fazer média
-  // Cruzar com ordens_compra (valor_nf / quantidade_metros_kg = custo tecido por metro) × consumo_por_peca
+  // ========== TECIDO/PÇ: MÉDIA DAS 2 ÚLTIMAS COMPRAS POR SKU DESTINO ==========
+  // Fonte: ordens_compra (valor_metro_kg × consumo_por_peca).
+  // Ordena por data_faturamento desc e pega as 2 mais recentes com valores validos.
+  var comprasPorSku = {};
+  compras.forEach(function(c) {
+    var sku = c.sku_destino || c.sku_produto;
+    if (!sku) return;
+    var vm = parseFloat(c.valor_metro_kg);
+    var cons = parseFloat(c.consumo_por_peca);
+    if (!(vm > 0) || !(cons > 0)) return;  // ignora compras sem dados
+    if (!c.data_faturamento) return;        // precisa de data pra ranking
+    if (!comprasPorSku[sku]) comprasPorSku[sku] = [];
+    comprasPorSku[sku].push({ data: c.data_faturamento, valorMetro: vm, consumo: cons, id: c.id });
+  });
+  Object.keys(comprasPorSku).forEach(function(sku) {
+    comprasPorSku[sku].sort(function(a,b){ return b.data.localeCompare(a.data); });
+  });
 
-  var comprasMap = {};
-  (compras || []).forEach(function(c) { comprasMap[c.id] = c; });
-
-  // Agrupar OPs concluidas por SKU pai, ordenado por data desc
+  // ========== COSTUREIRO/PÇ: MÉDIA DAS 2 ÚLTIMAS OPs VÁLIDAS POR SKU PAI ==========
+  // Filtros: status='Entregue', valor_peca > 0 E <= 100 (exclui outliers absurdos),
+  // data_envio_tecido preenchida. Ordena desc.
   var opsPorSku = {};
   (STATE.ops || []).forEach(function(o) {
     if (o.status !== 'Entregue') return;
     var sku = o.sku_produto;
     if (!sku) return;
+    var vp = parseFloat(o.valor_peca);
+    if (!(vp > 0) || vp > 100) return;  // exclui null, zero, e outliers (R$>100/pç é erro)
+    if (!o.data_envio_tecido) return;
     if (!opsPorSku[sku]) opsPorSku[sku] = [];
-    opsPorSku[sku].push(o);
+    opsPorSku[sku].push({ data: o.data_envio_tecido, valor: vp, id: o.id });
+  });
+  Object.keys(opsPorSku).forEach(function(sku) {
+    opsPorSku[sku].sort(function(a,b){ return b.data.localeCompare(a.data); });
   });
 
-  var rows = Object.keys(opsPorSku).sort().map(function(sku) {
-    var ops = opsPorSku[sku];
-    // Ordenar por data mais recente
-    ops.sort(function(a, b) {
-      var da = a.data_envio_tecido || a.data_pagamento || a.criado_em || '';
-      var db = b.data_envio_tecido || b.data_pagamento || b.criado_em || '';
-      return db.localeCompare(da);
-    });
-    // Pegar os 2 mais recentes
-    var ultimos = ops.slice(0, 2);
+  // ========== MONTAR TABELA: união de SKUs que tem dado em qualquer das fontes ==========
+  var skusUnion = {};
+  Object.keys(comprasPorSku).forEach(function(s){ skusUnion[s]=1; });
+  Object.keys(opsPorSku).forEach(function(s){ skusUnion[s]=1; });
 
-    // Nome do produto pai
+  var avg = function(arr) { return arr.length ? arr.reduce(function(s,v){return s+v;},0) / arr.length : 0; };
+
+  var rows = Object.keys(skusUnion).sort().map(function(sku) {
     var prodInfo = produtosPais().find(function(p){return p.sku_pai===sku;});
     var nomeProduto = prodInfo ? prodInfo.nome : sku;
 
-    // Calcular custos por peça desses 2 últimos
-    var tecidoPecas = [], costPecas = [], totalPecas = [];
-    ultimos.forEach(function(o) {
-      var compra = o.ordem_compra_id ? comprasMap[o.ordem_compra_id] : null;
-      var valorMetro = compra ? parseFloat(compra.valor_metro_kg) : 0;
-      var consumo = parseFloat(o.consumo_por_peca) || (compra ? parseFloat(compra.consumo_por_peca) : 0);
-      var custoTec = (valorMetro > 0 && consumo > 0) ? valorMetro * consumo : 0;
-      var custoCost = parseFloat(valorCosturaPecaComFallback(o)) || 0;
-      if (custoTec > 0) tecidoPecas.push(custoTec);
-      if (custoCost > 0) costPecas.push(custoCost);
-      if (custoTec > 0 || custoCost > 0) totalPecas.push(custoTec + custoCost);
-    });
-
-    if (!totalPecas.length) return '';  // nada a mostrar
-
-    var avg = function(arr) { return arr.length ? arr.reduce(function(s,v){return s+v;},0) / arr.length : 0; };
+    // Tecido/pç = média(valorMetro × consumo) das 2 últimas compras
+    var cs = (comprasPorSku[sku] || []).slice(0, 2);
+    var tecidoPecas = cs.map(function(c){ return c.valorMetro * c.consumo; });
     var avgTec = avg(tecidoPecas);
+
+    // Costureiro/pç = média valor_peca das 2 últimas OPs válidas
+    var ops2 = (opsPorSku[sku] || []).slice(0, 2);
+    var costPecas = ops2.map(function(o){ return o.valor; });
     var avgCost = avg(costPecas);
-    var avgTotal = avg(totalPecas);
+
+    var avgTotal = avgTec + avgCost;
+    if (avgTotal <= 0) return '';  // sem dado util
+
+    var base = cs.length + ' compra' + (cs.length===1?'':'s') + ' · ' + ops2.length + ' OP' + (ops2.length===1?'':'s');
 
     return '<tr>' +
       '<td><strong>' + nomeProduto + '</strong> <span style="color:var(--txt3);font-size:11px">('+sku+')</span></td>' +
-      '<td class="r">' + fmtR(avgTec) + '/pç</td>' +
-      '<td class="r">' + fmtR(avgCost) + '/pç</td>' +
+      '<td class="r">' + (avgTec > 0 ? fmtR(avgTec) + '/pç' : '<span style="color:var(--txt4)">—</span>') + '</td>' +
+      '<td class="r">' + (avgCost > 0 ? fmtR(avgCost) + '/pç' : '<span style="color:var(--txt4)">—</span>') + '</td>' +
       '<td class="r" style="font-weight:700;color:var(--indigo)">' + fmtR(avgTotal) + '/pç</td>' +
-      '<td class="r" style="color:var(--txt3);font-size:11px">' + ultimos.length + ' OP' + (ultimos.length>1?'s':'') + '</td>' +
+      '<td class="r" style="color:var(--txt3);font-size:11px">' + base + '</td>' +
     '</tr>';
   }).filter(function(r){return r;}).join('');
 
@@ -1949,7 +1960,11 @@ function renderCustos() {
     '<table class="tb"><thead><tr>' +
       '<th>Produto</th><th class="r">Tecido/pç</th><th class="r">Costureiro/pç</th><th class="r">CMV Total/pç</th><th class="r">Base</th>' +
     '</tr></thead><tbody>' + rows + '</tbody></table>' +
-    '<div style="font-size:11px;color:var(--txt3);margin-top:8px">Média das 2 últimas OPs concluídas por SKU pai</div>';
+    '<div style="font-size:11px;color:var(--txt3);margin-top:8px">' +
+      'Tecido: média das 2 últimas <strong>compras</strong> (ordens_compra) · ' +
+      'Costureiro: média das 2 últimas <strong>OPs Entregues</strong> com valor_peca válido (≤R$100/pç). ' +
+      'Só entram compras/OPs com data_faturamento/data_envio preenchida.' +
+    '</div>';
 
   // KPIs
   var totalGasto = compras.reduce(function(s, c) { return s + (c.valor_nf || 0); }, 0);
