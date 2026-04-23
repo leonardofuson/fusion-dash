@@ -285,6 +285,7 @@ table.tb-historico{min-width:1600px;}
     <button class="tab-btn" data-tab="planejamento">Planejamento</button>
     <button class="tab-btn" data-tab="custos">Custos</button>
     <button class="tab-btn" data-tab="costureiros">Costureiros</button>
+    <button class="tab-btn" data-tab="curadoria">Curadoria</button>
   </nav>
 
   <!-- ═══════════════ TAB: PIPELINE ═══════════════ -->
@@ -477,6 +478,49 @@ table.tb-historico{min-width:1600px;}
       </div>
     </div>
   </div>
+
+  <!-- ═══════════════ TAB: CURADORIA DE CORES ═══════════════ -->
+  <div class="tab-panel" id="panel-curadoria">
+    <div class="kpi-grid" id="kpis-curadoria"></div>
+    <div class="filtros">
+      <select id="flt-cur-sku" class="dselect" onchange="renderCuradoria()"><option value="">Todos SKUs</option></select>
+      <select id="flt-cur-origem" class="dselect" onchange="renderCuradoria()">
+        <option value="">Todas origens</option>
+        <option value="produtos_filho">Cadastradas (produtos)</option>
+        <option value="historico_producao">Só em produção</option>
+        <option value="historico_compras">Só em compras</option>
+        <option value="auto_aprendido">Auto-aprendidas</option>
+        <option value="mesclado">Mescladas</option>
+      </select>
+      <select id="flt-cur-status" class="dselect" onchange="renderCuradoria()">
+        <option value="ativas">Ativas</option>
+        <option value="inativas">Desativadas</option>
+        <option value="orfas">Órfãs (sem SKU filho)</option>
+        <option value="todas">Todas</option>
+      </select>
+      <input type="text" id="flt-cur-busca" class="dinput" placeholder="Buscar cor..." oninput="renderCuradoria()">
+      <button class="btnf ghost" onclick="limparFiltrosCur()">Limpar</button>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Curadoria de Cores<small id="cur-count"></small></span>
+        <small style="color:var(--txt3)">fundir typos, desativar cores espúrias, ligar tudo ao cadastro</small>
+      </div>
+      <div class="tb-wrap">
+        <table class="tb"><thead><tr>
+          <th>Produto</th>
+          <th>Cor</th>
+          <th>Origem</th>
+          <th class="r">SKUs filhos</th>
+          <th class="r">OPs</th>
+          <th class="r">Compras</th>
+          <th>Última OP</th>
+          <th>Status</th>
+          <th style="text-align:center">Ações</th>
+        </tr></thead><tbody id="tbody-curadoria"></tbody></table>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ═══════════════ DRAWER (Slide-out) ═══════════════ -->
@@ -508,6 +552,7 @@ var STATE = {
   ops: [], compras: [], costureiros: [], precos: [], cortadores: [],
   insumos: [], consumo: [], planejamento: [], fornecedores: [], produtos: [],
   coresValidas: [],  // produto_cores_validas: fonte da verdade (sku_pai -> cor) ligando producao/compras/estoque ao cadastro
+  curadoria: [],     // v_curadoria_cores: contadores de uso por (sku_pai, cor) pra aba Curadoria
   tab: 'pipeline', drawerType: null,
   ganttExpanded: {}  // { sku_pai: true/false } - grupos expandidos
 };
@@ -577,6 +622,7 @@ function renderAll() {
   renderHistorico();
   renderPlanejamento();
   renderCustos();
+  carregarCuradoria();
   populateFilters();
   populateHistoricoFilters();
 }
@@ -1822,6 +1868,153 @@ function populateFilters() {
   // Costureiro filter (Gantt)
   var selC = document.getElementById('flt-costureiro-gantt');
   if (selC) selC.innerHTML = '<option value="">Todos costureiros</option>' + STATE.costureiros.map(function(c) { return '<option value="' + c.id + '">' + c.nome + '</option>'; }).join('');
+}
+
+// ═══════════════ TAB: CURADORIA DE CORES ═══════════════
+async function carregarCuradoria() {
+  try {
+    var url = SB_URL + '/rest/v1/v_curadoria_cores?select=*&order=sku_pai,cor&limit=10000';
+    var r = await fetch(url, { headers: AUTH_HEADERS });
+    if (!r.ok) { console.error('curadoria HTTP', r.status); return; }
+    STATE.curadoria = await r.json();
+    populateCuradoriaFilters();
+    renderCuradoria();
+  } catch(e) { console.error('carregarCuradoria', e); }
+}
+
+function populateCuradoriaFilters() {
+  var skus = {};
+  (STATE.curadoria || []).forEach(function(c){ skus[c.sku_pai] = c.produto_nome || c.sku_pai; });
+  var sel = document.getElementById('flt-cur-sku');
+  if (sel) sel.innerHTML = '<option value="">Todos SKUs</option>' +
+    Object.entries(skus).sort(function(a,b){return a[1].localeCompare(b[1]);})
+      .map(function(e){ return '<option value="'+e[0]+'">'+e[1]+' ('+e[0]+')</option>'; }).join('');
+}
+
+function limparFiltrosCur() {
+  ['flt-cur-sku','flt-cur-origem','flt-cur-busca'].forEach(function(id){
+    var el = document.getElementById(id); if (el) el.value='';
+  });
+  document.getElementById('flt-cur-status').value = 'ativas';
+  renderCuradoria();
+}
+
+function renderCuradoria() {
+  var rows = (STATE.curadoria || []).slice();
+  var fSku = document.getElementById('flt-cur-sku').value;
+  var fOr = document.getElementById('flt-cur-origem').value;
+  var fSt = document.getElementById('flt-cur-status').value || 'ativas';
+  var q = (document.getElementById('flt-cur-busca').value || '').toLowerCase();
+
+  if (fSku) rows = rows.filter(function(r){return r.sku_pai===fSku;});
+  if (fOr) rows = rows.filter(function(r){return r.origem===fOr;});
+  if (fSt === 'ativas') rows = rows.filter(function(r){return r.ativo;});
+  else if (fSt === 'inativas') rows = rows.filter(function(r){return !r.ativo;});
+  else if (fSt === 'orfas') rows = rows.filter(function(r){return r.ativo && r.qtd_skus_filho==0;});
+  if (q) rows = rows.filter(function(r){ return (r.cor||'').toLowerCase().indexOf(q)>=0 || (r.produto_nome||'').toLowerCase().indexOf(q)>=0; });
+
+  // KPIs
+  var total = (STATE.curadoria||[]).length;
+  var orfas = (STATE.curadoria||[]).filter(function(r){return r.ativo && r.qtd_skus_filho==0;}).length;
+  var inativas = (STATE.curadoria||[]).filter(function(r){return !r.ativo;}).length;
+  var cadastradas = (STATE.curadoria||[]).filter(function(r){return r.ativo && r.qtd_skus_filho>0;}).length;
+  document.getElementById('kpis-curadoria').innerHTML = [
+    kpiHtml('Total Cores', fmt(total), 'todas as (SKU, cor)', '--kpi-accent:var(--indigo)'),
+    kpiHtml('Cadastradas', fmt(cadastradas), 'com SKU filho em produtos', '--kpi-accent:var(--green)'),
+    kpiClickable('orfas', 'Órfãs', orfas, 'sem cadastro em produtos', '--kpi-accent:var(--orange)'),
+    kpiHtml('Desativadas', fmt(inativas), '', '--kpi-accent:var(--red)'),
+  ].join('');
+
+  document.getElementById('cur-count').textContent = ' — ' + rows.length + ' linhas';
+
+  var origemLabel = {
+    'produtos_filho': '<span class="pill pill-ok">Cadastro</span>',
+    'historico_producao': '<span class="pill pill-info">Produção</span>',
+    'historico_compras': '<span class="pill pill-info">Compras</span>',
+    'auto_aprendido': '<span class="pill pill-purple">Auto</span>',
+    'mesclado': '<span class="pill pill-neutral">Mesclado</span>',
+    'cadastro_manual': '<span class="pill pill-ok">Manual</span>'
+  };
+
+  var html = rows.map(function(r) {
+    var orfa = r.ativo && r.qtd_skus_filho == 0;
+    var statusTxt = !r.ativo ? '<span class="pill pill-danger">Desativada</span>' :
+                    orfa ? '<span class="pill pill-warning">Órfã</span>' :
+                    '<span class="pill pill-ok">OK</span>';
+    var acoes = !r.ativo
+      ? '<button class="btnf ghost" style="font-size:10px;padding:4px 8px" onclick="acReativarCor(\''+esc(r.sku_pai)+'\',\''+esc(r.cor)+'\')">Reativar</button>'
+      : '<button class="btnf ghost" style="font-size:10px;padding:4px 8px;margin-right:4px" onclick="acMesclarCor(\''+esc(r.sku_pai)+'\',\''+esc(r.cor)+'\')">Mesclar</button>' +
+        '<button class="btnf ghost" style="font-size:10px;padding:4px 8px;color:var(--red);border-color:rgba(248,113,113,0.3)" onclick="acDesativarCor(\''+esc(r.sku_pai)+'\',\''+esc(r.cor)+'\')">Desativar</button>';
+
+    var corChip = '<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:12px;height:12px;border-radius:3px;background:'+corToColor(r.cor)+'"></span>'+r.cor+'</span>';
+
+    return '<tr>' +
+      '<td><strong>'+r.produto_nome+'</strong> <span style="color:var(--txt3);font-size:11px">('+r.sku_pai+')</span></td>' +
+      '<td>'+corChip+'</td>' +
+      '<td>'+(origemLabel[r.origem] || r.origem)+'</td>' +
+      '<td class="r">'+fmt(r.qtd_skus_filho)+'</td>' +
+      '<td class="r">'+fmt(r.qtd_ops)+'</td>' +
+      '<td class="r">'+fmt(r.qtd_compras)+'</td>' +
+      '<td class="dim" style="font-size:11px">'+(r.ultima_op ? formatDate(r.ultima_op) : '—')+'</td>' +
+      '<td>'+statusTxt+'</td>' +
+      '<td style="text-align:center;white-space:nowrap">'+acoes+'</td>' +
+    '</tr>';
+  }).join('');
+
+  document.getElementById('tbody-curadoria').innerHTML = html || '<tr><td colspan="9" class="empty">Nenhuma cor nos filtros</td></tr>';
+}
+
+function esc(s) { return String(s || '').replace(/'/g, "\\'"); }
+
+async function acMesclarCor(skuPai, corDe) {
+  var outrasCores = (STATE.curadoria || [])
+    .filter(function(c){return c.sku_pai===skuPai && c.cor!==corDe && c.ativo;})
+    .map(function(c){return c.cor;}).sort();
+  if (!outrasCores.length) { alert('Não há outras cores ativas em ' + skuPai + ' para mesclar.'); return; }
+
+  var corPara = prompt('Mesclar "' + corDe + '" em qual cor de ' + skuPai + '?\n\nCores disponíveis:\n- ' + outrasCores.join('\n- '));
+  if (!corPara) return;
+  corPara = corPara.trim().toUpperCase();
+  if (!corPara || corPara === corDe) return;
+
+  if (!confirm('Confirma fusão:\n\n' + corDe + ' → ' + corPara + '\n\nem ' + skuPai + '?\n\nTodas ordens/compras/estoque serão atualizados.')) return;
+
+  try {
+    var r = await fetch(SB_URL + '/rest/v1/rpc/mesclar_cor', {
+      method: 'POST',
+      headers: Object.assign({'Content-Type':'application/json','Prefer':'return=representation'}, AUTH_HEADERS),
+      body: JSON.stringify({ p_sku_pai: skuPai, p_cor_de: corDe, p_cor_para: corPara })
+    });
+    var res = await r.json();
+    if (!r.ok) throw new Error(res.message || JSON.stringify(res));
+    alert('Mesclado ✓\nOPs: '+res.ops_atualizadas+' · Compras: '+res.compras_atualizadas+' · Insumos: '+res.insumos_atualizados);
+    await carregar();
+  } catch(e) { alert('Erro: ' + e.message); }
+}
+
+async function acDesativarCor(skuPai, cor) {
+  if (!confirm('Desativar "' + cor + '" em ' + skuPai + '?\n\nA cor não aparecerá mais nos dropdowns, mas o histórico fica preservado.')) return;
+  try {
+    var r = await fetch(SB_URL + '/rest/v1/rpc/desativar_cor', {
+      method: 'POST',
+      headers: Object.assign({'Content-Type':'application/json'}, AUTH_HEADERS),
+      body: JSON.stringify({ p_sku_pai: skuPai, p_cor: cor })
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    await carregar();
+  } catch(e) { alert('Erro: ' + e.message); }
+}
+
+async function acReativarCor(skuPai, cor) {
+  try {
+    var r = await fetch(SB_URL + '/rest/v1/rpc/reativar_cor', {
+      method: 'POST',
+      headers: Object.assign({'Content-Type':'application/json'}, AUTH_HEADERS),
+      body: JSON.stringify({ p_sku_pai: skuPai, p_cor: cor })
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    await carregar();
+  } catch(e) { alert('Erro: ' + e.message); }
 }
 
 // ═══════════════ TAB SWITCHING ═══════════════
