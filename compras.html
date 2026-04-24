@@ -1742,7 +1742,7 @@ function renderCardSugestao(p) {
     '</div>' +
     '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px;font-size:12px">' +
       '<div><div style="color:var(--txt3);font-size:10px;text-transform:uppercase">Estoque</div><strong>' + fmt(p.estoque_atual) + ' pç</strong></div>' +
-      '<div><div style="color:var(--txt3);font-size:10px;text-transform:uppercase">Vendas 90d</div><strong>' + fmt(p.vendas_90d) + ' pç</strong></div>' +
+      '<div title="Total de peças vendidas nos últimos 90 dias (ecommerce + lojas KWID, excluindo cancelados/devolvidos)"><div style="color:var(--txt3);font-size:10px;text-transform:uppercase">Vendas 90d · ecom+lojas</div><strong>' + fmt(p.vendas_90d) + ' pç</strong><div style="font-size:10px;color:var(--txt3)">' + (p.velocidade_diaria||0).toFixed(1) + ' pç/dia</div></div>' +
       '<div><div style="color:var(--txt3);font-size:10px;text-transform:uppercase">Em Produção</div><strong>' + fmt(p.em_producao) + ' pç</strong></div>' +
       '<div><div style="color:var(--txt3);font-size:10px;text-transform:uppercase">Necessidade</div><strong style="color:var(--indigo)">' + fmt(p.necessidade_pecas) + ' pç</strong></div>' +
     '</div>' +
