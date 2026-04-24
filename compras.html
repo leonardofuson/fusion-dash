@@ -517,7 +517,7 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
         <div class="card-body" id="cmv-table"></div>
       </div>
       <div class="card">
-        <div class="card-header"><span class="card-title">Evolução do CMV<small style="color:var(--txt3);font-weight:400;margin-left:8px">custo/peça por SKU ao longo do tempo</small></span></div>
+        <div class="card-header"><span class="card-title">Evolução do CMV<small style="color:var(--txt3);font-weight:400;margin-left:8px">top 8 SKUs por volume produzido · últimos 12 meses</small></span></div>
         <div class="card-body"><div class="chart-wrap" style="height:420px"><canvas id="chart-custos"></canvas></div></div>
       </div>
     </div>
@@ -1999,16 +1999,26 @@ function renderChartCustos() {
     compraPontos.push({ sku: o.sku_produto, data: o.data_envio_tecido, custoPc: vm * cons });
   });
 
-  // Determinar SKUs a plotar: top 8 POR CMV, EXCLUINDO ternos/blazer (CMV > R$100)
-  // — ternos distorcem a escala do grafico (R$200+ vs R$25 dos outros).
-  var topSkus = (STATE.custosSku || [])
-    .filter(function(c){
-      var v = parseFloat(c.cmv_total_peca);
-      return v > 0 && v <= 100;
-    })
-    .sort(function(a,b){ return parseFloat(b.cmv_total_peca) - parseFloat(a.cmv_total_peca); })
+  // Top 8 SKUs por VOLUME produzido (total de peças entregues nas OPs).
+  // Muda o foco: mostra os principais produtos do negócio, não os mais caros.
+  var volumePorSku = {};
+  (STATE.ops || []).forEach(function(o) {
+    if (o.status !== 'Entregue' || !o.sku_produto) return;
+    var q = parseFloat(o.qtde_pecas_entregues || o.qtde_pecas) || 0;
+    if (q <= 0) return;
+    volumePorSku[o.sku_produto] = (volumePorSku[o.sku_produto] || 0) + q;
+  });
+  var custoMap = {};
+  (STATE.custosSku || []).forEach(function(c){
+    if (parseFloat(c.cmv_total_peca) > 0) {
+      custoMap[c.sku_pai] = c.produto_nome || c.sku_pai;
+    }
+  });
+  var topSkus = Object.entries(volumePorSku)
+    .filter(function(e){ return custoMap[e[0]]; })  // só SKUs com CMV calculado
+    .sort(function(a,b){ return b[1] - a[1]; })
     .slice(0, 8)
-    .map(function(c){ return { sku: c.sku_pai, nome: c.produto_nome || c.sku_pai }; });
+    .map(function(e){ return { sku: e[0], nome: custoMap[e[0]] }; });
 
   if (!topSkus.length) return;
 
