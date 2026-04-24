@@ -561,8 +561,23 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
 <script>
 // ═══════════════ CONFIG ═══════════════
 var SB_URL = 'https://spulbhnmkomvgohzhfvj.supabase.co';
-var AUTH_HEADERS = null;
+var AUTH_HEADERS = null;  // fallback inicial — getAuthHeaders() sempre retorna o token mais fresco
 var MAX_PAGES = 20;
+
+// Sempre lê o token atual da sessão do SDK (autoRefreshToken gerencia a renovação em memória).
+// Previne 401 PGRST303 "JWT expired" em sessões longas com múltiplos POSTs.
+async function getAuthHeaders() {
+  try {
+    var sess = await fusionAuth.getSession();
+    if (sess && sess.access_token) {
+      return {
+        apikey: fusionAuth.SUPABASE_ANON_KEY,
+        Authorization: 'Bearer ' + sess.access_token
+      };
+    }
+  } catch (e) { console.warn('[auth] getSession falhou:', e); }
+  return AUTH_HEADERS || {};
+}
 
 // ═══════════════ STATE ═══════════════
 var STATE = {
@@ -588,7 +603,7 @@ async function buscarTudo(tab, filtro) {
   var todos = [], off = 0, tam = 1000, pag = 0;
   while (pag < MAX_PAGES) {
     var url = SB_URL + '/rest/v1/' + tab + '?' + filtro + '&limit=' + tam + '&offset=' + off;
-    var r = await fetch(url, { headers: AUTH_HEADERS });
+    var r = await fetch(url, { headers: await getAuthHeaders() });
     if (!r.ok) throw new Error(tab + ' HTTP ' + r.status);
     var lote = await r.json();
     if (!Array.isArray(lote) || lote.length === 0) break;
@@ -1341,7 +1356,7 @@ async function excluirInsumo(insumoId) {
   try {
     var r = await fetch(SB_URL + '/rest/v1/estoque_insumos?id=eq.' + insumoId, {
       method: 'DELETE',
-      headers: Object.assign({'Prefer':'return=minimal'}, AUTH_HEADERS)
+      headers: Object.assign({'Prefer':'return=minimal'}, await getAuthHeaders())
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     closeDrawer();
@@ -2314,7 +2329,7 @@ async function acRecalcularCustos(btn) {
   try {
     var r = await fetch(SB_URL + '/rest/v1/rpc/recalcular_custos_sku', {
       method: 'POST',
-      headers: Object.assign({'Content-Type':'application/json'}, AUTH_HEADERS),
+      headers: Object.assign({'Content-Type':'application/json'}, await getAuthHeaders()),
       body: '{}'
     });
     if (!r.ok) throw new Error('HTTP ' + r.status + ': ' + await r.text());
@@ -3249,7 +3264,7 @@ async function excluirOP(opId) {
   try {
     var r = await fetch(SB_URL + '/rest/v1/ordens_producao?id=eq.' + opId, {
       method: 'DELETE',
-      headers: Object.assign({'Prefer':'return=minimal'}, AUTH_HEADERS)
+      headers: Object.assign({'Prefer':'return=minimal'}, await getAuthHeaders())
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     closeDrawer();
@@ -3440,7 +3455,7 @@ async function submitDrawer() {
 async function postSupabase(table, data) {
   var r = await fetch(SB_URL + '/rest/v1/' + table, {
     method: 'POST',
-    headers: Object.assign({}, AUTH_HEADERS, { 'Content-Type': 'application/json', 'Prefer': 'return=representation' }),
+    headers: Object.assign({}, await getAuthHeaders(), { 'Content-Type': 'application/json', 'Prefer': 'return=representation' }),
     body: JSON.stringify(data)
   });
   if (!r.ok) { var err = await r.text(); throw new Error('HTTP ' + r.status + ': ' + err); }
@@ -3450,7 +3465,7 @@ async function postSupabase(table, data) {
 async function patchSupabase(table, id, data) {
   var r = await fetch(SB_URL + '/rest/v1/' + table + '?id=eq.' + id, {
     method: 'PATCH',
-    headers: Object.assign({}, AUTH_HEADERS, { 'Content-Type': 'application/json', 'Prefer': 'return=representation' }),
+    headers: Object.assign({}, await getAuthHeaders(), { 'Content-Type': 'application/json', 'Prefer': 'return=representation' }),
     body: JSON.stringify(data)
   });
   if (!r.ok) { var err = await r.text(); throw new Error('HTTP ' + r.status + ': ' + err); }
