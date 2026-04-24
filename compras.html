@@ -1999,9 +1999,13 @@ function renderChartCustos() {
     compraPontos.push({ sku: o.sku_produto, data: o.data_envio_tecido, custoPc: vm * cons });
   });
 
-  // Determinar SKUs a plotar: top 8 por CMV atual (da tabela custos_sku)
+  // Determinar SKUs a plotar: top 8 POR CMV, EXCLUINDO ternos/blazer (CMV > R$100)
+  // — ternos distorcem a escala do grafico (R$200+ vs R$25 dos outros).
   var topSkus = (STATE.custosSku || [])
-    .filter(function(c){ return parseFloat(c.cmv_total_peca) > 0; })
+    .filter(function(c){
+      var v = parseFloat(c.cmv_total_peca);
+      return v > 0 && v <= 100;
+    })
     .sort(function(a,b){ return parseFloat(b.cmv_total_peca) - parseFloat(a.cmv_total_peca); })
     .slice(0, 8)
     .map(function(c){ return { sku: c.sku_pai, nome: c.produto_nome || c.sku_pai }; });
@@ -2074,7 +2078,11 @@ function renderChartCustos() {
         }
       },
       scales: {
-        y: { ticks: { callback: function(v){ return 'R$ ' + v; } } }
+        y: {
+          beginAtZero: false,
+          grace: '10%',
+          ticks: { callback: function(v){ return 'R$ ' + v; } }
+        }
       }
     }
   });
