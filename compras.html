@@ -427,7 +427,7 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
       <button class="btnf" onclick="openDrawer('novo-insumo')">+ Cadastrar Insumo</button>
     </div>
     <div class="card">
-      <div class="card-header"><span class="card-title">Estoque de Insumos<small id="insumo-count"></small><small style="color:var(--txt3);margin-left:6px">(ordenado por NF mais recente)</small></span></div>
+      <div class="card-header"><span class="card-title">Estoque de Insumos<small id="insumo-count"></small><small style="color:var(--txt3);margin-left:6px">(ordenado por saldo, maior primeiro)</small></span></div>
       <div class="tb-wrap tb-wrap-scroll">
         <table class="tb"><thead><tr>
           <th style="width:40px"></th>
@@ -1493,8 +1493,10 @@ function renderInsumos() {
     grupos[key].saldo += saldo;
   });
 
-  // Ordenar grupos por data_faturamento DESC (NF mais recente primeiro)
+  // Ordenar grupos por SALDO DESC (mais saldo primeiro); empates pela NF mais recente.
   var gruposArr = Object.values(grupos).sort(function(a, b) {
+    var sa = a.saldo || 0, sb = b.saldo || 0;
+    if (sa !== sb) return sb - sa;
     var da = a.data_faturamento || '0000-00-00';
     var db = b.data_faturamento || '0000-00-00';
     return db.localeCompare(da);
