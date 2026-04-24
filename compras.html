@@ -495,13 +495,24 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
   <!-- ═══════════════ TAB: PLANEJAMENTO ═══════════════ -->
   <div class="tab-panel" id="panel-planejamento">
     <div class="kpi-grid" id="kpis-planejamento"></div>
-    <div class="card">
-      <div class="card-header"><span class="card-title">Cobertura de Estoque por SKU</span><small style="color:var(--txt3)">dias de venda cobertos (estoque + em produção)</small></div>
-      <div class="card-body" id="cobertura-bars"></div>
+    <div class="filtros">
+      <select id="flt-plan-prioridade" class="dselect" onchange="renderPlanejamento()">
+        <option value="">Todas prioridades</option>
+        <option value="critica">🔴 Críticas</option>
+        <option value="alta">🟠 Atenção</option>
+        <option value="media">🟡 Média</option>
+      </select>
+      <span id="plan-updated" style="margin-left:auto;font-size:11px;color:var(--txt3)"></span>
     </div>
     <div class="card">
-      <div class="card-header"><span class="card-title">Sugestões do MRP</span><small style="color:var(--txt3)">atualizado diariamente</small></div>
-      <div class="card-body" id="mrp-sugestoes"><div class="empty">MRP ainda não executado. Execute fusion_sync_producao.py para gerar sugestões.</div></div>
+      <div class="card-header">
+        <span class="card-title">Sugestões de Produção<small style="color:var(--txt3);margin-left:6px">clique em "Abrir OP" pra criar com tudo pré-preenchido</small></span>
+      </div>
+      <div class="card-body" id="mrp-cards"></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Cobertura Geral por SKU<small style="color:var(--txt3);margin-left:6px">dias de venda cobertos (estoque + em produção)</small></span></div>
+      <div class="card-body" id="cobertura-bars"></div>
     </div>
   </div>
 
@@ -1570,53 +1581,248 @@ function toggleInsumoTipo(el) {
 }
 
 // ═══════════════ TAB: PLANEJAMENTO ═══════════════
+
+// Soma quantidade_atual de todos tecidos (estoque_insumos) vinculados a este SKU pai.
+function saldoTecidoDoSku(sku) {
+  return (STATE.insumos || [])
+    .filter(function(i) {
+      return i.tipo === 'tecido' && i.skus_pai && i.skus_pai.indexOf(sku) >= 0;
+    })
+    .reduce(function(s, i) { return s + (parseFloat(i.quantidade_atual) || 0); }, 0);
+}
+
+// Nome do tecido mais usado nas ultimas OPs Entregues do SKU (fallback BOM).
+function tecidoPrincipalDoSku(sku) {
+  var comprasMap = {};
+  (STATE.compras || []).forEach(function(c){ comprasMap[c.id] = c; });
+  var tec = (STATE.ops || [])
+    .filter(function(o) { return o.sku_produto === sku && o.status === 'Entregue' && o.ordem_compra_id; })
+    .sort(function(a, b) { return (b.data_envio_tecido || '').localeCompare(a.data_envio_tecido || ''); })
+    .slice(0, 1)
+    .map(function(o) {
+      var c = comprasMap[o.ordem_compra_id];
+      return c ? c.tecido : null;
+    })[0];
+  if (tec) return tec;
+  var bom = (STATE.consumo || []).find(function(b){ return b.sku_produto === sku; });
+  return bom ? bom.tecido_nome : null;
+}
+
 function renderPlanejamento() {
-  var plan = STATE.planejamento;
+  var plan = STATE.planejamento || [];
 
   if (!plan.length) {
-    document.getElementById('kpis-planejamento').innerHTML = [
-      kpiHtml('Status', 'Aguardando', 'MRP não executado ainda', '--kpi-accent:var(--amber)'),
-    ].join('');
-    document.getElementById('cobertura-bars').innerHTML = '<div class="empty">Execute fusion_sync_producao.py para calcular cobertura e sugestões.</div>';
+    document.getElementById('kpis-planejamento').innerHTML =
+      kpiHtml('Status', 'Aguardando', 'MRP não executado ainda', '--kpi-accent:var(--amber)');
+    document.getElementById('mrp-cards').innerHTML = '<div class="empty">Execute fusion_sync_producao.py para calcular cobertura e sugestões.</div>';
+    document.getElementById('cobertura-bars').innerHTML = '';
     return;
   }
 
-  var criticos = plan.filter(function(p) { return p.prioridade === 'critica'; }).length;
-  var altos = plan.filter(function(p) { return p.prioridade === 'alta'; }).length;
-  var cobMedia = plan.reduce(function(s, p) { return s + (p.cobertura_dias || 0); }, 0) / plan.length;
+  // KPIs
+  var criticos = plan.filter(function(p){return p.prioridade==='critica';}).length;
+  var altos = plan.filter(function(p){return p.prioridade==='alta';}).length;
+  var cobMediana = (function() {
+    var arr = plan.map(function(p){return Math.min(p.cobertura_dias||0, 999);}).sort(function(a,b){return a-b;});
+    return arr.length ? Math.round(arr[Math.floor(arr.length/2)]) : 0;
+  })();
+  var ultimoCalc = plan.reduce(function(m,p){ return p.data_calculo > m ? p.data_calculo : m; }, '');
+  document.getElementById('plan-updated').textContent = ultimoCalc ? 'MRP de ' + formatDate(ultimoCalc) : '';
 
   document.getElementById('kpis-planejamento').innerHTML = [
     kpiHtml('SKUs Críticos', criticos, 'cobertura < 30d', '--kpi-accent:var(--red)'),
     kpiHtml('SKUs Atenção', altos, 'cobertura 30-60d', '--kpi-accent:var(--orange)'),
-    kpiHtml('Cobertura Média', Math.round(cobMedia) + 'd', '', '--kpi-accent:var(--indigo)'),
+    kpiHtml('Cobertura Mediana', cobMediana + 'd', '', '--kpi-accent:var(--indigo)'),
     kpiHtml('Total Analisados', plan.length, 'SKUs', '--kpi-accent:var(--green)'),
   ].join('');
 
-  // Coverage bars
-  var sorted = plan.slice().sort(function(a, b) { return (a.cobertura_dias || 0) - (b.cobertura_dias || 0); });
+  // Cards de sugestão (filtrados por prioridade)
+  var fPri = document.getElementById('flt-plan-prioridade').value;
+  var ordem = { critica: 0, alta: 1, media: 2, baixa: 3 };
+  var sugestoes = plan.slice()
+    .filter(function(p) {
+      if (fPri) return p.prioridade === fPri;
+      return p.acao_sugerida && p.acao_sugerida !== 'ok' && p.acao_sugerida !== 'excesso';
+    })
+    .sort(function(a, b) {
+      var pa = ordem[a.prioridade] != null ? ordem[a.prioridade] : 9;
+      var pb = ordem[b.prioridade] != null ? ordem[b.prioridade] : 9;
+      if (pa !== pb) return pa - pb;
+      return (a.cobertura_dias || 0) - (b.cobertura_dias || 0);
+    });
+
+  if (!sugestoes.length) {
+    document.getElementById('mrp-cards').innerHTML = '<div class="empty">Nenhum SKU precisando atenção com os filtros atuais.</div>';
+  } else {
+    document.getElementById('mrp-cards').innerHTML = sugestoes.map(renderCardSugestao).join('');
+  }
+
+  // Barras de cobertura geral (todos SKUs, ordenados)
+  var sorted = plan.slice().sort(function(a, b){ return (a.cobertura_dias||0) - (b.cobertura_dias||0); });
   var maxCob = 150;
   var barsHtml = sorted.map(function(p) {
-    var dias = p.cobertura_dias || 0;
+    var dias = Math.min(p.cobertura_dias || 0, 999);
     var pct = Math.min(100, Math.round(dias / maxCob * 100));
     var color = dias < 30 ? 'var(--red)' : dias < 60 ? 'var(--orange)' : dias < 100 ? 'var(--amber)' : 'var(--green)';
     return '<div class="cov-row"><span class="cov-label">' + p.sku_produto + '</span>' +
       '<div class="cov-bar-track"><div class="cov-bar-fill" style="width:' + pct + '%;background:' + color + '"></div></div>' +
-      '<span class="cov-val" style="color:' + color + '">' + dias + ' dias</span></div>';
+      '<span class="cov-val" style="color:' + color + '">' + (p.cobertura_dias >= 9999 ? '∞' : p.cobertura_dias + 'd') + '</span></div>';
   }).join('');
   document.getElementById('cobertura-bars').innerHTML = barsHtml;
+}
 
-  // Sugestoes
-  var sugestoes = plan.filter(function(p) { return p.acao_sugerida && p.acao_sugerida !== 'ok'; });
-  if (sugestoes.length) {
-    var sugHtml = sugestoes.map(function(p) {
-      var icon = p.prioridade === 'critica' ? '🔴' : p.prioridade === 'alta' ? '🟠' : '🟡';
-      return '<div style="padding:12px;border:1px solid var(--bdr);border-radius:8px;margin-bottom:8px;background:var(--bg3)">' +
-        '<div style="font-weight:600;margin-bottom:4px">' + icon + ' ' + p.sku_produto + ' — ' + p.acao_sugerida.replace(/_/g, ' ') + '</div>' +
-        '<div style="font-size:12px;color:var(--txt2)">Cobertura: ' + p.cobertura_dias + 'd · Necessidade: ' + fmt(p.necessidade_pecas) + ' pç · Tecido: ' + fmt(p.necessidade_tecido) + ' ' + (p.unidade_tecido || '') + '</div>' +
-        '</div>';
-    }).join('');
-    document.getElementById('mrp-sugestoes').innerHTML = sugHtml;
+function renderCardSugestao(p) {
+  var pill = p.prioridade === 'critica' ? '<span class="pill pill-danger">🔴 Crítico</span>'
+           : p.prioridade === 'alta' ? '<span class="pill pill-delayed">🟠 Atenção</span>'
+           : '<span class="pill pill-warning">🟡 Monitorar</span>';
+
+  var prodNome = (produtosPais().find(function(x){return x.sku_pai === p.sku_produto;}) || {}).nome || p.sku_produto;
+
+  // Grade em proporcao
+  var gradeBox = '';
+  if (p.grade_tamanhos && p.grade_proporcao) {
+    gradeBox = '<div style="padding:10px 12px;background:var(--bg);border:1px solid var(--bdr);border-radius:8px;margin-bottom:10px">' +
+      '<div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">Grade sugerida (vendas ecommerce 90d)</div>' +
+      '<div style="font-family:monospace;font-size:14px;color:var(--indigo);font-weight:700">' +
+        p.grade_tamanhos + ' &nbsp;·&nbsp; ' + p.grade_proporcao +
+      '</div></div>';
   }
+
+  // Cor top
+  var cores = p.cores_sugeridas || [];
+  var corBox = '';
+  if (cores.length) {
+    var top3 = cores.slice(0, 3).map(function(c) {
+      return '<span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px"><span style="width:10px;height:10px;border-radius:2px;background:'+corToColor(c.cor)+'"></span>' + c.cor + ' <small style="color:var(--txt3)">' + c.pct + '%</small></span>';
+    }).join('');
+    corBox = '<div style="font-size:12px;margin-bottom:8px"><strong style="color:var(--txt3);font-size:10px;text-transform:uppercase;margin-right:8px">Cores:</strong>' + top3 + '</div>';
+  }
+
+  // Tecido + saldo
+  var tecNome = tecidoPrincipalDoSku(p.sku_produto) || '(sem histórico)';
+  var saldoTec = saldoTecidoDoSku(p.sku_produto);
+  var necTec = p.necessidade_tecido || 0;
+  var temTecido = saldoTec >= necTec && necTec > 0;
+  var tecColor = temTecido ? 'var(--green)' : 'var(--red)';
+
+  // Costureiro sugerido
+  var topCost = (p.costureiros_sugeridos || [])[0] || null;
+  var custBox = topCost ? '<div style="font-size:12px"><strong style="color:var(--txt3);font-size:10px;text-transform:uppercase">Costureiro:</strong> ' + topCost.nome + (topCost.valor_peca ? ' · ' + fmtR(topCost.valor_peca) + '/pç' : '') + '</div>' : '';
+
+  // CTA
+  var ctaBtn;
+  if (necTec > 0 && !temTecido) {
+    ctaBtn = '<button class="btnf" style="background:var(--orange);color:#fff;margin-left:auto" onclick="abrirCompraTecidoDaSugestao(\''+p.sku_produto+'\')">Comprar Tecido</button>';
+  } else {
+    ctaBtn = '<button class="btnf" onclick="abrirOPDaSugestao(\''+p.sku_produto+'\')">Abrir OP</button>';
+  }
+
+  return '<div style="padding:16px;border:1px solid var(--bdr);border-radius:10px;margin-bottom:12px;background:var(--bg3)">' +
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">' +
+      pill +
+      '<div style="flex:1"><strong style="font-size:14px">' + prodNome + '</strong> <span style="color:var(--txt3);font-size:11px">(' + p.sku_produto + ')</span></div>' +
+      '<span style="color:var(--txt3);font-size:12px">' + (p.cobertura_dias >= 9999 ? 'cobertura ∞' : p.cobertura_dias + 'd de cobertura') + '</span>' +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px;font-size:12px">' +
+      '<div><div style="color:var(--txt3);font-size:10px;text-transform:uppercase">Estoque</div><strong>' + fmt(p.estoque_atual) + ' pç</strong></div>' +
+      '<div><div style="color:var(--txt3);font-size:10px;text-transform:uppercase">Vendas 90d</div><strong>' + fmt(p.vendas_90d) + ' pç</strong></div>' +
+      '<div><div style="color:var(--txt3);font-size:10px;text-transform:uppercase">Em Produção</div><strong>' + fmt(p.em_producao) + ' pç</strong></div>' +
+      '<div><div style="color:var(--txt3);font-size:10px;text-transform:uppercase">Necessidade</div><strong style="color:var(--indigo)">' + fmt(p.necessidade_pecas) + ' pç</strong></div>' +
+    '</div>' +
+    gradeBox +
+    corBox +
+    '<div style="font-size:12px;margin-bottom:8px"><strong style="color:var(--txt3);font-size:10px;text-transform:uppercase">Tecido:</strong> ' + tecNome + ' · ' +
+      '<span style="color:' + tecColor + '">saldo ' + fmt(Math.round(saldoTec)) + ' / necessidade ' + fmt(necTec) + ' ' + (p.unidade_tecido || 'M') + '</span></div>' +
+    custBox +
+    '<div style="display:flex;justify-content:flex-end;margin-top:12px">' + ctaBtn + '</div>' +
+  '</div>';
+}
+
+// Abre drawer de nova OP com tudo pre-preenchido a partir da sugestao do MRP.
+function abrirOPDaSugestao(sku) {
+  var plan = (STATE.planejamento || []).find(function(p){return p.sku_produto === sku;});
+  if (!plan) { alert('Sugestão não encontrada pra ' + sku); return; }
+  openDrawer('nova-op');
+  setTimeout(function(){ preencherOPComSugestao(plan); }, 150);
+}
+
+function preencherOPComSugestao(plan) {
+  var prod = produtosPais().find(function(x){return x.sku_pai === plan.sku_produto;});
+  var inputProd = document.getElementById('f-nova-produto');
+  if (inputProd && prod) {
+    inputProd.value = prod.nome + ' (' + plan.sku_produto + ')';
+    if (typeof onProdutoOPChange === 'function') onProdutoOPChange();
+  }
+
+  // Costureiro top 1
+  var topCost = (plan.costureiros_sugeridos || [])[0] || null;
+  if (topCost) {
+    var cc = document.getElementById('f-nova-costureiro');
+    if (cc && topCost.nome) cc.value = topCost.nome;
+    var vv = document.getElementById('f-valor');
+    if (vv && topCost.valor_peca) vv.value = topCost.valor_peca;
+  }
+
+  // Data envio = hoje (user ajusta quando receber o tecido)
+  var hoje = new Date().toISOString().slice(0, 10);
+  var envio = document.getElementById('f-data-envio');
+  if (envio) envio.value = hoje;
+
+  // Aguarda mais um tick pra grade estar disponível (onProdutoOPChange constrói)
+  setTimeout(function() {
+    // Grade distribuida: necessidade_pecas × proporcao_por_tamanho
+    if (plan.grade_tamanhos && plan.grade_proporcao && plan.necessidade_pecas) {
+      distribuirGradePorProporcao(plan.grade_tamanhos, plan.grade_proporcao, plan.necessidade_pecas, 'row0');
+    }
+    // Cor top 1 na primeira row
+    var topCor = ((plan.cores_sugeridas || [])[0] || {}).cor;
+    if (topCor) {
+      var corSel = document.querySelector('.op-cor-row[data-idx="0"] [data-field="cor"]');
+      if (corSel) {
+        var opt = Array.from(corSel.options).find(function(o){ return (o.dataset.cor || o.textContent || '').toUpperCase().indexOf(topCor.toUpperCase()) >= 0; });
+        if (opt) { corSel.value = opt.value; corSel.dispatchEvent(new Event('change')); }
+      }
+    }
+  }, 300);
+}
+
+function distribuirGradePorProporcao(tamanhosStr, proporcaoStr, totalPecas, prefixo) {
+  var tamanhos = tamanhosStr.split('-');
+  var propInt = proporcaoStr.split('-').map(function(p){return parseInt(p) || 1;});
+  var soma = propInt.reduce(function(s, v){ return s + v; }, 0);
+  if (!soma) return;
+  tamanhos.forEach(function(t, i) {
+    var q = Math.round(totalPecas * propInt[i] / soma);
+    var sel = '.grade-input-' + prefixo + '[data-tamanho="' + t + '"]';
+    var inp = document.querySelector(sel);
+    if (inp) inp.value = q;
+  });
+  if (typeof atualizarGradeTotal === 'function') atualizarGradeTotal(prefixo);
+}
+
+// Abre drawer de nova compra de tecido pra SKU que precisa mas nao tem estoque
+function abrirCompraTecidoDaSugestao(sku) {
+  var plan = (STATE.planejamento || []).find(function(p){return p.sku_produto === sku;});
+  if (!plan) return;
+  openDrawer('novo-insumo');
+  setTimeout(function() {
+    // Na primeira row do form de insumo, marcar o SKU nos checkboxes
+    var cbx = document.querySelector('#insumo-row-0 [data-field="skus"] input[value="'+sku+'"]');
+    if (cbx) cbx.checked = true;
+    // Sugerir nome do tecido (ultimo usado)
+    var tecNome = tecidoPrincipalDoSku(sku);
+    if (tecNome) {
+      var inpNome = document.querySelector('#insumo-row-0 [data-field="nome"]');
+      if (inpNome) inpNome.value = tecNome;
+    }
+    // Sugerir quantidade = necessidade - saldo
+    var saldo = saldoTecidoDoSku(sku);
+    var faltante = Math.max(0, (plan.necessidade_tecido || 0) - saldo);
+    if (faltante > 0) {
+      var inpQtd = document.querySelector('#insumo-row-0 [data-field="qtd"]');
+      if (inpQtd) inpQtd.value = Math.round(faltante);
+    }
+  }, 150);
 }
 
 // ═══════════════ TAB: CUSTOS ═══════════════
