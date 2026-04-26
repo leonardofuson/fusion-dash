@@ -450,7 +450,7 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
       <select id="flt-hist-status" class="dselect" onchange="renderHistorico()">
         <option value="">Todos status</option>
         <option value="Entregue">Entregue</option>
-        <option value="Cancelada">Cancelada</option>
+        <option value="Cancelado">Cancelado</option>
       </select>
       <select id="flt-hist-produto" class="dselect" onchange="renderHistorico()"><option value="">Todos produtos</option></select>
       <select id="flt-hist-costureiro" class="dselect" onchange="renderHistorico()"><option value="">Todos costureiros</option></select>
@@ -668,9 +668,9 @@ function costuName(id) { var c = STATE.costureiros.find(function(x) { return x.i
 function statusPill(st) {
   var map = {
     'Entregue': 'pill-ok',
-    'Produzindo': 'pill-warning',
-    'cancelada': 'pill-neutral',
-    'Cancelada': 'pill-neutral',
+    'Em Produção': 'pill-warning',
+    'Devolvido Fornecedor': 'pill-warning',
+    'Cancelado': 'pill-neutral',
   };
   var cls = map[st] || 'pill-neutral';
   return '<span class="pill ' + cls + '">' + (st || '—') + '</span>';
@@ -781,9 +781,9 @@ function weekLabel(d) {
 }
 
 function renderOPsLista() {
-  // Lista de Ordens mostra apenas OPs ATIVAS (Produzindo / parcial / atrasada / aguardando_tecido / tecido_enviado)
+  // Lista de Ordens mostra apenas OPs ATIVAS (Em Produção / Devolvido Fornecedor)
   var ops = STATE.ops.filter(function(o) {
-    return ['Entregue','cancelada'].indexOf(o.status) < 0;
+    return ['Entregue','Cancelado'].indexOf(o.status) < 0;
   });
   var fSt = document.getElementById('flt-status-op').value;
   var fProd = document.getElementById('flt-produto-gantt').value;
@@ -1443,10 +1443,10 @@ function renderInsumos() {
   var tipoFilt = document.querySelector('.chip[data-tipo].on');
   var tipo = tipoFilt ? tipoFilt.dataset.tipo : 'tecido';
 
-  // IDs de insumos que têm OPs ATIVAS (produzindo/parcial/etc) consumindo eles
+  // IDs de insumos que têm OPs ATIVAS consumindo eles (Em Produção / Devolvido Fornecedor)
   var insumosEmUso = {};
   (STATE.ops || []).forEach(function(op) {
-    if (op.insumo_id && ['Entregue','cancelada'].indexOf(op.status) < 0) {
+    if (op.insumo_id && ['Entregue','Cancelado'].indexOf(op.status) < 0) {
       insumosEmUso[op.insumo_id] = true;
     }
   });
@@ -1893,13 +1893,13 @@ function valorCosturaPecaComFallback(o) {
 function renderHistorico() {
   construirLookupValorCosturaPeca();
 
-  // Fonte única: ordens_producao com status concluida/cancelada (historico)
+  // Fonte única: ordens_producao com status Entregue/Cancelado (historico)
   // Cruza com ordens_compra via ordem_compra_id para resgatar dados de NF/fornecedor
   var comprasMap = {};
   (STATE.compras || []).forEach(function(c) { comprasMap[c.id] = c; });
 
   var historico = (STATE.ops || []).filter(function(o) {
-    return o.status === 'Entregue' || o.status === 'cancelada';
+    return o.status === 'Entregue' || o.status === 'Cancelado';
   }).map(function(o) {
     var compra = o.ordem_compra_id ? comprasMap[o.ordem_compra_id] : null;
     var insumo = o.insumo_id ? STATE.insumos.find(function(i){return i.id===o.insumo_id;}) : null;
@@ -1920,7 +1920,7 @@ function renderHistorico() {
       qtde_projetada: o.qtde_pecas,
       qtde_entregue: o.qtde_pecas_entregues,
       valor_peca_costureiro: valorCosturaPecaComFallback(o),  // R$ por peça com fallback do último valor daquele costureiro+produto
-      status: o.status === 'cancelada' ? 'Cancelada' : 'Entregue',
+      status: o.status === 'Cancelado' ? 'Cancelado' : 'Entregue',
     };
   });
 
@@ -2092,7 +2092,7 @@ function populateHistoricoFilters() {
   });
   // Costureiros vem do HISTORICO de ordens_producao (mesma fonte que alimenta a tabela)
   (STATE.ops || []).forEach(function(o) {
-    if ((o.status === 'Entregue' || o.status === 'cancelada') && o.costureiro_id) {
+    if ((o.status === 'Entregue' || o.status === 'Cancelado') && o.costureiro_id) {
       costIds[o.costureiro_id] = 1;
     }
   });
@@ -3221,7 +3221,7 @@ function buildEditOPForm(op) {
     var faz = (c.skus_habilitados || []).indexOf(op.sku_produto) >= 0;
     return '<option value="' + c.id + '"' + sel + '>' + c.nome + (faz ? ' ✓' : '') + '</option>';
   }).join('');
-  var statusOpts = ['Produzindo','Entregue'].map(function(s) {
+  var statusOpts = ['Em Produção','Entregue','Devolvido Fornecedor','Cancelado'].map(function(s) {
     var sel = s === op.status ? ' selected' : '';
     return '<option value="' + s + '"' + sel + '>' + s + '</option>';
   }).join('');
@@ -3391,7 +3391,7 @@ async function submitDrawer() {
           data_envio_tecido: dataEnvio,
           data_prevista_entrega: dataPrev,
           corte_externo: corteExt,
-          status: 'Produzindo',
+          status: 'Em Produção',
           insumo_id: insumoPrincipalId,
           quantidade_tecido_usada: metragem,
         });
