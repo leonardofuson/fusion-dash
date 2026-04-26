@@ -3403,7 +3403,8 @@ async function submitDrawer() {
       var opsCriadas = await postSupabase('ordens_producao', ops);
       var opsArr = Array.isArray(opsCriadas) ? opsCriadas : [opsCriadas];
 
-      // Distribuir baixa em FIFO pelos insumo_ids daquela cor.
+      // Distribuir baixa em FIFO + envio pro costureiro (2 movs: -CD, +costureiro)
+      var costureiroNome = ((STATE.costureiros || []).find(function(c){return c.id===costureiroId;}) || {}).nome || 'Desconhecido';
       for (var j = 0; j < opsArr.length; j++) {
         var plano = baixas[j];
         if (!plano || !plano.metragem || plano.metragem <= 0 || !plano.insumoIdsFifo.length) continue;
@@ -3414,13 +3415,15 @@ async function submitDrawer() {
           var disp = ins ? (ins.quantidade_atual || 0) : 0;
           if (disp <= 0) continue;
           var usar = Math.min(restante, disp);
-          await postSupabase('movimentacao_insumos', {
-            insumo_id: iid,
-            tipo_mov: 'saida_producao',
-            quantidade: -usar,
-            ordem_producao_id: opsArr[j].id,
-            observacao: 'Saída automática FIFO pela OP #' + opsArr[j].id,
-          });
+          // Event log: 2 movs preservam saldo total, registram movimentação entre locais
+          await postSupabase('movimentacao_insumos', [
+            { insumo_id: iid, tipo_mov: 'envio_costureiro', quantidade: -usar,
+              localizacao: 'CD FUSION', ordem_producao_id: opsArr[j].id,
+              observacao: 'Saída CD via OP #' + opsArr[j].id },
+            { insumo_id: iid, tipo_mov: 'envio_costureiro', quantidade: usar,
+              localizacao: costureiroNome, ordem_producao_id: opsArr[j].id,
+              observacao: 'Entrada costureiro via OP #' + opsArr[j].id },
+          ]);
           restante -= usar;
         }
       }
