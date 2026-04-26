@@ -345,7 +345,8 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
             <select id="flt-produto-gantt" class="dselect" onchange="renderGantt();renderOPsLista()"><option value="">Todos produtos</option></select>
             <select id="flt-costureiro-gantt" class="dselect" onchange="renderGantt();renderOPsLista()"><option value="">Todos costureiros</option></select>
             <select id="flt-status-op" class="dselect" onchange="renderGantt();renderOPsLista()"><option value="">Todos status</option></select>
-            <button class="btnf ghost" onclick="document.getElementById('flt-produto-gantt').value='';document.getElementById('flt-costureiro-gantt').value='';document.getElementById('flt-status-op').value='';renderGantt();renderOPsLista()">Limpar</button>
+            <button class="chip" id="chip-sem-data" onclick="toggleSemDataChip()">SEM DATA DE ENVIO</button>
+            <button class="btnf ghost" onclick="limparFiltrosPipeline()">Limpar</button>
             <span style="margin-left:auto;display:flex;gap:4px;">
               <button class="btnf ghost" onclick="expandTodosGantt()" style="font-size:11px;padding:6px 10px;">Expandir tudo</button>
               <button class="btnf ghost" onclick="colapsarTodosGantt()" style="font-size:11px;padding:6px 10px;">Colapsar tudo</button>
@@ -667,6 +668,30 @@ function renderAll() {
   renderCustos();
   populateFilters();
   populateHistoricoFilters();
+  updateSemDataChipCount();
+}
+
+// Chip "SEM DATA DE ENVIO" — atalho pro filtro existente kpiFilter='sem_data' (Sprint 4)
+// Reusa toggleFilterKpi do KPI card pra manter sincronia entre os dois controles
+function toggleSemDataChip() {
+  toggleFilterKpi('sem_data');
+}
+function updateSemDataChipCount() {
+  // Conta OPs ativas sem data_prevista_entrega E sem data_pagamento (mesma regra do KPI)
+  var count = (STATE.ops || []).filter(function(o) {
+    return o.status !== 'Entregue' && !o.data_prevista_entrega && !o.data_pagamento;
+  }).length;
+  var el = document.getElementById('chip-sem-data');
+  if (!el) return;
+  el.innerHTML = 'SEM DATA DE ENVIO <span style="opacity:0.6;font-weight:500">'+count+'</span>';
+  if (STATE.kpiFilter === 'sem_data') el.classList.add('on'); else el.classList.remove('on');
+}
+function limparFiltrosPipeline() {
+  document.getElementById('flt-produto-gantt').value='';
+  document.getElementById('flt-costureiro-gantt').value='';
+  document.getElementById('flt-status-op').value='';
+  STATE.kpiFilter = null;
+  renderPipeline();
 }
 
 // ═══════════════ HELPERS ═══════════════
@@ -736,6 +761,7 @@ function renderPipeline() {
 
   renderGantt();
   renderOPsLista();
+  updateSemDataChipCount();
 }
 
 function kpiHtml(lbl, val, sub, accent) {
