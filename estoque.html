@@ -464,6 +464,7 @@ async function api(path) {
 
 async function apiAll(base) {
   let all = [], o = 0;
+  if (base.indexOf('order=') < 0) base += '&order=id.asc';
   while (true) {
     const r = await api(`${base}&limit=1000&offset=${o}`);
     if (!Array.isArray(r) || !r.length) break;

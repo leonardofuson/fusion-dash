@@ -299,6 +299,7 @@ function weekLabel(ws){
 // ===================== FETCH =========================
 async function buscarTudo(tab,filtro){
   var todos=[],off=0,tam=1000,pag=0;
+  if(filtro.indexOf('order=')<0) filtro+='&order=id.asc';
   while(pag<MAX_PAGES){
     var url=SB_URL+'/rest/v1/'+tab+'?'+filtro+'&limit='+tam+'&offset='+off;
     var r=await fetch(url,{headers:AUTH_HEADERS});
