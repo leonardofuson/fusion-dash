@@ -156,8 +156,8 @@ echo "$HTML" | grep -q "tbody-regua-pagamentos" && echo "✅ tbody régua único
 echo "$HTML" | grep -q "'Produzindo'" && echo "🔴 status antigo 'Produzindo' aparece" || echo "✅ sem status antigo"
 echo "$HTML" | grep -q "'cancelada'" && echo "🔴 status antigo 'cancelada' aparece (em ordens_producao)" || echo "✅ sem cancelada bare"
 echo "$HTML" | grep -cE '<tbody id="tbody-pagamentos"' | grep -qE '^[01]$' && echo "✅ tbody-pagamentos único ou ausente" || echo "🔴 tbody-pagamentos duplicado"
-# Detecta </script> literal dentro de string JS (caracter por caracter, não concatenação)
-echo "$HTML" | grep -E "'<script>" | grep -v "'<scr'+'ipt>'" >/dev/null && echo "🔴 </script> literal em string JS" || echo "✅ sem </script> literal"
+# Detecta </script> literal dentro de string JS (literal `'</script>'` quebra o parser HTML)
+echo "$HTML" | grep -qE "'</script>'" && echo "🔴 </script> literal em string JS" || echo "✅ sem </script> literal"
 
 # 4. jsPDF carregado (necessário pra Sprint 7 do refactor)
 echo "$HTML" | grep -q "jspdf" && echo "✅ jsPDF presente" || echo "🔴 jsPDF ausente"
