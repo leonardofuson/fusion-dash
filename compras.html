@@ -2311,6 +2311,7 @@ function renderCustos() {
     '</div>';
 
   // KPIs
+  var compras = STATE.compras || [];
   var totalGasto = compras.reduce(function(s, c) { return s + (c.valor_nf || 0); }, 0);
   document.getElementById('kpis-custos').innerHTML = [
     kpiHtml('Gasto Total Tecido', fmtR(totalGasto), compras.length + ' ordens', '--kpi-accent:var(--indigo)'),
