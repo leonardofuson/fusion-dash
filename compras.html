@@ -1324,16 +1324,23 @@ async function abrirRegistrarEntrega(opId) {
     if (rE.ok) entregasAnt = await rE.json();
   } catch (e) { console.warn('Falha ao buscar entregas anteriores:', e); }
 
-  // Histórico HTML
+  // Cache pra editar/excluir depois sem refetch
+  STATE.entregasCache = {};
+  entregasAnt.forEach(function(e){ STATE.entregasCache[e.id] = e; });
+
+  // Histórico HTML — cada linha tem botões Editar/Excluir
   var histHtml = '';
   if (entregasAnt.length) {
     histHtml = '<div style="margin-bottom:16px;padding:12px;background:var(--bg3);border:1px solid var(--bdr);border-radius:8px">' +
       '<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px">Entregas anteriores (' + entregasAnt.length + ')</div>' +
       entregasAnt.map(function(e) {
         var d = e.data_entrega ? formatDate(e.data_entrega) : '—';
-        return '<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.04)">' +
-          '<span>' + d + (e.observacao ? ' · <span style="color:var(--txt3)">' + e.observacao + '</span>' : '') + '</span>' +
-          '<strong style="color:var(--green)">' + fmt(e.quantidade) + ' pç</strong>' +
+        var obs = e.observacao ? ' · <span style="color:var(--txt3)">' + e.observacao + '</span>' : '';
+        return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)">' +
+          '<span style="flex:1">' + d + obs + '</span>' +
+          '<strong style="color:var(--green);min-width:60px;text-align:right">' + fmt(e.quantidade) + ' pç</strong>' +
+          '<button class="btnf ghost" style="font-size:9px;padding:2px 6px" onclick="editarEntrega('+e.id+','+opId+')" title="Corrigir esta entrega">Editar</button>' +
+          '<button class="btnf ghost" style="font-size:9px;padding:2px 6px;color:var(--red);border-color:rgba(248,113,113,0.3)" onclick="excluirEntrega('+e.id+','+opId+')" title="Apagar esta entrega">Excluir</button>' +
         '</div>';
       }).join('') +
     '</div>';
@@ -1423,6 +1430,111 @@ function atualizarEntregaTotal() {
   if (el) el.textContent = total.toLocaleString('pt-BR');
   // Re-render preview de fechamento se "Total" estiver marcado
   atualizarPreviewFechamento();
+}
+
+// Edita uma entrega passada (caso de erro de digitação)
+function editarEntrega(entregaId, opId) {
+  var entrega = (STATE.entregasCache || {})[entregaId];
+  var op = STATE.ops.find(function(o){return o.id===opId;});
+  if (!entrega || !op) { alert('Entrega não encontrada'); return; }
+
+  STATE.drawerType = 'edit-entrega';
+  STATE.editingEntrega = entrega;
+  STATE.entregaOp = op;
+
+  var cor = (op.cor || '—').trim();
+  var gradeAtual = entrega.grade_entregue || {};
+  var tamanhos = Object.keys(gradeAtual);
+  if (!tamanhos.length) tamanhos = tamanhosDoSKU(op.sku_produto);
+
+  // Pendente "real" disponível pro tamanho = (projetado - já entregue total) + qtd_atual_dessa_entrega
+  // (porque ao editar, a qtd dessa entrega volta pro pool e pode ser realocada)
+  var gradeProj = op.grade_projetada || {};
+  var gradeJa = op.grade_entregue || {};
+  var gradeInputs = tamanhos.map(function(t) {
+    var proj = gradeProj[t] || 0;
+    var jaTotal = gradeJa[t] || 0;
+    var dessaEntrega = gradeAtual[t] || 0;
+    var pendDisp = (proj - jaTotal) + dessaEntrega;
+    return '<div class="grade-cell">' +
+      '<label>' + t + '</label>' +
+      '<input type="number" min="0" max="' + pendDisp + '" data-tamanho="' + t + '" class="grade-input-ent-edit" value="' + dessaEntrega + '" oninput="atualizarEntregaTotalEdit()">' +
+      '<div style="font-size:9px;color:var(--txt3);text-align:center;margin-top:2px">disp: '+pendDisp+'</div>' +
+    '</div>';
+  }).join('');
+
+  document.getElementById('drawer-title').textContent = 'Editar entrega — ' + cor;
+  document.getElementById('drawer-body').innerHTML =
+    '<div style="padding:12px;background:rgba(248,113,113,0.08);border:1px solid rgba(248,113,113,0.3);border-radius:8px;margin-bottom:16px;font-size:12px">' +
+      '<strong style="color:var(--red)">⚠ Editando entrega passada</strong><br>' +
+      '<span style="color:var(--txt2)">A diferença entre o valor antigo e o novo gera um ajuste no consumo de tecido.</span>' +
+    '</div>' +
+    '<div style="padding:12px;background:var(--bg);border-radius:8px;margin-bottom:16px;font-size:12px;color:var(--txt2)">' +
+      '<div style="font-weight:700;color:var(--txt1);margin-bottom:4px">' + (op.produto || '') + ' — ' + cor + '</div>' +
+      '<div>OP #' + op.id + ' · Costureiro: ' + costuName(op.costureiro_id) + '</div>' +
+      '<div style="margin-top:6px">Entrega original: <strong>' + fmt(entrega.quantidade) + ' pç</strong> em ' + (entrega.data_entrega ? formatDate(entrega.data_entrega) : '?') + '</div>' +
+    '</div>' +
+    '<div class="form-group"><label class="form-label">Data da entrega</label>' +
+      '<input type="date" class="form-input" id="f-ent-edit-data" value="' + (entrega.data_entrega || '') + '"></div>' +
+    '<div class="form-group"><label class="form-label">Quantidade por tamanho</label>' +
+      '<div class="grade-grid">' + gradeInputs + '</div>' +
+      '<div class="grade-total"><span>Total nesta entrega</span><strong id="ent-total-edit">'+fmt(entrega.quantidade)+'</strong></div>' +
+    '</div>' +
+    '<div class="form-group"><label class="form-label">Observação</label>' +
+      '<textarea class="form-textarea" id="f-ent-edit-obs" placeholder="Opcional...">' + (entrega.observacao || '') + '</textarea></div>';
+  document.getElementById('drawer-footer').style.display = 'flex';
+}
+
+function atualizarEntregaTotalEdit() {
+  var inputs = document.querySelectorAll('.grade-input-ent-edit');
+  var total = 0;
+  inputs.forEach(function(inp) { total += parseInt(inp.value) || 0; });
+  var el = document.getElementById('ent-total-edit');
+  if (el) el.textContent = total.toLocaleString('pt-BR');
+}
+
+// Exclui uma entrega passada
+async function excluirEntrega(entregaId, opId) {
+  var entrega = (STATE.entregasCache || {})[entregaId];
+  var op = STATE.ops.find(function(o){return o.id===opId;});
+  if (!entrega || !op) { alert('Entrega não encontrada'); return; }
+
+  var consumoPorPeca = parseFloat(op.consumo_por_peca) || 0;
+  var metrosReverter = (entrega.quantidade || 0) * consumoPorPeca;
+
+  var msg = 'Excluir esta entrega?\n\n' +
+    'Data: ' + (entrega.data_entrega ? formatDate(entrega.data_entrega) : '?') + '\n' +
+    'Quantidade: ' + fmt(entrega.quantidade) + ' pç';
+  if (metrosReverter > 0) {
+    msg += '\nTecido: ' + fmt(metrosReverter) + ' ' + (op.unidade || '') + ' voltarão pro saldo do costureiro';
+  }
+  msg += '\n\nEsta ação não pode ser desfeita.';
+  if (!confirm(msg)) return;
+
+  try {
+    // 1) Reverte o consumo de tecido (mov positivo no costureiro = devolve saldo)
+    if (op.insumo_id && metrosReverter > 0) {
+      try {
+        await postSupabase('movimentacao_insumos', [{
+          insumo_id: op.insumo_id, tipo_mov: 'consumo_op',
+          quantidade: metrosReverter, // positivo = retorno ao saldo
+          localizacao: costuName(op.costureiro_id),
+          ordem_producao_id: op.id,
+          observacao: 'Reversão entrega #' + entregaId + ' (excluída)',
+        }]);
+      } catch (e) { console.warn('Falha ao reverter consumo:', e); }
+    }
+
+    // 2) Apaga a entrega (trigger DB recalcula qtde_pecas_entregues)
+    var rD = await fetch(SB_URL + '/rest/v1/producao_entregas?id=eq.' + entregaId, {
+      method: 'DELETE',
+      headers: Object.assign({'Prefer':'return=minimal'}, await getAuthHeaders())
+    });
+    if (!rD.ok) throw new Error('HTTP ' + rD.status + ': ' + await rD.text());
+
+    closeDrawer();
+    await carregar();
+  } catch (e) { alert('Erro ao excluir: ' + e.message); }
 }
 
 // Abre drawer pra editar um insumo (compra de tecido / aviamento)
@@ -2972,6 +3084,7 @@ function closeDrawer() {
   STATE.drawerType = null;
   STATE.editingOp = null;
   STATE.editingInsumo = null;
+  STATE.editingEntrega = null;
   STATE.alocandoInsumoId = null;
   configurarBtnExcluir(null);
 }
@@ -4153,6 +4266,50 @@ async function submitDrawer() {
         atualizado_em: new Date().toISOString(),
       };
       await patchSupabase('estoque_insumos', ei.id, body);
+    } else if (type === 'edit-entrega') {
+      var op = STATE.entregaOp;
+      var entregaOrig = STATE.editingEntrega;
+      if (!op || !entregaOrig) throw new Error('Contexto de edição perdido');
+
+      var dataNova = document.getElementById('f-ent-edit-data').value;
+      if (!dataNova) { alert('Informe a data da entrega'); btn.textContent='Salvar'; btn.disabled=false; return; }
+
+      var gradeNova = {};
+      var qtdNova = 0;
+      document.querySelectorAll('.grade-input-ent-edit').forEach(function(inp) {
+        var q = parseInt(inp.value) || 0;
+        if (q > 0) {
+          gradeNova[inp.dataset.tamanho] = q;
+          qtdNova += q;
+        }
+      });
+      if (qtdNova === 0) { alert('Quantidade não pode ser zero — use Excluir se for o caso'); btn.textContent='Salvar'; btn.disabled=false; return; }
+
+      var qtdAntiga = parseInt(entregaOrig.quantidade) || 0;
+      var diff = qtdNova - qtdAntiga;
+      var consumoPorPeca = parseFloat(op.consumo_por_peca) || 0;
+
+      // 1) PATCH a entrega existente
+      await patchSupabase('producao_entregas', entregaOrig.id, {
+        data_entrega: dataNova,
+        quantidade: qtdNova,
+        grade_entregue: Object.keys(gradeNova).length ? gradeNova : null,
+        observacao: (document.getElementById('f-ent-edit-obs').value || '').trim() || null,
+      });
+
+      // 2) Mov de ajuste delta no consumo (só se a qtd mudou)
+      if (op.insumo_id && consumoPorPeca > 0 && diff !== 0) {
+        var metrosDelta = diff * consumoPorPeca; // positivo se mais peças, negativo se menos
+        try {
+          await postSupabase('movimentacao_insumos', [{
+            insumo_id: op.insumo_id, tipo_mov: 'consumo_op',
+            quantidade: -metrosDelta, // saída = negativo. Se diff > 0 (mais peças), sai mais. Se diff < 0, "sai" negativo = entra (devolve)
+            localizacao: costuName(op.costureiro_id),
+            ordem_producao_id: op.id,
+            observacao: 'Ajuste correção entrega #' + entregaOrig.id + ' (' + qtdAntiga + ' → ' + qtdNova + ' pç)',
+          }]);
+        } catch (e) { console.warn('Falha ao registrar mov de ajuste:', e); }
+      }
     } else if (type === 'registrar-entrega') {
       var op = STATE.entregaOp;
       var data = document.getElementById('f-ent-data').value;
