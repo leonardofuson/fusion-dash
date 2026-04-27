@@ -3059,12 +3059,12 @@ function buildOPCorRow(idx, firstRow) {
       '<div data-field="tecido-info" style="font-size:11px;color:var(--txt3);margin-top:4px;"></div>' +
     '</div>' +
     '<div class="form-row">' +
-      '<div class="form-group"><label class="form-label">Cor</label>' +
+      '<div class="form-group"><label class="form-label">Cor / NF <small style="color:var(--txt3);font-weight:400">(só NFs com saldo)</small></label>' +
         '<select class="form-select" data-field="cor" onchange="atualizarSaldoRow('+idx+')"><option value="">Selecione um tecido primeiro</option></select></div>' +
-      '<div class="form-group"><label class="form-label">Metragem disponível</label>' +
+      '<div class="form-group"><label class="form-label">Metragem disponível desta NF</label>' +
         '<input class="form-input" data-field="saldo" type="text" readonly style="background:var(--bg3);color:var(--green);font-weight:700"></div>' +
     '</div>' +
-    '<div class="form-group"><label class="form-label">NF do tecido <small style="color:var(--txt3);font-weight:400">(auto — vem do lote mais antigo desta cor)</small></label>' +
+    '<div class="form-group"><label class="form-label">NF do tecido <small style="color:var(--txt3);font-weight:400">(auto — vinculada à opção escolhida)</small></label>' +
       '<input class="form-input" data-field="nf-tecido" type="text" readonly style="background:var(--bg3);color:var(--txt2)" placeholder="—"></div>' +
     '<div class="form-row">' +
       '<div class="form-group"><label class="form-label">Metragem a produzir</label>' +
@@ -3146,28 +3146,45 @@ function atualizarCoresTecidoRow(idx) {
     atualizarSaldoRow(idx);
     return;
   }
-  var variantes = (STATE.insumos || []).filter(function(i) {
+  // Só insumos do tecido com saldo > 0 (NFs ainda em estoque)
+  var disponiveis = (STATE.insumos || []).filter(function(i) {
     return i.tipo === 'tecido' && (i.nome||'').trim() === nomeTecido &&
+      (i.quantidade_atual || 0) > 0 &&
       (!sku || !i.skus_pai || i.skus_pai.length === 0 || i.skus_pai.indexOf(sku) >= 0);
   });
-  // Agrupar por cor: saldo total = soma das compras daquela cor.
-  // Ao salvar, baixa FIFO nos insumo_ids em ordem de data_faturamento.
+  // Agrupar por cor pra montar <optgroup> mas cada NF é uma <option> separada
   var porCor = {};
-  variantes.forEach(function(v) {
+  disponiveis.forEach(function(v) {
     var c = (v.cor || '—').trim() || '—';
-    if (!porCor[c]) porCor[c] = { saldo: 0, unidade: v.unidade || '', insumos: [] };
-    porCor[c].saldo += (v.quantidade_atual || 0);
-    porCor[c].insumos.push({ id: v.id, saldo: v.quantidade_atual || 0, data: v.data_faturamento || '' });
+    if (!porCor[c]) porCor[c] = [];
+    porCor[c].push(v);
   });
+  // Ordenar cores asc, dentro de cada cor ordenar por data_faturamento (mais antigo primeiro = sugestão FIFO)
   var cores = Object.keys(porCor).sort();
+  cores.forEach(function(c) {
+    porCor[c].sort(function(a,b){ return (a.data_faturamento||'').localeCompare(b.data_faturamento||''); });
+  });
+
+  function fmtData(d) {
+    if (!d) return '';
+    var p = d.split('-');
+    return p.length === 3 ? p[2]+'/'+p[1]+'/'+p[0] : d;
+  }
+
   corSel.innerHTML = cores.length
-    ? '<option value="">Selecione a cor...</option>' + cores.map(function(c){
-        var info = porCor[c];
-        info.insumos.sort(function(a,b){ return (a.data || '').localeCompare(b.data || ''); });
-        var idsStr = info.insumos.map(function(x){return x.id;}).join(',');
-        return '<option value="'+idsStr+'" data-saldo="'+info.saldo+'" data-unidade="'+info.unidade+'" data-cor="'+c.replace(/"/g,'&quot;')+'">'+c+' — saldo '+fmt(info.saldo)+' '+info.unidade+'</option>';
+    ? '<option value="">Selecione a NF...</option>' + cores.map(function(c){
+        var lista = porCor[c];
+        var opts = lista.map(function(v) {
+          var nf = v.numero_nf ? String(v.numero_nf).trim() : '(sem NF)';
+          var saldo = v.quantidade_atual || 0;
+          var unidade = v.unidade || '';
+          var dataFat = fmtData(v.data_faturamento || '');
+          var label = 'NF ' + nf + ' — saldo ' + fmt(saldo) + ' ' + unidade + (dataFat ? ' (' + dataFat + ')' : '');
+          return '<option value="'+v.id+'" data-saldo="'+saldo+'" data-unidade="'+unidade+'" data-cor="'+c.replace(/"/g,'&quot;')+'" data-nf="'+(nf||'').replace(/"/g,'&quot;')+'">'+label+'</option>';
+        }).join('');
+        return '<optgroup label="'+c.replace(/"/g,'&quot;')+'">'+opts+'</optgroup>';
       }).join('')
-    : '<option value="">Nenhuma cor cadastrada</option>';
+    : '<option value="">Nenhuma NF disponível em estoque</option>';
 
   var info = row.querySelector('[data-field="tecido-info"]');
   var cons = ultimoConsumoDoSku(sku);
@@ -3197,21 +3214,13 @@ function atualizarSaldoRow(idx) {
   var unidade = opt.dataset.unidade || '';
   if (saldoEl) saldoEl.value = fmt(saldo) + ' ' + unidade;
 
-  // Pegar primeiro insumo_id pra consulta do BOM (mesmo nome de tecido)
-  var primeiroId = parseInt((opt.value || '').split(',')[0]);
-  var insumo = STATE.insumos.find(function(i){return i.id===primeiroId;});
+  // Pegar o insumo (NF) selecionado
+  var insumoId = parseInt(opt.value);
+  var insumo = STATE.insumos.find(function(i){return i.id===insumoId;});
   if (!insumo) return;
 
-  // Auto-fill da NF do tecido: vem do lote mais antigo (FIFO) — se houver mais de um lote daquela cor
-  // listamos todos separados por vírgula
-  if (nfEl) {
-    var ids = (opt.value || '').split(',').map(function(x){return parseInt(x);});
-    var nfs = ids.map(function(id) {
-      var i = STATE.insumos.find(function(x){return x.id === id;});
-      return i && i.numero_nf ? String(i.numero_nf).trim() : null;
-    }).filter(function(x){return x;});
-    nfEl.value = nfs.length ? nfs.join(' · ') : '—';
-  }
+  // NF vem direto do data-nf (já é uma NF única por option)
+  if (nfEl) nfEl.value = opt.dataset.nf || '—';
 
   var sku = extrairSkuProduto(document.getElementById('f-nova-produto').value);
   var cons = ultimoConsumoDoSku(sku);
@@ -3999,24 +4008,33 @@ async function submitDrawer() {
       var dataPrev = document.getElementById('f-data-prevista').value || null;
       var corteExt = document.getElementById('f-corte').value === 'true';
 
-      // Coletar cada cor (row). Value do <option> agora traz IDs separados
-      // por virgula ordenados FIFO (data_faturamento asc).
+      // Cada row da OP usa exatamente 1 insumo (NF) selecionada explicitamente pelo user.
+      // Pra consumir 2 NFs do mesmo tecido+cor, user adiciona 2 rows com NFs diferentes.
       var rows = document.querySelectorAll('.op-cor-row');
       var ops = [];
-      var baixas = [];  // plano de baixa FIFO por OP index
+      var baixas = [];  // [{ insumoId, metragem }] alinhado com ops
       for (var r = 0; r < rows.length; r++) {
         var row = rows[r];
         var idx = parseInt(row.dataset.idx);
         var corSel = row.querySelector('[data-field="cor"]');
         var opt = corSel && corSel.selectedIndex >= 0 ? corSel.options[corSel.selectedIndex] : null;
-        var idsStr = opt ? opt.value : '';
-        var insumoIdsFifo = idsStr ? idsStr.split(',').map(function(s){return parseInt(s);}).filter(Boolean) : [];
+        var insumoId = opt && opt.value ? parseInt(opt.value) : null;
         var metragem = parseFloat(row.querySelector('[data-field="metragem"]').value) || null;
         var pecasFinal = parseInt(row.querySelector('[data-field="pecas-final"]').value) || 0;
         if (!pecasFinal) continue;
 
         var corTexto = opt && opt.dataset.cor ? opt.dataset.cor : '';
-        var insumoPrincipalId = insumoIdsFifo[0] || null;
+
+        // Validação: metragem solicitada não pode passar do saldo daquela NF
+        if (insumoId && metragem) {
+          var insSel = STATE.insumos.find(function(x){return x.id===insumoId;});
+          var saldoNF = insSel ? (insSel.quantidade_atual || 0) : 0;
+          if (metragem > saldoNF + 0.01) {
+            if (!confirm('Cor "'+corTexto+'": metragem solicitada ('+fmt(metragem)+') excede saldo da NF '+(opt.dataset.nf||'')+' ('+fmt(saldoNF)+').\n\nSalvar mesmo assim?')) {
+              btn.textContent='Salvar'; btn.disabled=false; return;
+            }
+          }
+        }
 
         var grade = {};
         row.querySelectorAll('.grade-input-row'+idx).forEach(function(inp) {
@@ -4038,10 +4056,10 @@ async function submitDrawer() {
           data_prevista_entrega: dataPrev,
           corte_externo: corteExt,
           status: 'Em Produção',
-          insumo_id: insumoPrincipalId,
+          insumo_id: insumoId,
           quantidade_tecido_usada: metragem,
         });
-        baixas.push({ insumoIdsFifo: insumoIdsFifo, metragem: (metragem || 0) });
+        baixas.push({ insumoId: insumoId, metragem: (metragem || 0) });
       }
 
       if (!ops.length) { alert('Preencha ao menos uma cor com peças > 0'); btn.textContent = 'Salvar'; btn.disabled = false; return; }
@@ -4049,29 +4067,19 @@ async function submitDrawer() {
       var opsCriadas = await postSupabase('ordens_producao', ops);
       var opsArr = Array.isArray(opsCriadas) ? opsCriadas : [opsCriadas];
 
-      // Distribuir baixa em FIFO + envio pro costureiro (2 movs: -CD, +costureiro)
+      // 2 movs por row: -X CD FUSION + +X costureiro (saldo total inalterado)
       var costureiroNome = ((STATE.costureiros || []).find(function(c){return c.id===costureiroId;}) || {}).nome || 'Desconhecido';
       for (var j = 0; j < opsArr.length; j++) {
         var plano = baixas[j];
-        if (!plano || !plano.metragem || plano.metragem <= 0 || !plano.insumoIdsFifo.length) continue;
-        var restante = plano.metragem;
-        for (var k = 0; k < plano.insumoIdsFifo.length && restante > 0; k++) {
-          var iid = plano.insumoIdsFifo[k];
-          var ins = STATE.insumos.find(function(x){return x.id===iid;});
-          var disp = ins ? (ins.quantidade_atual || 0) : 0;
-          if (disp <= 0) continue;
-          var usar = Math.min(restante, disp);
-          // Event log: 2 movs preservam saldo total, registram movimentação entre locais
-          await postSupabase('movimentacao_insumos', [
-            { insumo_id: iid, tipo_mov: 'envio_costureiro', quantidade: -usar,
-              localizacao: 'CD FUSION', ordem_producao_id: opsArr[j].id,
-              observacao: 'Saída CD via OP #' + opsArr[j].id },
-            { insumo_id: iid, tipo_mov: 'envio_costureiro', quantidade: usar,
-              localizacao: costureiroNome, ordem_producao_id: opsArr[j].id,
-              observacao: 'Entrada costureiro via OP #' + opsArr[j].id },
-          ]);
-          restante -= usar;
-        }
+        if (!plano || !plano.insumoId || plano.metragem <= 0) continue;
+        await postSupabase('movimentacao_insumos', [
+          { insumo_id: plano.insumoId, tipo_mov: 'envio_costureiro', quantidade: -plano.metragem,
+            localizacao: 'CD FUSION', ordem_producao_id: opsArr[j].id,
+            observacao: 'Saída CD via OP #' + opsArr[j].id },
+          { insumo_id: plano.insumoId, tipo_mov: 'envio_costureiro', quantidade: plano.metragem,
+            localizacao: costureiroNome, ordem_producao_id: opsArr[j].id,
+            observacao: 'Entrada costureiro via OP #' + opsArr[j].id },
+        ]);
       }
     } else if (type === 'edit-costureiro') {
       var skus = document.getElementById('f-skus').value.split(',').map(function(s) { return s.trim().toUpperCase(); }).filter(Boolean);
