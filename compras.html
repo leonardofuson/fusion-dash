@@ -473,6 +473,7 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
           <th>Un.</th>
           <th>Produtos</th>
           <th>Preço/Un.</th>
+          <th style="width:90px">Ações</th>
         </tr></thead><tbody id="tbody-insumos"></tbody></table>
       </div>
     </div>
@@ -1365,6 +1366,46 @@ function openDrawerEditInsumo(insumoId) {
   document.getElementById('drawer-overlay').classList.add('open');
 }
 
+// Aloca tecido (insumo) num costureiro sem criar OP. Gera 2 movs envio_costureiro
+// (-X em CD FUSION + +X no costureiro), ordem_producao_id=null. Saldo total inalterado.
+function abrirAlocacaoCostureiro(insumoId) {
+  var insumo = STATE.insumos.find(function(i) { return i.id === insumoId; });
+  if (!insumo) return;
+  STATE.alocandoInsumoId = insumoId;
+  openDrawer('alocar-tecido');
+}
+
+function buildAlocarTecidoForm(insumoId) {
+  var insumo = STATE.insumos.find(function(i) { return i.id === insumoId; }) || {};
+  // Saldo do CD FUSION (origem padrão da alocação)
+  var saldoCD = ((STATE.saldoLocalIdx || {})[insumoId] || {})['CD FUSION'] || 0;
+  var saldoTotal = parseFloat(insumo.quantidade_atual || 0);
+  var unidade = insumo.unidade || '';
+
+  // Lista de costureiros ativos
+  var costureirosAtivos = (STATE.costureiros || []).filter(function(c){ return c.ativo !== false; });
+  costureirosAtivos.sort(function(a,b){ return (a.nome || '').localeCompare(b.nome || ''); });
+
+  return '<div class="form-group" style="background:rgba(99,102,241,0.06);padding:12px;border-radius:8px;margin-bottom:12px">' +
+      '<div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px">Tecido</div>' +
+      '<div style="font-weight:700;font-size:14px">' + (insumo.nome || '—') + '</div>' +
+      '<div style="font-size:12px;color:var(--txt2);margin-top:2px">Cor: ' + (insumo.cor || '—') + ' · Saldo total: <strong style="color:var(--green)">' + fmt(saldoTotal) + ' ' + unidade + '</strong></div>' +
+      '<div style="font-size:12px;color:var(--txt2);margin-top:2px">No CD FUSION: <strong>' + fmt(saldoCD) + ' ' + unidade + '</strong></div>' +
+    '</div>' +
+    '<div class="form-group"><label class="form-label">Costureiro *</label>' +
+      '<select id="f-aloc-costureiro" class="form-select"><option value="">Selecione...</option>' +
+        costureirosAtivos.map(function(c){return '<option value="'+c.id+'">'+c.nome+'</option>';}).join('') +
+      '</select>' +
+    '</div>' +
+    '<div class="form-group"><label class="form-label">Quantidade ('+(unidade||'')+') *</label>' +
+      '<input id="f-aloc-qtde" class="form-input" type="number" step="0.01" min="0.01" max="'+saldoCD+'" placeholder="máx '+fmt(saldoCD)+'">' +
+      '<small style="color:var(--txt3)">Sai do CD FUSION e vai pro costureiro selecionado. Saldo total inalterado.</small>' +
+    '</div>' +
+    '<div class="form-group"><label class="form-label">Observação <small style="color:var(--txt3);font-weight:400">(opcional)</small></label>' +
+      '<input id="f-aloc-obs" class="form-input" type="text" placeholder="ex: separado pra próxima OP">' +
+    '</div>';
+}
+
 function buildEditInsumoForm(i) {
   var pais = produtosFabricacaoPropria();
   var paisSelected = i.skus_pai || [];
@@ -1680,6 +1721,7 @@ function renderInsumos() {
       '<td>' + (g.unidade || '') + '</td>' +
       '<td>' + skusHtml + '</td>' +
       '<td></td>' +
+      '<td></td>' +
     '</tr>';
 
     // Linhas filhas (só se expanded) — cada uma clicável para editar
@@ -1708,12 +1750,15 @@ function renderInsumos() {
           '<td class="dim">' + (i.unidade || '') + '</td>' +
           '<td></td>' +
           '<td class="dim" style="font-size:10px">' + (i.valor_unitario_referencia ? fmtR(i.valor_unitario_referencia) : '') + '</td>' +
+          '<td onclick="event.stopPropagation()" style="text-align:center">' +
+            (v.saldo > 0 ? '<button class="btnf ghost" style="font-size:10px;padding:3px 8px" onclick="abrirAlocacaoCostureiro('+i.id+')" title="Enviar tecido pra costureiro sem criar OP">Alocar</button>' : '') +
+          '</td>' +
         '</tr>';
       });
     }
     return htmlGrupo;
   }).join('');
-  document.getElementById('tbody-insumos').innerHTML = html || '<tr><td colspan="8" class="empty">Nenhum insumo encontrado</td></tr>';
+  document.getElementById('tbody-insumos').innerHTML = html || '<tr><td colspan="9" class="empty">Nenhum insumo encontrado</td></tr>';
 }
 
 function toggleInsumoGrupo(key) {
@@ -2701,6 +2746,9 @@ function openDrawer(type) {
   } else if (type === 'novo-insumo') {
     title.textContent = 'Cadastrar Insumo';
     body.innerHTML = buildInsumoForm();
+  } else if (type === 'alocar-tecido') {
+    title.textContent = 'Alocar Tecido em Costureiro';
+    body.innerHTML = buildAlocarTecidoForm(STATE.alocandoInsumoId);
   }
   document.getElementById('drawer-footer').style.display = 'flex';
   configurarBtnExcluir(null);  // esconde em forms de criacao
@@ -3016,6 +3064,8 @@ function buildOPCorRow(idx, firstRow) {
       '<div class="form-group"><label class="form-label">Metragem disponível</label>' +
         '<input class="form-input" data-field="saldo" type="text" readonly style="background:var(--bg3);color:var(--green);font-weight:700"></div>' +
     '</div>' +
+    '<div class="form-group"><label class="form-label">NF do tecido <small style="color:var(--txt3);font-weight:400">(auto — vem do lote mais antigo desta cor)</small></label>' +
+      '<input class="form-input" data-field="nf-tecido" type="text" readonly style="background:var(--bg3);color:var(--txt2)" placeholder="—"></div>' +
     '<div class="form-row">' +
       '<div class="form-group"><label class="form-label">Metragem a produzir</label>' +
         '<input class="form-input" data-field="metragem" type="number" step="0.01" placeholder="ex: 150" oninput="recalcularPecasRow('+idx+')"></div>' +
@@ -3133,10 +3183,12 @@ function atualizarSaldoRow(idx) {
   var opt = corSel && corSel.selectedIndex >= 0 ? corSel.options[corSel.selectedIndex] : null;
   var saldoEl = row.querySelector('[data-field="saldo"]');
   var consumoEl = row.querySelector('[data-field="consumo"]');
+  var nfEl = row.querySelector('[data-field="nf-tecido"]');
 
   if (!opt || !opt.value) {
     if (saldoEl) saldoEl.value = '';
     if (consumoEl) consumoEl.value = '';
+    if (nfEl) nfEl.value = '';
     recalcularPecasRow(idx);
     return;
   }
@@ -3149,6 +3201,17 @@ function atualizarSaldoRow(idx) {
   var primeiroId = parseInt((opt.value || '').split(',')[0]);
   var insumo = STATE.insumos.find(function(i){return i.id===primeiroId;});
   if (!insumo) return;
+
+  // Auto-fill da NF do tecido: vem do lote mais antigo (FIFO) — se houver mais de um lote daquela cor
+  // listamos todos separados por vírgula
+  if (nfEl) {
+    var ids = (opt.value || '').split(',').map(function(x){return parseInt(x);});
+    var nfs = ids.map(function(id) {
+      var i = STATE.insumos.find(function(x){return x.id === id;});
+      return i && i.numero_nf ? String(i.numero_nf).trim() : null;
+    }).filter(function(x){return x;});
+    nfEl.value = nfs.length ? nfs.join(' · ') : '—';
+  }
 
   var sku = extrairSkuProduto(document.getElementById('f-nova-produto').value);
   var cons = ultimoConsumoDoSku(sku);
@@ -3767,13 +3830,52 @@ async function excluirOP(opId) {
   var op = STATE.ops.find(function(o) { return o.id === opId; });
   if (!op) return;
   var label = (op.produto || op.sku_produto || 'OP #'+opId) + (op.cor ? ' — ' + op.cor : '') + ' (' + costuName(op.costureiro_id) + ')';
-  if (!confirm('Excluir esta OP?\n\n' + label + '\n' + fmt(Math.round(op.qtde_pecas || 0)) + ' peças projetadas\n\nEsta ação não pode ser desfeita.')) return;
+  var metrosKg = parseFloat(op.metros_kg) || 0;
+  var costureiroNomeAtual = costuName(op.costureiro_id);
+  var precisaRetornarTecido = op.status === 'Em Produção' && op.insumo_id && metrosKg > 0;
+
+  var msg = 'Excluir esta OP?\n\n' + label + '\n' + fmt(Math.round(op.qtde_pecas || 0)) + ' peças projetadas';
+  if (precisaRetornarTecido) {
+    msg += '\n\n' + fmt(metrosKg) + ' ' + (op.unidade || '') + ' de tecido voltarão pro CD FUSION.';
+  }
+  msg += '\n\nEsta ação não pode ser desfeita.';
+  if (!confirm(msg)) return;
+
   try {
+    // 1) Se OP em produção: gera retorno_cd movs (sem ordem_producao_id, pois a OP vai ser deletada)
+    if (precisaRetornarTecido) {
+      try {
+        await postSupabase('movimentacao_insumos', [
+          { insumo_id: op.insumo_id, tipo_mov: 'retorno_cd', quantidade: -metrosKg,
+            localizacao: costureiroNomeAtual, ordem_producao_id: null,
+            observacao: 'Retorno por exclusão de OP #' + opId },
+          { insumo_id: op.insumo_id, tipo_mov: 'retorno_cd', quantidade: metrosKg,
+            localizacao: 'CD FUSION', ordem_producao_id: null,
+            observacao: 'Retorno por exclusão de OP #' + opId },
+        ]);
+      } catch (e) { console.warn('Falha ao registrar retorno de tecido:', e); }
+    }
+
+    // 2) Nullifica FK em movs antigas que apontam pra essa OP (preserva histórico mas libera DELETE)
+    var rN = await fetch(SB_URL + '/rest/v1/movimentacao_insumos?ordem_producao_id=eq.' + opId, {
+      method: 'PATCH',
+      headers: Object.assign({'Content-Type':'application/json','Prefer':'return=minimal'}, await getAuthHeaders()),
+      body: JSON.stringify({ ordem_producao_id: null })
+    });
+    if (!rN.ok) {
+      var errN = await rN.text();
+      throw new Error('Falha ao limpar movs antigas: HTTP ' + rN.status + ': ' + errN);
+    }
+
+    // 3) DELETE da OP
     var r = await fetch(SB_URL + '/rest/v1/ordens_producao?id=eq.' + opId, {
       method: 'DELETE',
       headers: Object.assign({'Prefer':'return=minimal'}, await getAuthHeaders())
     });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
+    if (!r.ok) {
+      var errD = await r.text();
+      throw new Error('HTTP ' + r.status + ': ' + errD);
+    }
     closeDrawer();
     await carregar();
   } catch(e) { alert('Erro ao excluir: ' + e.message); }
@@ -3988,6 +4090,34 @@ async function submitDrawer() {
       if (!insumos.length) { alert('Preencha ao menos um tecido/insumo'); btn.textContent='Salvar'; btn.disabled=false; return; }
       // Insert em batch (array)
       await postSupabase('estoque_insumos', insumos);
+    } else if (type === 'alocar-tecido') {
+      var insumoId = STATE.alocandoInsumoId;
+      var insumo = STATE.insumos.find(function(i){return i.id === insumoId;});
+      if (!insumo) { alert('Insumo não encontrado'); btn.textContent='Salvar'; btn.disabled=false; return; }
+
+      var costuId = parseInt(document.getElementById('f-aloc-costureiro').value);
+      var qtde = parseFloat(document.getElementById('f-aloc-qtde').value);
+      var obs = (document.getElementById('f-aloc-obs').value || '').trim();
+      if (!costuId) { alert('Selecione um costureiro'); btn.textContent='Salvar'; btn.disabled=false; return; }
+      if (!qtde || qtde <= 0) { alert('Quantidade inválida'); btn.textContent='Salvar'; btn.disabled=false; return; }
+
+      var saldoCD = ((STATE.saldoLocalIdx || {})[insumoId] || {})['CD FUSION'] || 0;
+      if (qtde > saldoCD) {
+        if (!confirm('Quantidade (' + fmt(qtde) + ') maior que saldo do CD (' + fmt(saldoCD) + '). Continuar mesmo assim?')) {
+          btn.textContent='Salvar'; btn.disabled=false; return;
+        }
+      }
+
+      var costuNome = costuName(costuId);
+      var observacao = obs || ('Alocação avulsa pra ' + costuNome);
+      // 2 movs envio_costureiro: -X em CD FUSION + +X no costureiro (saldo total inalterado)
+      await postSupabase('movimentacao_insumos', [
+        { insumo_id: insumoId, tipo_mov: 'envio_costureiro', quantidade: -qtde,
+          localizacao: 'CD FUSION', ordem_producao_id: null, observacao: observacao },
+        { insumo_id: insumoId, tipo_mov: 'envio_costureiro', quantidade: qtde,
+          localizacao: costuNome, ordem_producao_id: null, observacao: observacao },
+      ]);
+      STATE.alocandoInsumoId = null;
     }
     closeDrawer();
     await carregar();
