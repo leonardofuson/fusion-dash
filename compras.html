@@ -1626,6 +1626,98 @@ function renderHistoricoMovsInsumo(movs, insumo) {
     '</div>';
 }
 
+// Desmembra uma OP em múltiplas com datas de entrega diferentes
+function abrirDesmembrarOP(opId) {
+  var op = STATE.ops.find(function(o){return o.id===opId;});
+  if (!op) return;
+  if ((op.qtde_pecas_entregues || 0) > 0) {
+    alert('Não é possível desmembrar uma OP que já teve entregas registradas.\n\nExclua as entregas primeiro se necessário.');
+    return;
+  }
+  if (op.status === 'Entregue' || op.status === 'Cancelado') {
+    alert('Não é possível desmembrar uma OP ' + op.status + '.');
+    return;
+  }
+  STATE.desmembrandoOP = op;
+  STATE.desmembrarRows = [
+    { qty: op.qtde_pecas || 0, data: op.data_prevista_entrega || '' },
+    { qty: 0, data: '' }
+  ];
+  openDrawer('desmembrar-op');
+}
+
+function buildDesmembrarOPForm() {
+  var op = STATE.desmembrandoOP;
+  if (!op) return '<div class="form-group">Erro: nenhuma OP selecionada</div>';
+  var rows = STATE.desmembrarRows || [];
+  var qtdTotal = parseFloat(op.qtde_pecas) || 0;
+
+  var rowsHtml = rows.map(function(r, idx) {
+    var lbl = idx === 0 ? '<span style="color:var(--indigo);font-weight:700">Esta OP (será atualizada)</span>' : 'Nova OP #' + (idx+1);
+    var rmBtn = idx === 0 ? '' : '<button type="button" class="btnf ghost" style="font-size:10px;padding:3px 8px;color:var(--red);border-color:rgba(248,113,113,0.3)" onclick="removerSplitRow('+idx+')">✕</button>';
+    return '<div style="padding:10px;border:1px solid var(--bdr);border-radius:8px;margin-bottom:8px;background:var(--bg)">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:11px">' +
+        lbl + rmBtn +
+      '</div>' +
+      '<div class="form-row">' +
+        '<div class="form-group" style="margin-bottom:0"><label class="form-label" style="font-size:10px">Quantidade (peças)</label>' +
+          '<input class="form-input split-qty" type="number" min="1" data-idx="'+idx+'" value="'+r.qty+'" oninput="atualizarSplitTotal()"></div>' +
+        '<div class="form-group" style="margin-bottom:0"><label class="form-label" style="font-size:10px">Data prevista entrega</label>' +
+          '<input class="form-input split-data" type="date" data-idx="'+idx+'" value="'+r.data+'"></div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  return '<div style="padding:12px;background:var(--bg);border-radius:8px;margin-bottom:14px;font-size:12px;color:var(--txt2)">' +
+      '<div style="font-weight:700;color:var(--txt1);margin-bottom:4px">' + (op.produto || '') + ' — ' + (op.cor || '—') + '</div>' +
+      '<div>OP #' + op.id + ' · Costureiro: ' + costuName(op.costureiro_id) + '</div>' +
+      '<div style="margin-top:6px">Total atual: <strong>' + fmt(qtdTotal) + ' pç</strong> · entrega prevista <strong>' + (op.data_prevista_entrega || '—') + '</strong></div>' +
+    '</div>' +
+    '<div style="padding:12px;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.25);border-radius:8px;margin-bottom:12px;font-size:12px">' +
+      '<strong>Como funciona:</strong> as quantidades novas são distribuídas em OPs separadas. Linha 1 atualiza esta OP atual, demais criam OPs novas (mesmo costureiro/produto/cor/tecido). Tecido já enviado fica registrado nesta OP original.' +
+    '</div>' +
+    '<div id="split-rows">' + rowsHtml + '</div>' +
+    '<div style="text-align:center;margin:10px 0">' +
+      '<button type="button" class="btnf ghost" onclick="adicionarSplitRow()">+ Adicionar split</button>' +
+    '</div>' +
+    '<div style="display:flex;justify-content:space-between;padding:12px;background:var(--bg3);border:1px solid var(--bdr);border-radius:8px;font-weight:700">' +
+      '<span>Total distribuído:</span>' +
+      '<span id="split-total-feedback">0 / ' + fmt(qtdTotal) + ' pç</span>' +
+    '</div>';
+}
+
+function adicionarSplitRow() {
+  STATE.desmembrarRows.push({ qty: 0, data: '' });
+  document.getElementById('drawer-body').innerHTML = buildDesmembrarOPForm();
+  setTimeout(atualizarSplitTotal, 0);
+}
+
+function removerSplitRow(idx) {
+  if (idx === 0) return; // não remove a primeira (parent)
+  STATE.desmembrarRows.splice(idx, 1);
+  document.getElementById('drawer-body').innerHTML = buildDesmembrarOPForm();
+  setTimeout(atualizarSplitTotal, 0);
+}
+
+function atualizarSplitTotal() {
+  // Atualiza state com inputs atuais
+  document.querySelectorAll('.split-qty').forEach(function(el) {
+    var idx = parseInt(el.dataset.idx);
+    if (STATE.desmembrarRows[idx]) STATE.desmembrarRows[idx].qty = parseInt(el.value) || 0;
+  });
+  document.querySelectorAll('.split-data').forEach(function(el) {
+    var idx = parseInt(el.dataset.idx);
+    if (STATE.desmembrarRows[idx]) STATE.desmembrarRows[idx].data = el.value;
+  });
+  var total = STATE.desmembrarRows.reduce(function(s, r){ return s + (r.qty || 0); }, 0);
+  var alvo = parseFloat(STATE.desmembrandoOP.qtde_pecas) || 0;
+  var fb = document.getElementById('split-total-feedback');
+  if (fb) {
+    fb.textContent = fmt(total) + ' / ' + fmt(alvo) + ' pç';
+    fb.style.color = total === alvo ? 'var(--green)' : (total > alvo ? 'var(--red)' : 'var(--orange)');
+  }
+}
+
 // Aloca tecido (insumo) num costureiro sem criar OP. Gera 2 movs envio_costureiro
 // (-X em CD FUSION + +X no costureiro), ordem_producao_id=null. Saldo total inalterado.
 function abrirAlocacaoCostureiro(insumoId) {
@@ -1822,6 +1914,8 @@ function openDrawerEdit(opId) {
   injetarBtnImprimirOP(opId);
   // Botão "Registrar Entrega" no footer (entregas parciais — só pra OPs ativas com saldo pendente)
   injetarBtnRegistrarEntrega(opId);
+  // Botão "Desmembrar OP" no footer (só pra OPs ativas sem entregas registradas)
+  injetarBtnDesmembrarOP(opId);
   overlay.classList.add('open');
   // Atualiza diff visual inicial (em caso de status já = Entregue)
   setTimeout(updateDiffEntrega, 0);
@@ -1864,6 +1958,30 @@ function injetarBtnRegistrarEntrega(opId) {
   // Insere depois do "Gerar PDF" (que já está no início do footer)
   var ger = document.getElementById('drawer-btn-imprimir');
   if (ger && ger.nextSibling) footer.insertBefore(btn, ger.nextSibling);
+  else footer.insertBefore(btn, footer.firstChild);
+}
+
+function injetarBtnDesmembrarOP(opId) {
+  var footer = document.getElementById('drawer-footer');
+  if (!footer) return;
+  var existing = document.getElementById('drawer-btn-desmembrar');
+  if (existing) existing.remove();
+  var op = STATE.ops.find(function(o){return o.id === opId;});
+  if (!op) return;
+  // Só mostra se OP ativa sem entregas registradas
+  if (op.status === 'Entregue' || op.status === 'Cancelado') return;
+  if ((op.qtde_pecas_entregues || 0) > 0) return;
+  var btn = document.createElement('button');
+  btn.id = 'drawer-btn-desmembrar';
+  btn.className = 'btnf ghost';
+  btn.textContent = '✂ Desmembrar OP';
+  btn.title = 'Dividir esta OP em múltiplas com datas de entrega diferentes';
+  btn.onclick = function(){ closeDrawer(); setTimeout(function(){ abrirDesmembrarOP(opId); }, 50); };
+  // Insere depois dos botões já existentes (PDF + Registrar Entrega)
+  var ent = document.getElementById('drawer-btn-entrega');
+  var ger = document.getElementById('drawer-btn-imprimir');
+  var ref = ent || ger;
+  if (ref && ref.nextSibling) footer.insertBefore(btn, ref.nextSibling);
   else footer.insertBefore(btn, footer.firstChild);
 }
 
@@ -3135,11 +3253,13 @@ function openDrawer(type) {
   var overlay = document.getElementById('drawer-overlay');
   var title = document.getElementById('drawer-title');
   var body = document.getElementById('drawer-body');
-  // Limpa botões transientes (PDF + Registrar Entrega) caso tenham ficado de uma edição anterior
+  // Limpa botões transientes (PDF + Registrar Entrega + Desmembrar) caso tenham ficado de uma edição anterior
   var btnImp = document.getElementById('drawer-btn-imprimir');
   if (btnImp) btnImp.remove();
   var btnEnt = document.getElementById('drawer-btn-entrega');
   if (btnEnt) btnEnt.remove();
+  var btnDesm = document.getElementById('drawer-btn-desmembrar');
+  if (btnDesm) btnDesm.remove();
 
   if (type === 'nova-op') {
     title.textContent = 'Nova Ordem de Produção';
@@ -3153,6 +3273,10 @@ function openDrawer(type) {
   } else if (type === 'alocar-tecido') {
     title.textContent = 'Alocar Tecido em Costureiro';
     body.innerHTML = buildAlocarTecidoForm(STATE.alocandoInsumoId);
+  } else if (type === 'desmembrar-op') {
+    title.textContent = 'Desmembrar OP #' + (STATE.desmembrandoOP ? STATE.desmembrandoOP.id : '');
+    body.innerHTML = buildDesmembrarOPForm();
+    setTimeout(atualizarSplitTotal, 0);
   }
   document.getElementById('drawer-footer').style.display = 'flex';
   configurarBtnExcluir(null);  // esconde em forms de criacao
@@ -4476,6 +4600,87 @@ async function submitDrawer() {
           });
         } catch (e) { console.warn('Falha ao fechar OP como Entregue:', e); alert('Entrega registrada, mas falhou fechar OP: ' + e.message); }
       }
+    } else if (type === 'desmembrar-op') {
+      var op = STATE.desmembrandoOP;
+      if (!op) throw new Error('Contexto do desmembramento perdido');
+      atualizarSplitTotal(); // sincroniza state com inputs
+      var rows = STATE.desmembrarRows || [];
+      var qtdTotal = parseFloat(op.qtde_pecas) || 0;
+      var somaRows = rows.reduce(function(s,r){return s + (parseInt(r.qty)||0);}, 0);
+
+      if (somaRows !== qtdTotal) {
+        alert('Total das splits ('+somaRows+') deve bater com a OP ('+qtdTotal+'). Ajuste antes de salvar.');
+        btn.textContent='Salvar'; btn.disabled=false; return;
+      }
+      // Validações: cada row precisa qty > 0
+      for (var i = 0; i < rows.length; i++) {
+        if (!rows[i].qty || rows[i].qty <= 0) {
+          alert('Linha #' + (i+1) + ' está sem quantidade. Use o botão ✕ pra remover ou preencha.');
+          btn.textContent='Salvar'; btn.disabled=false; return;
+        }
+      }
+
+      // Distribuir grade proporcionalmente (se houver)
+      function dividirGrade(grade, ratio) {
+        if (!grade || typeof grade !== 'object') return null;
+        var nova = {};
+        Object.keys(grade).forEach(function(t){
+          var v = Math.round((grade[t] || 0) * ratio);
+          if (v > 0) nova[t] = v;
+        });
+        return Object.keys(nova).length ? nova : null;
+      }
+
+      var rowParent = rows[0];
+      var ratioParent = rowParent.qty / qtdTotal;
+      var metrosOriginal = parseFloat(op.metros_kg) || 0;
+
+      // 1) PATCH parent (linha 1) com qty + data + metros proporcional + grade reduzida
+      await patchSupabase('ordens_producao', op.id, {
+        qtde_pecas: rowParent.qty,
+        data_prevista_entrega: rowParent.data || null,
+        metros_kg: metrosOriginal > 0 ? Math.round(metrosOriginal * ratioParent * 100) / 100 : null,
+        grade_projetada: dividirGrade(op.grade_projetada, ratioParent),
+        atualizado_em: new Date().toISOString(),
+      });
+
+      // 2) INSERT novas OPs (linhas 2+) com metadata copiado do parent
+      var novosOPs = [];
+      for (var k = 1; k < rows.length; k++) {
+        var r = rows[k];
+        var ratio = r.qty / qtdTotal;
+        novosOPs.push({
+          sku_produto: op.sku_produto,
+          produto: op.produto,
+          cor: op.cor,
+          costureiro_id: op.costureiro_id,
+          insumo_id: op.insumo_id,
+          tipo_tecido: op.tipo_tecido,
+          metros_kg: metrosOriginal > 0 ? Math.round(metrosOriginal * ratio * 100) / 100 : null,
+          consumo_por_peca: op.consumo_por_peca,
+          qtde_pecas: r.qty,
+          qtde_pecas_entregues: 0,
+          grade_projetada: dividirGrade(op.grade_projetada, ratio),
+          data_envio_tecido: op.data_envio_tecido,
+          data_prevista_entrega: r.data || null,
+          status: 'Em Produção',
+          valor_unitario: op.valor_unitario,
+          valor_peca: op.valor_peca,
+          valor_costura_dentro: op.valor_costura_dentro,
+          valor_costura_fora: op.valor_costura_fora,
+          corte_externo: op.corte_externo,
+        });
+      }
+      if (novosOPs.length) {
+        await postSupabase('ordens_producao', novosOPs);
+      }
+
+      // Garante que grupo do produto fique expandido (mesma lógica do edit-op)
+      var prodNome = (op.produto || op.sku_produto || '').trim();
+      if (prodNome) STATE.ganttExpanded[prodNome] = true;
+
+      STATE.desmembrandoOP = null;
+      STATE.desmembrarRows = null;
     } else if (type === 'edit-op') {
       var op = STATE.editingOp;
       var skuEdit = document.getElementById('f-edit-produto').value;
