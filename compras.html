@@ -1297,7 +1297,7 @@ function abrirSubgrupoOps(idsCsv) {
 }
 
 // Drawer para registrar entrega parcial
-function abrirRegistrarEntrega(opId) {
+async function abrirRegistrarEntrega(opId) {
   var op = STATE.ops.find(function(o){return o.id===opId;});
   if (!op) return;
 
@@ -1308,6 +1308,36 @@ function abrirRegistrarEntrega(opId) {
   var pecas = op.qtde_pecas || 0;
   var jaEntregues = op.qtde_pecas_entregues || 0;
   var pendente = pecas - jaEntregues;
+
+  // Mostrar drawer com loading antes do fetch
+  document.getElementById('drawer-title').textContent = 'Registrar entrega — ' + cor;
+  document.getElementById('drawer-body').innerHTML = '<div style="padding:24px;text-align:center;color:var(--txt3)">Carregando histórico de entregas...</div>';
+  document.getElementById('drawer-footer').style.display = 'flex';
+  document.getElementById('drawer-overlay').classList.add('open');
+
+  // Buscar entregas anteriores desta OP
+  var entregasAnt = [];
+  try {
+    var rE = await fetch(SB_URL + '/rest/v1/producao_entregas?ordem_producao_id=eq.' + opId + '&order=data_entrega.asc', {
+      headers: await getAuthHeaders()
+    });
+    if (rE.ok) entregasAnt = await rE.json();
+  } catch (e) { console.warn('Falha ao buscar entregas anteriores:', e); }
+
+  // Histórico HTML
+  var histHtml = '';
+  if (entregasAnt.length) {
+    histHtml = '<div style="margin-bottom:16px;padding:12px;background:var(--bg3);border:1px solid var(--bdr);border-radius:8px">' +
+      '<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px">Entregas anteriores (' + entregasAnt.length + ')</div>' +
+      entregasAnt.map(function(e) {
+        var d = e.data_entrega ? formatDate(e.data_entrega) : '—';
+        return '<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.04)">' +
+          '<span>' + d + (e.observacao ? ' · <span style="color:var(--txt3)">' + e.observacao + '</span>' : '') + '</span>' +
+          '<strong style="color:var(--green)">' + fmt(e.quantidade) + ' pç</strong>' +
+        '</div>';
+      }).join('') +
+    '</div>';
+  }
 
   // Grade: mostra tamanhos com saldo pendente
   var gradeProj = op.grade_projetada || {};
@@ -1326,23 +1356,63 @@ function abrirRegistrarEntrega(opId) {
     '</div>';
   }).join('');
 
-  document.getElementById('drawer-title').textContent = 'Registrar entrega — ' + cor;
   document.getElementById('drawer-body').innerHTML =
     '<div style="padding:12px;background:var(--bg);border-radius:8px;margin-bottom:16px;font-size:12px;color:var(--txt2)">' +
       '<div style="font-weight:700;color:var(--txt1);margin-bottom:4px">' + (op.produto || '') + ' — ' + cor + '</div>' +
       '<div>OP #' + op.id + ' · Costureiro: ' + costuName(op.costureiro_id) + '</div>' +
       '<div style="margin-top:6px">Já entregue: <strong>' + fmt(jaEntregues) + '</strong> / ' + fmt(pecas) + ' · <span style="color:var(--amber)">Pendente: ' + fmt(pendente) + '</span></div>' +
     '</div>' +
+    histHtml +
     '<div class="form-group"><label class="form-label">Data da entrega</label>' +
       '<input type="date" class="form-input" id="f-ent-data" value="' + new Date().toISOString().slice(0,10) + '"></div>' +
     '<div class="form-group"><label class="form-label">Quantidade por tamanho</label>' +
       '<div class="grade-grid">' + gradeInputs + '</div>' +
       '<div class="grade-total"><span>Total entregue nesta baixa</span><strong id="ent-total">0</strong></div>' +
     '</div>' +
+    '<div class="form-group" style="background:rgba(99,102,241,0.06);padding:14px;border-radius:8px;border:1px solid rgba(99,102,241,0.25)">' +
+      '<label class="form-label" style="color:var(--indigo);font-weight:700">Esta entrega é:</label>' +
+      '<div style="display:flex;gap:14px;margin-top:6px">' +
+        '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px"><input type="radio" name="ent-tipo" value="parcial" checked onchange="atualizarPreviewFechamento()"><span><strong>Parcial</strong> — ainda há saldo a receber</span></label>' +
+        '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px"><input type="radio" name="ent-tipo" value="total" onchange="atualizarPreviewFechamento()"><span><strong>Total</strong> — última entrega, fecha a OP</span></label>' +
+      '</div>' +
+      '<div id="ent-preview-fechamento" style="margin-top:10px;display:none;font-size:12px"></div>' +
+    '</div>' +
     '<div class="form-group"><label class="form-label">Observação</label>' +
       '<textarea class="form-textarea" id="f-ent-obs" placeholder="Opcional..."></textarea></div>';
-  document.getElementById('drawer-footer').style.display = 'flex';
-  document.getElementById('drawer-overlay').classList.add('open');
+}
+
+// Atualiza preview do fechamento quando user marca "Total"
+function atualizarPreviewFechamento() {
+  var op = STATE.entregaOp;
+  if (!op) return;
+  var tipo = (document.querySelector('input[name="ent-tipo"]:checked') || {}).value || 'parcial';
+  var preview = document.getElementById('ent-preview-fechamento');
+  if (!preview) return;
+  if (tipo !== 'total') {
+    preview.style.display = 'none';
+    preview.innerHTML = '';
+    return;
+  }
+  // Soma jaEntregues + qtd desta entrega
+  var jaEnt = op.qtde_pecas_entregues || 0;
+  var inputs = document.querySelectorAll('.grade-input-ent');
+  var qtdAgora = 0;
+  inputs.forEach(function(inp) { qtdAgora += parseInt(inp.value) || 0; });
+  var totalEnt = jaEnt + qtdAgora;
+  var proj = op.qtde_pecas || 0;
+  var diff = totalEnt - proj;
+  var corDiff = diff === 0 ? 'var(--green)' : (diff > 0 ? 'var(--indigo)' : 'var(--orange)');
+  var sinal = diff > 0 ? '+' : '';
+  var lbl = diff === 0 ? 'Bate exato' : (diff > 0 ? 'Sobrou' : 'Faltou');
+  preview.style.display = 'block';
+  preview.innerHTML = '<div style="padding:10px;border:1px solid var(--bdr);border-left:3px solid '+corDiff+';border-radius:6px;background:var(--bg)">' +
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">' +
+      '<div><div style="color:var(--txt3);font-size:10px;text-transform:uppercase">Projetado</div><strong>' + fmt(proj) + ' pç</strong></div>' +
+      '<div><div style="color:var(--txt3);font-size:10px;text-transform:uppercase">Total entregue</div><strong style="color:var(--green)">' + fmt(totalEnt) + ' pç</strong></div>' +
+      '<div><div style="color:var(--txt3);font-size:10px;text-transform:uppercase">' + lbl + '</div><strong style="color:'+corDiff+'">' + sinal + fmt(diff) + ' pç</strong></div>' +
+    '</div>' +
+    '<div style="margin-top:8px;font-size:11px;color:var(--txt3)">Ao salvar, OP será fechada como Entregue (data hoje) e o saldo de tecido será baixado proporcionalmente.</div>' +
+  '</div>';
 }
 
 function atualizarEntregaTotal() {
@@ -1351,6 +1421,8 @@ function atualizarEntregaTotal() {
   inputs.forEach(function(inp) { total += parseInt(inp.value) || 0; });
   var el = document.getElementById('ent-total');
   if (el) el.textContent = total.toLocaleString('pt-BR');
+  // Re-render preview de fechamento se "Total" estiver marcado
+  atualizarPreviewFechamento();
 }
 
 // Abre drawer pra editar um insumo (compra de tecido / aviamento)
@@ -1556,6 +1628,8 @@ function openDrawerEdit(opId) {
   configurarBtnExcluir(function(){ excluirOP(opId); }, 'Excluir OP');
   // Botão "Imprimir OP" no footer (Sprint 6)
   injetarBtnImprimirOP(opId);
+  // Botão "Registrar Entrega" no footer (entregas parciais — só pra OPs ativas com saldo pendente)
+  injetarBtnRegistrarEntrega(opId);
   overlay.classList.add('open');
   // Atualiza diff visual inicial (em caso de status já = Entregue)
   setTimeout(updateDiffEntrega, 0);
@@ -1574,6 +1648,31 @@ function injetarBtnImprimirOP(opId) {
   btn.style.marginRight = 'auto';
   btn.onclick = function(){ imprimirOPFechamento(opId); };
   footer.insertBefore(btn, footer.firstChild);
+}
+
+function injetarBtnRegistrarEntrega(opId) {
+  var footer = document.getElementById('drawer-footer');
+  if (!footer) return;
+  var existing = document.getElementById('drawer-btn-entrega');
+  if (existing) existing.remove();
+  var op = STATE.ops.find(function(o){return o.id === opId;});
+  if (!op) return;
+  // Só mostra se OP ainda não entregue e tem saldo pendente
+  if (op.status === 'Entregue' || op.status === 'Cancelado') return;
+  var pendente = (op.qtde_pecas || 0) - (op.qtde_pecas_entregues || 0);
+  if (pendente <= 0) return;
+  var btn = document.createElement('button');
+  btn.id = 'drawer-btn-entrega';
+  btn.className = 'btnf';
+  btn.style.background = 'var(--green)';
+  btn.style.color = '#000';
+  btn.style.fontWeight = '700';
+  btn.textContent = '📦 Registrar entrega';
+  btn.onclick = function(){ abrirRegistrarEntrega(opId); };
+  // Insere depois do "Gerar PDF" (que já está no início do footer)
+  var ger = document.getElementById('drawer-btn-imprimir');
+  if (ger && ger.nextSibling) footer.insertBefore(btn, ger.nextSibling);
+  else footer.insertBefore(btn, footer.firstChild);
 }
 
 // ═══════════════ TAB: COSTUREIROS ═══════════════
@@ -2844,9 +2943,11 @@ function openDrawer(type) {
   var overlay = document.getElementById('drawer-overlay');
   var title = document.getElementById('drawer-title');
   var body = document.getElementById('drawer-body');
-  // Limpa botão "Imprimir OP" caso tenha ficado de uma edição anterior
+  // Limpa botões transientes (PDF + Registrar Entrega) caso tenham ficado de uma edição anterior
   var btnImp = document.getElementById('drawer-btn-imprimir');
   if (btnImp) btnImp.remove();
+  var btnEnt = document.getElementById('drawer-btn-entrega');
+  if (btnEnt) btnEnt.remove();
 
   if (type === 'nova-op') {
     title.textContent = 'Nova Ordem de Produção';
@@ -4068,6 +4169,21 @@ async function submitDrawer() {
       });
       if (totalEntrega === 0) { alert('Informe as quantidades entregues'); btn.textContent='Salvar'; btn.disabled=false; return; }
 
+      var tipoEntrega = (document.querySelector('input[name="ent-tipo"]:checked') || {}).value || 'parcial';
+
+      // Validação Total: confirma se total entregue diverge MUITO do projetado
+      if (tipoEntrega === 'total') {
+        var totalAcumulado = (op.qtde_pecas_entregues || 0) + totalEntrega;
+        var diff = totalAcumulado - (op.qtde_pecas || 0);
+        if (Math.abs(diff) >= 50) {
+          var sinal = diff > 0 ? 'sobrando' : 'faltando';
+          if (!confirm('Atenção: total entregue ('+fmt(totalAcumulado)+') diverge do projetado ('+fmt(op.qtde_pecas||0)+') em '+fmt(Math.abs(diff))+' pç ('+sinal+').\n\nFechar OP mesmo assim?')) {
+            btn.textContent='Salvar'; btn.disabled=false; return;
+          }
+        }
+      }
+
+      // 1) Insere registro da entrega (trigger DB atualiza qtde_pecas_entregues)
       await postSupabase('producao_entregas', {
         ordem_producao_id: op.id,
         data_entrega: data,
@@ -4075,7 +4191,33 @@ async function submitDrawer() {
         grade_entregue: Object.keys(grade).length ? grade : null,
         observacao: (document.getElementById('f-ent-obs').value || '').trim() || null,
       });
-      // Trigger do banco atualiza ordens_producao automaticamente
+
+      // 2) Gera consumo_op proporcional (qtd_entregue × consumo_por_peca)
+      var consumoPorPeca = parseFloat(op.consumo_por_peca) || 0;
+      if (op.insumo_id && consumoPorPeca > 0 && totalEntrega > 0) {
+        var metrosConsumidos = totalEntrega * consumoPorPeca;
+        var costuNome = costuName(op.costureiro_id);
+        try {
+          await postSupabase('movimentacao_insumos', [{
+            insumo_id: op.insumo_id, tipo_mov: 'consumo_op',
+            quantidade: -metrosConsumidos, localizacao: costuNome,
+            ordem_producao_id: op.id,
+            observacao: 'Consumo entrega ' + (tipoEntrega==='total'?'TOTAL':'parcial') + ' OP #' + op.id + ' (' + totalEntrega + ' pç × ' + consumoPorPeca + ')',
+          }]);
+        } catch (e) { console.warn('Falha ao registrar consumo_op proporcional:', e); }
+      }
+
+      // 3) Se Total: fecha a OP (status='Entregue', data_entrega_real=data)
+      if (tipoEntrega === 'total') {
+        try {
+          await patchSupabase('ordens_producao', op.id, {
+            status: 'Entregue',
+            data_entrega_real: data,
+            mes_ano_entrega: data.slice(0,7),
+            atualizado_em: new Date().toISOString(),
+          });
+        } catch (e) { console.warn('Falha ao fechar OP como Entregue:', e); alert('Entrega registrada, mas falhou fechar OP: ' + e.message); }
+      }
     } else if (type === 'edit-op') {
       var op = STATE.editingOp;
       var skuEdit = document.getElementById('f-edit-produto').value;
