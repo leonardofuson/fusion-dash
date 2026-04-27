@@ -468,7 +468,7 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
           <th style="width:40px"></th>
           <th>Tecido / Cor</th>
           <th class="r">Total</th>
-          <th class="r">Destinado</th>
+          <th class="r">Em Produção</th>
           <th class="r">Saldo</th>
           <th>Localização</th>
           <th>Un.</th>
@@ -1768,10 +1768,12 @@ function buildEditInsumoForm(i) {
       '<span>' + p.nome + '</span></label>';
   }).join('');
 
-  var destinado = (STATE.ops || []).filter(function(o) { return o.insumo_id === i.id && o.quantidade_tecido_usada; })
-    .reduce(function(s, o) { return s + (o.quantidade_tecido_usada || 0); }, 0);
+  // Em Produção = OPs ativas (não Entregue, não Cancelado) que usam este insumo
+  var emProducao = (STATE.ops || []).filter(function(o) {
+    return o.insumo_id === i.id && o.quantidade_tecido_usada && o.status !== 'Entregue' && o.status !== 'Cancelado';
+  }).reduce(function(s, o) { return s + (o.quantidade_tecido_usada || 0); }, 0);
   var saldo = i.quantidade_atual || 0;
-  var totalComprado = saldo + destinado;
+  var totalComprado = saldo + emProducao;
 
   // Saldo por localização (event log via vw_insumo_saldo_local)
   var saldosPorLoc = (STATE.saldoLocalIdx || {})[i.id] || {};
@@ -1801,13 +1803,13 @@ function buildEditInsumoForm(i) {
       '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><strong>Total comprado:</strong>' +
         '<input type="number" step="0.01" id="f-ei-total" value="' + totalComprado + '" data-original="' + totalComprado + '" style="width:120px;padding:4px 8px;background:var(--bg3);border:1px solid var(--bdr);border-radius:4px;color:var(--txt1);font-weight:700;font-size:13px" oninput="atualizarSaldoEditInsumo()">' +
         '<span>' + (i.unidade||'') + '</span>' +
-        '<span style="color:var(--amber);margin-left:auto">Destinado: ' + fmt(destinado) + '</span>' +
+        '<span style="color:var(--amber);margin-left:auto" title="Tecido em OPs ativas">Em Produção: ' + fmt(emProducao) + '</span>' +
         '<span style="color:var(--green)">Saldo: <span id="f-ei-saldo-calc">' + fmt(saldo) + '</span></span>' +
       '</div>' +
-      '<div style="margin-top:8px;font-size:10px;color:var(--txt3)">Editar Total comprado gera ajuste no event log (saldo recalcula automático). Destinado vem das OPs vinculadas.</div>' +
+      '<div style="margin-top:8px;font-size:10px;color:var(--txt3)">Editar Total Comprado gera ajuste no event log. Em Produção vem das OPs ativas (Em Produção / Devolvido Fornecedor); Saldo = Total − Em Produção.</div>' +
       '<div style="margin-top:6px;font-size:11px">Saldo por local: ' + breakdownHtml + '</div>' +
     '</div>' +
-    '<input type="hidden" id="f-ei-destinado" value="' + destinado + '">' +
+    '<input type="hidden" id="f-ei-destinado" value="' + emProducao + '">' +
     '<div class="form-row">' +
       '<div class="form-group"><label class="form-label">Tipo</label>' +
         '<select class="form-select" id="f-ei-tipo"><option value="tecido"' + (i.tipo==='tecido'?' selected':'') + '>Tecido</option><option value="aviamento"' + (i.tipo==='aviamento'?' selected':'') + '>Aviamento</option></select></div>' +
@@ -2120,11 +2122,12 @@ function renderInsumos() {
 
   document.getElementById('insumo-count').textContent = ' — ' + filtered.length + ' itens';
 
-  // Calcular destinado (soma de OPs com insumo_id = este)
-  var destinadoPorInsumo = {};
+  // Calcular "em produção" (soma de tecido das OPs ativas com insumo_id = este)
+  // Só conta OPs com status ativo (Em Produção / Devolvido Fornecedor) — Entregue/Cancelado não conta
+  var emProducaoPorInsumo = {};
   (STATE.ops || []).forEach(function(op) {
-    if (op.insumo_id && op.quantidade_tecido_usada) {
-      destinadoPorInsumo[op.insumo_id] = (destinadoPorInsumo[op.insumo_id] || 0) + (op.quantidade_tecido_usada || 0);
+    if (op.insumo_id && op.quantidade_tecido_usada && op.status !== 'Entregue' && op.status !== 'Cancelado') {
+      emProducaoPorInsumo[op.insumo_id] = (emProducaoPorInsumo[op.insumo_id] || 0) + (op.quantidade_tecido_usada || 0);
     }
   });
 
@@ -2141,14 +2144,14 @@ function renderInsumos() {
         key: key, nf: i.numero_nf, tecido: i.nome, unidade: i.unidade,
         data_faturamento: i.data_faturamento, fornecedor_id: i.fornecedor_id,
         skus_pai: i.skus_pai || [],
-        variantes: [], total: 0, destinado: 0, saldo: 0,
+        variantes: [], total: 0, em_producao: 0, saldo: 0,
       };
     }
-    var destinado = destinadoPorInsumo[i.id] || 0;
+    var em_producao = emProducaoPorInsumo[i.id] || 0;
     var saldo = i.quantidade_atual || 0;
-    grupos[key].variantes.push({ item: i, destinado: destinado, saldo: saldo, total: saldo + destinado });
-    grupos[key].total += saldo + destinado;
-    grupos[key].destinado += destinado;
+    grupos[key].variantes.push({ item: i, em_producao: em_producao, saldo: saldo, total: saldo + em_producao });
+    grupos[key].total += saldo + em_producao;
+    grupos[key].em_producao += em_producao;
     grupos[key].saldo += saldo;
   });
 
@@ -2224,7 +2227,7 @@ function renderInsumos() {
         '</div>' +
       '</td>' +
       '<td class="r" style="font-weight:700">' + fmt(g.total) + '</td>' +
-      '<td class="r" style="color:var(--amber);font-weight:700">' + fmt(g.destinado) + '</td>' +
+      '<td class="r" style="color:var(--amber);font-weight:700" title="Tecido em OPs ativas (status Em Produção / Devolvido Fornecedor)">' + fmt(g.em_producao) + '</td>' +
       '<td class="r" style="color:'+corTotal+';font-weight:800;font-size:14px">' + fmt(g.saldo) + '</td>' +
       '<td style="line-height:1.5">' + locGrupoHtml + '</td>' +
       '<td>' + (g.unidade || '') + '</td>' +
@@ -2262,7 +2265,7 @@ function renderInsumos() {
           '<td></td>' +
           '<td style="padding-left:24px" class="dim">↳ ' + ((i.cor || '—').trim()) + '<span style="color:var(--txt4);font-size:10px;margin-left:6px">(editar)</span></td>' +
           '<td class="r">' + fmt(v.total) + '</td>' +
-          '<td class="r" style="color:var(--amber)">' + fmt(v.destinado) + '</td>' +
+          '<td class="r" style="color:var(--amber)">' + fmt(v.em_producao) + '</td>' +
           '<td class="r" style="color:'+corSaldo+';font-weight:600">' + fmt(v.saldo) + '</td>' +
           '<td style="line-height:1.5">' + locVarHtml + '</td>' +
           '<td class="dim">' + (i.unidade || '') + '</td>' +
@@ -4142,7 +4145,24 @@ function buildEditOPForm(op) {
     return '<option value="' + s + '"' + sel + '>' + s + '</option>';
   }).join('');
 
-  return '<div class="form-group"><label class="form-label">Produto</label>' +
+  // Info do tecido vinculado (read-only) — vem do insumo_id
+  var insumoVinc = op.insumo_id ? (STATE.insumos || []).find(function(x){return x.id === op.insumo_id;}) : null;
+  var nfTecido = insumoVinc && insumoVinc.numero_nf ? String(insumoVinc.numero_nf).trim() : null;
+  var tecidoNome = insumoVinc ? (insumoVinc.nome || '') : (op.tecido || '');
+  var infoTecidoBlock = (insumoVinc || tecidoNome || nfTecido) ? (
+    '<div style="padding:10px 12px;background:var(--bg);border:1px solid var(--bdr);border-radius:8px;margin-bottom:14px;font-size:12px">' +
+      '<div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px">Tecido vinculado</div>' +
+      '<div style="display:flex;gap:14px;flex-wrap:wrap">' +
+        (tecidoNome ? '<span><strong style="color:var(--txt1)">' + tecidoNome.replace(/</g,'&lt;') + '</strong></span>' : '') +
+        (insumoVinc && insumoVinc.cor ? '<span>Cor: <strong>' + insumoVinc.cor.replace(/</g,'&lt;') + '</strong></span>' : '') +
+        (nfTecido ? '<span>NF: <strong style="color:var(--indigo)">' + nfTecido.replace(/</g,'&lt;') + '</strong></span>' : '<span style="color:var(--orange)">⚠ Sem NF cadastrada no tecido</span>') +
+        (op.metros_kg ? '<span>Metragem: <strong>' + fmt(op.metros_kg) + ' ' + (op.unidade||'') + '</strong></span>' : '') +
+      '</div>' +
+    '</div>'
+  ) : '';
+
+  return infoTecidoBlock +
+    '<div class="form-group"><label class="form-label">Produto</label>' +
       '<select class="form-select" id="f-edit-produto" onchange="atualizarCamposProduto(\'edit\')">' +
         '<option value="">Selecione...</option>' + prodOpts +
       '</select></div>' +
