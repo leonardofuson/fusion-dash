@@ -1485,6 +1485,19 @@ function editarEntrega(entregaId, opId) {
   document.getElementById('drawer-footer').style.display = 'flex';
 }
 
+// Preview do saldo no header do edit-insumo: saldo = total - destinado
+function atualizarSaldoEditInsumo() {
+  var totalEl = document.getElementById('f-ei-total');
+  var destEl = document.getElementById('f-ei-destinado');
+  var saldoEl = document.getElementById('f-ei-saldo-calc');
+  if (!totalEl || !destEl || !saldoEl) return;
+  var t = parseFloat(totalEl.value) || 0;
+  var d = parseFloat(destEl.value) || 0;
+  var s = t - d;
+  saldoEl.textContent = fmt(s);
+  saldoEl.style.color = s < 0 ? 'var(--red)' : 'var(--green)';
+}
+
 function atualizarEntregaTotalEdit() {
   var inputs = document.querySelectorAll('.grade-input-ent-edit');
   var total = 0;
@@ -1577,6 +1590,7 @@ function renderHistoricoMovsInsumo(movs, insumo) {
     'consumo_op': '✂ Consumo',
     'retorno_cd': '⬅ Retorno',
     'saldo_inicial': '📍 Saldo inicial',
+    'ajuste_compra': '🔧 Ajuste compra',
   };
   var rows = movs.map(function(m) {
     var data = m.criado_em ? new Date(m.criado_em).toLocaleDateString('pt-BR') : '—';
@@ -1692,9 +1706,16 @@ function buildEditInsumoForm(i) {
   if (locOpts.indexOf(locAtual) < 0) locOpts.push(locAtual);
 
   return '<div style="padding:12px;background:var(--bg);border-radius:8px;margin-bottom:16px;font-size:12px;color:var(--txt2)">' +
-      '<div><strong>Total comprado:</strong> ' + fmt(totalComprado) + ' ' + (i.unidade||'') + ' · <span style="color:var(--amber)">Destinado: ' + fmt(destinado) + '</span> · <span style="color:var(--green)">Saldo: ' + fmt(saldo) + '</span></div>' +
+      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><strong>Total comprado:</strong>' +
+        '<input type="number" step="0.01" id="f-ei-total" value="' + totalComprado + '" data-original="' + totalComprado + '" style="width:120px;padding:4px 8px;background:var(--bg3);border:1px solid var(--bdr);border-radius:4px;color:var(--txt1);font-weight:700;font-size:13px" oninput="atualizarSaldoEditInsumo()">' +
+        '<span>' + (i.unidade||'') + '</span>' +
+        '<span style="color:var(--amber);margin-left:auto">Destinado: ' + fmt(destinado) + '</span>' +
+        '<span style="color:var(--green)">Saldo: <span id="f-ei-saldo-calc">' + fmt(saldo) + '</span></span>' +
+      '</div>' +
+      '<div style="margin-top:8px;font-size:10px;color:var(--txt3)">Editar Total comprado gera ajuste no event log (saldo recalcula automático). Destinado vem das OPs vinculadas.</div>' +
       '<div style="margin-top:6px;font-size:11px">Saldo por local: ' + breakdownHtml + '</div>' +
     '</div>' +
+    '<input type="hidden" id="f-ei-destinado" value="' + destinado + '">' +
     '<div class="form-row">' +
       '<div class="form-group"><label class="form-label">Tipo</label>' +
         '<select class="form-select" id="f-ei-tipo"><option value="tecido"' + (i.tipo==='tecido'?' selected':'') + '>Tecido</option><option value="aviamento"' + (i.tipo==='aviamento'?' selected':'') + '>Aviamento</option></select></div>' +
@@ -1723,8 +1744,6 @@ function buildEditInsumoForm(i) {
       '<div class="form-group"><label class="form-label">Valor Unitário (R$/un)</label>' +
         '<input class="form-input" id="f-ei-valor" type="number" step="0.01" value="' + (i.valor_unitario_referencia || '') + '"></div>' +
     '</div>' +
-    '<div class="form-group"><label class="form-label">Quantidade em estoque (saldo atual total)</label>' +
-      '<input class="form-input" id="f-ei-qtd" type="number" step="0.01" value="' + (i.quantidade_atual || 0) + '"></div>' +
     '<div style="margin-top:8px;padding:12px;border:1px solid var(--bdr);border-radius:8px;background:var(--bg);">' +
       '<div style="font-size:13px;font-weight:600;color:var(--txt2);margin-bottom:10px;">Nota Fiscal</div>' +
       '<div class="form-row">' +
@@ -4311,6 +4330,13 @@ async function submitDrawer() {
       var skusSelecionados = Array.from(document.querySelectorAll('.f-edit-insumo-sku:checked')).map(function(el) { return el.value; });
       var locEl = document.getElementById('f-ei-localizacao');
       var localizacaoNova = (locEl && locEl.value) ? locEl.value : (ei.localizacao || 'CD FUSION');
+
+      // Detecta mudança no Total Comprado pra gerar mov de ajuste (não PATCH direto em quantidade_atual)
+      var totalEl = document.getElementById('f-ei-total');
+      var totalNovo = totalEl ? (parseFloat(totalEl.value) || 0) : null;
+      var totalOriginal = totalEl ? (parseFloat(totalEl.dataset.original) || 0) : null;
+      var deltaTotal = (totalNovo != null && totalOriginal != null) ? (totalNovo - totalOriginal) : 0;
+
       var body = {
         tipo: document.getElementById('f-ei-tipo').value,
         subtipo: document.getElementById('f-ei-subtipo').value,
@@ -4318,7 +4344,6 @@ async function submitDrawer() {
         cor: (document.getElementById('f-ei-cor').value || '').trim() || null,
         unidade: document.getElementById('f-ei-unidade').value,
         localizacao: localizacaoNova,
-        quantidade_atual: parseFloat(document.getElementById('f-ei-qtd').value) || 0,
         valor_unitario_referencia: parseFloat(document.getElementById('f-ei-valor').value) || null,
         numero_nf: (document.getElementById('f-ei-nf').value || '').trim() || null,
         data_faturamento: document.getElementById('f-ei-data-fat').value || null,
@@ -4326,7 +4351,22 @@ async function submitDrawer() {
         skus_pai: skusSelecionados.length ? skusSelecionados : null,
         atualizado_em: new Date().toISOString(),
       };
+
       await patchSupabase('estoque_insumos', ei.id, body);
+
+      // Se Total Comprado mudou: gera mov de ajuste (trigger atualiza quantidade_atual)
+      if (Math.abs(deltaTotal) > 0.001) {
+        try {
+          await postSupabase('movimentacao_insumos', [{
+            insumo_id: ei.id,
+            tipo_mov: 'ajuste_compra',
+            quantidade: deltaTotal,  // positivo = comprou mais; negativo = corrigiu pra menos
+            localizacao: localizacaoNova,
+            ordem_producao_id: null,
+            observacao: 'Ajuste manual Total Comprado (' + fmt(totalOriginal) + ' → ' + fmt(totalNovo) + ' ' + (body.unidade||'') + ')',
+          }]);
+        } catch (e) { console.warn('Falha ao registrar ajuste compra:', e); alert('Insumo salvo, mas o ajuste de saldo falhou: ' + e.message); }
+      }
     } else if (type === 'edit-entrega') {
       var op = STATE.entregaOp;
       var entregaOrig = STATE.editingEntrega;
