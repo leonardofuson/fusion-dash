@@ -740,6 +740,24 @@ function updateValorTotalOP(prefix) {
   if (el) el.value = t;
 }
 
+// Soma valor por dentro + por fora numa row do form Novo Insumo
+function updateValorTotalInsumoRow(idx) {
+  var row = document.getElementById('insumo-row-'+idx);
+  if (!row) return;
+  var vd = parseFloat((row.querySelector('[data-field="valor_dentro"]') || {}).value) || 0;
+  var vf = parseFloat((row.querySelector('[data-field="valor_fora"]') || {}).value) || 0;
+  var totalEl = row.querySelector('[data-field="valor_total"]');
+  if (totalEl) totalEl.value = (vd + vf).toFixed(2);
+}
+
+// Soma valor por dentro + por fora no form Editar Insumo
+function updateValorTotalEditInsumo() {
+  var vd = parseFloat((document.getElementById('f-ei-valor-dentro') || {}).value) || 0;
+  var vf = parseFloat((document.getElementById('f-ei-valor-fora') || {}).value) || 0;
+  var el = document.getElementById('f-ei-valor');
+  if (el) el.value = (vd + vf).toFixed(2);
+}
+
 // ═══════════════ HELPERS ═══════════════
 function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('pt-BR'); }
 function fmtR(n) { return n == null ? '—' : 'R$ ' + Number(n).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
@@ -1854,8 +1872,15 @@ function buildEditInsumoForm(i) {
         '</select>' +
         '<small style="color:var(--txt3)">Mudar aqui só altera a referência. Pra mover tecido fisicamente, use "Alocar" na lista de insumos.</small>' +
       '</div>' +
-      '<div class="form-group"><label class="form-label">Valor Unitário (R$/un)</label>' +
-        '<input class="form-input" id="f-ei-valor" type="number" step="0.01" value="' + (i.valor_unitario_referencia || '') + '"></div>' +
+    '</div>' +
+    '<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.04em;margin:8px 0 4px">Valor unitário (R$/un)</div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label class="form-label">Por dentro <small style="color:var(--txt3);font-weight:400">(com NF)</small></label>' +
+        '<input class="form-input" id="f-ei-valor-dentro" type="number" step="0.01" value="' + (i.valor_unitario_dentro != null ? i.valor_unitario_dentro : '') + '" oninput="updateValorTotalEditInsumo()"></div>' +
+      '<div class="form-group"><label class="form-label">Por fora <small style="color:var(--txt3);font-weight:400">(sem NF)</small></label>' +
+        '<input class="form-input" id="f-ei-valor-fora" type="number" step="0.01" value="' + (i.valor_unitario_fora != null ? i.valor_unitario_fora : '') + '" oninput="updateValorTotalEditInsumo()"></div>' +
+      '<div class="form-group"><label class="form-label">Total/un</label>' +
+        '<input class="form-input" id="f-ei-valor" type="text" readonly style="background:var(--bg3);color:var(--indigo);font-weight:700" value="' + (i.valor_unitario_referencia != null ? Number(i.valor_unitario_referencia).toFixed(2) : '0.00') + '"></div>' +
     '</div>' +
     '<div style="margin-top:8px;padding:12px;border:1px solid var(--bdr);border-radius:8px;background:var(--bg);">' +
       '<div style="font-size:13px;font-weight:600;color:var(--txt2);margin-bottom:10px;">Nota Fiscal</div>' +
@@ -4094,9 +4119,15 @@ function buildInsumoRow(idx, firstRow) {
       '<div class="form-group"><label class="form-label">Unidade</label>' +
         '<select class="form-select" data-field="unidade"><option value="M">Metros (M)</option><option value="KG">Quilos (KG)</option><option value="UN">Unidades (UN)</option><option value="ROL">Rolos (ROL)</option></select></div>' +
     '</div>' +
+    '<div class="form-group"><label class="form-label">Quantidade comprada</label><input class="form-input" data-field="qtd" type="number" step="0.01" placeholder="500"></div>' +
+    '<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.04em;margin:8px 0 4px">Valor unitário (R$/un)</div>' +
     '<div class="form-row">' +
-      '<div class="form-group"><label class="form-label">Quantidade comprada</label><input class="form-input" data-field="qtd" type="number" step="0.01" placeholder="500"></div>' +
-      '<div class="form-group"><label class="form-label">Valor Unitário (R$)</label><input class="form-input" data-field="valor" type="number" step="0.01" placeholder="25.00"></div>' +
+      '<div class="form-group"><label class="form-label">Por dentro <small style="color:var(--txt3);font-weight:400">(com NF)</small></label>' +
+        '<input class="form-input" data-field="valor_dentro" type="number" step="0.01" placeholder="0.00" oninput="updateValorTotalInsumoRow('+idx+')"></div>' +
+      '<div class="form-group"><label class="form-label">Por fora <small style="color:var(--txt3);font-weight:400">(sem NF)</small></label>' +
+        '<input class="form-input" data-field="valor_fora" type="number" step="0.01" placeholder="0.00" oninput="updateValorTotalInsumoRow('+idx+')"></div>' +
+      '<div class="form-group"><label class="form-label">Total/un</label>' +
+        '<input class="form-input" data-field="valor_total" type="text" readonly style="background:var(--bg3);color:var(--indigo);font-weight:700" value="0.00"></div>' +
     '</div>' +
     '<div class="form-row">' +
       '<div class="form-group"><label class="form-label">Número NF</label><input class="form-input" data-field="nf" placeholder="Ex: 060054"></div>' +
@@ -4181,6 +4212,9 @@ function coletarInsumosRows() {
 
     var skusChecked = Array.from(row.querySelectorAll('[data-field="skus"] input:checked')).map(function(el){return el.value;});
 
+    var vDentro = parseFloat(row.querySelector('[data-field="valor_dentro"]').value) || null;
+    var vFora = parseFloat(row.querySelector('[data-field="valor_fora"]').value) || null;
+    var vTotal = (vDentro || 0) + (vFora || 0);
     insumos.push({
       tipo: tipo,
       subtipo: row.querySelector('[data-field="subtipo"]').value,
@@ -4188,7 +4222,9 @@ function coletarInsumosRows() {
       cor: (row.querySelector('[data-field="cor"]').value || '').trim() || null,
       unidade: row.querySelector('[data-field="unidade"]').value,
       quantidade_atual: parseFloat(row.querySelector('[data-field="qtd"]').value) || 0,
-      valor_unitario_referencia: parseFloat(row.querySelector('[data-field="valor"]').value) || null,
+      valor_unitario_dentro: vDentro,
+      valor_unitario_fora: vFora,
+      valor_unitario_referencia: vTotal > 0 ? vTotal : null,
       numero_nf: (row.querySelector('[data-field="nf"]').value || '').trim() || null,
       data_faturamento: row.querySelector('[data-field="data_fat"]').value || null,
       data_entrega: row.querySelector('[data-field="data_ent"]').value || null,
@@ -4558,6 +4594,11 @@ async function submitDrawer() {
       var totalOriginal = totalEl ? (parseFloat(totalEl.dataset.original) || 0) : null;
       var deltaTotal = (totalNovo != null && totalOriginal != null) ? (totalNovo - totalOriginal) : 0;
 
+      var vDentroEi = parseFloat(document.getElementById('f-ei-valor-dentro').value) || null;
+      var vForaEi = parseFloat(document.getElementById('f-ei-valor-fora').value) || null;
+      var vTotalEi = (vDentroEi || 0) + (vForaEi || 0);
+      // Fallback: insumo legado sem dentro/fora preenchidos — preserva valor_unitario_referencia original
+      var refFinal = vTotalEi > 0 ? vTotalEi : (vDentroEi == null && vForaEi == null ? (ei.valor_unitario_referencia != null ? parseFloat(ei.valor_unitario_referencia) : null) : null);
       var body = {
         tipo: document.getElementById('f-ei-tipo').value,
         subtipo: document.getElementById('f-ei-subtipo').value,
@@ -4565,7 +4606,9 @@ async function submitDrawer() {
         cor: (document.getElementById('f-ei-cor').value || '').trim() || null,
         unidade: document.getElementById('f-ei-unidade').value,
         localizacao: localizacaoNova,
-        valor_unitario_referencia: parseFloat(document.getElementById('f-ei-valor').value) || null,
+        valor_unitario_dentro: vDentroEi,
+        valor_unitario_fora: vForaEi,
+        valor_unitario_referencia: refFinal,
         numero_nf: (document.getElementById('f-ei-nf').value || '').trim() || null,
         data_faturamento: document.getElementById('f-ei-data-fat').value || null,
         data_entrega: document.getElementById('f-ei-data-ent').value || null,

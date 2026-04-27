@@ -131,3 +131,38 @@ Fonte única: tabela `contas_pagar` (só Fio e Trama).
 
 - Visão consolidada (todos os canais). Receita, top SKUs, anomalias.
 - **Pendência**: refatorar pra usar `vw_pedidos_completo` em vez de fetch paralelo.
+
+## Smoke checks pós-deploy
+
+Rodar após qualquer push em fusion-dash. **A skill [`fusion-sanity-check`](../.claude/skills/fusion-sanity-check/SKILL.md) automatiza isso.**
+
+```bash
+BASE="https://fusion-dash.onrender.com"
+
+# 1. Cada dash retorna 200 + HTML não-trivial (>20KB)
+for d in compras lojas ecommerce diretoria estoque financeiro index; do
+  size=$(curl -s -o /dev/null -w "%{size_download}" "$BASE/$d.html")
+  echo "$d.html: ${size}B" && [ "$size" -gt 20000 ] || echo "  ⚠️ tamanho suspeito"
+done
+
+# 2. compras.html — invariantes do refactor Phase 2 (devem aparecer)
+HTML=$(curl -s "$BASE/compras.html")
+echo "$HTML" | grep -q "'Em Produção'" && echo "✅ status novo presente" || echo "🔴 status novo ausente"
+echo "$HTML" | grep -q "vw_insumo_saldo_local" && echo "✅ view insumo carregada" || echo "🔴 view insumo ausente"
+echo "$HTML" | grep -q "renderReguaPagamentos" && echo "✅ régua pagamentos OK" || echo "🔴 régua ausente"
+echo "$HTML" | grep -q "tbody-regua-pagamentos" && echo "✅ tbody régua único" || echo "🔴 tbody régua ausente"
+
+# 3. compras.html — armadilhas conhecidas (NÃO devem aparecer)
+echo "$HTML" | grep -q "'Produzindo'" && echo "🔴 status antigo 'Produzindo' aparece" || echo "✅ sem status antigo"
+echo "$HTML" | grep -q "'cancelada'" && echo "🔴 status antigo 'cancelada' aparece (em ordens_producao)" || echo "✅ sem cancelada bare"
+echo "$HTML" | grep -cE '<tbody id="tbody-pagamentos"' | grep -qE '^[01]$' && echo "✅ tbody-pagamentos único ou ausente" || echo "🔴 tbody-pagamentos duplicado"
+# Detecta </script> literal dentro de string JS (caracter por caracter, não concatenação)
+echo "$HTML" | grep -E "'<script>" | grep -v "'<scr'+'ipt>'" >/dev/null && echo "🔴 </script> literal em string JS" || echo "✅ sem </script> literal"
+
+# 4. jsPDF carregado (necessário pra Sprint 7 do refactor)
+echo "$HTML" | grep -q "jspdf" && echo "✅ jsPDF presente" || echo "🔴 jsPDF ausente"
+```
+
+**Invariantes cross-arquivo críticos**:
+- Status names (`Em Produção`, `Cancelado`, `Devolvido Fornecedor`) devem bater com o que `fusion_sync_producao.py` filtra E com o que `max-chat/backend/prompts/schema_compras_producao.md` documenta.
+- IDs HTML únicos no documento (especialmente `tbody-*`, `kpis-*`).
