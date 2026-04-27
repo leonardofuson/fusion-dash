@@ -470,6 +470,7 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
           <th class="r">Total</th>
           <th class="r">Destinado</th>
           <th class="r">Saldo</th>
+          <th>Localização</th>
           <th>Un.</th>
           <th>Produtos</th>
           <th>Preço/Un.</th>
@@ -1735,6 +1736,46 @@ function renderInsumos() {
     var expanded = STATE.insumoExpanded[g.key] === true;
     var toggleIcon = expanded ? '▼' : '▶';
 
+    // Localização agregada do grupo (soma das variantes)
+    var saldoLocGrupo = {};
+    var saldoSemMovsGrupo = 0;
+    var locsDefaultGrupo = {};
+    g.variantes.forEach(function(v) {
+      var ii = v.item;
+      var sl = (STATE.saldoLocalIdx || {})[ii.id] || {};
+      var temMov = false;
+      Object.keys(sl).forEach(function(l) {
+        if (sl[l] > 0.001) {
+          saldoLocGrupo[l] = (saldoLocGrupo[l] || 0) + sl[l];
+          temMov = true;
+        }
+      });
+      if (!temMov && v.saldo > 0.001) {
+        var locD = ii.localizacao || 'CD FUSION';
+        locsDefaultGrupo[locD] = (locsDefaultGrupo[locD] || 0) + v.saldo;
+        saldoSemMovsGrupo += v.saldo;
+      }
+    });
+    var locsGrupoSorted = Object.keys(saldoLocGrupo).sort(function(a,b){
+      if (a==='CD FUSION') return -1; if (b==='CD FUSION') return 1;
+      return saldoLocGrupo[b] - saldoLocGrupo[a];
+    });
+    var locGrupoHtml;
+    if (locsGrupoSorted.length || saldoSemMovsGrupo > 0) {
+      var partes = locsGrupoSorted.map(function(l){
+        var lbl = l==='CD FUSION' ? 'CD' : l;
+        return '<span style="display:inline-block;margin-right:6px;font-size:10px"><strong style="color:var(--txt1)">'+lbl+'</strong>: '+fmt(saldoLocGrupo[l])+'</span>';
+      }).join('');
+      // Saldo sem movs (legacy/migração) — mostra agregado por localização default
+      Object.keys(locsDefaultGrupo).forEach(function(l) {
+        var lbl = l==='CD FUSION' ? 'CD' : l;
+        partes += '<span style="display:inline-block;margin-right:6px;font-size:10px;color:var(--orange)" title="Sem movs registradas — saldo agregado em '+l+'">⚠ <strong>'+lbl+'</strong>: '+fmt(locsDefaultGrupo[l])+'</span>';
+      });
+      locGrupoHtml = partes;
+    } else {
+      locGrupoHtml = '<span style="color:var(--txt4);font-size:10px">—</span>';
+    }
+
     // Header da NF (clicavel)
     var htmlGrupo = '<tr style="background:rgba(99,102,241,0.06);border-top:2px solid var(--bdr);cursor:pointer;user-select:none" onclick="toggleInsumoGrupo(\'' + g.key.replace(/'/g, "\\'") + '\')">' +
       '<td style="text-align:center;color:var(--txt3);font-size:10px">' + toggleIcon + '</td>' +
@@ -1749,6 +1790,7 @@ function renderInsumos() {
       '<td class="r" style="font-weight:700">' + fmt(g.total) + '</td>' +
       '<td class="r" style="color:var(--amber);font-weight:700">' + fmt(g.destinado) + '</td>' +
       '<td class="r" style="color:'+corTotal+';font-weight:800;font-size:14px">' + fmt(g.saldo) + '</td>' +
+      '<td style="line-height:1.5">' + locGrupoHtml + '</td>' +
       '<td>' + (g.unidade || '') + '</td>' +
       '<td>' + skusHtml + '</td>' +
       '<td></td>' +
@@ -1761,23 +1803,32 @@ function renderInsumos() {
       g.variantes.forEach(function(v) {
         var i = v.item;
         var corSaldo = v.saldo <= 0 ? 'var(--red)' : v.saldo < 50 ? 'var(--orange)' : 'var(--txt2)';
-        // Breakdown saldo por localização (Sprint 3)
+        // Localização da variante
         var saldoPorLoc = (STATE.saldoLocalIdx || {})[i.id] || {};
         var locParts = Object.keys(saldoPorLoc).filter(function(l){return saldoPorLoc[l] > 0;}).sort(function(a,b){
           if (a==='CD FUSION') return -1; if (b==='CD FUSION') return 1; return saldoPorLoc[b]-saldoPorLoc[a];
         });
-        var locTxt = locParts.map(function(l) {
-          var label = l==='CD FUSION' ? 'CD' : l.split(' ')[0];
-          return '<span style="color:var(--txt3);margin-right:8px">'+label+': '+fmt(saldoPorLoc[l])+'</span>';
-        }).join('');
+        var locVarHtml;
+        if (locParts.length) {
+          locVarHtml = locParts.map(function(l) {
+            var lbl = l==='CD FUSION' ? 'CD' : l;
+            return '<span style="display:inline-block;margin-right:6px;font-size:11px"><strong>'+lbl+'</strong>: '+fmt(saldoPorLoc[l])+'</span>';
+          }).join('');
+        } else if (v.saldo > 0.001) {
+          // Sem movs (migração) — usa localização default do cadastro
+          var locD = i.localizacao || 'CD FUSION';
+          var lbl = locD==='CD FUSION' ? 'CD' : locD;
+          locVarHtml = '<span style="color:var(--orange);font-size:11px" title="Sem movs registradas — saldo agregado">⚠ <strong>'+lbl+'</strong>: '+fmt(v.saldo)+'</span>';
+        } else {
+          locVarHtml = '<span style="color:var(--txt4);font-size:10px">—</span>';
+        }
         htmlGrupo += '<tr style="background:rgba(255,255,255,0.01);cursor:pointer" onclick="event.stopPropagation();openDrawerEditInsumo('+i.id+')" title="Click para editar">' +
           '<td></td>' +
           '<td style="padding-left:24px" class="dim">↳ ' + ((i.cor || '—').trim()) + '<span style="color:var(--txt4);font-size:10px;margin-left:6px">(editar)</span></td>' +
           '<td class="r">' + fmt(v.total) + '</td>' +
           '<td class="r" style="color:var(--amber)">' + fmt(v.destinado) + '</td>' +
-          '<td class="r" style="color:'+corSaldo+';font-weight:600">' + fmt(v.saldo) +
-            (locTxt ? '<div style="font-size:9px;font-weight:400;margin-top:3px;text-align:right;line-height:1.4">'+locTxt+'</div>' : '') +
-          '</td>' +
+          '<td class="r" style="color:'+corSaldo+';font-weight:600">' + fmt(v.saldo) + '</td>' +
+          '<td style="line-height:1.5">' + locVarHtml + '</td>' +
           '<td class="dim">' + (i.unidade || '') + '</td>' +
           '<td></td>' +
           '<td class="dim" style="font-size:10px">' + (i.valor_unitario_referencia ? fmtR(i.valor_unitario_referencia) : '') + '</td>' +
@@ -1789,7 +1840,7 @@ function renderInsumos() {
     }
     return htmlGrupo;
   }).join('');
-  document.getElementById('tbody-insumos').innerHTML = html || '<tr><td colspan="9" class="empty">Nenhum insumo encontrado</td></tr>';
+  document.getElementById('tbody-insumos').innerHTML = html || '<tr><td colspan="10" class="empty">Nenhum insumo encontrado</td></tr>';
 }
 
 function toggleInsumoGrupo(key) {
