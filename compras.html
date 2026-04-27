@@ -426,7 +426,8 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
         <button class="chip on" data-pgper="30" onclick="togglePagPeriodo(this)">Próx 30d</button>
         <button class="chip" data-pgper="60" onclick="togglePagPeriodo(this)">Próx 60d</button>
         <button class="chip" data-pgper="90" onclick="togglePagPeriodo(this)">Próx 90d</button>
-        <button class="chip" data-pgper="all" onclick="togglePagPeriodo(this)">Todos</button>
+        <button class="chip" data-pgper="all" onclick="togglePagPeriodo(this)">Todos futuros</button>
+        <button class="chip" id="chip-ver-passado" onclick="togglePagVerPassado()" style="margin-left:4px">Incluir pagos</button>
       </div>
       <select id="flt-pag-tipo" class="dselect" onchange="renderPagamentos()">
         <option value="">Todos tipos</option>
@@ -2559,6 +2560,12 @@ function togglePagSemDataChip() {
   STATE.pagSemDataFilt = !STATE.pagSemDataFilt;
   renderPagamentos();
 }
+function togglePagVerPassado() {
+  STATE.pagVerPassado = !STATE.pagVerPassado;
+  var el = document.getElementById('chip-ver-passado');
+  if (el) el.classList.toggle('on', STATE.pagVerPassado);
+  renderPagamentos();
+}
 
 function populatePagamentosFilters() {
   var sel = document.getElementById('flt-pag-costureiro');
@@ -2584,18 +2591,26 @@ function renderPagamentos() {
   }
   var fTipo = (document.getElementById('flt-pag-tipo') || {}).value || '';
   var fCost = (document.getElementById('flt-pag-costureiro') || {}).value || '';
+  var verPassado = STATE.pagVerPassado === true;
 
   var filtered = todos.filter(function(p) {
-    var d = new Date(p.data);
+    var d = new Date(p.data); d.setHours(0,0,0,0);
+    // Régua é projeção de FUTURO — passado já foi pago
+    if (!verPassado && d < hoje) return false;
     if (corteData && d > corteData) return false;
     if (fTipo && p.tipo !== fTipo) return false;
     if (fCost && p.costureiro_nome !== fCost) return false;
     return true;
   });
 
-  // KPIs
-  var totalDentro30 = todos.filter(function(p){ var d=new Date(p.data); var c=new Date(hoje); c.setDate(c.getDate()+30); return p.tipo==='dentro' && d<=c; }).reduce(function(s,p){return s+p.valor_total;},0);
-  var totalFora30 = todos.filter(function(p){ var d=new Date(p.data); var c=new Date(hoje); c.setDate(c.getDate()+30); return p.tipo==='fora' && d<=c; }).reduce(function(s,p){return s+p.valor_total;},0);
+  // KPIs (sempre só futuros, nas próximas 30d)
+  function dataNoIntervalo(p, ini, fim) {
+    var d = new Date(p.data); d.setHours(0,0,0,0);
+    return d >= ini && d <= fim;
+  }
+  var corte30 = new Date(hoje); corte30.setDate(corte30.getDate()+30);
+  var totalDentro30 = todos.filter(function(p){ return p.tipo==='dentro' && dataNoIntervalo(p, hoje, corte30); }).reduce(function(s,p){return s+p.valor_total;},0);
+  var totalFora30 = todos.filter(function(p){ return p.tipo==='fora' && dataNoIntervalo(p, hoje, corte30); }).reduce(function(s,p){return s+p.valor_total;},0);
   var totalGeral = filtered.reduce(function(s,p){return s+p.valor_total;},0);
   var opsSemData = (STATE.ops || []).filter(function(o){ return ['Cancelado','Devolvido Fornecedor','Entregue'].indexOf(o.status)<0 && !o.data_prevista_entrega && !o.data_entrega_real; }).length;
   var opsSemCusto = (STATE.ops || []).filter(function(o){ return ['Cancelado','Devolvido Fornecedor'].indexOf(o.status)<0 && !o.valor_costura_dentro && !o.valor_costura_fora && !o.valor_unitario; }).length;
