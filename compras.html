@@ -3839,33 +3839,53 @@ async function excluirOP(opId) {
   var op = STATE.ops.find(function(o) { return o.id === opId; });
   if (!op) return;
   var label = (op.produto || op.sku_produto || 'OP #'+opId) + (op.cor ? ' — ' + op.cor : '') + ' (' + costuName(op.costureiro_id) + ')';
-  var metrosKg = parseFloat(op.metros_kg) || 0;
-  var costureiroNomeAtual = costuName(op.costureiro_id);
-  var precisaRetornarTecido = op.status === 'Em Produção' && op.insumo_id && metrosKg > 0;
-
-  var msg = 'Excluir esta OP?\n\n' + label + '\n' + fmt(Math.round(op.qtde_pecas || 0)) + ' peças projetadas';
-  if (precisaRetornarTecido) {
-    msg += '\n\n' + fmt(metrosKg) + ' ' + (op.unidade || '') + ' de tecido voltarão pro CD FUSION.';
-  }
-  msg += '\n\nEsta ação não pode ser desfeita.';
-  if (!confirm(msg)) return;
 
   try {
-    // 1) Se OP em produção: gera retorno_cd movs (sem ordem_producao_id, pois a OP vai ser deletada)
-    if (precisaRetornarTecido) {
-      try {
-        await postSupabase('movimentacao_insumos', [
-          { insumo_id: op.insumo_id, tipo_mov: 'retorno_cd', quantidade: -metrosKg,
-            localizacao: costureiroNomeAtual, ordem_producao_id: null,
-            observacao: 'Retorno por exclusão de OP #' + opId },
-          { insumo_id: op.insumo_id, tipo_mov: 'retorno_cd', quantidade: metrosKg,
-            localizacao: 'CD FUSION', ordem_producao_id: null,
-            observacao: 'Retorno por exclusão de OP #' + opId },
-        ]);
-      } catch (e) { console.warn('Falha ao registrar retorno de tecido:', e); }
+    // 1) Buscar TODAS as movs envio_costureiro da OP — vamos inverter cada uma pra retornar o tecido pro local de origem registrado.
+    //    Se OP foi criada com tecido vindo do CD: movs eram (-X CD FUSION, +X costureiro). Inverso: (+X CD, -X costureiro) → tecido volta pro CD.
+    //    Se tecido já estava no costureiro (pré-alocado), não havia movs envio_costureiro vinculadas → nada a retornar.
+    var rMovs = await fetch(SB_URL + '/rest/v1/movimentacao_insumos?ordem_producao_id=eq.' + opId + '&tipo_mov=eq.envio_costureiro&select=insumo_id,quantidade,localizacao', {
+      headers: await getAuthHeaders()
+    });
+    var movsAntigas = rMovs.ok ? await rMovs.json() : [];
+
+    // Resumo por localização → mostrar no diálogo
+    var resumoLocs = {};
+    movsAntigas.forEach(function(m) {
+      var q = parseFloat(m.quantidade) || 0;
+      if (q >= 0) return; // só saídas mostram a origem
+      var origem = m.localizacao || '?';
+      resumoLocs[origem] = (resumoLocs[origem] || 0) + Math.abs(q);
+    });
+
+    var msg = 'Excluir esta OP?\n\n' + label + '\n' + fmt(Math.round(op.qtde_pecas || 0)) + ' peças projetadas';
+    var locs = Object.keys(resumoLocs);
+    if (locs.length) {
+      msg += '\n\nTecido voltará pra:';
+      locs.forEach(function(l){ msg += '\n  · ' + l + ': ' + fmt(resumoLocs[l]) + (op.unidade ? ' ' + op.unidade : ''); });
+    } else if (op.status === 'Em Produção') {
+      msg += '\n\n(Sem movimentações registradas — tecido permanece onde está)';
+    }
+    msg += '\n\nEsta ação não pode ser desfeita.';
+    if (!confirm(msg)) return;
+
+    // 2) Inverter cada mov: cria retorno espelhado (sinal oposto, mesma localização)
+    if (movsAntigas.length) {
+      var retornos = movsAntigas.map(function(m) {
+        return {
+          insumo_id: m.insumo_id,
+          tipo_mov: 'retorno_cd',
+          quantidade: -Number(m.quantidade),
+          localizacao: m.localizacao,
+          ordem_producao_id: null,
+          observacao: 'Retorno por exclusão de OP #' + opId,
+        };
+      });
+      try { await postSupabase('movimentacao_insumos', retornos); }
+      catch (e) { console.warn('Falha ao registrar retorno espelhado:', e); }
     }
 
-    // 2) Nullifica FK em movs antigas que apontam pra essa OP (preserva histórico mas libera DELETE)
+    // 3) Nullifica FK em movs antigas que apontam pra essa OP (preserva histórico mas libera DELETE)
     var rN = await fetch(SB_URL + '/rest/v1/movimentacao_insumos?ordem_producao_id=eq.' + opId, {
       method: 'PATCH',
       headers: Object.assign({'Content-Type':'application/json','Prefer':'return=minimal'}, await getAuthHeaders()),
@@ -3876,7 +3896,7 @@ async function excluirOP(opId) {
       throw new Error('Falha ao limpar movs antigas: HTTP ' + rN.status + ': ' + errN);
     }
 
-    // 3) DELETE da OP
+    // 4) DELETE da OP
     var r = await fetch(SB_URL + '/rest/v1/ordens_producao?id=eq.' + opId, {
       method: 'DELETE',
       headers: Object.assign({'Prefer':'return=minimal'}, await getAuthHeaders())
@@ -3984,11 +4004,24 @@ async function submitDrawer() {
           observacao: 'Consumo OP #' + op.id + ' (entrega ' + (dataEntregaReal||'?') + ')',
         });
       } else if (statusAntigo === 'Em Produção' && novoStatus === 'Cancelado' && op.insumo_id && metrosKg > 0) {
-        // Cancelamento antes de entregar: tecido volta pro CD (saldo total inalterado)
-        movsExtras.push(
-          { insumo_id: op.insumo_id, tipo_mov: 'retorno_cd', quantidade: -metrosKg, localizacao: costureiroNomeAtual, ordem_producao_id: op.id, observacao: 'Retorno por cancelamento OP #' + op.id },
-          { insumo_id: op.insumo_id, tipo_mov: 'retorno_cd', quantidade: metrosKg, localizacao: 'CD FUSION', ordem_producao_id: op.id, observacao: 'Retorno por cancelamento OP #' + op.id }
-        );
+        // Cancelamento: tecido volta pro local de origem (espelha as movs envio_costureiro da OP)
+        try {
+          var rEnvio = await fetch(SB_URL + '/rest/v1/movimentacao_insumos?ordem_producao_id=eq.' + op.id + '&tipo_mov=eq.envio_costureiro&select=insumo_id,quantidade,localizacao', {
+            headers: await getAuthHeaders()
+          });
+          var enviosOP = rEnvio.ok ? await rEnvio.json() : [];
+          if (enviosOP.length) {
+            // Inverter cada mov: retorno volta pra mesma localização
+            enviosOP.forEach(function(m) {
+              movsExtras.push({
+                insumo_id: m.insumo_id, tipo_mov: 'retorno_cd', quantidade: -Number(m.quantidade),
+                localizacao: m.localizacao, ordem_producao_id: op.id,
+                observacao: 'Retorno por cancelamento OP #' + op.id,
+              });
+            });
+          }
+          // Se enviosOP.length === 0 → tecido já estava no costureiro (pré-alocado), não há nada a estornar
+        } catch (e) { console.warn('Falha ao buscar movs originais da OP pra cancelamento:', e); }
       }
       await patchSupabase('ordens_producao', op.id, body);
       if (movsExtras.length) {
@@ -4067,19 +4100,32 @@ async function submitDrawer() {
       var opsCriadas = await postSupabase('ordens_producao', ops);
       var opsArr = Array.isArray(opsCriadas) ? opsCriadas : [opsCriadas];
 
-      // 2 movs por row: -X CD FUSION + +X costureiro (saldo total inalterado)
+      // Movs de envio só pra qtde que precisa fisicamente vir do CD.
+      // Se o tecido já está no costureiro (pré-alocado), não duplica movs.
       var costureiroNome = ((STATE.costureiros || []).find(function(c){return c.id===costureiroId;}) || {}).nome || 'Desconhecido';
+      // Acumular o "consumo virtual" do saldo no costureiro durante este save
+      // (caso multiplas rows usem o mesmo insumo no mesmo costureiro)
+      var saldoUsado = {};
       for (var j = 0; j < opsArr.length; j++) {
         var plano = baixas[j];
         if (!plano || !plano.insumoId || plano.metragem <= 0) continue;
-        await postSupabase('movimentacao_insumos', [
-          { insumo_id: plano.insumoId, tipo_mov: 'envio_costureiro', quantidade: -plano.metragem,
-            localizacao: 'CD FUSION', ordem_producao_id: opsArr[j].id,
-            observacao: 'Saída CD via OP #' + opsArr[j].id },
-          { insumo_id: plano.insumoId, tipo_mov: 'envio_costureiro', quantidade: plano.metragem,
-            localizacao: costureiroNome, ordem_producao_id: opsArr[j].id,
-            observacao: 'Entrada costureiro via OP #' + opsArr[j].id },
-        ]);
+        var saldoNoCostu = ((STATE.saldoLocalIdx || {})[plano.insumoId] || {})[costureiroNome] || 0;
+        var ja = saldoUsado[plano.insumoId] || 0;
+        var disponivelCostu = Math.max(0, saldoNoCostu - ja);
+        var faltaTrazer = Math.max(0, plano.metragem - disponivelCostu);
+        saldoUsado[plano.insumoId] = ja + Math.min(plano.metragem, disponivelCostu);
+        if (faltaTrazer > 0.001) {
+          await postSupabase('movimentacao_insumos', [
+            { insumo_id: plano.insumoId, tipo_mov: 'envio_costureiro', quantidade: -faltaTrazer,
+              localizacao: 'CD FUSION', ordem_producao_id: opsArr[j].id,
+              observacao: 'Saída CD via OP #' + opsArr[j].id },
+            { insumo_id: plano.insumoId, tipo_mov: 'envio_costureiro', quantidade: faltaTrazer,
+              localizacao: costureiroNome, ordem_producao_id: opsArr[j].id,
+              observacao: 'Entrada costureiro via OP #' + opsArr[j].id },
+          ]);
+        }
+        // Se faltaTrazer = 0 → tecido já estava no costureiro, nenhuma mov criada;
+        // ao deletar/cancelar, o tecido permanece no costureiro (sem reversão).
       }
     } else if (type === 'edit-costureiro') {
       var skus = document.getElementById('f-skus').value.split(',').map(function(s) { return s.trim().toUpperCase(); }).filter(Boolean);
