@@ -1421,8 +1421,33 @@ function buildEditInsumoForm(i) {
   var saldo = i.quantidade_atual || 0;
   var totalComprado = saldo + destinado;
 
+  // Saldo por localização (event log via vw_insumo_saldo_local)
+  var saldosPorLoc = (STATE.saldoLocalIdx || {})[i.id] || {};
+  var locsComSaldo = Object.keys(saldosPorLoc).filter(function(l){return saldosPorLoc[l] > 0.001;})
+    .sort(function(a,b){
+      if (a === 'CD FUSION') return -1; if (b === 'CD FUSION') return 1;
+      return saldosPorLoc[b] - saldosPorLoc[a];
+    });
+  var breakdownHtml;
+  if (locsComSaldo.length) {
+    breakdownHtml = locsComSaldo.map(function(l){return '<span style="display:inline-block;margin-right:10px"><strong style="color:var(--txt1)">'+l+':</strong> '+fmt(saldosPorLoc[l])+' '+(i.unidade||'')+'</span>';}).join('');
+  } else if (saldo > 0) {
+    // Sem movs no event log mas tem saldo (ex: insumo migrado) — mostra localização do cadastro
+    var locDef = i.localizacao || 'CD FUSION';
+    breakdownHtml = '<span style="color:var(--orange)">⚠ sem movs registradas — saldo agregado em <strong style="color:var(--txt1)">'+locDef+'</strong>: '+fmt(saldo)+' '+(i.unidade||'')+'</span>';
+  } else {
+    breakdownHtml = '<span style="color:var(--txt3)">sem saldo</span>';
+  }
+
+  // Lista de locais possíveis pro select: CD FUSION + costureiros ativos + localização atual (se for outra)
+  var costuAtivos = (STATE.costureiros || []).filter(function(c){return c.ativo !== false;}).map(function(c){return c.nome;});
+  var locOpts = ['CD FUSION'].concat(costuAtivos.sort(function(a,b){return (a||'').localeCompare(b||'');}));
+  var locAtual = i.localizacao || 'CD FUSION';
+  if (locOpts.indexOf(locAtual) < 0) locOpts.push(locAtual);
+
   return '<div style="padding:12px;background:var(--bg);border-radius:8px;margin-bottom:16px;font-size:12px;color:var(--txt2)">' +
       '<div><strong>Total comprado:</strong> ' + fmt(totalComprado) + ' ' + (i.unidade||'') + ' · <span style="color:var(--amber)">Destinado: ' + fmt(destinado) + '</span> · <span style="color:var(--green)">Saldo: ' + fmt(saldo) + '</span></div>' +
+      '<div style="margin-top:6px;font-size:11px">Saldo por local: ' + breakdownHtml + '</div>' +
     '</div>' +
     '<div class="form-row">' +
       '<div class="form-group"><label class="form-label">Tipo</label>' +
@@ -1443,11 +1468,17 @@ function buildEditInsumoForm(i) {
         '</select></div>' +
     '</div>' +
     '<div class="form-row">' +
-      '<div class="form-group"><label class="form-label">Quantidade em estoque (saldo atual)</label>' +
-        '<input class="form-input" id="f-ei-qtd" type="number" step="0.01" value="' + (i.quantidade_atual || 0) + '"></div>' +
+      '<div class="form-group"><label class="form-label">Local de estoque <small style="color:var(--txt3);font-weight:400">(local padrão de cadastro)</small></label>' +
+        '<select class="form-select" id="f-ei-localizacao">' +
+          locOpts.map(function(l){return '<option value="'+l.replace(/"/g,'&quot;')+'"'+(l===locAtual?' selected':'')+'>'+l+'</option>';}).join('') +
+        '</select>' +
+        '<small style="color:var(--txt3)">Mudar aqui só altera a referência. Pra mover tecido fisicamente, use "Alocar" na lista de insumos.</small>' +
+      '</div>' +
       '<div class="form-group"><label class="form-label">Valor Unitário (R$/un)</label>' +
         '<input class="form-input" id="f-ei-valor" type="number" step="0.01" value="' + (i.valor_unitario_referencia || '') + '"></div>' +
     '</div>' +
+    '<div class="form-group"><label class="form-label">Quantidade em estoque (saldo atual total)</label>' +
+      '<input class="form-input" id="f-ei-qtd" type="number" step="0.01" value="' + (i.quantidade_atual || 0) + '"></div>' +
     '<div style="margin-top:8px;padding:12px;border:1px solid var(--bdr);border-radius:8px;background:var(--bg);">' +
       '<div style="font-size:13px;font-weight:600;color:var(--txt2);margin-bottom:10px;">Nota Fiscal</div>' +
       '<div class="form-row">' +
@@ -3923,12 +3954,15 @@ async function submitDrawer() {
     if (type === 'edit-insumo') {
       var ei = STATE.editingInsumo;
       var skusSelecionados = Array.from(document.querySelectorAll('.f-edit-insumo-sku:checked')).map(function(el) { return el.value; });
+      var locEl = document.getElementById('f-ei-localizacao');
+      var localizacaoNova = locEl ? locEl.value : null;
       var body = {
         tipo: document.getElementById('f-ei-tipo').value,
         subtipo: document.getElementById('f-ei-subtipo').value,
         nome: (document.getElementById('f-ei-nome').value || '').trim(),
         cor: (document.getElementById('f-ei-cor').value || '').trim() || null,
         unidade: document.getElementById('f-ei-unidade').value,
+        localizacao: localizacaoNova || null,
         quantidade_atual: parseFloat(document.getElementById('f-ei-qtd').value) || 0,
         valor_unitario_referencia: parseFloat(document.getElementById('f-ei-valor').value) || null,
         numero_nf: (document.getElementById('f-ei-nf').value || '').trim() || null,
