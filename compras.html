@@ -6,6 +6,7 @@
 <title>Fusion — Compras & Produção</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <style>
 :root{--bg:#09090b;--bg2:#111113;--bg3:#1a1a1e;--bdr:#2a2a2e;--bdr-hover:#3f3f46;
   --txt1:#fafafa;--txt2:#d4d4d8;--txt3:#a1a1aa;--txt4:#71717a;
@@ -1469,7 +1470,7 @@ function injetarBtnImprimirOP(opId) {
   var btn = document.createElement('button');
   btn.id = 'drawer-btn-imprimir';
   btn.className = 'btnf ghost';
-  btn.textContent = 'Imprimir OP';
+  btn.textContent = 'Gerar PDF';
   btn.style.marginRight = 'auto';
   btn.onclick = function(){ imprimirOPFechamento(opId); };
   footer.insertBefore(btn, footer.firstChild);
@@ -3621,50 +3622,145 @@ function updateDiffEntrega() {
   '</div>';
 }
 
-// Gera versão printable da OP (sprint 6 — sprint 7 vai fazer PDF mais elaborado com jsPDF)
-function imprimirOPFechamento(opId) {
+// Carrega imagem como dataURL (pra embutir no PDF)
+function carregarImagemDataURL(url) {
+  return new Promise(function(resolve, reject) {
+    var img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = function() {
+      var canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+      canvas.getContext('2d').drawImage(img, 0, 0);
+      try { resolve({ dataURL: canvas.toDataURL('image/png'), w: img.naturalWidth, h: img.naturalHeight }); }
+      catch (e) { resolve(null); }
+    };
+    img.onerror = function() { resolve(null); };
+    img.src = url;
+  });
+}
+
+// Sprint 7: gera PDF baixável da OP (jsPDF + logo Fusion)
+async function imprimirOPFechamento(opId) {
   var op = STATE.ops.find(function(o) { return o.id === opId; });
   if (!op) return;
+  if (!window.jspdf || !window.jspdf.jsPDF) { alert('Biblioteca jsPDF não carregada. Recarregue a página.'); return; }
+  var jsPDFCtor = window.jspdf.jsPDF;
+  var doc = new jsPDFCtor({ unit: 'mm', format: 'a4' });
+
   var costu = costuName(op.costureiro_id);
   var qtdProj = parseFloat(op.qtde_pecas) || 0;
   var qtdEnt = parseFloat(op.qtde_pecas_entregues) || 0;
   var diff = qtdEnt - qtdProj;
   var sinal = diff > 0 ? '+' : '';
   var vt = parseFloat(op.valor_unitario || op.valor_peca) || 0;
+  var vd = parseFloat(op.valor_costura_dentro) || 0;
+  var vf = parseFloat(op.valor_costura_fora) || 0;
   var diffValor = diff * vt;
-  var html = '<!doctype html><html><head><meta charset="utf-8"><title>OP #'+op.id+' — Fechamento</title>' +
-    '<style>body{font-family:Arial,sans-serif;padding:32px;color:#222;}' +
-    'h1{font-size:18px;border-bottom:2px solid #333;padding-bottom:8px;margin:0 0 16px}' +
-    '.row{display:flex;gap:24px;margin:8px 0}.row > div{flex:1}' +
-    '.lbl{font-size:11px;color:#666;text-transform:uppercase;letter-spacing:0.05em}' +
-    '.val{font-size:14px;font-weight:600;margin-top:2px}' +
-    'table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13px}' +
-    'th,td{border:1px solid #ccc;padding:8px;text-align:left}th{background:#f5f5f5}' +
-    '.diff{background:'+(diff===0?'#e8f5e9':(diff>0?'#e3f2fd':'#fff3e0'))+';padding:12px;border-left:4px solid '+(diff===0?'#22c55e':(diff>0?'#3b82f6':'#f59e0b'))+';margin:16px 0}' +
-    '.sig{margin-top:64px;display:flex;gap:32px}.sig > div{flex:1;border-top:1px solid #333;padding-top:6px;font-size:11px;text-align:center}' +
-    '</style></head><body>' +
-    '<h1>FUSION GRUPO — Ordem de Produção #'+op.id+' (Fechamento)</h1>' +
-    '<div class="row"><div><div class="lbl">Costureiro</div><div class="val">'+costu+'</div></div>' +
-      '<div><div class="lbl">Produto</div><div class="val">'+(op.produto||'')+(op.cor?' / '+op.cor:'')+'</div></div>' +
-      '<div><div class="lbl">Status</div><div class="val">'+op.status+'</div></div></div>' +
-    '<div class="row"><div><div class="lbl">Data Envio Tecido</div><div class="val">'+(op.data_envio_tecido||'—')+'</div></div>' +
-      '<div><div class="lbl">Data Prevista</div><div class="val">'+(op.data_prevista_entrega||'—')+'</div></div>' +
-      '<div><div class="lbl">Data Entrega Real</div><div class="val">'+(op.data_entrega_real||'—')+'</div></div></div>' +
-    '<table><thead><tr><th>Métrica</th><th>Quantidade</th><th>Valor</th></tr></thead><tbody>' +
-      '<tr><td>Projetado</td><td>'+fmt(qtdProj)+' pç</td><td>'+fmtR(qtdProj*vt)+'</td></tr>' +
-      '<tr><td>Entregue</td><td>'+fmt(qtdEnt)+' pç</td><td>'+fmtR(qtdEnt*vt)+'</td></tr>' +
-      '<tr><td><strong>Diferença</strong></td><td><strong>'+sinal+fmt(diff)+' pç</strong></td><td><strong>'+sinal+fmtR(diffValor)+'</strong></td></tr>' +
-    '</tbody></table>' +
-    '<div class="diff"><strong>'+(diff===0?'Quantidade bate exato':(diff>0?'Sobrou '+fmt(diff)+' peça(s)':'Faltaram '+fmt(-diff)+' peça(s)'))+'</strong>'+
-      (diff!==0 && vt>0 ? '<br>Impacto financeiro: '+sinal+fmtR(diffValor) : '')+'</div>' +
-    '<div class="row"><div><div class="lbl">Valor Costura/Peça</div><div class="val">'+fmtR(vt)+'</div></div>' +
-      '<div><div class="lbl">Valor Total Pago</div><div class="val">'+fmtR(qtdEnt*vt)+'</div></div></div>' +
-    '<div class="sig"><div>Costureiro — '+costu+'</div><div>Fusion Grupo — Recebido por</div></div>' +
-    '<scr'+'ipt>window.onload=function(){window.print();}<\/scr'+'ipt>' +
-    '</body></html>';
-  var w = window.open('', '_blank');
-  w.document.write(html);
-  w.document.close();
+  var hoje = new Date().toLocaleDateString('pt-BR');
+
+  // Header com logo
+  var logo = await carregarImagemDataURL('/logo-marca.png');
+  if (logo) {
+    var logoH = 14, logoW = logo.w * (logoH / logo.h);
+    doc.addImage(logo.dataURL, 'PNG', 15, 12, logoW, logoH);
+  }
+  doc.setFont('helvetica', 'bold').setFontSize(16).setTextColor(20, 20, 20);
+  doc.text('FUSION GRUPO', 200, 18, { align: 'right' });
+  doc.setFont('helvetica', 'normal').setFontSize(10).setTextColor(100, 100, 100);
+  doc.text('Ordem de Produção · Fechamento', 200, 24, { align: 'right' });
+  doc.text('Emitido em ' + hoje, 200, 29, { align: 'right' });
+
+  // Linha separadora
+  doc.setDrawColor(40, 40, 40).setLineWidth(0.5).line(15, 35, 195, 35);
+
+  // Título da OP
+  doc.setFont('helvetica', 'bold').setFontSize(14).setTextColor(20, 20, 20);
+  doc.text('OP #' + op.id + ' — ' + (op.produto || op.sku_produto || ''), 15, 44);
+  doc.setFont('helvetica', 'normal').setFontSize(10).setTextColor(80, 80, 80);
+  doc.text((op.cor ? 'Cor: ' + op.cor + '   ·   ' : '') + 'Status: ' + op.status, 15, 50);
+
+  // Bloco: 3 colunas (Costureiro, Datas, Valores)
+  var y = 60;
+  function drawLabel(x, y, lbl, val) {
+    doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(120, 120, 120);
+    doc.text(lbl.toUpperCase(), x, y);
+    doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(20, 20, 20);
+    doc.text(String(val || '—'), x, y + 5);
+  }
+  drawLabel(15, y, 'Costureiro', costu);
+  drawLabel(80, y, 'Data Envio Tecido', op.data_envio_tecido || '—');
+  drawLabel(140, y, 'Data Entrega Real', op.data_entrega_real || '—');
+  y += 14;
+  drawLabel(15, y, 'Data Prevista', op.data_prevista_entrega || '—');
+  drawLabel(80, y, 'Custo Costura/Peça', 'R$ ' + vt.toFixed(2).replace('.', ','));
+  drawLabel(140, y, 'Valor Total Pago', 'R$ ' + (qtdEnt * vt).toFixed(2).replace('.', ','));
+  y += 18;
+
+  // Tabela: Projetado / Entregue / Diferença
+  doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(20, 20, 20);
+  doc.text('Comparativo de Entrega', 15, y);
+  y += 4;
+  // Header da tabela
+  doc.setFillColor(245, 245, 245).rect(15, y, 180, 8, 'F');
+  doc.setFont('helvetica', 'bold').setFontSize(9).setTextColor(60, 60, 60);
+  doc.text('MÉTRICA', 18, y + 5.5);
+  doc.text('QUANTIDADE', 100, y + 5.5);
+  doc.text('VALOR', 160, y + 5.5);
+  y += 8;
+  // Linhas
+  doc.setFont('helvetica', 'normal').setFontSize(10).setTextColor(40, 40, 40);
+  function row(lbl, qtd, val, bold) {
+    doc.setDrawColor(220, 220, 220).line(15, y + 8, 195, y + 8);
+    doc.setFont('helvetica', bold ? 'bold' : 'normal');
+    doc.text(lbl, 18, y + 5.5);
+    doc.text(qtd, 100, y + 5.5);
+    doc.text(val, 160, y + 5.5);
+    y += 8;
+  }
+  row('Projetado', fmt(qtdProj) + ' pç', 'R$ ' + (qtdProj * vt).toFixed(2).replace('.', ','), false);
+  row('Entregue', fmt(qtdEnt) + ' pç', 'R$ ' + (qtdEnt * vt).toFixed(2).replace('.', ','), false);
+  row('Diferença', sinal + fmt(diff) + ' pç', sinal + 'R$ ' + Math.abs(diffValor).toFixed(2).replace('.', ','), true);
+  y += 6;
+
+  // Bloco diferença (destaque)
+  var bgCor = diff === 0 ? [232, 245, 233] : (diff > 0 ? [227, 242, 253] : [255, 243, 224]);
+  var brdCor = diff === 0 ? [34, 197, 94] : (diff > 0 ? [59, 130, 246] : [245, 158, 11]);
+  doc.setFillColor(bgCor[0], bgCor[1], bgCor[2]).rect(15, y, 180, 14, 'F');
+  doc.setDrawColor(brdCor[0], brdCor[1], brdCor[2]).setLineWidth(1).line(15, y, 15, y + 14);
+  doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(20, 20, 20);
+  var diffMsg = diff === 0 ? 'Quantidade bate exato com o projetado.' :
+                (diff > 0 ? 'Sobrou ' + fmt(diff) + ' peça(s).' : 'Faltaram ' + fmt(-diff) + ' peça(s).');
+  doc.text(diffMsg, 20, y + 6);
+  if (diff !== 0 && vt > 0) {
+    doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(80, 80, 80);
+    doc.text('Impacto financeiro: ' + sinal + 'R$ ' + Math.abs(diffValor).toFixed(2).replace('.', ','), 20, y + 11);
+  }
+  y += 22;
+
+  // Custo dual (se preenchido)
+  if (vd > 0 || vf > 0) {
+    doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(20, 20, 20);
+    doc.text('Detalhamento de Custo', 15, y);
+    y += 6;
+    doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(80, 80, 80);
+    if (vd > 0) { doc.text('Por dentro (com NF): R$ ' + vd.toFixed(2).replace('.', ',') + '/peça   ·   Total: R$ ' + (qtdEnt * vd).toFixed(2).replace('.', ','), 15, y); y += 5; }
+    if (vf > 0) { doc.text('Por fora (sem NF): R$ ' + vf.toFixed(2).replace('.', ',') + '/peça   ·   Total: R$ ' + (qtdEnt * vf).toFixed(2).replace('.', ','), 15, y); y += 5; }
+    y += 6;
+  }
+
+  // Assinaturas (rodapé)
+  var ySig = 260;
+  doc.setDrawColor(60, 60, 60).setLineWidth(0.3).line(20, ySig, 90, ySig);
+  doc.line(120, ySig, 190, ySig);
+  doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(80, 80, 80);
+  doc.text('Costureiro — ' + costu, 55, ySig + 5, { align: 'center' });
+  doc.text('Fusion Grupo · Recebido por', 155, ySig + 5, { align: 'center' });
+
+  // Rodapé
+  doc.setFontSize(7).setTextColor(150, 150, 150);
+  doc.text('Documento gerado pelo Fusion BI · OP ' + op.id + ' · ' + hoje, 105, 285, { align: 'center' });
+
+  doc.save('OP-' + op.id + '-' + (op.produto || 'producao').replace(/[^A-Za-z0-9]/g, '') + '.pdf');
 }
 
 async function excluirOP(opId) {
