@@ -474,7 +474,7 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
           <th>Un.</th>
           <th>Produtos</th>
           <th>Preço/Un.</th>
-          <th style="width:90px">Ações</th>
+          <th style="min-width:200px;width:200px">Ações</th>
         </tr></thead><tbody id="tbody-insumos"></tbody></table>
       </div>
     </div>
@@ -1501,16 +1501,43 @@ async function excluirInsumo(insumoId) {
   if (!insumo) return;
   var opsLigadas = (STATE.ops || []).filter(function(o) { return o.insumo_id === insumoId; });
   if (opsLigadas.length > 0) {
-    alert('Não é possível excluir: há ' + opsLigadas.length + ' OP(s) vinculada(s) a este tecido. Exclua as OPs primeiro.');
+    alert('Não é possível excluir: há ' + opsLigadas.length + ' OP(s) vinculada(s) a este tecido.\n\nExclua ou cancele as OPs primeiro.');
     return;
   }
-  if (!confirm('Excluir esta compra de tecido?\n\n' + (insumo.nome || '') + (insumo.cor ? ' — ' + insumo.cor : '') + '\n\nEsta ação não pode ser desfeita.')) return;
+
+  // Conta movimentações pra avisar o usuário
+  var saldosLoc = (STATE.saldoLocalIdx || {})[insumoId] || {};
+  var temMovs = Object.keys(saldosLoc).length > 0;
+
+  var msg = 'Excluir esta compra de tecido?\n\n' + (insumo.nome || '') + (insumo.cor ? ' — ' + insumo.cor : '');
+  if (temMovs) {
+    msg += '\n\n⚠ Há movimentações registradas no event log que também serão apagadas (compra, envios, retornos, etc).';
+  }
+  msg += '\n\nEsta ação não pode ser desfeita.';
+  if (!confirm(msg)) return;
+
   try {
+    // 1) Apaga movs vinculadas (se houver) — evita FK violation
+    if (temMovs) {
+      var rM = await fetch(SB_URL + '/rest/v1/movimentacao_insumos?insumo_id=eq.' + insumoId, {
+        method: 'DELETE',
+        headers: Object.assign({'Prefer':'return=minimal'}, await getAuthHeaders())
+      });
+      if (!rM.ok) {
+        var errM = await rM.text();
+        throw new Error('Falha ao apagar movs: HTTP ' + rM.status + ': ' + errM);
+      }
+    }
+
+    // 2) Apaga o insumo
     var r = await fetch(SB_URL + '/rest/v1/estoque_insumos?id=eq.' + insumoId, {
       method: 'DELETE',
       headers: Object.assign({'Prefer':'return=minimal'}, await getAuthHeaders())
     });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
+    if (!r.ok) {
+      var errD = await r.text();
+      throw new Error('HTTP ' + r.status + ': ' + errD);
+    }
     closeDrawer();
     await carregar();
   } catch(e) { alert('Erro ao excluir: ' + e.message); }
@@ -1832,8 +1859,10 @@ function renderInsumos() {
           '<td class="dim">' + (i.unidade || '') + '</td>' +
           '<td></td>' +
           '<td class="dim" style="font-size:10px">' + (i.valor_unitario_referencia ? fmtR(i.valor_unitario_referencia) : '') + '</td>' +
-          '<td onclick="event.stopPropagation()" style="text-align:center">' +
-            (v.saldo > 0 ? '<button class="btnf ghost" style="font-size:10px;padding:3px 8px" onclick="abrirAlocacaoCostureiro('+i.id+')" title="Enviar tecido pra costureiro sem criar OP">Alocar</button>' : '') +
+          '<td onclick="event.stopPropagation()" style="text-align:center;white-space:nowrap">' +
+            '<button class="btnf" style="font-size:10px;padding:3px 8px;margin-right:3px" onclick="openDrawerEditInsumo('+i.id+')" title="Editar tecido">Editar</button>' +
+            (v.saldo > 0 ? '<button class="btnf ghost" style="font-size:10px;padding:3px 8px;margin-right:3px" onclick="abrirAlocacaoCostureiro('+i.id+')" title="Enviar pra costureiro sem OP">Alocar</button>' : '') +
+            '<button class="btnf ghost" style="font-size:10px;padding:3px 8px;color:var(--red);border-color:rgba(248,113,113,0.4)" onclick="excluirInsumo('+i.id+')" title="Excluir tecido">Excluir</button>' +
           '</td>' +
         '</tr>';
       });
@@ -4006,14 +4035,14 @@ async function submitDrawer() {
       var ei = STATE.editingInsumo;
       var skusSelecionados = Array.from(document.querySelectorAll('.f-edit-insumo-sku:checked')).map(function(el) { return el.value; });
       var locEl = document.getElementById('f-ei-localizacao');
-      var localizacaoNova = locEl ? locEl.value : null;
+      var localizacaoNova = (locEl && locEl.value) ? locEl.value : (ei.localizacao || 'CD FUSION');
       var body = {
         tipo: document.getElementById('f-ei-tipo').value,
         subtipo: document.getElementById('f-ei-subtipo').value,
         nome: (document.getElementById('f-ei-nome').value || '').trim(),
         cor: (document.getElementById('f-ei-cor').value || '').trim() || null,
         unidade: document.getElementById('f-ei-unidade').value,
-        localizacao: localizacaoNova || null,
+        localizacao: localizacaoNova,
         quantidade_atual: parseFloat(document.getElementById('f-ei-qtd').value) || 0,
         valor_unitario_referencia: parseFloat(document.getElementById('f-ei-valor').value) || null,
         numero_nf: (document.getElementById('f-ei-nf').value || '').trim() || null,
