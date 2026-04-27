@@ -420,7 +420,7 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
 
   <!-- ═══════════════ TAB: PAGAMENTOS ═══════════════ -->
   <div class="tab-panel" id="panel-pagamentos">
-    <div class="kpi-grid" id="kpis-pagamentos"></div>
+    <div class="kpi-grid" id="kpis-regua-pagamentos"></div>
     <div class="filtros" style="flex-wrap:wrap">
       <div style="display:flex;gap:6px;">
         <button class="chip on" data-pgper="30" onclick="togglePagPeriodo(this)">Próx 30d</button>
@@ -429,18 +429,18 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
         <button class="chip" data-pgper="all" onclick="togglePagPeriodo(this)">Todos futuros</button>
         <button class="chip" id="chip-ver-passado" onclick="togglePagVerPassado()" style="margin-left:4px">Incluir pagos</button>
       </div>
-      <select id="flt-pag-tipo" class="dselect" onchange="renderPagamentos()">
+      <select id="flt-pag-tipo" class="dselect" onchange="renderReguaPagamentos()">
         <option value="">Todos tipos</option>
         <option value="dentro">Por dentro (com NF)</option>
         <option value="fora">Por fora (sem NF)</option>
       </select>
-      <select id="flt-pag-costureiro" class="dselect" onchange="renderPagamentos()">
+      <select id="flt-pag-costureiro" class="dselect" onchange="renderReguaPagamentos()">
         <option value="">Todos costureiros</option>
       </select>
       <button class="chip alert" id="chip-pag-sem-data" onclick="togglePagSemDataChip()">SEM DATA — não projeta</button>
     </div>
     <div class="card">
-      <div class="card-header"><span class="card-title">Régua de Pagamentos<small id="pag-count" style="margin-left:6px;color:var(--txt3)"></small></span></div>
+      <div class="card-header"><span class="card-title">Régua de Pagamentos<small id="regua-pag-count" style="margin-left:6px;color:var(--txt3)"></small></span></div>
       <div class="tb-wrap tb-wrap-scroll">
         <table class="tb"><thead><tr>
           <th>Data Pgto</th>
@@ -452,7 +452,7 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
           <th>Tipo</th>
           <th class="r">R$/Pç</th>
           <th class="r">Total</th>
-        </tr></thead><tbody id="tbody-pagamentos"></tbody></table>
+        </tr></thead><tbody id="tbody-regua-pagamentos"></tbody></table>
       </div>
     </div>
   </div>
@@ -709,10 +709,10 @@ function renderAll() {
   renderHistorico();
   renderPlanejamento();
   renderCustos();
-  renderPagamentos();
+  renderReguaPagamentos();
   populateFilters();
   populateHistoricoFilters();
-  populatePagamentosFilters();
+  populateReguaPagFilters();
   updateSemDataChipCount();
 }
 
@@ -2567,20 +2567,20 @@ function escHtml(s) {
 function togglePagPeriodo(el) {
   document.querySelectorAll('.chip[data-pgper]').forEach(function(c){ c.classList.remove('on'); });
   el.classList.add('on');
-  renderPagamentos();
+  renderReguaPagamentos();
 }
 function togglePagSemDataChip() {
   STATE.pagSemDataFilt = !STATE.pagSemDataFilt;
-  renderPagamentos();
+  renderReguaPagamentos();
 }
 function togglePagVerPassado() {
   STATE.pagVerPassado = !STATE.pagVerPassado;
   var el = document.getElementById('chip-ver-passado');
   if (el) el.classList.toggle('on', STATE.pagVerPassado);
-  renderPagamentos();
+  renderReguaPagamentos();
 }
 
-function populatePagamentosFilters() {
+function populateReguaPagFilters() {
   var sel = document.getElementById('flt-pag-costureiro');
   if (!sel) return;
   var nomes = {};
@@ -2592,7 +2592,7 @@ function populatePagamentosFilters() {
   sel.innerHTML = '<option value="">Todos costureiros</option>' + Object.keys(nomes).sort().map(function(n){ return '<option value="'+n+'">'+n+'</option>'; }).join('');
 }
 
-function renderPagamentos() {
+function renderReguaPagamentos() {
   var todos = gerarPagamentosFromOps();
   // Periodo: chip ativo
   var perEl = document.querySelector('.chip[data-pgper].on');
@@ -2630,7 +2630,7 @@ function renderPagamentos() {
   var opsSemData = (STATE.ops || []).filter(function(o){ return ['Cancelado','Devolvido Fornecedor','Entregue'].indexOf(o.status)<0 && !o.data_prevista_entrega && !o.data_entrega_real; }).length;
   var opsSemCusto = (STATE.ops || []).filter(function(o){ return ['Cancelado','Devolvido Fornecedor'].indexOf(o.status)<0 && !o.valor_costura_dentro && !o.valor_costura_fora && !o.valor_unitario; }).length;
 
-  document.getElementById('kpis-pagamentos').innerHTML = [
+  document.getElementById('kpis-regua-pagamentos').innerHTML = [
     kpiHtml('A pagar (período)', fmtR(totalGeral), 'no filtro selecionado', '--kpi-accent:var(--indigo)'),
     kpiHtml('Por dentro · 30d', fmtR(totalDentro30), 'com NF — D+15', '--kpi-accent:var(--green)'),
     kpiHtml('Por fora · 30d', fmtR(totalFora30), 'sem NF — D+30', '--kpi-accent:var(--purple)'),
@@ -2639,7 +2639,7 @@ function renderPagamentos() {
   ].join('');
 
   document.getElementById('badge-pagamentos').textContent = filtered.length;
-  document.getElementById('pag-count').textContent = ' — ' + filtered.length + ' pagamentos · total ' + fmtR(totalGeral);
+  document.getElementById('regua-pag-count').textContent = ' — ' + filtered.length + ' pagamentos · total ' + fmtR(totalGeral);
 
   var html = filtered.slice(0, 500).map(function(p) {
     var tipoTxt = p.tipo === 'dentro'
@@ -2665,7 +2665,7 @@ function renderPagamentos() {
       '<td class="r" style="font-weight:700">'+fmtR(p.valor_total)+'</td>' +
     '</tr>';
   }).join('');
-  document.getElementById('tbody-pagamentos').innerHTML = html || '<tr><td colspan="9" class="empty">Nenhum pagamento previsto no filtro</td></tr>';
+  document.getElementById('tbody-regua-pagamentos').innerHTML = html || '<tr><td colspan="9" class="empty">Nenhum pagamento previsto no filtro</td></tr>';
 
   // Atualiza chip "SEM DATA" da tab pagamentos (info only, nao filtra a lista)
   var elChip = document.getElementById('chip-pag-sem-data');
