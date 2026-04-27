@@ -455,7 +455,7 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
         <button class="chip on" data-tipo="tecido" onclick="toggleInsumoTipo(this)">Tecidos</button>
         <button class="chip" data-tipo="aviamento" onclick="toggleInsumoTipo(this)">Aviamentos</button>
       </div>
-      <input type="text" id="flt-insumo-busca" class="dinput" placeholder="Buscar tecido, cor..." oninput="renderInsumos()">
+      <input type="text" id="flt-insumo-busca" class="dinput" placeholder="Buscar tecido, cor, NF, fornecedor..." oninput="renderInsumos()">
       <button class="btnf ghost" style="font-size:11px;padding:6px 10px" onclick="expandirTodosInsumos()">Expandir tudo</button>
       <button class="btnf ghost" style="font-size:11px;padding:6px 10px" onclick="colapsarTodosInsumos()">Colapsar tudo</button>
       <button class="btnf" onclick="openDrawer('novo-insumo')">+ Cadastrar Insumo</button>
@@ -2104,7 +2104,15 @@ function renderInsumos() {
     }
     if (busca) {
       var q = busca.toLowerCase();
-      return (i.nome || '').toLowerCase().includes(q) || (i.cor || '').toLowerCase().includes(q);
+      var fornNome = '';
+      if (i.fornecedor_id) {
+        var forn = (STATE.fornecedores || []).find(function(f){return f.id === i.fornecedor_id;});
+        if (forn && forn.nome) fornNome = forn.nome.toLowerCase();
+      }
+      return (i.nome || '').toLowerCase().includes(q)
+        || (i.cor || '').toLowerCase().includes(q)
+        || (i.numero_nf || '').toLowerCase().includes(q)
+        || fornNome.includes(q);
     }
     return true;
   });
@@ -3311,6 +3319,40 @@ function configurarBtnExcluir(handler, label) {
 }
 
 // ═══ Helpers produtos/grades ═══
+// Retorna a lista de tecidos permitidos pra um SKU pai, em ordem de prioridade:
+// 1. BOM (consumo_tecido) — fonte da verdade
+// 2. Histórico de OPs com este SKU (qualquer status, exclui cancelado)
+// 3. estoque_insumos.skus_pai (legado — fallback)
+// Retorna array de nomes únicos. Vazio = sem restrição (todos os tecidos cadastrados).
+function tecidosPermitidosParaSku(sku) {
+  if (!sku) return [];
+  var nomesSet = {};
+  var prioridade = []; // pra preservar ordem (BOM primeiro)
+
+  function add(nome) {
+    if (!nome) return;
+    var t = nome.trim();
+    if (!t || nomesSet[t.toUpperCase()]) return;
+    nomesSet[t.toUpperCase()] = 1;
+    prioridade.push(t);
+  }
+
+  // 1. BOM
+  (STATE.consumo || []).forEach(function(c) {
+    if (c.sku_produto === sku && c.ativo !== false) add(c.tecido_nome);
+  });
+  // 2. Histórico de OPs
+  (STATE.ops || []).forEach(function(o) {
+    if (o.sku_produto === sku && o.status !== 'Cancelado' && o.tecido) add(o.tecido);
+  });
+  // 3. Insumos com skus_pai contendo este SKU (legado)
+  (STATE.insumos || []).forEach(function(i) {
+    if (i.tipo !== 'tecido') return;
+    if (i.skus_pai && i.skus_pai.indexOf(sku) >= 0) add(i.nome);
+  });
+  return prioridade;
+}
+
 // Retorna o consumo_por_peca da ultima OP Entregue do SKU.
 // Se nao houver OP Entregue, cai no BOM (consumo_tecido).
 function ultimoConsumoDoSku(sku) {
@@ -3649,15 +3691,30 @@ function onProdutoOPChange() {
         dlTec.innerHTML = '';
         if (tecInput) tecInput.placeholder = 'Selecione um produto primeiro';
       } else {
-        var nomesSet = {};
+        // Tecidos permitidos = BOM + histórico do produto (associação produto↔tecido)
+        var permitidos = tecidosPermitidosParaSku(sku);
+        // Filtra só os que tem insumo cadastrado (precisa estar em STATE.insumos)
+        var insumosNomesSet = {};
         (STATE.insumos || []).forEach(function(i) {
-          if (i.tipo !== 'tecido') return;
-          if (i.skus_pai && i.skus_pai.length > 0 && i.skus_pai.indexOf(sku) < 0) return;
-          if (i.nome) nomesSet[i.nome.trim()] = 1;
+          if (i.tipo === 'tecido' && i.nome) insumosNomesSet[i.nome.trim().toUpperCase()] = 1;
         });
-        var nomes = Object.keys(nomesSet).sort();
+        var nomes = permitidos.filter(function(n){ return insumosNomesSet[n.toUpperCase()]; });
+        // Fallback: se nada foi permitido (produto sem histórico/BOM), mostra tecidos com skus_pai NULL
+        if (!nomes.length) {
+          var fallback = {};
+          (STATE.insumos || []).forEach(function(i) {
+            if (i.tipo !== 'tecido') return;
+            if (!i.skus_pai || i.skus_pai.length === 0) {
+              if (i.nome) fallback[i.nome.trim()] = 1;
+            }
+          });
+          nomes = Object.keys(fallback).sort();
+        }
         dlTec.innerHTML = nomes.map(function(n){return '<option value="'+n.replace(/"/g,'&quot;')+'">';}).join('');
-        if (tecInput) tecInput.placeholder = nomes.length ? 'Digite pra buscar tecido...' : 'Nenhum tecido cadastrado';
+        if (tecInput) {
+          if (nomes.length) tecInput.placeholder = 'Digite pra buscar (' + nomes.length + ' tecido' + (nomes.length>1?'s':'') + ' associado' + (nomes.length>1?'s':'') + ')';
+          else tecInput.placeholder = 'Nenhum tecido associado a este produto';
+        }
       }
     }
     atualizarCoresTecidoRow(idx);
@@ -3681,11 +3738,12 @@ function atualizarCoresTecidoRow(idx) {
     atualizarSaldoRow(idx);
     return;
   }
-  // Só insumos do tecido com saldo > 0 (NFs ainda em estoque)
+  // Só insumos do tecido com saldo > 0 (NFs ainda em estoque).
+  // Nota: filtro por sku já foi feito no datalist via tecidosPermitidosParaSku — aqui aceitamos
+  // todas as variantes (NFs/cores) do tecido escolhido, independente de skus_pai.
   var disponiveis = (STATE.insumos || []).filter(function(i) {
     return i.tipo === 'tecido' && (i.nome||'').trim() === nomeTecido &&
-      (i.quantidade_atual || 0) > 0 &&
-      (!sku || !i.skus_pai || i.skus_pai.length === 0 || i.skus_pai.indexOf(sku) >= 0);
+      (i.quantidade_atual || 0) > 0;
   });
   // Agrupar por cor pra montar <optgroup> mas cada NF é uma <option> separada
   var porCor = {};
