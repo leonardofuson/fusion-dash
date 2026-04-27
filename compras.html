@@ -3660,7 +3660,7 @@ function imprimirOPFechamento(opId) {
     '<div class="row"><div><div class="lbl">Valor Costura/Peça</div><div class="val">'+fmtR(vt)+'</div></div>' +
       '<div><div class="lbl">Valor Total Pago</div><div class="val">'+fmtR(qtdEnt*vt)+'</div></div></div>' +
     '<div class="sig"><div>Costureiro — '+costu+'</div><div>Fusion Grupo — Recebido por</div></div>' +
-    '<script>window.onload=function(){window.print();}</script>' +
+    '<scr'+'ipt>window.onload=function(){window.print();}<\/scr'+'ipt>' +
     '</body></html>';
   var w = window.open('', '_blank');
   w.document.write(html);
