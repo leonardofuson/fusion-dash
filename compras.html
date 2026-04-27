@@ -2758,6 +2758,9 @@ function openDrawer(type) {
 function closeDrawer() {
   document.getElementById('drawer-overlay').classList.remove('open');
   STATE.drawerType = null;
+  STATE.editingOp = null;
+  STATE.editingInsumo = null;
+  STATE.alocandoInsumoId = null;
   configurarBtnExcluir(null);
 }
 
@@ -4027,6 +4030,13 @@ async function submitDrawer() {
       if (movsExtras.length) {
         try { await postSupabase('movimentacao_insumos', movsExtras); } catch (e) { console.warn('Falha ao registrar movimentacao de tecido:', e); }
       }
+      // Preserva visualização: garante que o grupo da OP editada continue expanded no Gantt.
+      // Se o produto foi canonizado (ex: "Calça Sarja " → "Calça Sarja"), a OP migra de grupo —
+      // expandimos ambos pra ela não "sumir" da view.
+      var prodAntigoGantt = ((op.produto || op.sku_produto) || '').trim();
+      var prodNovoGantt = ((body.produto || body.sku_produto) || '').trim();
+      if (prodAntigoGantt) STATE.ganttExpanded[prodAntigoGantt] = true;
+      if (prodNovoGantt && prodNovoGantt !== prodAntigoGantt) STATE.ganttExpanded[prodNovoGantt] = true;
     } else if (type === 'nova-op') {
       var sku = extrairSkuProduto(document.getElementById('f-nova-produto').value);
       if (!sku) { alert('Selecione um produto (digite o nome ou SKU)'); btn.textContent = 'Salvar'; btn.disabled = false; return; }
@@ -4099,6 +4109,10 @@ async function submitDrawer() {
 
       var opsCriadas = await postSupabase('ordens_producao', ops);
       var opsArr = Array.isArray(opsCriadas) ? opsCriadas : [opsCriadas];
+
+      // Preserva visualização no Gantt — expande o grupo do produto recém-criado
+      var prodNovaOPGantt = (prodInfo && prodInfo.nome ? prodInfo.nome : sku || '').trim();
+      if (prodNovaOPGantt) STATE.ganttExpanded[prodNovaOPGantt] = true;
 
       // Movs de envio só pra qtde que precisa fisicamente vir do CD.
       // Se o tecido já está no costureiro (pré-alocado), não duplica movs.
