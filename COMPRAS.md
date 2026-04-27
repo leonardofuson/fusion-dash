@@ -4,16 +4,17 @@
 
 ## Estrutura
 
-Arquivo: [`compras.html`](compras.html) (~183 KB, maior arquivo do projeto). 6 abas:
+Arquivo: [`compras.html`](compras.html) (~3800 linhas, maior arquivo do projeto). 7 abas:
 
 | Aba | Função |
 |---|---|
-| Pipeline | Gantt por costureiro — OPs ativas em janela de tempo |
-| Costureiros | Cadastro/edição de facções (capacidade, SKUs habilitados) |
-| Insumos | Compras de tecido (OCs) — drawer de cadastro/edição |
+| Pipeline | Gantt por costureiro — OPs ativas em janela de tempo. Botão "📦 Registrar entrega" no footer do drawer de Editar OP (só aparece se tem saldo pendente) |
+| Pagamentos | Régua D+15 (com NF) / D+30 (sem NF) baseada em `data_entrega_real` ou `data_prevista_entrega` |
+| Insumos | Compras de tecido (OCs) — coluna "Localização" + botões Editar/Alocar/Excluir por linha |
+| Histórico | Listagem cronológica de OCs/OPs com filtros e drag-to-scroll |
 | Planejamento | Sugestões do MRP (`planejamento_producao`) — botões "Criar OP" e "Comprar tecido" pré-preenchem drawer |
 | Custos | RPC `recalcular_custos_sku()` — botão "Recalcular" força refresh manual |
-| Histórico | Listagem cronológica de OCs/OPs com filtros e drag-to-scroll |
+| Fornecedores | Cadastro |
 
 ## ⚠️ JWT autoRefresh — padrão obrigatório
 
@@ -46,12 +47,50 @@ const r = await fetch(url, {
 
 | Tabela | Operações |
 |---|---|
-| `ordens_compra` | INSERT (Insumos: nova compra de tecido), UPDATE (edição), soft-delete |
-| `ordens_producao` | INSERT (Planejamento: criar OP, ou direto), UPDATE (registrar entrega parcial, mudar status) |
-| `costureiros` | INSERT/UPDATE (Costureiros: cadastro de facção) |
-| `estoque_insumos` | INSERT/UPDATE (entrada de tecido) — derivado de `ordens_compra` |
+| `ordens_producao` | INSERT (Planejamento ou Nova OP), UPDATE (edição/transição de status), DELETE (com inversão de movs) |
+| `producao_entregas` | INSERT (entrega parcial/total), UPDATE (corrigir entrega passada), DELETE (cancelar entrega) |
+| `movimentacao_insumos` | INSERT (todos os fluxos abaixo geram event log), DELETE (só ao excluir insumo) |
+| `estoque_insumos` | INSERT (nova compra), PATCH (edição metadados — saldo NÃO é editado direto) |
+| `costureiros` | INSERT/UPDATE |
 
 Schema das tabelas em [../SCHEMA.md](../SCHEMA.md). Vocabulário de status em [../fusion-sync/MRP.md](../fusion-sync/MRP.md).
+
+## Fluxos críticos (movimentação de tecido)
+
+**Princípio**: `estoque_insumos.quantidade_atual` é mantido por trigger em `movimentacao_insumos`. **NUNCA fazer PATCH direto** em `quantidade_atual` — sempre via mov, pra preservar audit trail.
+
+### Tipos de mov ([compras.html](compras.html))
+
+| `tipo_mov` | Quando | Sinal | Localização |
+|---|---|---|---|
+| `compra` | Cadastro de novo insumo | + | localização default |
+| `saldo_inicial` | Backfill / migração | + | local atual |
+| `envio_costureiro` | Criar OP (par -CD/+costureiro) ou "Alocar" sem OP | par neg/pos | CD FUSION → costureiro |
+| `consumo_op` | Entrega parcial ou total registrada | − | costureiro (proporcional `qty × consumo_por_peca`) |
+| `retorno_cd` | Cancelamento ou exclusão de OP — espelha as `envio_costureiro` originais (sinal oposto, mesma localização) | par invertido | volta pro local de origem |
+| `ajuste_compra` | Editar "Total Comprado" no drawer de Insumo | ± delta | localização default |
+
+### Criação de OP (smart origin)
+Se costureiro **já tem saldo** do insumo (ex: pré-alocado via "Alocar tecido"), nenhuma `envio_costureiro` é gerada — só pra qty que **falta vir do CD**. Isso garante que o retorno na exclusão coloca o tecido onde realmente estava.
+
+### Exclusão de OP / cancelamento
+1. Busca movs `envio_costureiro` com `ordem_producao_id=<X>`
+2. Inverte cada uma (sinal oposto, mesma `localizacao`) — gera mov `retorno_cd`
+3. Para exclusão: PATCH movs históricas → `ordem_producao_id=NULL` (preserva auditoria, libera FK)
+4. DELETE OP
+
+### Entrega parcial
+Drawer "Registrar entrega" tem radio **Parcial / Total**:
+- **Parcial**: INSERT em `producao_entregas` + mov `consumo_op` proporcional (`qty × consumo_por_peca`). OP fica `Em Produção`.
+- **Total**: mesmas ações + PATCH OP com `status='Entregue'`, `data_entrega_real`, `mes_ano_entrega`. Preview de diff (projetado vs total) antes de salvar.
+
+### Editar / excluir entrega passada
+Cada item do histórico tem botões `Editar` e `Excluir`:
+- **Editar**: PATCH `producao_entregas` + mov de delta (`(qty_nova − qty_antiga) × consumo_por_peca`) — sinal flip pra ajustar saldo do costureiro.
+- **Excluir**: mov reversa (`+qty × consumo_por_peca`) + DELETE em `producao_entregas`. Trigger DB recalcula `qtde_pecas_entregues`.
+
+## Histórico de movimentações
+Drawer de Editar Insumo carrega últimos 200 movs daquele insumo via `movimentacao_insumos?insumo_id=eq.X&order=criado_em.desc`. Mostra Data / Tipo / OP / Local / Qtd / Observação. **Único lugar** pra auditar o event log — futuramente pode replicar no drawer de Editar OP.
 
 ## Cache local de preço por costureiro/SKU
 
