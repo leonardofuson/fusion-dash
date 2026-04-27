@@ -225,6 +225,9 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
 .chip{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;border:1px solid var(--bdr);background:transparent;color:var(--txt2);cursor:pointer;transition:all 0.15s;}
 .chip:hover{border-color:var(--indigo);color:var(--indigo);}
 .chip.on{background:var(--indigo);border-color:var(--indigo);color:#fff;box-shadow:0 0 10px rgba(99,102,241,0.25);}
+.chip.alert{background:rgba(245,158,11,0.12);border-color:rgba(245,158,11,0.5);color:#f59e0b;text-transform:uppercase;letter-spacing:0.04em;}
+.chip.alert:hover{border-color:#f59e0b;color:#f59e0b;background:rgba(245,158,11,0.18);}
+.chip.alert.on{background:#f59e0b;border-color:#f59e0b;color:#fff;box-shadow:0 0 14px rgba(245,158,11,0.45);}
 .dinput,.dselect{background:var(--bg);border:1px solid var(--bdr);border-radius:8px;padding:7px 12px;font-size:12px;color:var(--txt1);font-family:inherit;outline:none;}
 .dselect{min-width:150px;cursor:pointer;}
 .dinput:focus,.dselect:focus{border-color:var(--indigo);box-shadow:0 0 0 3px rgba(99,102,241,0.12);}
@@ -318,6 +321,7 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
   <!-- Tab Navigation -->
   <nav class="tab-nav" id="tab-nav">
     <button class="tab-btn active" data-tab="pipeline">Pipeline <span class="badge" id="badge-pipeline">0</span></button>
+    <button class="tab-btn" data-tab="pagamentos">Pagamentos <span class="badge" id="badge-pagamentos">0</span></button>
     <button class="tab-btn" data-tab="insumos">Insumos</button>
     <button class="tab-btn" data-tab="historico">Histórico</button>
     <button class="tab-btn" data-tab="planejamento">Planejamento</button>
@@ -345,7 +349,7 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
             <select id="flt-produto-gantt" class="dselect" onchange="renderGantt();renderOPsLista()"><option value="">Todos produtos</option></select>
             <select id="flt-costureiro-gantt" class="dselect" onchange="renderGantt();renderOPsLista()"><option value="">Todos costureiros</option></select>
             <select id="flt-status-op" class="dselect" onchange="renderGantt();renderOPsLista()"><option value="">Todos status</option></select>
-            <button class="chip" id="chip-sem-data" onclick="toggleSemDataChip()">SEM DATA DE ENVIO</button>
+            <button class="chip alert" id="chip-sem-data" onclick="toggleSemDataChip()">SEM DATA DE ENVIO</button>
             <button class="btnf ghost" onclick="limparFiltrosPipeline()">Limpar</button>
             <span style="margin-left:auto;display:flex;gap:4px;">
               <button class="btnf ghost" onclick="expandTodosGantt()" style="font-size:11px;padding:6px 10px;">Expandir tudo</button>
@@ -410,6 +414,44 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
         <table class="tb"><thead><tr>
           <th>Fornecedor</th><th class="r">Ordens</th><th class="r">Volume Total</th><th class="r">Valor Total</th><th class="r">Preço Médio</th>
         </tr></thead><tbody id="tbody-fornecedores"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ TAB: PAGAMENTOS ═══════════════ -->
+  <div class="tab-panel" id="panel-pagamentos">
+    <div class="kpi-grid" id="kpis-pagamentos"></div>
+    <div class="filtros" style="flex-wrap:wrap">
+      <div style="display:flex;gap:6px;">
+        <button class="chip on" data-pgper="30" onclick="togglePagPeriodo(this)">Próx 30d</button>
+        <button class="chip" data-pgper="60" onclick="togglePagPeriodo(this)">Próx 60d</button>
+        <button class="chip" data-pgper="90" onclick="togglePagPeriodo(this)">Próx 90d</button>
+        <button class="chip" data-pgper="all" onclick="togglePagPeriodo(this)">Todos</button>
+      </div>
+      <select id="flt-pag-tipo" class="dselect" onchange="renderPagamentos()">
+        <option value="">Todos tipos</option>
+        <option value="dentro">Por dentro (com NF)</option>
+        <option value="fora">Por fora (sem NF)</option>
+      </select>
+      <select id="flt-pag-costureiro" class="dselect" onchange="renderPagamentos()">
+        <option value="">Todos costureiros</option>
+      </select>
+      <button class="chip alert" id="chip-pag-sem-data" onclick="togglePagSemDataChip()">SEM DATA — não projeta</button>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Régua de Pagamentos<small id="pag-count" style="margin-left:6px;color:var(--txt3)"></small></span></div>
+      <div class="tb-wrap tb-wrap-scroll">
+        <table class="tb"><thead><tr>
+          <th>Data Pgto</th>
+          <th>Costureiro</th>
+          <th>OP #</th>
+          <th>Produto</th>
+          <th>Cor</th>
+          <th class="r">Qtd Pç</th>
+          <th>Tipo</th>
+          <th class="r">R$/Pç</th>
+          <th class="r">Total</th>
+        </tr></thead><tbody id="tbody-pagamentos"></tbody></table>
       </div>
     </div>
   </div>
@@ -666,8 +708,10 @@ function renderAll() {
   renderHistorico();
   renderPlanejamento();
   renderCustos();
+  renderPagamentos();
   populateFilters();
   populateHistoricoFilters();
+  populatePagamentosFilters();
   updateSemDataChipCount();
 }
 
@@ -692,6 +736,15 @@ function limparFiltrosPipeline() {
   document.getElementById('flt-status-op').value='';
   STATE.kpiFilter = null;
   renderPipeline();
+}
+
+// Soma valor_costura_dentro + valor_costura_fora e atualiza display do total (Sprint 5)
+function updateValorTotalOP(prefix) {
+  var vd = parseFloat((document.getElementById('f-'+prefix+'-vd') || {}).value) || 0;
+  var vf = parseFloat((document.getElementById('f-'+prefix+'-vf') || {}).value) || 0;
+  var t = (vd + vf).toFixed(2);
+  var el = document.getElementById('f-'+prefix+'-vt');
+  if (el) el.value = t;
 }
 
 // ═══════════════ HELPERS ═══════════════
@@ -2463,6 +2516,128 @@ function populateFilters() {
   if (selC) selC.innerHTML = '<option value="">Todos costureiros</option>' + STATE.costureiros.map(function(c) { return '<option value="' + c.id + '">' + c.nome + '</option>'; }).join('');
 }
 
+// ═══════════════ TAB: PAGAMENTOS (Sprint 5) ═══════════════
+// Régua de fluxo de caixa: D+15 (por dentro/com NF) + D+30 (por fora/sem NF)
+// a partir de COALESCE(data_entrega_real, data_prevista_entrega)
+
+function gerarPagamentosFromOps() {
+  // Retorna array de pagamentos projetados {data, costureiro_id, costureiro_nome, op_id, produto, cor, qtd, tipo, valor_unit, valor_total}
+  var pagamentos = [];
+  (STATE.ops || []).forEach(function(o) {
+    if (o.status === 'Cancelado' || o.status === 'Devolvido Fornecedor') return;
+    var refDate = o.data_entrega_real || o.data_prevista_entrega;
+    if (!refDate) return; // sem data não projeta
+    var qtd = parseFloat(o.qtde_pecas) || 0;
+    if (qtd <= 0) return;
+    var vd = o.valor_costura_dentro != null ? parseFloat(o.valor_costura_dentro) : null;
+    var vf = o.valor_costura_fora != null ? parseFloat(o.valor_costura_fora) : null;
+    // Fallback: se nem dentro/fora preenchido, mas valor_unitario sim, considera tudo como "fora" (sem NF) — D+30
+    if (vd == null && vf == null && o.valor_unitario) {
+      vf = parseFloat(o.valor_unitario);
+    }
+    var costNome = costuName(o.costureiro_id);
+    var base = { costureiro_id: o.costureiro_id, costureiro_nome: costNome, op_id: o.id, produto: o.produto, cor: o.cor, qtd: qtd };
+    if (vd && vd > 0) {
+      var d = new Date(refDate); d.setDate(d.getDate() + 15);
+      pagamentos.push(Object.assign({}, base, { data: d.toISOString().slice(0,10), tipo: 'dentro', valor_unit: vd, valor_total: qtd * vd }));
+    }
+    if (vf && vf > 0) {
+      var d2 = new Date(refDate); d2.setDate(d2.getDate() + 30);
+      pagamentos.push(Object.assign({}, base, { data: d2.toISOString().slice(0,10), tipo: 'fora', valor_unit: vf, valor_total: qtd * vf }));
+    }
+  });
+  return pagamentos.sort(function(a,b){ return a.data.localeCompare(b.data); });
+}
+
+function togglePagPeriodo(el) {
+  document.querySelectorAll('.chip[data-pgper]').forEach(function(c){ c.classList.remove('on'); });
+  el.classList.add('on');
+  renderPagamentos();
+}
+function togglePagSemDataChip() {
+  STATE.pagSemDataFilt = !STATE.pagSemDataFilt;
+  renderPagamentos();
+}
+
+function populatePagamentosFilters() {
+  var sel = document.getElementById('flt-pag-costureiro');
+  if (!sel) return;
+  var nomes = {};
+  (STATE.ops || []).forEach(function(o) {
+    if (o.status === 'Cancelado' || o.status === 'Devolvido Fornecedor') return;
+    var n = costuName(o.costureiro_id);
+    if (n && n !== '—') nomes[n] = 1;
+  });
+  sel.innerHTML = '<option value="">Todos costureiros</option>' + Object.keys(nomes).sort().map(function(n){ return '<option value="'+n+'">'+n+'</option>'; }).join('');
+}
+
+function renderPagamentos() {
+  var todos = gerarPagamentosFromOps();
+  // Periodo: chip ativo
+  var perEl = document.querySelector('.chip[data-pgper].on');
+  var per = perEl ? perEl.dataset.pgper : '30';
+  var hoje = new Date(); hoje.setHours(0,0,0,0);
+  var corteData = null;
+  if (per !== 'all') {
+    corteData = new Date(hoje); corteData.setDate(corteData.getDate() + parseInt(per));
+  }
+  var fTipo = (document.getElementById('flt-pag-tipo') || {}).value || '';
+  var fCost = (document.getElementById('flt-pag-costureiro') || {}).value || '';
+
+  var filtered = todos.filter(function(p) {
+    var d = new Date(p.data);
+    if (corteData && d > corteData) return false;
+    if (fTipo && p.tipo !== fTipo) return false;
+    if (fCost && p.costureiro_nome !== fCost) return false;
+    return true;
+  });
+
+  // KPIs
+  var totalDentro30 = todos.filter(function(p){ var d=new Date(p.data); var c=new Date(hoje); c.setDate(c.getDate()+30); return p.tipo==='dentro' && d<=c; }).reduce(function(s,p){return s+p.valor_total;},0);
+  var totalFora30 = todos.filter(function(p){ var d=new Date(p.data); var c=new Date(hoje); c.setDate(c.getDate()+30); return p.tipo==='fora' && d<=c; }).reduce(function(s,p){return s+p.valor_total;},0);
+  var totalGeral = filtered.reduce(function(s,p){return s+p.valor_total;},0);
+  var opsSemData = (STATE.ops || []).filter(function(o){ return ['Cancelado','Devolvido Fornecedor','Entregue'].indexOf(o.status)<0 && !o.data_prevista_entrega && !o.data_entrega_real; }).length;
+  var opsSemCusto = (STATE.ops || []).filter(function(o){ return ['Cancelado','Devolvido Fornecedor'].indexOf(o.status)<0 && !o.valor_costura_dentro && !o.valor_costura_fora && !o.valor_unitario; }).length;
+
+  document.getElementById('kpis-pagamentos').innerHTML = [
+    kpiHtml('A pagar (período)', fmtR(totalGeral), 'no filtro selecionado', '--kpi-accent:var(--indigo)'),
+    kpiHtml('Por dentro · 30d', fmtR(totalDentro30), 'com NF — D+15', '--kpi-accent:var(--green)'),
+    kpiHtml('Por fora · 30d', fmtR(totalFora30), 'sem NF — D+30', '--kpi-accent:var(--purple)'),
+    kpiHtml('OPs sem data', opsSemData, opsSemData > 0 ? 'não projetadas' : 'todas com data', '--kpi-accent:' + (opsSemData > 0 ? 'var(--orange)' : 'var(--green)')),
+    kpiHtml('OPs sem custo', opsSemCusto, opsSemCusto > 0 ? 'preencher dentro/fora' : 'todas com custo', '--kpi-accent:' + (opsSemCusto > 0 ? 'var(--red)' : 'var(--green)')),
+  ].join('');
+
+  document.getElementById('badge-pagamentos').textContent = filtered.length;
+  document.getElementById('pag-count').textContent = ' — ' + filtered.length + ' pagamentos · total ' + fmtR(totalGeral);
+
+  var html = filtered.slice(0, 500).map(function(p) {
+    var tipoTxt = p.tipo === 'dentro' ? '<span style="color:var(--green);font-weight:600">Por dentro</span>' : '<span style="color:var(--purple);font-weight:600">Por fora</span>';
+    var dataFmt = formatDate(p.data);
+    var dataDest = '';
+    var dt = new Date(p.data);
+    if (dt < hoje) dataDest = 'color:var(--red);font-weight:700';
+    return '<tr style="cursor:pointer" onclick="openDrawerEdit('+p.op_id+')" title="Click para editar OP">' +
+      '<td style="'+dataDest+'">'+dataFmt+'</td>' +
+      '<td>'+(p.costureiro_nome || '—')+'</td>' +
+      '<td class="dim">#'+p.op_id+'</td>' +
+      '<td>'+(p.produto || '—')+'</td>' +
+      '<td class="dim">'+(p.cor || '—')+'</td>' +
+      '<td class="r">'+fmt(p.qtd)+'</td>' +
+      '<td>'+tipoTxt+'</td>' +
+      '<td class="r">'+fmtR(p.valor_unit)+'</td>' +
+      '<td class="r" style="font-weight:700">'+fmtR(p.valor_total)+'</td>' +
+    '</tr>';
+  }).join('');
+  document.getElementById('tbody-pagamentos').innerHTML = html || '<tr><td colspan="9" class="empty">Nenhum pagamento previsto no filtro</td></tr>';
+
+  // Atualiza chip "SEM DATA" da tab pagamentos (info only, nao filtra a lista)
+  var elChip = document.getElementById('chip-pag-sem-data');
+  if (elChip) {
+    elChip.innerHTML = 'SEM DATA — não projeta <span style="opacity:0.6;font-weight:500">'+opsSemData+'</span>';
+    if (STATE.pagSemDataFilt) elChip.classList.add('on'); else elChip.classList.remove('on');
+  }
+}
+
 // ═══════════════ TAB SWITCHING ═══════════════
 document.querySelectorAll('.tab-btn').forEach(function(btn) {
   btn.addEventListener('click', function() {
@@ -2763,11 +2938,16 @@ function buildOPForm() {
     '<div class="form-group"><label class="form-label">Produto <small style="color:var(--txt3);font-weight:400">(digite pra buscar — fabricação própria)</small></label>' +
       '<input class="form-input" id="f-nova-produto" list="dl-produtos-fab" placeholder="ex: CLAF, calça, duna..." oninput="onProdutoOPChange()" autocomplete="off">' +
     '</div>' +
+    '<div class="form-group"><label class="form-label">Costureiro <small style="color:var(--txt3);font-weight:400">(digite pra buscar)</small></label>' +
+      '<input class="form-input" id="f-nova-costureiro" list="dl-costureiros" placeholder="ex: GJ, MF, Deb..." autocomplete="off"></div>' +
+    '<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.04em;margin:8px 0 4px">Custo de costura por peça</div>' +
     '<div class="form-row">' +
-      '<div class="form-group"><label class="form-label">Costureiro <small style="color:var(--txt3);font-weight:400">(digite pra buscar)</small></label>' +
-        '<input class="form-input" id="f-nova-costureiro" list="dl-costureiros" placeholder="ex: GJ, MF, Deb..." autocomplete="off"></div>' +
-      '<div class="form-group"><label class="form-label">Valor/Peça (R$)</label>' +
-        '<input class="form-input" id="f-valor" type="number" step="0.01" placeholder="18.00"></div>' +
+      '<div class="form-group"><label class="form-label">Por dentro <small style="color:var(--txt3);font-weight:400">(com NF)</small></label>' +
+        '<input class="form-input" id="f-nova-vd" type="number" step="0.01" placeholder="0.00" oninput="updateValorTotalOP(\'nova\')"></div>' +
+      '<div class="form-group"><label class="form-label">Por fora <small style="color:var(--txt3);font-weight:400">(sem NF)</small></label>' +
+        '<input class="form-input" id="f-nova-vf" type="number" step="0.01" placeholder="0.00" oninput="updateValorTotalOP(\'nova\')"></div>' +
+      '<div class="form-group"><label class="form-label">Total/Peça</label>' +
+        '<input class="form-input" id="f-nova-vt" type="text" readonly style="background:var(--bg3);color:var(--indigo);font-weight:700" value="0.00"></div>' +
     '</div>' +
     '<div class="form-row">' +
       '<div class="form-group"><label class="form-label">Data Recebimento do Tecido</label>' +
@@ -3348,8 +3528,16 @@ function buildEditOPForm(op) {
     '<div class="form-row"><div class="form-group"><label class="form-label">Data Recebimento do Tecido</label><input class="form-input" type="date" id="f-edit-envio" value="' + (op.data_envio_tecido || '') + '"></div>' +
     '<div class="form-group"><label class="form-label">Data Estimada de Entrega <small style="color:var(--txt3);font-weight:400">(opcional)</small></label><input class="form-input" type="date" id="f-edit-prevista" value="' + (op.data_prevista_entrega || '') + '"></div></div>' +
     '<div class="form-row"><div class="form-group"><label class="form-label">Status</label><select class="form-select" id="f-edit-status">' + statusOpts + '</select></div>' +
-    '<div class="form-group"><label class="form-label">Valor/Peça (R$)</label><input class="form-input" type="number" step="0.01" id="f-edit-valor" value="' + (op.valor_unitario || op.valor_peca || '') + '"></div></div>' +
-    '<div class="form-group"><label class="form-label">Corte Externo?</label><select class="form-select" id="f-edit-corte"><option value="false"' + (!op.corte_externo ? ' selected' : '') + '>Não</option><option value="true"' + (op.corte_externo ? ' selected' : '') + '>Sim</option></select></div>' +
+    '<div class="form-group"><label class="form-label">Corte Externo?</label><select class="form-select" id="f-edit-corte"><option value="false"' + (!op.corte_externo ? ' selected' : '') + '>Não</option><option value="true"' + (op.corte_externo ? ' selected' : '') + '>Sim</option></select></div></div>' +
+    '<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.04em;margin:8px 0 4px">Custo de costura por peça</div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label class="form-label">Por dentro <small style="color:var(--txt3);font-weight:400">(com NF)</small></label>' +
+        '<input class="form-input" type="number" step="0.01" id="f-edit-vd" value="' + (op.valor_costura_dentro != null ? op.valor_costura_dentro : '') + '" oninput="updateValorTotalOP(\'edit\')"></div>' +
+      '<div class="form-group"><label class="form-label">Por fora <small style="color:var(--txt3);font-weight:400">(sem NF)</small></label>' +
+        '<input class="form-input" type="number" step="0.01" id="f-edit-vf" value="' + (op.valor_costura_fora != null ? op.valor_costura_fora : '') + '" oninput="updateValorTotalOP(\'edit\')"></div>' +
+      '<div class="form-group"><label class="form-label">Total/Peça</label>' +
+        '<input class="form-input" type="text" id="f-edit-vt" readonly style="background:var(--bg3);color:var(--indigo);font-weight:700" value="' + (op.valor_unitario || op.valor_peca || '0.00') + '"></div>' +
+    '</div>' +
     '<div style="margin-top:16px;padding:12px;background:var(--bg);border-radius:8px;font-size:12px;color:var(--txt3)">' +
       '<strong style="color:var(--txt2)">Resumo:</strong> ' + diasRodando(op) + ' dias rodando · ' +
       'Valor total: ' + fmtR(op.valor_total) + ' · Criado em: ' + (op.criado_em ? op.criado_em.slice(0, 10) : '—') +
@@ -3437,8 +3625,10 @@ async function submitDrawer() {
         data_envio_tecido: document.getElementById('f-edit-envio').value || null,
         data_prevista_entrega: document.getElementById('f-edit-prevista').value || null,
         status: document.getElementById('f-edit-status').value,
-        valor_unitario: parseFloat(document.getElementById('f-edit-valor').value) || null,
-        valor_peca: parseFloat(document.getElementById('f-edit-valor').value) || null,
+        valor_costura_dentro: parseFloat(document.getElementById('f-edit-vd').value) || null,
+        valor_costura_fora: parseFloat(document.getElementById('f-edit-vf').value) || null,
+        valor_unitario: parseFloat(document.getElementById('f-edit-vt').value) || null,
+        valor_peca: parseFloat(document.getElementById('f-edit-vt').value) || null,
         corte_externo: document.getElementById('f-edit-corte').value === 'true',
         atualizado_em: new Date().toISOString(),
       };
@@ -3450,7 +3640,9 @@ async function submitDrawer() {
       if (!prodInfo) { alert('Produto "'+sku+'" nao encontrado. Selecione da lista.'); btn.textContent = 'Salvar'; btn.disabled = false; return; }
       var costureiroId = costureiroIdPorNome(document.getElementById('f-nova-costureiro').value);
       if (!costureiroId) { alert('Costureiro nao encontrado. Digite o nome exato ou escolha da lista.'); btn.textContent = 'Salvar'; btn.disabled = false; return; }
-      var valorPeca = parseFloat(document.getElementById('f-valor').value) || null;
+      var valorDentro = parseFloat(document.getElementById('f-nova-vd').value) || null;
+      var valorFora = parseFloat(document.getElementById('f-nova-vf').value) || null;
+      var valorPeca = (valorDentro || 0) + (valorFora || 0); valorPeca = valorPeca > 0 ? valorPeca : null;
       var dataEnvio = document.getElementById('f-data-envio').value || null;
       var dataPrev = document.getElementById('f-data-prevista').value || null;
       var corteExt = document.getElementById('f-corte').value === 'true';
@@ -3486,6 +3678,8 @@ async function submitDrawer() {
           produto: prodInfo ? prodInfo.nome : sku,
           cor: corTexto,
           qtde_pecas: pecasFinal,
+          valor_costura_dentro: valorDentro,
+          valor_costura_fora: valorFora,
           valor_peca: valorPeca, valor_unitario: valorPeca,
           grade_projetada: Object.keys(grade).length ? grade : null,
           data_envio_tecido: dataEnvio,
