@@ -4911,6 +4911,38 @@ async function submitDrawer() {
       var prodNovaOPGantt = (prodInfo && prodInfo.nome ? prodInfo.nome : sku || '').trim();
       if (prodNovaOPGantt) STATE.ganttExpanded[prodNovaOPGantt] = true;
 
+      // Auto-update BOM (consumo_tecido): se a associação SKU↔tecido é nova, registra
+      // pra que apareça no datalist da próxima OP do mesmo produto.
+      try {
+        var bomNovas = [];
+        opsArr.forEach(function(opCriada) {
+          var tecNome = (opCriada.tecido || '').trim();
+          var skuOp = opCriada.sku_produto;
+          var consumo = parseFloat(opCriada.consumo_por_peca) || 0;
+          if (!skuOp || !tecNome || consumo <= 0) return;
+          var jaExiste = (STATE.consumo || []).some(function(c){
+            return c.sku_produto === skuOp
+              && (c.tecido_nome || '').trim().toUpperCase() === tecNome.toUpperCase()
+              && c.ativo !== false;
+          });
+          // Evita duplicatas dentro do mesmo lote (multi-row pra mesma cor)
+          var jaNoLote = bomNovas.some(function(b){ return b.sku_produto === skuOp && b.tecido_nome.toUpperCase() === tecNome.toUpperCase(); });
+          if (!jaExiste && !jaNoLote) {
+            bomNovas.push({
+              sku_produto: skuOp,
+              tecido_nome: tecNome,
+              tipo_tecido: opCriada.tipo_tecido || 'plano',
+              consumo_por_peca: consumo,
+              unidade: opCriada.unidade || (opCriada.tipo_tecido === 'circular' ? 'KG' : 'M'),
+              ativo: true,
+            });
+          }
+        });
+        if (bomNovas.length) {
+          await postSupabase('consumo_tecido', bomNovas);
+        }
+      } catch (e) { console.warn('Falha ao atualizar BOM (consumo_tecido):', e); }
+
       // Movs de envio só pra qtde que precisa fisicamente vir do CD.
       // Se o tecido já está no costureiro (pré-alocado), não duplica movs.
       var costureiroNome = ((STATE.costureiros || []).find(function(c){return c.id===costureiroId;}) || {}).nome || 'Desconhecido';
