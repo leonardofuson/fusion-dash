@@ -1538,17 +1538,78 @@ async function excluirEntrega(entregaId, opId) {
 }
 
 // Abre drawer pra editar um insumo (compra de tecido / aviamento)
-function openDrawerEditInsumo(insumoId) {
+async function openDrawerEditInsumo(insumoId) {
   var insumo = STATE.insumos.find(function(i) { return i.id === insumoId; });
   if (!insumo) return;
   STATE.drawerType = 'edit-insumo';
   STATE.editingInsumo = insumo;
 
   document.getElementById('drawer-title').textContent = 'Editar Compra — ' + (insumo.nome || '—');
-  document.getElementById('drawer-body').innerHTML = buildEditInsumoForm(insumo);
+  document.getElementById('drawer-body').innerHTML = buildEditInsumoForm(insumo) +
+    '<div id="hist-movs-insumo-wrap" style="margin-top:16px"><div style="padding:12px;color:var(--txt3);text-align:center;font-size:12px">Carregando histórico de movimentações...</div></div>';
   document.getElementById('drawer-footer').style.display = 'flex';
   configurarBtnExcluir(function(){ excluirInsumo(insumoId); }, 'Excluir compra');
   document.getElementById('drawer-overlay').classList.add('open');
+
+  // Fetch e renderiza histórico de movs deste insumo
+  try {
+    var rM = await fetch(SB_URL + '/rest/v1/movimentacao_insumos?insumo_id=eq.' + insumoId + '&order=criado_em.desc&limit=200', {
+      headers: await getAuthHeaders()
+    });
+    var movs = rM.ok ? await rM.json() : [];
+    renderHistoricoMovsInsumo(movs, insumo);
+  } catch (e) {
+    var w = document.getElementById('hist-movs-insumo-wrap');
+    if (w) w.innerHTML = '<div style="padding:12px;color:var(--red);font-size:12px">Falha ao carregar histórico: '+e.message+'</div>';
+  }
+}
+
+function renderHistoricoMovsInsumo(movs, insumo) {
+  var wrap = document.getElementById('hist-movs-insumo-wrap');
+  if (!wrap) return;
+  if (!movs.length) {
+    wrap.innerHTML = '<div style="padding:12px;border:1px solid var(--bdr);border-radius:8px;color:var(--txt3);font-size:12px">Sem movimentações registradas pra este insumo.</div>';
+    return;
+  }
+  var tipoLabel = {
+    'compra': '🛒 Compra',
+    'envio_costureiro': '➡ Envio',
+    'consumo_op': '✂ Consumo',
+    'retorno_cd': '⬅ Retorno',
+    'saldo_inicial': '📍 Saldo inicial',
+  };
+  var rows = movs.map(function(m) {
+    var data = m.criado_em ? new Date(m.criado_em).toLocaleDateString('pt-BR') : '—';
+    var qtd = parseFloat(m.quantidade) || 0;
+    var corQtd = qtd > 0 ? 'var(--green)' : 'var(--red)';
+    var sinal = qtd > 0 ? '+' : '';
+    var loc = m.localizacao || '—';
+    var tipoTxt = tipoLabel[m.tipo_mov] || m.tipo_mov;
+    var opLink = m.ordem_producao_id ? ' · OP #'+m.ordem_producao_id : '';
+    var obs = m.observacao ? '<div style="font-size:10px;color:var(--txt3);margin-top:2px">' + m.observacao.replace(/</g,'&lt;') + '</div>' : '';
+    return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04)">' +
+      '<td style="padding:6px 4px;font-size:11px;color:var(--txt3);white-space:nowrap">' + data + '</td>' +
+      '<td style="padding:6px 4px;font-size:11px"><span style="font-weight:600">' + tipoTxt + '</span>' + opLink + obs + '</td>' +
+      '<td style="padding:6px 4px;font-size:11px;color:var(--txt2)">' + loc + '</td>' +
+      '<td style="padding:6px 4px;font-size:11px;text-align:right;font-weight:700;color:'+corQtd+';white-space:nowrap">' + sinal + fmt(qtd) + ' ' + (insumo.unidade||'') + '</td>' +
+    '</tr>';
+  }).join('');
+  wrap.innerHTML =
+    '<div style="padding:12px;border:1px solid var(--bdr);border-radius:8px;background:var(--bg)">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+        '<div style="font-size:13px;font-weight:600;color:var(--txt2)">Histórico de movimentações</div>' +
+        '<small style="color:var(--txt3)">' + movs.length + ' eventos' + (movs.length===200?' (limitado)':'') + '</small>' +
+      '</div>' +
+      '<table style="width:100%;border-collapse:collapse">' +
+        '<thead><tr style="border-bottom:1px solid var(--bdr)">' +
+          '<th style="padding:4px;text-align:left;font-size:10px;color:var(--txt3);font-weight:700;text-transform:uppercase">Data</th>' +
+          '<th style="padding:4px;text-align:left;font-size:10px;color:var(--txt3);font-weight:700;text-transform:uppercase">Tipo / OP</th>' +
+          '<th style="padding:4px;text-align:left;font-size:10px;color:var(--txt3);font-weight:700;text-transform:uppercase">Local</th>' +
+          '<th style="padding:4px;text-align:right;font-size:10px;color:var(--txt3);font-weight:700;text-transform:uppercase">Qtd</th>' +
+        '</tr></thead>' +
+        '<tbody>' + rows + '</tbody>' +
+      '</table>' +
+    '</div>';
 }
 
 // Aloca tecido (insumo) num costureiro sem criar OP. Gera 2 movs envio_costureiro
