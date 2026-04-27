@@ -398,17 +398,6 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
       <div class="card-body" id="costureiro-bars"></div>
     </div>
     <div class="card">
-      <div class="card-header">
-        <span class="card-title">Previsão de Pagamentos</span>
-        <small style="color:var(--txt3)">D+10 (NF) / D+15 (sem NF) a partir da entrega</small>
-      </div>
-      <div class="tb-wrap tb-wrap-scroll">
-        <table class="tb"><thead><tr>
-          <th>Costureiro</th><th>Produto</th><th class="r">Peças</th><th class="r">Valor/pç</th><th class="r">Total</th><th>Tipo NF</th><th>Vencimento Est.</th>
-        </tr></thead><tbody id="tbody-pagamentos"></tbody></table>
-      </div>
-    </div>
-    <div class="card">
       <div class="card-header"><span class="card-title">Top Fornecedores de Tecido</span><small style="color:var(--txt3)">por valor total comprado</small></div>
       <div class="tb-wrap">
         <table class="tb"><thead><tr>
@@ -1464,7 +1453,26 @@ function openDrawerEdit(opId) {
   document.getElementById('drawer-body').innerHTML = buildEditOPForm(op);
   document.getElementById('drawer-footer').style.display = 'flex';
   configurarBtnExcluir(function(){ excluirOP(opId); }, 'Excluir OP');
+  // Botão "Imprimir OP" no footer (Sprint 6)
+  injetarBtnImprimirOP(opId);
   overlay.classList.add('open');
+  // Atualiza diff visual inicial (em caso de status já = Entregue)
+  setTimeout(updateDiffEntrega, 0);
+}
+
+function injetarBtnImprimirOP(opId) {
+  // Adiciona/remove botão "Imprimir OP" no drawer-footer
+  var footer = document.getElementById('drawer-footer');
+  if (!footer) return;
+  var existing = document.getElementById('drawer-btn-imprimir');
+  if (existing) existing.remove();
+  var btn = document.createElement('button');
+  btn.id = 'drawer-btn-imprimir';
+  btn.className = 'btnf ghost';
+  btn.textContent = 'Imprimir OP';
+  btn.style.marginRight = 'auto';
+  btn.onclick = function(){ imprimirOPFechamento(opId); };
+  footer.insertBefore(btn, footer.firstChild);
 }
 
 // ═══════════════ TAB: COSTUREIROS ═══════════════
@@ -1505,24 +1513,7 @@ function renderCostureiros() {
   document.getElementById('costureiro-bars').innerHTML = barsHtml || '<div class="empty">Sem dados</div>';
 
   // Pagamentos previstos
-  renderPagamentos(ops, costureiros);
-}
-
-function renderPagamentos(ops, costureiros) {
-  var ativas = ops.filter(function(o) { return o.status !== 'Entregue'; });
-  var html = ativas.map(function(o) {
-    var c = costureiros.find(function(x) { return x.id === o.costureiro_id; });
-    var tipoNf = c ? (c.tipo_nf || 'com_nf') : 'com_nf';
-    var dias = tipoNf === 'com_nf' ? 10 : 15;
-    var venc = o.data_pagamento || '—';
-    return '<tr><td>' + costuName(o.costureiro_id) + '</td><td class="dim">' + (o.sku_produto || o.produto || '') + '</td>' +
-      '<td class="r">' + fmt(Math.round(o.qtde_pecas || 0)) + '</td>' +
-      '<td class="r">' + fmtR(o.valor_unitario || o.valor_peca) + '</td>' +
-      '<td class="r">' + fmtR(o.valor_total) + '</td>' +
-      '<td>' + (tipoNf === 'com_nf' ? 'NF (D+10)' : 'Sem NF (D+15)') + '</td>' +
-      '<td class="dim">' + venc + '</td></tr>';
-  }).join('');
-  document.getElementById('tbody-pagamentos').innerHTML = html || '<tr><td colspan="7" class="empty">Sem pagamentos pendentes</td></tr>';
+  // (Tabela 'Previsão de Pagamentos' removida 26/04/2026 — substituída pela aba Pagamentos com régua D+15/D+30)
 }
 
 // ═══════════════ TAB: INSUMOS ═══════════════
@@ -2696,6 +2687,9 @@ function openDrawer(type) {
   var overlay = document.getElementById('drawer-overlay');
   var title = document.getElementById('drawer-title');
   var body = document.getElementById('drawer-body');
+  // Limpa botão "Imprimir OP" caso tenha ficado de uma edição anterior
+  var btnImp = document.getElementById('drawer-btn-imprimir');
+  if (btnImp) btnImp.remove();
 
   if (type === 'nova-op') {
     title.textContent = 'Nova Ordem de Produção';
@@ -3560,12 +3554,15 @@ function buildEditOPForm(op) {
       '<div class="form-group"><label class="form-label">Peças Projetadas</label>' +
         '<input class="form-input" type="number" id="f-edit-pecas" value="' + (op.qtde_pecas || '') + '"></div>' +
       '<div class="form-group"><label class="form-label">Peças Entregues</label>' +
-        '<input class="form-input" type="number" id="f-edit-entregues" value="' + (op.qtde_pecas_entregues || 0) + '"></div>' +
+        '<input class="form-input" type="number" id="f-edit-entregues" value="' + (op.qtde_pecas_entregues || 0) + '" oninput="updateDiffEntrega()"></div>' +
     '</div>' +
     '<div class="form-row"><div class="form-group"><label class="form-label">Data Recebimento do Tecido</label><input class="form-input" type="date" id="f-edit-envio" value="' + (op.data_envio_tecido || '') + '"></div>' +
     '<div class="form-group"><label class="form-label">Data Estimada de Entrega <small style="color:var(--txt3);font-weight:400">(opcional)</small></label><input class="form-input" type="date" id="f-edit-prevista" value="' + (op.data_prevista_entrega || '') + '"></div></div>' +
-    '<div class="form-row"><div class="form-group"><label class="form-label">Status</label><select class="form-select" id="f-edit-status">' + statusOpts + '</select></div>' +
-    '<div class="form-group"><label class="form-label">Corte Externo?</label><select class="form-select" id="f-edit-corte"><option value="false"' + (!op.corte_externo ? ' selected' : '') + '>Não</option><option value="true"' + (op.corte_externo ? ' selected' : '') + '>Sim</option></select></div></div>' +
+    '<div class="form-row"><div class="form-group"><label class="form-label">Data de Entrega Real <small style="color:var(--txt3);font-weight:400">(obrigatório p/ Entregue)</small></label>' +
+      '<input class="form-input" type="date" id="f-edit-data-entrega" value="' + (op.data_entrega_real || '') + '" oninput="updateDiffEntrega()"></div>' +
+    '<div class="form-group"><label class="form-label">Status</label><select class="form-select" id="f-edit-status" onchange="updateDiffEntrega()">' + statusOpts + '</select></div></div>' +
+    '<div class="form-row"><div class="form-group" style="flex:0 0 auto"><label class="form-label">Corte Externo?</label><select class="form-select" id="f-edit-corte"><option value="false"' + (!op.corte_externo ? ' selected' : '') + '>Não</option><option value="true"' + (op.corte_externo ? ' selected' : '') + '>Sim</option></select></div></div>' +
+    '<div id="diff-entrega-alert" style="margin:8px 0;display:none"></div>' +
     '<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.04em;margin:8px 0 4px">Custo de costura por peça</div>' +
     '<div class="form-row">' +
       '<div class="form-group"><label class="form-label">Por dentro <small style="color:var(--txt3);font-weight:400">(com NF)</small></label>' +
@@ -3579,6 +3576,95 @@ function buildEditOPForm(op) {
       '<strong style="color:var(--txt2)">Resumo:</strong> ' + diasRodando(op) + ' dias rodando · ' +
       'Valor total: ' + fmtR(op.valor_total) + ' · Criado em: ' + (op.criado_em ? op.criado_em.slice(0, 10) : '—') +
     '</div>';
+}
+
+// Mostra diff (peças e valor) entre projetado vs entregue quando user mexe nos campos
+function updateDiffEntrega() {
+  var op = STATE.editingOp;
+  if (!op) return;
+  var status = (document.getElementById('f-edit-status') || {}).value;
+  var qtdProj = parseFloat((document.getElementById('f-edit-pecas') || {}).value) || 0;
+  var qtdEnt = parseFloat((document.getElementById('f-edit-entregues') || {}).value) || 0;
+  var dataEnt = (document.getElementById('f-edit-data-entrega') || {}).value;
+  var vt = parseFloat((document.getElementById('f-edit-vt') || {}).value) || 0;
+  var alertEl = document.getElementById('diff-entrega-alert');
+  if (!alertEl) return;
+
+  if (status !== 'Entregue') {
+    alertEl.style.display = 'none';
+    return;
+  }
+  // Status = Entregue. Mostrar diff + faltas
+  var avisos = [];
+  if (!dataEnt) avisos.push('<strong style="color:var(--red)">⚠ Falta preencher Data de Entrega Real</strong>');
+  if (!qtdEnt || qtdEnt <= 0) avisos.push('<strong style="color:var(--red)">⚠ Falta preencher Peças Entregues (>0)</strong>');
+
+  var diffPecas = qtdEnt - qtdProj;
+  var diffValor = diffPecas * vt;
+  var diffPct = qtdProj > 0 ? (diffPecas / qtdProj * 100) : 0;
+  var corDiff = diffPecas === 0 ? 'var(--green)' : (diffPecas > 0 ? 'var(--indigo)' : 'var(--orange)');
+  var sinalDiff = diffPecas > 0 ? '+' : '';
+  var diffLabel = diffPecas === 0 ? 'Bate exato' : (diffPecas > 0 ? 'Sobrou' : 'Faltou');
+
+  alertEl.style.display = 'block';
+  alertEl.innerHTML = '<div style="padding:12px;border:1px solid var(--bdr);border-left:3px solid '+corDiff+';border-radius:8px;background:var(--bg)">' +
+    '<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px">Fechamento da OP</div>' +
+    (avisos.length ? '<div style="margin-bottom:8px">' + avisos.join('<br>') + '</div>' : '') +
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;font-size:12px">' +
+      '<div><div style="color:var(--txt3);font-size:10px;text-transform:uppercase">Projetado</div><strong>' + fmt(qtdProj) + ' pç</strong></div>' +
+      '<div><div style="color:var(--txt3);font-size:10px;text-transform:uppercase">Entregue</div><strong>' + fmt(qtdEnt) + ' pç</strong></div>' +
+      '<div><div style="color:var(--txt3);font-size:10px;text-transform:uppercase">' + diffLabel + '</div>' +
+        '<strong style="color:'+corDiff+'">' + sinalDiff + fmt(diffPecas) + ' pç (' + sinalDiff + diffPct.toFixed(1) + '%)</strong>' +
+        (vt > 0 ? '<div style="font-size:10px;color:'+corDiff+';margin-top:2px">' + sinalDiff + fmtR(diffValor) + '</div>' : '') +
+      '</div>' +
+    '</div>' +
+  '</div>';
+}
+
+// Gera versão printable da OP (sprint 6 — sprint 7 vai fazer PDF mais elaborado com jsPDF)
+function imprimirOPFechamento(opId) {
+  var op = STATE.ops.find(function(o) { return o.id === opId; });
+  if (!op) return;
+  var costu = costuName(op.costureiro_id);
+  var qtdProj = parseFloat(op.qtde_pecas) || 0;
+  var qtdEnt = parseFloat(op.qtde_pecas_entregues) || 0;
+  var diff = qtdEnt - qtdProj;
+  var sinal = diff > 0 ? '+' : '';
+  var vt = parseFloat(op.valor_unitario || op.valor_peca) || 0;
+  var diffValor = diff * vt;
+  var html = '<!doctype html><html><head><meta charset="utf-8"><title>OP #'+op.id+' — Fechamento</title>' +
+    '<style>body{font-family:Arial,sans-serif;padding:32px;color:#222;}' +
+    'h1{font-size:18px;border-bottom:2px solid #333;padding-bottom:8px;margin:0 0 16px}' +
+    '.row{display:flex;gap:24px;margin:8px 0}.row > div{flex:1}' +
+    '.lbl{font-size:11px;color:#666;text-transform:uppercase;letter-spacing:0.05em}' +
+    '.val{font-size:14px;font-weight:600;margin-top:2px}' +
+    'table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13px}' +
+    'th,td{border:1px solid #ccc;padding:8px;text-align:left}th{background:#f5f5f5}' +
+    '.diff{background:'+(diff===0?'#e8f5e9':(diff>0?'#e3f2fd':'#fff3e0'))+';padding:12px;border-left:4px solid '+(diff===0?'#22c55e':(diff>0?'#3b82f6':'#f59e0b'))+';margin:16px 0}' +
+    '.sig{margin-top:64px;display:flex;gap:32px}.sig > div{flex:1;border-top:1px solid #333;padding-top:6px;font-size:11px;text-align:center}' +
+    '</style></head><body>' +
+    '<h1>FUSION GRUPO — Ordem de Produção #'+op.id+' (Fechamento)</h1>' +
+    '<div class="row"><div><div class="lbl">Costureiro</div><div class="val">'+costu+'</div></div>' +
+      '<div><div class="lbl">Produto</div><div class="val">'+(op.produto||'')+(op.cor?' / '+op.cor:'')+'</div></div>' +
+      '<div><div class="lbl">Status</div><div class="val">'+op.status+'</div></div></div>' +
+    '<div class="row"><div><div class="lbl">Data Envio Tecido</div><div class="val">'+(op.data_envio_tecido||'—')+'</div></div>' +
+      '<div><div class="lbl">Data Prevista</div><div class="val">'+(op.data_prevista_entrega||'—')+'</div></div>' +
+      '<div><div class="lbl">Data Entrega Real</div><div class="val">'+(op.data_entrega_real||'—')+'</div></div></div>' +
+    '<table><thead><tr><th>Métrica</th><th>Quantidade</th><th>Valor</th></tr></thead><tbody>' +
+      '<tr><td>Projetado</td><td>'+fmt(qtdProj)+' pç</td><td>'+fmtR(qtdProj*vt)+'</td></tr>' +
+      '<tr><td>Entregue</td><td>'+fmt(qtdEnt)+' pç</td><td>'+fmtR(qtdEnt*vt)+'</td></tr>' +
+      '<tr><td><strong>Diferença</strong></td><td><strong>'+sinal+fmt(diff)+' pç</strong></td><td><strong>'+sinal+fmtR(diffValor)+'</strong></td></tr>' +
+    '</tbody></table>' +
+    '<div class="diff"><strong>'+(diff===0?'Quantidade bate exato':(diff>0?'Sobrou '+fmt(diff)+' peça(s)':'Faltaram '+fmt(-diff)+' peça(s)'))+'</strong>'+
+      (diff!==0 && vt>0 ? '<br>Impacto financeiro: '+sinal+fmtR(diffValor) : '')+'</div>' +
+    '<div class="row"><div><div class="lbl">Valor Costura/Peça</div><div class="val">'+fmtR(vt)+'</div></div>' +
+      '<div><div class="lbl">Valor Total Pago</div><div class="val">'+fmtR(qtdEnt*vt)+'</div></div></div>' +
+    '<div class="sig"><div>Costureiro — '+costu+'</div><div>Fusion Grupo — Recebido por</div></div>' +
+    '<script>window.onload=function(){window.print();}</script>' +
+    '</body></html>';
+  var w = window.open('', '_blank');
+  w.document.write(html);
+  w.document.close();
 }
 
 async function excluirOP(opId) {
@@ -3651,17 +3737,26 @@ async function submitDrawer() {
       var skuEdit = document.getElementById('f-edit-produto').value;
       var prodInfoEdit = produtosPais().find(function(p) { return p.sku_pai === skuEdit; });
       var gradeEdit = coletarGrade('edit');
+      var novoStatus = document.getElementById('f-edit-status').value;
+      var qtdEnt = parseInt(document.getElementById('f-edit-entregues').value) || 0;
+      var dataEntregaReal = document.getElementById('f-edit-data-entrega').value || null;
+      // Validation pra fechar como Entregue (Sprint 6)
+      if (novoStatus === 'Entregue') {
+        if (!dataEntregaReal) { alert('Pra fechar como Entregue, preencha a Data de Entrega Real.'); btn.textContent='Salvar'; btn.disabled=false; return; }
+        if (qtdEnt <= 0) { alert('Pra fechar como Entregue, preencha as Peças Entregues (>0).'); btn.textContent='Salvar'; btn.disabled=false; return; }
+      }
       var body = {
         sku_produto: skuEdit,
         produto: prodInfoEdit ? prodInfoEdit.nome : (op.produto || skuEdit),
         cor: document.getElementById('f-edit-cor').value.trim(),
         costureiro_id: parseInt(document.getElementById('f-edit-costureiro').value),
         qtde_pecas: parseFloat(document.getElementById('f-edit-pecas').value),
-        qtde_pecas_entregues: parseInt(document.getElementById('f-edit-entregues').value) || 0,
+        qtde_pecas_entregues: qtdEnt,
         grade_projetada: gradeEdit,
         data_envio_tecido: document.getElementById('f-edit-envio').value || null,
         data_prevista_entrega: document.getElementById('f-edit-prevista').value || null,
-        status: document.getElementById('f-edit-status').value,
+        data_entrega_real: dataEntregaReal,
+        status: novoStatus,
         valor_costura_dentro: parseFloat(document.getElementById('f-edit-vd').value) || null,
         valor_costura_fora: parseFloat(document.getElementById('f-edit-vf').value) || null,
         valor_unitario: parseFloat(document.getElementById('f-edit-vt').value) || null,
@@ -3669,7 +3764,29 @@ async function submitDrawer() {
         corte_externo: document.getElementById('f-edit-corte').value === 'true',
         atualizado_em: new Date().toISOString(),
       };
+      // Detectar transição de status pra gerar movimentação de tecido (Sprint 6)
+      var statusAntigo = op.status;
+      var costureiroNomeAtual = costuName(body.costureiro_id);
+      var metrosKg = parseFloat(op.metros_kg) || 0;
+      var movsExtras = [];
+      if (statusAntigo === 'Em Produção' && novoStatus === 'Entregue' && op.insumo_id && metrosKg > 0) {
+        // Consumo: tecido virou produto, sai do saldo total (-X no costureiro)
+        movsExtras.push({
+          insumo_id: op.insumo_id, tipo_mov: 'consumo_op', quantidade: -metrosKg,
+          localizacao: costureiroNomeAtual, ordem_producao_id: op.id,
+          observacao: 'Consumo OP #' + op.id + ' (entrega ' + (dataEntregaReal||'?') + ')',
+        });
+      } else if (statusAntigo === 'Em Produção' && novoStatus === 'Cancelado' && op.insumo_id && metrosKg > 0) {
+        // Cancelamento antes de entregar: tecido volta pro CD (saldo total inalterado)
+        movsExtras.push(
+          { insumo_id: op.insumo_id, tipo_mov: 'retorno_cd', quantidade: -metrosKg, localizacao: costureiroNomeAtual, ordem_producao_id: op.id, observacao: 'Retorno por cancelamento OP #' + op.id },
+          { insumo_id: op.insumo_id, tipo_mov: 'retorno_cd', quantidade: metrosKg, localizacao: 'CD FUSION', ordem_producao_id: op.id, observacao: 'Retorno por cancelamento OP #' + op.id }
+        );
+      }
       await patchSupabase('ordens_producao', op.id, body);
+      if (movsExtras.length) {
+        try { await postSupabase('movimentacao_insumos', movsExtras); } catch (e) { console.warn('Falha ao registrar movimentacao de tecido:', e); }
+      }
     } else if (type === 'nova-op') {
       var sku = extrairSkuProduto(document.getElementById('f-nova-produto').value);
       if (!sku) { alert('Selecione um produto (digite o nome ou SKU)'); btn.textContent = 'Salvar'; btn.disabled = false; return; }
