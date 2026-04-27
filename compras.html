@@ -1020,18 +1020,35 @@ function renderGantt() {
   }
   var totalW = semanas.length * COL_W;
 
-  // Agrupar por PRODUTO
+  // Agrupar por SKU (não por produto string) — evita duplicatas por casing
+  // Ex: "CALÇA DE MALHA" e "Calça De Malha" tinham 2 grupos. Agora viram 1.
+  // Label do grupo = produto mais frequente daquele SKU (em peças totais).
   var grupos = {};
   ativas.forEach(function(o) {
-    var prod = (o.produto || o.sku_produto || 'Sem produto').trim();
-    if (!grupos[prod]) grupos[prod] = { ops: [], totalPecas: 0, totalEntregues: 0, maxPrevEntrega: null };
-    grupos[prod].ops.push(o);
-    grupos[prod].totalPecas += (o.qtde_pecas || 0);
-    grupos[prod].totalEntregues += (o.qtde_pecas_entregues || 0);
+    var sku = (o.sku_produto || '').trim();
+    var prodLabel = (o.produto || o.sku_produto || 'Sem produto').trim();
+    var key = sku || prodLabel; // sku é a chave canonical; fallback pro nome quando OP não tem sku
+    if (!grupos[key]) grupos[key] = {
+      label: prodLabel, sku: sku,
+      labelCounts: {},  // contagem por label observada
+      ops: [], totalPecas: 0, totalEntregues: 0, maxPrevEntrega: null
+    };
+    var g = grupos[key];
+    g.labelCounts[prodLabel] = (g.labelCounts[prodLabel] || 0) + (o.qtde_pecas || 0);
+    g.ops.push(o);
+    g.totalPecas += (o.qtde_pecas || 0);
+    g.totalEntregues += (o.qtde_pecas_entregues || 0);
     var dt = o.data_prevista_entrega || o.data_envio_tecido || null;
-    if (dt && (!grupos[prod].maxPrevEntrega || dt > grupos[prod].maxPrevEntrega)) {
-      grupos[prod].maxPrevEntrega = dt;
-    }
+    if (dt && (!g.maxPrevEntrega || dt > g.maxPrevEntrega)) g.maxPrevEntrega = dt;
+  });
+  // Resolver label final: variante com mais peças vence
+  Object.keys(grupos).forEach(function(k) {
+    var counts = grupos[k].labelCounts;
+    var best = grupos[k].label, bestCount = -1;
+    Object.keys(counts).forEach(function(p) {
+      if (counts[p] > bestCount) { best = p; bestCount = counts[p]; }
+    });
+    grupos[k].label = best;
   });
   // Ordenacao desc por data de recebimento das pecas. Grupos sem data vao pro fim.
   var gruposSorted = Object.entries(grupos).sort(function(a, b) {
@@ -1057,12 +1074,14 @@ function renderGantt() {
 
   // ── Rows por grupo de produto ──
   var bodyHtml = gruposSorted.map(function(entry) {
-    var prodNome = entry[0], grupo = entry[1];
+    var key = entry[0], grupo = entry[1];
+    var prodNome = grupo.label || key; // label resolvido (variante mais frequente)
     var pendente = Math.round(grupo.totalPecas - grupo.totalEntregues);
     var numOps = grupo.ops.length;
 
     // Group header (expandivel, dropdown style)
-    var expanded = STATE.ganttExpanded[prodNome] === true;
+    // Mantém compat com STATE.ganttExpanded armazenado em sessões anteriores: aceita key OU label
+    var expanded = STATE.ganttExpanded[key] === true || STATE.ganttExpanded[prodNome] === true;
     var ghLabel = '<div class="g-group-label">' +
       '<span class="g-group-toggle">▶</span>' +
       '<span class="g-group-name">' + prodNome + '</span>' +
@@ -1073,7 +1092,7 @@ function renderGantt() {
       '<span><strong style="color:var(--green)">' + fmt(Math.round(grupo.totalEntregues)) + '</strong><small>entregues</small></span>' +
       '<span><strong style="color:' + (pendente > 0 ? 'var(--amber)' : 'var(--green)') + '">' + fmt(pendente) + '</strong><small>a receber</small></span>' +
     '</div>';
-    var groupHeader = '<div class="g-group-header' + (expanded ? ' expanded' : '') + '" onclick="toggleGruposGantt(\'' + prodNome.replace(/'/g, "\\'") + '\')">' + ghLabel + ghStats + '</div>';
+    var groupHeader = '<div class="g-group-header' + (expanded ? ' expanded' : '') + '" onclick="toggleGruposGantt(\'' + key.replace(/'/g, "\\'") + '\')">' + ghLabel + ghStats + '</div>';
 
     // Consolidar por cor (summary quando colapsado)
     var coresAgg = {};
@@ -4756,6 +4775,7 @@ async function submitDrawer() {
       // Garante que grupo do produto fique expandido (mesma lógica do edit-op)
       var prodNome = (op.produto || op.sku_produto || '').trim();
       if (prodNome) STATE.ganttExpanded[prodNome] = true;
+      if (op.sku_produto) STATE.ganttExpanded[op.sku_produto] = true;
 
       STATE.desmembrandoOP = null;
       STATE.desmembrarRows = null;
@@ -4828,8 +4848,10 @@ async function submitDrawer() {
         try { await postSupabase('movimentacao_insumos', movsExtras); } catch (e) { console.warn('Falha ao registrar movimentacao de tecido:', e); }
       }
       // Preserva visualização: garante que o grupo da OP editada continue expanded no Gantt.
-      // Se o produto foi canonizado (ex: "Calça Sarja " → "Calça Sarja"), a OP migra de grupo —
-      // expandimos ambos pra ela não "sumir" da view.
+      // Agora o agrupamento do Gantt usa sku_produto como chave canonical (não label string).
+      if (op.sku_produto) STATE.ganttExpanded[op.sku_produto] = true;
+      if (body.sku_produto) STATE.ganttExpanded[body.sku_produto] = true;
+      // Compat: também expande pelo label antigo caso outros pontos tenham salvo assim
       var prodAntigoGantt = ((op.produto || op.sku_produto) || '').trim();
       var prodNovoGantt = ((body.produto || body.sku_produto) || '').trim();
       if (prodAntigoGantt) STATE.ganttExpanded[prodAntigoGantt] = true;
@@ -4910,6 +4932,7 @@ async function submitDrawer() {
       // Preserva visualização no Gantt — expande o grupo do produto recém-criado
       var prodNovaOPGantt = (prodInfo && prodInfo.nome ? prodInfo.nome : sku || '').trim();
       if (prodNovaOPGantt) STATE.ganttExpanded[prodNovaOPGantt] = true;
+      if (sku) STATE.ganttExpanded[sku] = true;
 
       // Auto-update BOM (consumo_tecido): se a associação SKU↔tecido é nova, registra
       // pra que apareça no datalist da próxima OP do mesmo produto.
