@@ -1758,10 +1758,11 @@ function renderHistoricoMovsInsumo(movs, insumo) {
     var loc = m.localizacao || '—';
     var tipoTxt = tipoLabel[m.tipo_mov] || m.tipo_mov;
     var opLink = m.ordem_producao_id ? ' · OP #'+m.ordem_producao_id : '';
+    var nfRemTxt = m.nf_remessa ? ' · NF Remessa <strong style="color:var(--indigo)">'+String(m.nf_remessa).replace(/</g,'&lt;')+'</strong>' : '';
     var obs = m.observacao ? '<div style="font-size:10px;color:var(--txt3);margin-top:2px">' + m.observacao.replace(/</g,'&lt;') + '</div>' : '';
     return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04)">' +
       '<td style="padding:6px 4px;font-size:11px;color:var(--txt3);white-space:nowrap">' + data + '</td>' +
-      '<td style="padding:6px 4px;font-size:11px"><span style="font-weight:600">' + tipoTxt + '</span>' + opLink + obs + '</td>' +
+      '<td style="padding:6px 4px;font-size:11px"><span style="font-weight:600">' + tipoTxt + '</span>' + opLink + nfRemTxt + obs + '</td>' +
       '<td style="padding:6px 4px;font-size:11px;color:var(--txt2)">' + loc + '</td>' +
       '<td style="padding:6px 4px;font-size:11px;text-align:right;font-weight:700;color:'+corQtd+';white-space:nowrap">' + sinal + fmt(qtd) + ' ' + (insumo.unidade||'') + '</td>' +
     '</tr>';
@@ -1937,7 +1938,7 @@ function buildTransferirTecidoForm(insumoId) {
         '</select>' +
       '</div>' +
       '<div class="form-group"><label class="form-label">Destino *</label>' +
-        '<select id="f-trf-destino" class="form-select">' +
+        '<select id="f-trf-destino" class="form-select" onchange="atualizarSaldoTransferencia()">' +
           destinos.map(function(d){
             var sel = d===destinoDefault ? ' selected' : '';
             var atual = saldosPorLoc[d] || 0;
@@ -1951,6 +1952,10 @@ function buildTransferirTecidoForm(insumoId) {
       '<input id="f-trf-qtde" class="form-input" type="number" step="0.01" min="0.01" placeholder="máx disponível na origem">' +
       '<small style="color:var(--txt3)" id="f-trf-saldo-hint">Saldo da origem: <strong>' + fmt(saldosPorLoc[origemDefault] || 0) + ' ' + unidade + '</strong></small>' +
     '</div>' +
+    '<div class="form-group" id="f-trf-nf-remessa-wrap">' +
+      '<label class="form-label">NF Fusion Remessa <small style="color:var(--txt3);font-weight:400" id="f-trf-nf-remessa-hint">(quando sai do CD FUSION pra costureiro)</small></label>' +
+      '<input id="f-trf-nf-remessa" class="form-input" type="text" placeholder="Ex: 12345">' +
+    '</div>' +
     '<div class="form-group"><label class="form-label">Observação <small style="color:var(--txt3);font-weight:400">(opcional)</small></label>' +
       '<input id="f-trf-obs" class="form-input" type="text" placeholder="ex: retorno de saldo não utilizado">' +
     '</div>';
@@ -1959,6 +1964,7 @@ function buildTransferirTecidoForm(insumoId) {
 function atualizarSaldoTransferencia() {
   var insumoId = STATE.transferindoInsumoId;
   var origem = (document.getElementById('f-trf-origem') || {}).value;
+  var destino = (document.getElementById('f-trf-destino') || {}).value;
   var saldosPorLoc = (STATE.saldoLocalIdx || {})[insumoId] || {};
   var insumo = (STATE.insumos || []).find(function(i){ return i.id === insumoId; }) || {};
   var saldo = saldosPorLoc[origem] || 0;
@@ -1966,6 +1972,16 @@ function atualizarSaldoTransferencia() {
   if (hint) hint.innerHTML = 'Saldo da origem: <strong>' + fmt(saldo) + ' ' + (insumo.unidade || '') + '</strong>';
   var qtdInput = document.getElementById('f-trf-qtde');
   if (qtdInput) qtdInput.setAttribute('max', saldo);
+  // NF Remessa: destacar como obrigatório quando origem=CD e destino é costureiro
+  var nfWrap = document.getElementById('f-trf-nf-remessa-wrap');
+  var nfHint = document.getElementById('f-trf-nf-remessa-hint');
+  if (nfWrap && nfHint) {
+    var ehSaidaCD = origem === 'CD FUSION' && destino && destino !== 'CD FUSION';
+    nfWrap.style.display = '';
+    nfHint.innerHTML = ehSaidaCD
+      ? '<span style="color:var(--orange)">(obrigatório — saída CD FUSION → costureiro)</span>'
+      : '(opcional pra movimentações que não saem do CD)';
+  }
 }
 
 function buildEditInsumoForm(i) {
@@ -3842,8 +3858,12 @@ function buildOPForm() {
       '<div class="form-group"><label class="form-label">Data Estimada de Entrega <small style="color:var(--txt3);font-weight:400">(opcional)</small></label>' +
         '<input class="form-input" id="f-data-prevista" type="date"></div>' +
     '</div>' +
-    '<div class="form-group"><label class="form-label">Corte Externo?</label>' +
-      '<select class="form-select" id="f-corte"><option value="false">Não</option><option value="true">Sim</option></select></div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label class="form-label">NF Fusion Remessa <small style="color:var(--txt3);font-weight:400">(quando tecido sai do CD FUSION pro costureiro)</small></label>' +
+        '<input class="form-input" id="f-nova-nf-remessa" placeholder="Ex: 12345"></div>' +
+      '<div class="form-group" style="flex:0 0 auto"><label class="form-label">Corte Externo?</label>' +
+        '<select class="form-select" id="f-corte"><option value="false">Não</option><option value="true">Sim</option></select></div>' +
+    '</div>' +
     '</div>' +
 
     '<div style="font-size:12px;font-weight:700;color:var(--indigo);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px;">Cores a produzir</div>' +
@@ -5141,6 +5161,8 @@ async function submitDrawer() {
       var dataEnvio = document.getElementById('f-data-envio').value || null;
       var dataPrev = document.getElementById('f-data-prevista').value || null;
       var corteExt = document.getElementById('f-corte').value === 'true';
+      var novaNfRemessa = (document.getElementById('f-nova-nf-remessa') || {}).value || '';
+      novaNfRemessa = novaNfRemessa.trim() || null;
 
       // Cada row da OP usa exatamente 1 insumo (NF) selecionada explicitamente pelo user.
       // Pra consumir 2 NFs do mesmo tecido+cor, user adiciona 2 rows com NFs diferentes.
@@ -5267,10 +5289,12 @@ async function submitDrawer() {
           await postSupabase('movimentacao_insumos', [
             { insumo_id: plano.insumoId, tipo_mov: 'envio_costureiro', quantidade: -faltaTrazer,
               localizacao: 'CD FUSION', ordem_producao_id: opsArr[j].id,
-              observacao: 'Saída CD via OP #' + opsArr[j].id },
+              observacao: 'Saída CD via OP #' + opsArr[j].id,
+              nf_remessa: novaNfRemessa },
             { insumo_id: plano.insumoId, tipo_mov: 'envio_costureiro', quantidade: faltaTrazer,
               localizacao: costureiroNome, ordem_producao_id: opsArr[j].id,
-              observacao: 'Entrada costureiro via OP #' + opsArr[j].id },
+              observacao: 'Entrada costureiro via OP #' + opsArr[j].id,
+              nf_remessa: novaNfRemessa },
           ]);
         }
         // Se faltaTrazer = 0 → tecido já estava no costureiro, nenhuma mov criada;
@@ -5292,8 +5316,25 @@ async function submitDrawer() {
     } else if (type === 'novo-insumo') {
       var insumos = coletarInsumosRows();
       if (!insumos.length) { alert('Preencha ao menos um tecido/insumo'); btn.textContent='Salvar'; btn.disabled=false; return; }
-      // Insert em batch (array)
-      await postSupabase('estoque_insumos', insumos);
+      // Preserva qty original e zera quantidade_atual no insert (trigger soma via mov compra)
+      var qtdsOriginais = insumos.map(function(i){ return parseFloat(i.quantidade_atual) || 0; });
+      insumos.forEach(function(i){ i.quantidade_atual = 0; });
+      var criados = await postSupabase('estoque_insumos', insumos);
+      var criadosArr = Array.isArray(criados) ? criados : [criados];
+      // Gera mov compra por insumo com qty > 0; localizacao = a do insumo (default CD FUSION)
+      var movsCompra = [];
+      criadosArr.forEach(function(ins, idx) {
+        var qty = qtdsOriginais[idx];
+        if (!ins || !ins.id || qty <= 0) return;
+        movsCompra.push({
+          insumo_id: ins.id,
+          tipo_mov: 'compra',
+          quantidade: qty,
+          localizacao: ins.localizacao || 'CD FUSION',
+          observacao: 'Compra inicial' + (ins.numero_nf ? ' (NF ' + ins.numero_nf + ')' : ''),
+        });
+      });
+      if (movsCompra.length) await postSupabase('movimentacao_insumos', movsCompra);
     } else if (type === 'transferir-tecido') {
       var insumoId = STATE.transferindoInsumoId;
       var insumo = STATE.insumos.find(function(i){return i.id === insumoId;});
@@ -5303,11 +5344,17 @@ async function submitDrawer() {
       var destino = (document.getElementById('f-trf-destino') || {}).value;
       var qtde = parseFloat(document.getElementById('f-trf-qtde').value);
       var obs = (document.getElementById('f-trf-obs').value || '').trim();
+      var nfRemessa = (document.getElementById('f-trf-nf-remessa') || {}).value || '';
+      nfRemessa = nfRemessa.trim();
 
       if (!origem) { alert('Escolha a origem'); btn.textContent='Salvar'; btn.disabled=false; return; }
       if (!destino) { alert('Escolha o destino'); btn.textContent='Salvar'; btn.disabled=false; return; }
       if (origem === destino) { alert('Origem e destino devem ser diferentes'); btn.textContent='Salvar'; btn.disabled=false; return; }
       if (!qtde || qtde <= 0) { alert('Quantidade inválida'); btn.textContent='Salvar'; btn.disabled=false; return; }
+      // NF Remessa obrigatória quando sai do CD FUSION pra costureiro
+      if (origem === 'CD FUSION' && destino !== 'CD FUSION' && !nfRemessa) {
+        alert('NF Fusion Remessa é obrigatória pra saídas do CD FUSION pra costureiros'); btn.textContent='Salvar'; btn.disabled=false; return;
+      }
 
       var saldoOrigem = ((STATE.saldoLocalIdx || {})[insumoId] || {})[origem] || 0;
       if (qtde > saldoOrigem) {
@@ -5321,9 +5368,11 @@ async function submitDrawer() {
       var observacao = obs || ('Transferência ' + origem + ' → ' + destino);
       await postSupabase('movimentacao_insumos', [
         { insumo_id: insumoId, tipo_mov: tipoMov, quantidade: -qtde,
-          localizacao: origem, ordem_producao_id: null, observacao: observacao },
+          localizacao: origem, ordem_producao_id: null, observacao: observacao,
+          nf_remessa: nfRemessa || null },
         { insumo_id: insumoId, tipo_mov: tipoMov, quantidade: qtde,
-          localizacao: destino, ordem_producao_id: null, observacao: observacao },
+          localizacao: destino, ordem_producao_id: null, observacao: observacao,
+          nf_remessa: nfRemessa || null },
       ]);
       STATE.transferindoInsumoId = null;
     }
