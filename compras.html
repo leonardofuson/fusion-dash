@@ -1755,44 +1755,96 @@ function atualizarSplitTotal() {
   }
 }
 
-// Aloca tecido (insumo) num costureiro sem criar OP. Gera 2 movs envio_costureiro
-// (-X em CD FUSION + +X no costureiro), ordem_producao_id=null. Saldo total inalterado.
-function abrirAlocacaoCostureiro(insumoId) {
+// Transfere tecido entre locais (CD ↔ costureiros, costureiro ↔ costureiro). Sem OP.
+// Gera 2 movs envio_costureiro (-X na origem, +X no destino), ordem_producao_id=null.
+// Saldo total inalterado.
+function abrirTransferenciaTecido(insumoId) {
   var insumo = STATE.insumos.find(function(i) { return i.id === insumoId; });
   if (!insumo) return;
-  STATE.alocandoInsumoId = insumoId;
-  openDrawer('alocar-tecido');
+  STATE.transferindoInsumoId = insumoId;
+  openDrawer('transferir-tecido');
 }
 
-function buildAlocarTecidoForm(insumoId) {
-  var insumo = STATE.insumos.find(function(i) { return i.id === insumoId; }) || {};
-  // Saldo do CD FUSION (origem padrão da alocação)
-  var saldoCD = ((STATE.saldoLocalIdx || {})[insumoId] || {})['CD FUSION'] || 0;
-  var saldoTotal = parseFloat(insumo.quantidade_atual || 0);
-  var unidade = insumo.unidade || '';
+// Compat: alias antigo (caso algum botão antigo ainda referencie)
+function abrirAlocacaoCostureiro(insumoId) { return abrirTransferenciaTecido(insumoId); }
 
-  // Lista de costureiros ativos
+function buildTransferirTecidoForm(insumoId) {
+  var insumo = STATE.insumos.find(function(i) { return i.id === insumoId; }) || {};
+  var unidade = insumo.unidade || '';
+  var saldoTotal = parseFloat(insumo.quantidade_atual || 0);
+  var saldosPorLoc = (STATE.saldoLocalIdx || {})[insumoId] || {};
+
+  // Locais com saldo > 0 = origens elegíveis
+  var origensElegiveis = Object.keys(saldosPorLoc).filter(function(l){ return saldosPorLoc[l] > 0.001; });
+  origensElegiveis.sort(function(a,b){
+    if (a==='CD FUSION') return -1; if (b==='CD FUSION') return 1;
+    return saldosPorLoc[b] - saldosPorLoc[a];
+  });
+
+  // Costureiros ativos = candidatos a destino (+ CD FUSION sempre)
   var costureirosAtivos = (STATE.costureiros || []).filter(function(c){ return c.ativo !== false; });
   costureirosAtivos.sort(function(a,b){ return (a.nome || '').localeCompare(b.nome || ''); });
+
+  // Lista completa de destinos: CD + costureiros (todos, mesmo zerados)
+  var destinos = ['CD FUSION'].concat(costureirosAtivos.map(function(c){ return c.nome; }));
+
+  // Default: origem = local com mais saldo; destino = primeiro diferente da origem
+  var origemDefault = origensElegiveis[0] || 'CD FUSION';
+  var destinoDefault = destinos.find(function(d){ return d !== origemDefault; }) || 'CD FUSION';
+
+  // Breakdown legível
+  var breakdownHtml = origensElegiveis.length
+    ? origensElegiveis.map(function(l){
+        var lbl = l==='CD FUSION' ? '📦 CD FUSION' : '✂️ '+l;
+        return '<span style="display:inline-block;margin-right:10px;font-size:12px">'+lbl+': <strong>'+fmt(saldosPorLoc[l])+' '+unidade+'</strong></span>';
+      }).join('')
+    : '<span style="color:var(--orange)">⚠ Nenhum local com saldo positivo</span>';
 
   return '<div class="form-group" style="background:rgba(99,102,241,0.06);padding:12px;border-radius:8px;margin-bottom:12px">' +
       '<div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px">Tecido</div>' +
       '<div style="font-weight:700;font-size:14px">' + (insumo.nome || '—') + '</div>' +
       '<div style="font-size:12px;color:var(--txt2);margin-top:2px">Cor: ' + (insumo.cor || '—') + ' · Saldo total: <strong style="color:var(--green)">' + fmt(saldoTotal) + ' ' + unidade + '</strong></div>' +
-      '<div style="font-size:12px;color:var(--txt2);margin-top:2px">No CD FUSION: <strong>' + fmt(saldoCD) + ' ' + unidade + '</strong></div>' +
+      '<div style="margin-top:8px;line-height:1.7">' + breakdownHtml + '</div>' +
     '</div>' +
-    '<div class="form-group"><label class="form-label">Costureiro *</label>' +
-      '<select id="f-aloc-costureiro" class="form-select"><option value="">Selecione...</option>' +
-        costureirosAtivos.map(function(c){return '<option value="'+c.id+'">'+c.nome+'</option>';}).join('') +
-      '</select>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label class="form-label">Origem *</label>' +
+        '<select id="f-trf-origem" class="form-select" onchange="atualizarSaldoTransferencia()">' +
+          origensElegiveis.map(function(l){
+            var sel = l===origemDefault ? ' selected' : '';
+            return '<option value="'+l.replace(/"/g,'&quot;')+'"'+sel+'>'+l+' ('+fmt(saldosPorLoc[l])+' '+unidade+')</option>';
+          }).join('') +
+        '</select>' +
+      '</div>' +
+      '<div class="form-group"><label class="form-label">Destino *</label>' +
+        '<select id="f-trf-destino" class="form-select">' +
+          destinos.map(function(d){
+            var sel = d===destinoDefault ? ' selected' : '';
+            var atual = saldosPorLoc[d] || 0;
+            var atualLbl = atual > 0 ? ' (atual: '+fmt(atual)+')' : '';
+            return '<option value="'+d.replace(/"/g,'&quot;')+'"'+sel+'>'+d+atualLbl+'</option>';
+          }).join('') +
+        '</select>' +
+      '</div>' +
     '</div>' +
     '<div class="form-group"><label class="form-label">Quantidade ('+(unidade||'')+') *</label>' +
-      '<input id="f-aloc-qtde" class="form-input" type="number" step="0.01" min="0.01" max="'+saldoCD+'" placeholder="máx '+fmt(saldoCD)+'">' +
-      '<small style="color:var(--txt3)">Sai do CD FUSION e vai pro costureiro selecionado. Saldo total inalterado.</small>' +
+      '<input id="f-trf-qtde" class="form-input" type="number" step="0.01" min="0.01" placeholder="máx disponível na origem">' +
+      '<small style="color:var(--txt3)" id="f-trf-saldo-hint">Saldo da origem: <strong>' + fmt(saldosPorLoc[origemDefault] || 0) + ' ' + unidade + '</strong></small>' +
     '</div>' +
     '<div class="form-group"><label class="form-label">Observação <small style="color:var(--txt3);font-weight:400">(opcional)</small></label>' +
-      '<input id="f-aloc-obs" class="form-input" type="text" placeholder="ex: separado pra próxima OP">' +
+      '<input id="f-trf-obs" class="form-input" type="text" placeholder="ex: retorno de saldo não utilizado">' +
     '</div>';
+}
+
+function atualizarSaldoTransferencia() {
+  var insumoId = STATE.transferindoInsumoId;
+  var origem = (document.getElementById('f-trf-origem') || {}).value;
+  var saldosPorLoc = (STATE.saldoLocalIdx || {})[insumoId] || {};
+  var insumo = (STATE.insumos || []).find(function(i){ return i.id === insumoId; }) || {};
+  var saldo = saldosPorLoc[origem] || 0;
+  var hint = document.getElementById('f-trf-saldo-hint');
+  if (hint) hint.innerHTML = 'Saldo da origem: <strong>' + fmt(saldo) + ' ' + (insumo.unidade || '') + '</strong>';
+  var qtdInput = document.getElementById('f-trf-qtde');
+  if (qtdInput) qtdInput.setAttribute('max', saldo);
 }
 
 function buildEditInsumoForm(i) {
@@ -2325,7 +2377,7 @@ function renderInsumos() {
           '<td class="dim" style="font-size:10px">' + (i.valor_unitario_referencia ? fmtR(i.valor_unitario_referencia) : '') + '</td>' +
           '<td onclick="event.stopPropagation()" style="text-align:center;white-space:nowrap">' +
             '<button class="btnf" style="font-size:10px;padding:3px 8px;margin-right:3px" onclick="openDrawerEditInsumo('+i.id+')" title="Editar tecido">Editar</button>' +
-            (v.saldo > 0 ? '<button class="btnf ghost" style="font-size:10px;padding:3px 8px;margin-right:3px" onclick="abrirAlocacaoCostureiro('+i.id+')" title="Enviar pra costureiro sem OP">Alocar</button>' : '') +
+            (((Object.values(saldoPorLoc)).some(function(s){return s>0.001;}) || v.saldo > 0) ? '<button class="btnf ghost" style="font-size:10px;padding:3px 8px;margin-right:3px" onclick="abrirTransferenciaTecido('+i.id+')" title="Mover tecido entre CD e costureiros">Transferir</button>' : '') +
             '<button class="btnf ghost" style="font-size:10px;padding:3px 8px;color:var(--red);border-color:rgba(248,113,113,0.4)" onclick="excluirInsumo('+i.id+')" title="Excluir tecido">Excluir</button>' +
           '</td>' +
         '</tr>';
@@ -3325,9 +3377,9 @@ function openDrawer(type) {
   } else if (type === 'novo-insumo') {
     title.textContent = 'Cadastrar Insumo';
     body.innerHTML = buildInsumoForm();
-  } else if (type === 'alocar-tecido') {
-    title.textContent = 'Alocar Tecido em Costureiro';
-    body.innerHTML = buildAlocarTecidoForm(STATE.alocandoInsumoId);
+  } else if (type === 'transferir-tecido') {
+    title.textContent = 'Transferir Tecido';
+    body.innerHTML = buildTransferirTecidoForm(STATE.transferindoInsumoId);
   } else if (type === 'desmembrar-op') {
     title.textContent = 'Desmembrar OP #' + (STATE.desmembrandoOP ? STATE.desmembrandoOP.id : '');
     body.innerHTML = buildDesmembrarOPForm();
@@ -3344,7 +3396,7 @@ function closeDrawer() {
   STATE.editingOp = null;
   STATE.editingInsumo = null;
   STATE.editingEntrega = null;
-  STATE.alocandoInsumoId = null;
+  STATE.transferindoInsumoId = null;
   configurarBtnExcluir(null);
 }
 
@@ -5053,34 +5105,38 @@ async function submitDrawer() {
       if (!insumos.length) { alert('Preencha ao menos um tecido/insumo'); btn.textContent='Salvar'; btn.disabled=false; return; }
       // Insert em batch (array)
       await postSupabase('estoque_insumos', insumos);
-    } else if (type === 'alocar-tecido') {
-      var insumoId = STATE.alocandoInsumoId;
+    } else if (type === 'transferir-tecido') {
+      var insumoId = STATE.transferindoInsumoId;
       var insumo = STATE.insumos.find(function(i){return i.id === insumoId;});
       if (!insumo) { alert('Insumo não encontrado'); btn.textContent='Salvar'; btn.disabled=false; return; }
 
-      var costuId = parseInt(document.getElementById('f-aloc-costureiro').value);
-      var qtde = parseFloat(document.getElementById('f-aloc-qtde').value);
-      var obs = (document.getElementById('f-aloc-obs').value || '').trim();
-      if (!costuId) { alert('Selecione um costureiro'); btn.textContent='Salvar'; btn.disabled=false; return; }
+      var origem = (document.getElementById('f-trf-origem') || {}).value;
+      var destino = (document.getElementById('f-trf-destino') || {}).value;
+      var qtde = parseFloat(document.getElementById('f-trf-qtde').value);
+      var obs = (document.getElementById('f-trf-obs').value || '').trim();
+
+      if (!origem) { alert('Escolha a origem'); btn.textContent='Salvar'; btn.disabled=false; return; }
+      if (!destino) { alert('Escolha o destino'); btn.textContent='Salvar'; btn.disabled=false; return; }
+      if (origem === destino) { alert('Origem e destino devem ser diferentes'); btn.textContent='Salvar'; btn.disabled=false; return; }
       if (!qtde || qtde <= 0) { alert('Quantidade inválida'); btn.textContent='Salvar'; btn.disabled=false; return; }
 
-      var saldoCD = ((STATE.saldoLocalIdx || {})[insumoId] || {})['CD FUSION'] || 0;
-      if (qtde > saldoCD) {
-        if (!confirm('Quantidade (' + fmt(qtde) + ') maior que saldo do CD (' + fmt(saldoCD) + '). Continuar mesmo assim?')) {
+      var saldoOrigem = ((STATE.saldoLocalIdx || {})[insumoId] || {})[origem] || 0;
+      if (qtde > saldoOrigem) {
+        if (!confirm('Quantidade (' + fmt(qtde) + ') maior que saldo da origem (' + fmt(saldoOrigem) + ' em ' + origem + '). Continuar mesmo assim?')) {
           btn.textContent='Salvar'; btn.disabled=false; return;
         }
       }
 
-      var costuNome = costuName(costuId);
-      var observacao = obs || ('Alocação avulsa pra ' + costuNome);
-      // 2 movs envio_costureiro: -X em CD FUSION + +X no costureiro (saldo total inalterado)
+      // tipo_mov: retorno_cd quando volta pro CD; envio_costureiro pra todo o resto
+      var tipoMov = (destino === 'CD FUSION') ? 'retorno_cd' : 'envio_costureiro';
+      var observacao = obs || ('Transferência ' + origem + ' → ' + destino);
       await postSupabase('movimentacao_insumos', [
-        { insumo_id: insumoId, tipo_mov: 'envio_costureiro', quantidade: -qtde,
-          localizacao: 'CD FUSION', ordem_producao_id: null, observacao: observacao },
-        { insumo_id: insumoId, tipo_mov: 'envio_costureiro', quantidade: qtde,
-          localizacao: costuNome, ordem_producao_id: null, observacao: observacao },
+        { insumo_id: insumoId, tipo_mov: tipoMov, quantidade: -qtde,
+          localizacao: origem, ordem_producao_id: null, observacao: observacao },
+        { insumo_id: insumoId, tipo_mov: tipoMov, quantidade: qtde,
+          localizacao: destino, ordem_producao_id: null, observacao: observacao },
       ]);
-      STATE.alocandoInsumoId = null;
+      STATE.transferindoInsumoId = null;
     }
     closeDrawer();
     await carregar();
