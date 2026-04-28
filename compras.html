@@ -740,6 +740,127 @@ function updateValorTotalOP(prefix) {
   if (el) el.value = t;
 }
 
+// Idem pra grade maior
+function updateValorTotalOPMaior(prefix) {
+  var vd = parseFloat((document.getElementById('f-'+prefix+'-vd-m') || {}).value) || 0;
+  var vf = parseFloat((document.getElementById('f-'+prefix+'-vf-m') || {}).value) || 0;
+  var t = (vd + vf).toFixed(2);
+  var el = document.getElementById('f-'+prefix+'-vt-m');
+  if (el) el.value = t;
+}
+
+// Retorna o tamanho_corte_menor_max do costureiro pelo nome (ou null se não definido)
+function corteCostureiroByName(nome) {
+  if (!nome) return null;
+  var c = (STATE.costureiros || []).find(function(x){
+    return (x.nome || '').trim().toUpperCase() === (nome || '').trim().toUpperCase();
+  });
+  return (c && c.tamanho_corte_menor_max != null) ? parseInt(c.tamanho_corte_menor_max) : null;
+}
+
+// Distribui grade {tam: qtd} em {menor: N, maior: N} dado o ponto de corte
+// Tamanhos numéricos: <= corte → menor; > corte → maior. Não-numéricos vão pra menor.
+function distribuirGradePorCorte(grade, corte) {
+  var menor = 0, maior = 0;
+  if (!grade) return { menor: 0, maior: 0 };
+  Object.keys(grade).forEach(function(tam) {
+    var q = parseInt(grade[tam]) || 0;
+    if (q <= 0) return;
+    var n = parseInt(tam);
+    if (corte != null && !isNaN(n) && n > corte) maior += q;
+    else menor += q;
+  });
+  return { menor: menor, maior: maior };
+}
+
+// Mostra/esconde a seção de grade maior conforme costureiro selecionado.
+// prefix: 'nova' ou 'edit'
+function ajustarSecaoGradeMaior(prefix) {
+  var inpId = (prefix === 'nova') ? 'f-nova-costureiro' : 'f-edit-costureiro';
+  var inp = document.getElementById(inpId);
+  if (!inp) return;
+  var nome = inp.tagName === 'SELECT'
+    ? (inp.options[inp.selectedIndex] ? inp.options[inp.selectedIndex].text : '')
+    : inp.value;
+  // Edit form usa <select> com value=id; pegar nome do costureiros[id]
+  if (inp.tagName === 'SELECT' && inp.value) {
+    var c = (STATE.costureiros || []).find(function(x){ return String(x.id) === String(inp.value); });
+    if (c) nome = c.nome;
+  }
+  var corte = corteCostureiroByName(nome);
+  var sec = document.getElementById('f-'+prefix+'-grade-maior-sec');
+  if (!sec) return;
+  if (corte != null) {
+    sec.style.display = '';
+    var lblMenor = document.getElementById('f-'+prefix+'-lbl-menor');
+    var lblMaior = document.getElementById('f-'+prefix+'-lbl-maior');
+    if (lblMenor) lblMenor.textContent = 'Custo grade menor (até ' + corte + ')';
+    if (lblMaior) lblMaior.textContent = 'Custo grade maior (acima de ' + corte + ')';
+    // Tenta auto-fill com última OP
+    autoPreencherCustosUltimaOP(prefix);
+  } else {
+    sec.style.display = 'none';
+  }
+}
+
+// Pré-preenche os 4 (ou 2) campos de custo com a última OP do mesmo (costureiro, sku) — só se vazios
+async function autoPreencherCustosUltimaOP(prefix) {
+  var prodInpId = prefix === 'nova' ? 'f-nova-produto' : 'f-edit-produto';
+  var costuInpId = prefix === 'nova' ? 'f-nova-costureiro' : 'f-edit-costureiro';
+  var prodInp = document.getElementById(prodInpId);
+  var costuInp = document.getElementById(costuInpId);
+  if (!prodInp || !costuInp || !prodInp.value || !costuInp.value) return;
+  // Resolver sku_produto
+  var sku = (function(){
+    var v = (prodInp.value || '').trim();
+    if (!v) return null;
+    // Tenta como SKU pai direto
+    var p = (STATE.produtos || []).find(function(x){ return (x.sku_pai || '').toUpperCase() === v.toUpperCase(); });
+    if (p) return p.sku_pai;
+    // Tenta extrair de formato "Nome (SKU)" usado no select de edit
+    var m = v.match(/\(([^)]+)\)\s*$/);
+    return m ? m[1].trim() : null;
+  })();
+  // Resolver costureiro_id
+  var costuId = null;
+  if (costuInp.tagName === 'SELECT') costuId = parseInt(costuInp.value) || null;
+  else {
+    var c = (STATE.costureiros || []).find(function(x){
+      return (x.nome || '').trim().toUpperCase() === (costuInp.value || '').trim().toUpperCase();
+    });
+    costuId = c ? c.id : null;
+  }
+  if (!sku || !costuId) return;
+
+  // Só preenche se TODOS os 4 campos estão vazios (não sobrescreve input do user)
+  var ids = ['f-'+prefix+'-vd', 'f-'+prefix+'-vf', 'f-'+prefix+'-vd-m', 'f-'+prefix+'-vf-m'];
+  var algumPreenchido = ids.some(function(id){
+    var el = document.getElementById(id);
+    return el && el.value && parseFloat(el.value) > 0;
+  });
+  if (algumPreenchido) return;
+
+  // Busca última OP do mesmo (costureiro, sku) que tenha algum valor de costura
+  try {
+    var url = SB_URL + '/rest/v1/ordens_producao?select=valor_costura_dentro,valor_costura_fora,valor_costura_dentro_maior,valor_costura_fora_maior'
+      + '&costureiro_id=eq.' + costuId + '&sku_produto=eq.' + encodeURIComponent(sku)
+      + '&or=(valor_costura_dentro.not.is.null,valor_costura_fora.not.is.null,valor_costura_dentro_maior.not.is.null,valor_costura_fora_maior.not.is.null)'
+      + '&order=criado_em.desc&limit=1';
+    var r = await fetch(url, { headers: await getAuthHeaders() });
+    if (!r.ok) return;
+    var arr = await r.json();
+    if (!arr || !arr.length) return;
+    var u = arr[0];
+    function setVal(id, v) { var el = document.getElementById(id); if (el && v != null) el.value = v; }
+    setVal('f-'+prefix+'-vd', u.valor_costura_dentro);
+    setVal('f-'+prefix+'-vf', u.valor_costura_fora);
+    setVal('f-'+prefix+'-vd-m', u.valor_costura_dentro_maior);
+    setVal('f-'+prefix+'-vf-m', u.valor_costura_fora_maior);
+    updateValorTotalOP(prefix);
+    updateValorTotalOPMaior(prefix);
+  } catch(e) { /* silently ignore */ }
+}
+
 // Soma valor por dentro + por fora numa row do form Novo Insumo
 function updateValorTotalInsumoRow(idx) {
   var row = document.getElementById('insumo-row-'+idx);
@@ -2017,6 +2138,8 @@ function openDrawerEdit(opId) {
   overlay.classList.add('open');
   // Atualiza diff visual inicial (em caso de status já = Entregue)
   setTimeout(updateDiffEntrega, 0);
+  // Mostra/esconde seção de grade maior conforme costureiro selecionado
+  setTimeout(function(){ ajustarSecaoGradeMaior('edit'); }, 0);
 }
 
 function injetarBtnImprimirOP(opId) {
@@ -3692,8 +3815,8 @@ function buildOPForm() {
       '<input class="form-input" id="f-nova-produto" list="dl-produtos-fab" placeholder="ex: CLAF, calça, duna..." oninput="onProdutoOPChange()" autocomplete="off">' +
     '</div>' +
     '<div class="form-group"><label class="form-label">Costureiro <small style="color:var(--txt3);font-weight:400">(digite pra buscar)</small></label>' +
-      '<input class="form-input" id="f-nova-costureiro" list="dl-costureiros" placeholder="ex: GJ, MF, Deb..." autocomplete="off"></div>' +
-    '<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.04em;margin:8px 0 4px">Custo de costura por peça</div>' +
+      '<input class="form-input" id="f-nova-costureiro" list="dl-costureiros" placeholder="ex: GJ, MF, Deb..." autocomplete="off" oninput="ajustarSecaoGradeMaior(\'nova\')"></div>' +
+    '<div id="f-nova-lbl-menor" style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.04em;margin:8px 0 4px">Custo de costura por peça</div>' +
     '<div class="form-row">' +
       '<div class="form-group"><label class="form-label">Por dentro <small style="color:var(--txt3);font-weight:400">(com NF)</small></label>' +
         '<input class="form-input" id="f-nova-vd" type="number" step="0.01" placeholder="0.00" oninput="updateValorTotalOP(\'nova\')"></div>' +
@@ -3701,6 +3824,17 @@ function buildOPForm() {
         '<input class="form-input" id="f-nova-vf" type="number" step="0.01" placeholder="0.00" oninput="updateValorTotalOP(\'nova\')"></div>' +
       '<div class="form-group"><label class="form-label">Total/Peça</label>' +
         '<input class="form-input" id="f-nova-vt" type="text" readonly style="background:var(--bg3);color:var(--indigo);font-weight:700" value="0.00"></div>' +
+    '</div>' +
+    '<div id="f-nova-grade-maior-sec" style="display:none">' +
+      '<div id="f-nova-lbl-maior" style="font-size:11px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:0.04em;margin:8px 0 4px">Custo grade maior</div>' +
+      '<div class="form-row">' +
+        '<div class="form-group"><label class="form-label">Por dentro <small style="color:var(--txt3);font-weight:400">(com NF)</small></label>' +
+          '<input class="form-input" id="f-nova-vd-m" type="number" step="0.01" placeholder="0.00" oninput="updateValorTotalOPMaior(\'nova\')"></div>' +
+        '<div class="form-group"><label class="form-label">Por fora <small style="color:var(--txt3);font-weight:400">(sem NF)</small></label>' +
+          '<input class="form-input" id="f-nova-vf-m" type="number" step="0.01" placeholder="0.00" oninput="updateValorTotalOPMaior(\'nova\')"></div>' +
+        '<div class="form-group"><label class="form-label">Total/Peça</label>' +
+          '<input class="form-input" id="f-nova-vt-m" type="text" readonly style="background:var(--bg3);color:var(--orange);font-weight:700" value="0.00"></div>' +
+      '</div>' +
     '</div>' +
     '<div class="form-row">' +
       '<div class="form-group"><label class="form-label">Data Recebimento do Tecido</label>' +
@@ -4110,7 +4244,13 @@ function buildCostureiroForm() {
     '<div class="form-row"><div class="form-group"><label class="form-label">Tipo NF</label><select class="form-select" id="f-tipo-nf"><option value="com_nf">Com NF (D+10)</option><option value="sem_nf">Sem NF (D+15)</option></select></div>' +
     '<div class="form-group"><label class="form-label">Capacidade Mensal</label><input class="form-input" id="f-capacidade" type="number" placeholder="2000"></div></div>' +
     '<div class="form-group"><label class="form-label">SKUs Habilitados (separar por vírgula)</label><input class="form-input" id="f-skus" placeholder="CLAF01, CMBB, CLOX01"></div>' +
-    '<div class="form-group"><label class="form-label">Valor Transporte/Peça (R$)</label><input class="form-input" id="f-transporte" type="number" step="0.01" placeholder="0.15"></div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label class="form-label">Valor Transporte/Peça (R$)</label><input class="form-input" id="f-transporte" type="number" step="0.01" placeholder="0.15"></div>' +
+      '<div class="form-group"><label class="form-label">Tamanho máx grade menor <small style="color:var(--txt3);font-weight:400">(opcional)</small></label>' +
+        '<input class="form-input" id="f-tamanho-corte" type="number" placeholder="ex: 50">' +
+        '<small style="color:var(--txt3)">Tamanhos ≤ esse valor pagam preço da grade menor; acima, grade maior. Vazio = sem distinção.</small>' +
+      '</div>' +
+    '</div>' +
     '<div class="form-group"><label class="form-label">Contato</label><input class="form-input" id="f-contato" placeholder="Telefone ou WhatsApp"></div>';
 }
 
@@ -4335,7 +4475,7 @@ function buildEditOPForm(op) {
       '<div class="form-group"><label class="form-label">Cor</label>' +
         '<select class="form-select" id="f-edit-cor">' + corOpts + '</select></div>' +
       '<div class="form-group"><label class="form-label">Costureiro</label>' +
-        '<select class="form-select" id="f-edit-costureiro">' + costOpts + '</select></div>' +
+        '<select class="form-select" id="f-edit-costureiro" onchange="ajustarSecaoGradeMaior(\'edit\')">' + costOpts + '</select></div>' +
     '</div>' +
     '<div class="form-group"><label class="form-label">Grade por tamanho</label>' +
       '<div id="grade-container-edit">' + renderGradeInputs(op.sku_produto, 'edit', op.grade_projetada || {}) + '</div>' +
@@ -4353,14 +4493,25 @@ function buildEditOPForm(op) {
     '<div class="form-group"><label class="form-label">Status</label><select class="form-select" id="f-edit-status" onchange="updateDiffEntrega()">' + statusOpts + '</select></div></div>' +
     '<div class="form-row"><div class="form-group" style="flex:0 0 auto"><label class="form-label">Corte Externo?</label><select class="form-select" id="f-edit-corte"><option value="false"' + (!op.corte_externo ? ' selected' : '') + '>Não</option><option value="true"' + (op.corte_externo ? ' selected' : '') + '>Sim</option></select></div></div>' +
     '<div id="diff-entrega-alert" style="margin:8px 0;display:none"></div>' +
-    '<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.04em;margin:8px 0 4px">Custo de costura por peça</div>' +
+    '<div id="f-edit-lbl-menor" style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.04em;margin:8px 0 4px">Custo de costura por peça</div>' +
     '<div class="form-row">' +
       '<div class="form-group"><label class="form-label">Por dentro <small style="color:var(--txt3);font-weight:400">(com NF)</small></label>' +
         '<input class="form-input" type="number" step="0.01" id="f-edit-vd" value="' + (op.valor_costura_dentro != null ? op.valor_costura_dentro : '') + '" oninput="updateValorTotalOP(\'edit\')"></div>' +
       '<div class="form-group"><label class="form-label">Por fora <small style="color:var(--txt3);font-weight:400">(sem NF)</small></label>' +
         '<input class="form-input" type="number" step="0.01" id="f-edit-vf" value="' + (op.valor_costura_fora != null ? op.valor_costura_fora : '') + '" oninput="updateValorTotalOP(\'edit\')"></div>' +
       '<div class="form-group"><label class="form-label">Total/Peça</label>' +
-        '<input class="form-input" type="text" id="f-edit-vt" readonly style="background:var(--bg3);color:var(--indigo);font-weight:700" value="' + (op.valor_unitario || op.valor_peca || '0.00') + '"></div>' +
+        '<input class="form-input" type="text" id="f-edit-vt" readonly style="background:var(--bg3);color:var(--indigo);font-weight:700" value="' + ((parseFloat(op.valor_costura_dentro)||0) + (parseFloat(op.valor_costura_fora)||0) || op.valor_unitario || op.valor_peca || '0.00') + '"></div>' +
+    '</div>' +
+    '<div id="f-edit-grade-maior-sec" style="display:none">' +
+      '<div id="f-edit-lbl-maior" style="font-size:11px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:0.04em;margin:8px 0 4px">Custo grade maior</div>' +
+      '<div class="form-row">' +
+        '<div class="form-group"><label class="form-label">Por dentro <small style="color:var(--txt3);font-weight:400">(com NF)</small></label>' +
+          '<input class="form-input" type="number" step="0.01" id="f-edit-vd-m" value="' + (op.valor_costura_dentro_maior != null ? op.valor_costura_dentro_maior : '') + '" oninput="updateValorTotalOPMaior(\'edit\')"></div>' +
+        '<div class="form-group"><label class="form-label">Por fora <small style="color:var(--txt3);font-weight:400">(sem NF)</small></label>' +
+          '<input class="form-input" type="number" step="0.01" id="f-edit-vf-m" value="' + (op.valor_costura_fora_maior != null ? op.valor_costura_fora_maior : '') + '" oninput="updateValorTotalOPMaior(\'edit\')"></div>' +
+        '<div class="form-group"><label class="form-label">Total/Peça</label>' +
+          '<input class="form-input" type="text" id="f-edit-vt-m" readonly style="background:var(--bg3);color:var(--orange);font-weight:700" value="' + ((parseFloat(op.valor_costura_dentro_maior)||0) + (parseFloat(op.valor_costura_fora_maior)||0)).toFixed(2) + '"></div>' +
+      '</div>' +
     '</div>' +
     '<div style="margin-top:16px;padding:12px;background:var(--bg);border-radius:8px;font-size:12px;color:var(--txt3)">' +
       '<strong style="color:var(--txt2)">Resumo:</strong> ' + diasRodando(op) + ' dias rodando · ' +
@@ -4887,6 +5038,23 @@ async function submitDrawer() {
         if (!dataEntregaReal) { alert('Pra fechar como Entregue, preencha a Data de Entrega Real.'); btn.textContent='Salvar'; btn.disabled=false; return; }
         if (qtdEnt <= 0) { alert('Pra fechar como Entregue, preencha as Peças Entregues (>0).'); btn.textContent='Salvar'; btn.disabled=false; return; }
       }
+      var vdEdit = parseFloat(document.getElementById('f-edit-vd').value) || null;
+      var vfEdit = parseFloat(document.getElementById('f-edit-vf').value) || null;
+      var vdmEdit = parseFloat((document.getElementById('f-edit-vd-m')||{}).value) || null;
+      var vfmEdit = parseFloat((document.getElementById('f-edit-vf-m')||{}).value) || null;
+      var vtMenor = (vdEdit || 0) + (vfEdit || 0);
+      var vtMaior = (vdmEdit || 0) + (vfmEdit || 0);
+      // Calcula valor_total ponderado pela grade × corte do costureiro
+      var costuEdit = (STATE.costureiros || []).find(function(x){ return x.id === parseInt(document.getElementById('f-edit-costureiro').value); });
+      var corteEdit = (costuEdit && costuEdit.tamanho_corte_menor_max != null) ? parseInt(costuEdit.tamanho_corte_menor_max) : null;
+      var distrEdit = distribuirGradePorCorte(gradeEdit, corteEdit);
+      var qtdeTotalEdit = distrEdit.menor + distrEdit.maior;
+      var valorTotalEdit;
+      if (corteEdit != null && vtMaior > 0) {
+        valorTotalEdit = distrEdit.menor * vtMenor + distrEdit.maior * vtMaior;
+      } else {
+        valorTotalEdit = qtdeTotalEdit * vtMenor;
+      }
       var body = {
         sku_produto: skuEdit,
         produto: prodInfoEdit ? prodInfoEdit.nome : (op.produto || skuEdit),
@@ -4899,10 +5067,13 @@ async function submitDrawer() {
         data_prevista_entrega: document.getElementById('f-edit-prevista').value || null,
         data_entrega_real: dataEntregaReal,
         status: novoStatus,
-        valor_costura_dentro: parseFloat(document.getElementById('f-edit-vd').value) || null,
-        valor_costura_fora: parseFloat(document.getElementById('f-edit-vf').value) || null,
-        valor_unitario: parseFloat(document.getElementById('f-edit-vt').value) || null,
-        valor_peca: parseFloat(document.getElementById('f-edit-vt').value) || null,
+        valor_costura_dentro: vdEdit,
+        valor_costura_fora: vfEdit,
+        valor_costura_dentro_maior: vdmEdit,
+        valor_costura_fora_maior: vfmEdit,
+        valor_unitario: vtMenor || null,
+        valor_peca: vtMenor || null,
+        valor_total: valorTotalEdit > 0 ? valorTotalEdit : null,
         corte_externo: document.getElementById('f-edit-corte').value === 'true',
         atualizado_em: new Date().toISOString(),
       };
@@ -4960,7 +5131,13 @@ async function submitDrawer() {
       if (!costureiroId) { alert('Costureiro nao encontrado. Digite o nome exato ou escolha da lista.'); btn.textContent = 'Salvar'; btn.disabled = false; return; }
       var valorDentro = parseFloat(document.getElementById('f-nova-vd').value) || null;
       var valorFora = parseFloat(document.getElementById('f-nova-vf').value) || null;
+      var valorDentroMaior = parseFloat((document.getElementById('f-nova-vd-m')||{}).value) || null;
+      var valorForaMaior = parseFloat((document.getElementById('f-nova-vf-m')||{}).value) || null;
       var valorPeca = (valorDentro || 0) + (valorFora || 0); valorPeca = valorPeca > 0 ? valorPeca : null;
+      var valorPecaMaior = (valorDentroMaior || 0) + (valorForaMaior || 0); valorPecaMaior = valorPecaMaior > 0 ? valorPecaMaior : null;
+      // Corte do costureiro selecionado (pra distribuir grade entre menor/maior)
+      var costuNovaSel = (STATE.costureiros || []).find(function(x){ return x.id === costureiroId; });
+      var corteNova = (costuNovaSel && costuNovaSel.tamanho_corte_menor_max != null) ? parseInt(costuNovaSel.tamanho_corte_menor_max) : null;
       var dataEnvio = document.getElementById('f-data-envio').value || null;
       var dataPrev = document.getElementById('f-data-prevista').value || null;
       var corteExt = document.getElementById('f-corte').value === 'true';
@@ -4999,6 +5176,14 @@ async function submitDrawer() {
           if (q > 0) grade[inp.dataset.tamanho] = q;
         });
 
+        // Calcula valor_total ponderado pela grade × corte (faixa menor/maior)
+        var distrCor = distribuirGradePorCorte(grade, corteNova);
+        var valorTotalCor;
+        if (corteNova != null && valorPecaMaior > 0) {
+          valorTotalCor = distrCor.menor * (valorPeca || 0) + distrCor.maior * valorPecaMaior;
+        } else {
+          valorTotalCor = pecasFinal * (valorPeca || 0);
+        }
         ops.push({
           costureiro_id: costureiroId,
           sku_produto: sku,
@@ -5007,7 +5192,10 @@ async function submitDrawer() {
           qtde_pecas: pecasFinal,
           valor_costura_dentro: valorDentro,
           valor_costura_fora: valorFora,
+          valor_costura_dentro_maior: valorDentroMaior,
+          valor_costura_fora_maior: valorForaMaior,
           valor_peca: valorPeca, valor_unitario: valorPeca,
+          valor_total: valorTotalCor > 0 ? valorTotalCor : null,
           grade_projetada: Object.keys(grade).length ? grade : null,
           data_envio_tecido: dataEnvio,
           data_prevista_entrega: dataPrev,
@@ -5097,6 +5285,7 @@ async function submitDrawer() {
         skus_habilitados: skus.length ? skus : null,
         valor_transporte_peca: parseFloat(document.getElementById('f-transporte').value) || null,
         contato: document.getElementById('f-contato').value.trim() || null,
+        tamanho_corte_menor_max: parseInt(document.getElementById('f-tamanho-corte').value) || null,
         ativo: true,
       };
       await postSupabase('costureiros', body);
