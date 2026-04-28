@@ -286,9 +286,9 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
       <button class="chip" data-preset="12m" onclick="setPeriodo('12m',this)">12m</button>
     </div>
     <div class="drange">
-      <input type="date" id="dt-de" class="dinput">
+      <input type="date" id="dt-de" class="dinput" onclick="this.showPicker && this.showPicker()" onfocus="this.showPicker && this.showPicker()">
       <span style="color:var(--txt3);font-size:12px;">até</span>
-      <input type="date" id="dt-ate" class="dinput">
+      <input type="date" id="dt-ate" class="dinput" onclick="this.showPicker && this.showPicker()" onfocus="this.showPicker && this.showPicker()">
       <button class="btnf" onclick="aplicarFiltro()">Filtrar</button>
     </div>
     <label class="toggle"><input type="checkbox" id="chk-compare" checked onchange="carregar()"> vs período anterior</label>
@@ -348,9 +348,14 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
   <div class="card">
     <div class="card-title">Top vendedores <button class="btn-export" onclick="exportImage('vendedores')">Compartilhar</button></div>
     <div id="vend-breadcrumb-slot"></div>
-    <div class="tb-wrap-scroll" style="max-height:480px;"><table class="tb"><thead><tr>
-      <th style="width:30px">#</th><th>Vendedor</th><th>Loja</th>
-      <th class="r">Faturamento</th><th class="r">Vendas</th><th class="r">TM</th><th class="r">PA</th>
+    <div class="tb-wrap-scroll" style="max-height:480px;"><table class="tb"><thead><tr id="thead-vendedores">
+      <th style="width:30px">#</th>
+      <th class="sortable" data-sort="nome" onclick="setVendSort('nome')">Vendedor</th>
+      <th class="sortable" data-sort="loja" onclick="setVendSort('loja')">Loja</th>
+      <th class="r sortable" data-sort="fat" onclick="setVendSort('fat')">Faturamento</th>
+      <th class="r sortable" data-sort="ped" onclick="setVendSort('ped')">Vendas</th>
+      <th class="r sortable" data-sort="tm" onclick="setVendSort('tm')">TM</th>
+      <th class="r sortable" data-sort="pa" onclick="setVendSort('pa')">PA</th>
     </tr></thead><tbody id="tbody-vendedores"></tbody></table></div>
   </div>
 
@@ -496,7 +501,7 @@ async function fetchProdutos(){
 
 // ---- State ----
 var DE=null, ATE=null;
-var STATE={pedidos:[],anteriores:[],itens:[],prods:null,lojas:[],lojasSel:{},stackMode:'abs',skuGroups:[],skuSel:null,vendSel:null,totLoja:{},metas:{},metasLoaded:false,freshness:null,lojaHighlight:null,catSel:null};
+var STATE={pedidos:[],anteriores:[],pedidosEscopo:[],anterioresEscopo:[],itens:[],prods:null,lojas:[],lojasSel:{},stackMode:'abs',skuGroups:[],skuSel:null,vendSel:null,totLoja:{},metas:{},metasLoaded:false,freshness:null,lojaHighlight:null,catSel:null,vendSort:{key:'fat',dir:'desc'},skuSort:{key:'receita',dir:'desc'}};
 var CHARTS={hero:null,pareto:null,sparkPed:null,sparkTM:null,sparkPA:null,lojaSparklines:[]};
 
 function setPeriodo(preset,el){
@@ -673,6 +678,8 @@ function clearLojas(){STATE.lojas.forEach(function(n){STATE.lojasSel[n]=false;})
 function renderAll(){
   STATE.pedidos=filtrarPedidos(STATE.pedidosRaw);
   STATE.anteriores=filtrarPedidos(STATE.anterioresRaw);
+  STATE.pedidosEscopo=STATE.vendSel?STATE.pedidos.filter(function(p){return p._vend===STATE.vendSel;}):STATE.pedidos;
+  STATE.anterioresEscopo=STATE.vendSel?STATE.anteriores.filter(function(p){return p._vend===STATE.vendSel;}):STATE.anteriores;
   renderKPIs();
   renderHighlights();
   renderHero();
@@ -725,14 +732,19 @@ function calcPALoja(){
 }
 
 function renderKPIs(){
-  var cur=calcKPIs(STATE.pedidos);
-  var prev=calcKPIs(STATE.anteriores);
+  var cur=calcKPIs(STATE.pedidosEscopo);
+  var prev=calcKPIs(STATE.anterioresEscopo);
+
+  // pedToVend pra filtrar itens por vendedor selecionado
+  var pedVendMap={};
+  if(STATE.vendSel) STATE.pedidos.forEach(function(p){if(p._vend===STATE.vendSel) pedVendMap[p.id]=true;});
 
   // PA geral a partir dos itens
   var paGeral=null;
   if(STATE.itens.length>0){
     var pedIds={},qtd=0;
     STATE.itens.forEach(function(it){
+      if(STATE.vendSel && !pedVendMap[it.pedido_id]) return;
       if(STATE.lojasSel[it._loja] || Object.keys(STATE.lojasSel).every(function(k){return !STATE.lojasSel[k];})){
         qtd+=it._qtd;
         pedIds[it.pedido_id]=true;
@@ -755,6 +767,7 @@ function renderKPIs(){
     if(st==='cancelado'||st==='devolvido') return;
     var nome=getLoja(p.loja_nome,p.origem_conta);
     if(IGNORAR_LOJA.indexOf(nome)>=0) return;
+    if(STATE.vendSel && ((p.vendedor||'').trim()||'Vendedor Não Identificado')!==STATE.vendSel) return;
     fatMes+=parseFloat(p.valor_bruto||0);
   });
   var projTotal=diasDec>0?fatMes/diasDec*diasTot:0;
@@ -1055,9 +1068,10 @@ var heroTotalsPlugin={
 
 // ---- Hero stacked area ----
 function renderHero(){
+  var pedidosUse=STATE.pedidosEscopo||STATE.pedidos;
   var diario={};
   var lojas={};
-  STATE.pedidos.forEach(function(p){
+  pedidosUse.forEach(function(p){
     if(p._canc) return;
     var d=(p.data_pedido||'').slice(0,10);
     if(!d) return;
@@ -1158,6 +1172,43 @@ function renderHero(){
       spanGaps:true
     });
   }
+
+  // ---- Trendline (regressão linear sobre o total diário observado) ----
+  if(STATE.stackMode==='abs'){
+    var hojeT=hojeSP();
+    var pts=[];
+    dias.forEach(function(d,i){
+      if(d>hojeT) return;
+      if(!diario[d]) return;
+      var t=0; lojasL.forEach(function(n){t+=diario[d][n]||0;});
+      pts.push({x:i,y:t});
+    });
+    if(pts.length>=2){
+      var n=pts.length,sX=0,sY=0,sXY=0,sXX=0;
+      pts.forEach(function(p){sX+=p.x;sY+=p.y;sXY+=p.x*p.y;sXX+=p.x*p.x;});
+      var denom=(n*sXX-sX*sX);
+      if(denom!==0){
+        var slope=(n*sXY-sX*sY)/denom;
+        var intercept=(sY-slope*sX)/n;
+        var trendVals=dias.map(function(d,i){return d>hojeT?null:(slope*i+intercept);});
+        datasets.push({
+          label:'Tendência',
+          data:trendVals,
+          borderColor:'rgba(255,255,255,0.55)',
+          backgroundColor:'transparent',
+          borderDash:[3,3],
+          fill:false,
+          tension:0,
+          pointRadius:0,
+          pointHoverRadius:0,
+          borderWidth:1.5,
+          stack:null,
+          spanGaps:true
+        });
+      }
+    }
+  }
+
   var labels=dias.map(function(d){return new Date(d+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});});
   if(CHARTS.hero) CHARTS.hero.destroy();
   CHARTS.hero=new Chart(document.getElementById('chart-hero'),{
@@ -1194,6 +1245,7 @@ function calcProjMesLoja(){
     if(st==='cancelado'||st==='devolvido') return;
     var nome=getLoja(p.loja_nome,p.origem_conta);
     if(IGNORAR_LOJA.indexOf(nome)>=0) return;
+    if(STATE.vendSel && ((p.vendedor||'').trim()||'Vendedor Não Identificado')!==STATE.vendSel) return;
     fatMesLoja[nome]=(fatMesLoja[nome]||0)+parseFloat(p.valor_bruto||0);
   });
   // Projeção simples: (fat acumulado / dias decorridos) * dias total mês
@@ -1207,8 +1259,10 @@ function calcProjMesLoja(){
 }
 
 function renderLojaCards(){
-  var cur=calcKPIs(STATE.pedidos).porLoja;
-  var prev=calcKPIs(STATE.anteriores).porLoja;
+  var pedidosUse=STATE.pedidosEscopo||STATE.pedidos;
+  var anterioresUse=STATE.anterioresEscopo||STATE.anteriores;
+  var cur=calcKPIs(pedidosUse).porLoja;
+  var prev=calcKPIs(anterioresUse).porLoja;
   var fatTotal=Object.values(cur).reduce(function(s,c){return s+c.fat;},0);
   var nomes=Object.keys(cur).sort(function(a,b){return cur[b].fat-cur[a].fat;});
   var paLoja=calcPALoja();
@@ -1217,7 +1271,7 @@ function renderLojaCards(){
   // Pre-compute: sparkline data + fat mês por loja (uma passada só)
   var sparkData={}, fatMesPorLoja={};
   var _inicioM=inicioMesSP(), _hojeC=hojeSP();
-  STATE.pedidos.forEach(function(p){
+  pedidosUse.forEach(function(p){
     if(p._canc) return;
     var d=(p.data_pedido||'').slice(0,10);
     if(!sparkData[p._nome]) sparkData[p._nome]={};
@@ -1230,6 +1284,7 @@ function renderLojaCards(){
     if(st2==='cancelado'||st2==='devolvido') return;
     var nm=getLoja(p2.loja_nome,p2.origem_conta);
     if(IGNORAR_LOJA.indexOf(nm)>=0) return;
+    if(STATE.vendSel && ((p2.vendedor||'').trim()||'Vendedor Não Identificado')!==STATE.vendSel) return;
     fatMesPorLoja[nm]=(fatMesPorLoja[nm]||0)+parseFloat(p2.valor_bruto||0);
   });
 
@@ -1367,14 +1422,19 @@ var paretoLabelsPlugin={
 };
 
 function renderPareto(){
-  var top=STATE.skuGroups.slice(0,20);
+  var grupos=STATE.skuGroups;
+  if(STATE.vendSel){
+    var f=itensFiltrados();
+    grupos=gruparSkusFromItens(f.itens);
+  }
+  var top=grupos.slice(0,20);
   var labels=top.map(function(s){
     var nome=s.nome||s.sku_pai;
     return nome.length>26?nome.slice(0,24)+'…':nome;
   });
   var fullNames=top.map(function(s){return s.nome||s.sku_pai;});
   var receita=top.map(function(s){return s.receita;});
-  var tot=STATE.skuGroups.reduce(function(s,x){return s+x.receita;},0);
+  var tot=grupos.reduce(function(s,x){return s+x.receita;},0);
   var cum=0;
   var cumPct=receita.map(function(v){cum+=v;return tot>0?cum/tot*100:0;});
   if(CHARTS.pareto) CHARTS.pareto.destroy();
@@ -1468,11 +1528,19 @@ function renderSkuList(){
     });
   });
 
-  var lista=grupos.filter(function(s){
+  var listaFull=grupos.filter(function(s){
     if(STATE.catSel && (s.cat||'OUTROS')!==STATE.catSel) return false;
     if(!q) return true;
     return s.sku_pai.toLowerCase().indexOf(q)>=0 || (s.nome||'').toLowerCase().indexOf(q)>=0;
-  }).slice(0,30);
+  });
+  var sk=STATE.skuSort.key, sd=STATE.skuSort.dir==='asc'?1:-1;
+  listaFull.sort(function(a,b){
+    var va, vb;
+    if(sk==='nome'){va=(a.nome||a.sku_pai).toLowerCase(); vb=(b.nome||b.sku_pai).toLowerCase(); return va.localeCompare(vb)*sd;}
+    va=a[sk]||0; vb=b[sk]||0;
+    return (va-vb)*sd;
+  });
+  var lista=listaFull.slice(0,30);
 
   // Breadcrumb
   var breadcrumb='';
@@ -1495,7 +1563,12 @@ function renderSkuList(){
     return;
   }
 
-  var th='<tr><th>Nome</th><th class="r">Receita</th><th class="r">Qtd</th><th style="min-width:220px;">Distribuição por loja</th></tr>';
+  var arrow=function(k){return STATE.skuSort.key===k?(' '+STATE.skuSort.dir):'';};
+  var th='<tr id="thead-skulist">'+
+    '<th class="sortable'+arrow('nome')+'" data-sort="nome" onclick="setSkuSort(\'nome\')">Nome</th>'+
+    '<th class="r sortable'+arrow('receita')+'" data-sort="receita" onclick="setSkuSort(\'receita\')">Receita</th>'+
+    '<th class="r sortable'+arrow('qtd')+'" data-sort="qtd" onclick="setSkuSort(\'qtd\')">Qtd</th>'+
+    '<th style="min-width:220px;">Distribuição por loja</th></tr>';
 
   document.getElementById('sku-list').innerHTML=
     '<table class="tb"><thead>'+th+'</thead><tbody>'+
@@ -1531,10 +1604,17 @@ function selectSku(k){
 }
 function selectVend(v){
   STATE.vendSel=STATE.vendSel===v?null:v;
-  renderSkuList();
-  renderSkuDetail();
+  renderAll();
+}
+function setVendSort(key){
+  if(STATE.vendSort.key===key) STATE.vendSort.dir=STATE.vendSort.dir==='desc'?'asc':'desc';
+  else STATE.vendSort={key:key,dir:(key==='nome'||key==='loja')?'asc':'desc'};
   renderVendedores();
-  renderHighlights();
+}
+function setSkuSort(key){
+  if(STATE.skuSort.key===key) STATE.skuSort.dir=STATE.skuSort.dir==='desc'?'asc':'desc';
+  else STATE.skuSort={key:key,dir:key==='nome'?'asc':'desc'};
+  renderSkuList();
 }
 function highlightLoja(n){
   STATE.lojaHighlight=STATE.lojaHighlight===n?null:n;
@@ -1681,8 +1761,24 @@ function renderVendedores(){
     var mx=0,top='—';
     Object.keys(v.lojas).forEach(function(l){if(v.lojas[l]>mx){mx=v.lojas[l];top=l;}});
     v.lojaTop=top; delete v.lojas;
+    v.tm=v.ped>0?v.fat/v.ped:0;
+    v.pa=paVend[v.nome]!=null?paVend[v.nome]:-1;
+    v.loja=lojaDisplay(v.lojaTop);
   });
-  var arr=Object.values(agg).sort(function(a,b){return b.fat-a.fat;}).slice(0,50);
+  var sk=STATE.vendSort.key, sd=STATE.vendSort.dir==='asc'?1:-1;
+  var arr=Object.values(agg).sort(function(a,b){
+    var va=a[sk], vb=b[sk];
+    if(typeof va==='string') return va.localeCompare(vb)*sd;
+    return ((va||0)-(vb||0))*sd;
+  }).slice(0,50);
+  // marca seta asc/desc no <th> ativo
+  var thead=document.getElementById('thead-vendedores');
+  if(thead){
+    thead.querySelectorAll('th.sortable').forEach(function(th){
+      th.classList.remove('asc','desc');
+      if(th.dataset.sort===sk) th.classList.add(STATE.vendSort.dir);
+    });
+  }
 
   // Breadcrumb
   var breadcrumb='';
