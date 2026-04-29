@@ -1903,6 +1903,88 @@ function atualizarSplitTotal() {
   }
 }
 
+// Transfere TODOS os tecidos de uma NF em um destino único.
+// Cada variante (cor) gera N pares de movs (um por local de origem com saldo > 0).
+function abrirTransferirNF(groupKey) {
+  STATE.transferindoNFKey = groupKey;
+  openDrawer('transferir-nf');
+}
+
+function gruposInsumosCache() {
+  // Reconstrói grupos por NF a partir do STATE.insumos (mesma lógica que renderInsumos)
+  var grupos = {};
+  (STATE.insumos || []).forEach(function(i) {
+    if (!i.ativo) return;
+    var nf = (i.numero_nf || '').trim() || '__sem_nf__';
+    var tec = (i.nome || '').trim().toUpperCase();
+    var key = nf + '::' + tec;
+    if (!grupos[key]) {
+      grupos[key] = { key: key, nf: i.numero_nf, tecido: i.nome, unidade: i.unidade, variantes: [] };
+    }
+    grupos[key].variantes.push(i);
+  });
+  return grupos;
+}
+
+function buildTransferirNFForm(groupKey) {
+  var grupos = gruposInsumosCache();
+  var g = grupos[groupKey];
+  if (!g) return '<div style="color:var(--red)">Grupo não encontrado.</div>';
+
+  // Lista costureiros ativos + CD pra dropdown destino
+  var costureirosAtivos = (STATE.costureiros || []).filter(function(c){ return c.ativo !== false; });
+  costureirosAtivos.sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||''); });
+  var destinos = ['CD FUSION'].concat(costureirosAtivos.map(function(c){ return c.nome; }));
+
+  // Pra cada variante, lista os locais com saldo > 0
+  var rowsHtml = g.variantes.map(function(ins, idx) {
+    var saldosLoc = (STATE.saldoLocalIdx || {})[ins.id] || {};
+    var locsComSaldo = Object.keys(saldosLoc).filter(function(l){ return saldosLoc[l] > 0.001; });
+    if (!locsComSaldo.length && (ins.quantidade_atual || 0) > 0) {
+      // Variante migrada (sem movs) — usa localização default
+      locsComSaldo = [ins.localizacao || 'CD FUSION'];
+      saldosLoc[locsComSaldo[0]] = parseFloat(ins.quantidade_atual) || 0;
+    }
+    locsComSaldo.sort(function(a,b){
+      if (a==='CD FUSION') return -1; if (b==='CD FUSION') return 1;
+      return saldosLoc[b] - saldosLoc[a];
+    });
+    var saldoTxt = locsComSaldo.length
+      ? locsComSaldo.map(function(l){ return l+': '+fmt(saldosLoc[l]); }).join(' · ')
+      : '<span style="color:var(--txt3)">sem saldo</span>';
+    var checked = locsComSaldo.length ? ' checked' : ' disabled';
+    return '<tr><td style="padding:6px 4px"><label style="display:inline-flex;align-items:center;gap:6px;font-size:12px">' +
+        '<input type="checkbox" class="f-trfnf-include" data-ins-id="'+ins.id+'"' + checked + '>' +
+        '<span><strong>'+(ins.cor || '—')+'</strong></span></label></td>' +
+      '<td style="padding:6px 4px;font-size:11px;color:var(--txt2)">' + saldoTxt + '</td></tr>';
+  }).join('');
+
+  return '<div class="form-group" style="background:rgba(99,102,241,0.06);padding:12px;border-radius:8px;margin-bottom:12px">' +
+      '<div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px">Tecido / NF</div>' +
+      '<div style="font-weight:700;font-size:14px">' + (g.tecido || '—') + '</div>' +
+      '<div style="font-size:12px;color:var(--txt2);margin-top:2px">NF: <strong>'+(g.nf||'—')+'</strong> · '+g.variantes.length+' cor(es)</div>' +
+    '</div>' +
+    '<div class="form-group"><label class="form-label">Destino *</label>' +
+      '<select id="f-trfnf-destino" class="form-select">' +
+        destinos.map(function(d){return '<option value="'+d.replace(/"/g,'&quot;')+'">'+d+'</option>';}).join('') +
+      '</select>' +
+      '<small style="color:var(--txt3)">Move 100% do saldo de cada cor pra este destino. Origem = local atual de cada saldo.</small>' +
+    '</div>' +
+    '<div class="form-group"><label class="form-label">NF Fusion Remessa <small style="color:var(--txt3);font-weight:400">(obrigatório quando destino é costureiro e origem inclui CD)</small></label>' +
+      '<input id="f-trfnf-nf-remessa" class="form-input" type="text" placeholder="Ex: 12345">' +
+    '</div>' +
+    '<div style="margin-top:12px"><div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px">Cores a transferir</div>' +
+      '<table style="width:100%;border-collapse:collapse">' +
+        '<thead><tr style="border-bottom:1px solid var(--bdr)">' +
+          '<th style="text-align:left;padding:4px;font-size:10px;color:var(--txt3);text-transform:uppercase">Cor</th>' +
+          '<th style="text-align:left;padding:4px;font-size:10px;color:var(--txt3);text-transform:uppercase">Saldo por local</th>' +
+        '</tr></thead><tbody>' + rowsHtml + '</tbody></table>' +
+    '</div>' +
+    '<div class="form-group"><label class="form-label">Observação <small style="color:var(--txt3);font-weight:400">(opcional)</small></label>' +
+      '<input id="f-trfnf-obs" class="form-input" type="text" placeholder="ex: remessa pra produção">' +
+    '</div>';
+}
+
 // Transfere tecido entre locais (CD ↔ costureiros, costureiro ↔ costureiro). Sem OP.
 // Gera 2 movs envio_costureiro (-X na origem, +X no destino), ordem_producao_id=null.
 // Saldo total inalterado.
@@ -2541,8 +2623,13 @@ function renderInsumos() {
       locGrupoHtml = '<span style="color:var(--txt4);font-size:10px">—</span>';
     }
 
+    // Botão "Transferir NF" no header do grupo (só se houver saldo total > 0)
+    var keyEsc = g.key.replace(/'/g, "\\'");
+    var btnTrfNF = (g.total > 0.001) ?
+      '<button class="btnf ghost" style="font-size:10px;padding:3px 8px" onclick="event.stopPropagation();abrirTransferirNF(\''+keyEsc+'\')" title="Transferir todas as cores desta NF de uma vez">⇄ Transferir NF</button>' : '';
+
     // Header da NF (clicavel)
-    var htmlGrupo = '<tr style="background:rgba(99,102,241,0.06);border-top:2px solid var(--bdr);cursor:pointer;user-select:none" onclick="toggleInsumoGrupo(\'' + g.key.replace(/'/g, "\\'") + '\')">' +
+    var htmlGrupo = '<tr style="background:rgba(99,102,241,0.06);border-top:2px solid var(--bdr);cursor:pointer;user-select:none" onclick="toggleInsumoGrupo(\'' + keyEsc + '\')">' +
       '<td style="text-align:center;color:var(--txt3);font-size:10px">' + toggleIcon + '</td>' +
       '<td><strong style="color:var(--txt1)">' + (g.tecido || '—').trim() + '</strong>' +
         '<div style="font-size:10px;color:var(--txt3);margin-top:2px">' +
@@ -2559,7 +2646,7 @@ function renderInsumos() {
       '<td>' + (g.unidade || '') + '</td>' +
       '<td>' + skusHtml + '</td>' +
       '<td></td>' +
-      '<td></td>' +
+      '<td onclick="event.stopPropagation()" style="text-align:center">' + btnTrfNF + '</td>' +
     '</tr>';
 
     // Linhas filhas (só se expanded) — cada uma clicável para editar
@@ -3684,6 +3771,9 @@ function openDrawer(type) {
   } else if (type === 'transferir-tecido') {
     title.textContent = 'Transferir Tecido';
     body.innerHTML = buildTransferirTecidoForm(STATE.transferindoInsumoId);
+  } else if (type === 'transferir-nf') {
+    title.textContent = 'Transferir NF inteira';
+    body.innerHTML = buildTransferirNFForm(STATE.transferindoNFKey);
   } else if (type === 'desmembrar-op') {
     title.textContent = 'Desmembrar OP #' + (STATE.desmembrandoOP ? STATE.desmembrandoOP.id : '');
     body.innerHTML = buildDesmembrarOPForm();
@@ -3703,6 +3793,7 @@ function closeDrawer() {
   STATE.transferindoInsumoId = null;
   STATE.editingCostureiro = null;
   STATE.cadastroCostureiroPreNome = null;
+  STATE.transferindoNFKey = null;
   configurarBtnExcluir(null);
 }
 
@@ -5592,6 +5683,65 @@ async function submitDrawer() {
           nf_remessa: nfRemessa || null },
       ]);
       STATE.transferindoInsumoId = null;
+    } else if (type === 'transferir-nf') {
+      var grupos = gruposInsumosCache();
+      var g = grupos[STATE.transferindoNFKey];
+      if (!g) { alert('Grupo não encontrado'); btn.textContent='Salvar'; btn.disabled=false; return; }
+      var destinoNF = (document.getElementById('f-trfnf-destino') || {}).value;
+      var nfRemessaNF = ((document.getElementById('f-trfnf-nf-remessa') || {}).value || '').trim();
+      var obsNF = ((document.getElementById('f-trfnf-obs') || {}).value || '').trim();
+      if (!destinoNF) { alert('Escolha o destino'); btn.textContent='Salvar'; btn.disabled=false; return; }
+
+      // IDs incluídos
+      var checkedIds = Array.from(document.querySelectorAll('.f-trfnf-include:checked'))
+        .map(function(el){ return parseInt(el.dataset.insId); });
+      if (!checkedIds.length) { alert('Selecione ao menos uma cor pra transferir'); btn.textContent='Salvar'; btn.disabled=false; return; }
+
+      // Monta movs: pra cada variante incluída, pega cada local de origem com saldo > 0
+      // e gera 1 par (-X origem, +X destino). Pula origens iguais ao destino.
+      var movsBatch = [];
+      var contaPares = 0;
+      var precisaNFRemessaCD = false;
+      checkedIds.forEach(function(insId) {
+        var ins = (STATE.insumos || []).find(function(x){return x.id === insId;});
+        if (!ins) return;
+        var saldosLoc = (STATE.saldoLocalIdx || {})[insId] || {};
+        var locs = Object.keys(saldosLoc).filter(function(l){ return saldosLoc[l] > 0.001; });
+        if (!locs.length && (ins.quantidade_atual || 0) > 0) {
+          // Migração: usa localização default
+          locs = [ins.localizacao || 'CD FUSION'];
+          saldosLoc[locs[0]] = parseFloat(ins.quantidade_atual) || 0;
+        }
+        locs.forEach(function(origem) {
+          if (origem === destinoNF) return; // skip — já tá lá
+          var qty = saldosLoc[origem];
+          if (qty <= 0.001) return;
+          var tm = (destinoNF === 'CD FUSION') ? 'retorno_cd' : 'envio_costureiro';
+          var obsBase = obsNF || ('Transferência NF ' + (g.nf || '?') + ' · ' + origem + ' → ' + destinoNF);
+          movsBatch.push({ insumo_id: insId, tipo_mov: tm, quantidade: -qty,
+            localizacao: origem, ordem_producao_id: null, observacao: obsBase,
+            nf_remessa: nfRemessaNF || null });
+          movsBatch.push({ insumo_id: insId, tipo_mov: tm, quantidade: qty,
+            localizacao: destinoNF, ordem_producao_id: null, observacao: obsBase,
+            nf_remessa: nfRemessaNF || null });
+          contaPares++;
+          if (origem === 'CD FUSION' && destinoNF !== 'CD FUSION') precisaNFRemessaCD = true;
+        });
+      });
+      if (!movsBatch.length) {
+        alert('Nada a transferir — todas as cores já estão no destino selecionado.');
+        btn.textContent='Salvar'; btn.disabled=false; return;
+      }
+      // Validação NF Remessa: obrigatória quando há saídas do CD pra costureiro
+      if (precisaNFRemessaCD && !nfRemessaNF) {
+        alert('NF Fusion Remessa é obrigatória quando há saídas do CD FUSION pra costureiro');
+        btn.textContent='Salvar'; btn.disabled=false; return;
+      }
+      if (!confirm('Confirma transferência de ' + contaPares + ' lote(s) pra "' + destinoNF + '"?')) {
+        btn.textContent='Salvar'; btn.disabled=false; return;
+      }
+      await postSupabase('movimentacao_insumos', movsBatch);
+      STATE.transferindoNFKey = null;
     }
     closeDrawer();
     await carregar();
