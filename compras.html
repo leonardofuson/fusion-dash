@@ -1048,7 +1048,7 @@ function renderOPsLista() {
     var pecas = o.qtde_pecas || 0;
     var pct = pecas > 0 ? Math.round(entregues/pecas*100) : 0;
     return '<tr style="cursor:pointer" onclick="openDrawerEdit('+o.id+')">' +
-      '<td><strong>'+(o.produto||o.sku_produto||'—')+'</strong></td>' +
+      '<td><strong>'+(o.produto||nomeProduto(o.sku_produto)||'—')+'</strong></td>' +
       '<td class="dim">'+((o.cor||'').trim()||'—')+'</td>' +
       '<td>'+costuName(o.costureiro_id)+'</td>' +
       '<td class="r">'+fmt(Math.round(pecas))+'</td>' +
@@ -2848,7 +2848,7 @@ function preencherOPComSugestao(plan) {
   var prod = produtosPais().find(function(x){return x.sku_pai === plan.sku_produto;});
   var inputProd = document.getElementById('f-nova-produto');
   if (inputProd && prod) {
-    inputProd.value = prod.nome + ' (' + plan.sku_produto + ')';
+    inputProd.value = prod.nome || '';
     if (typeof onProdutoOPChange === 'function') onProdutoOPChange();
   }
 
@@ -3221,7 +3221,7 @@ function renderCustos() {
     var base = (c.base_compras || 0) + ' compra' + (c.base_compras === 1 ? '' : 's') +
                ' · ' + (c.base_ops || 0) + ' OP' + (c.base_ops === 1 ? '' : 's');
     return '<tr>' +
-      '<td style="white-space:nowrap"><strong>' + nome + '</strong> <span style="color:var(--txt3);font-size:11px">(' + c.sku_pai + ')</span></td>' +
+      '<td style="white-space:nowrap"><strong>' + nome + '</strong></td>' +
       '<td class="r" style="white-space:nowrap">' + (tec > 0 ? fmtR(tec) : '<span style="color:var(--txt4)">—</span>') + '</td>' +
       '<td class="r" style="white-space:nowrap">' + (cost > 0 ? fmtR(cost) : '<span style="color:var(--txt4)">—</span>') + '</td>' +
       '<td class="r" style="font-weight:700;color:var(--indigo);white-space:nowrap">' + fmtR(total) + '</td>' +
@@ -3786,11 +3786,11 @@ function popularDatalistCores() {
     (STATE.coresValidas || []).forEach(function(c){ if (c.cor) set[c.cor] = 1; });
     dl.innerHTML = Object.keys(set).sort().map(function(c){ return '<option value="'+c.replace(/"/g,'&quot;')+'">'; }).join('');
   }
-  // Produtos de fabricacao propria — value = "Nome (SKU)" pra extrair SKU no handler
+  // Produtos de fabricacao propria — datalist com NOME do produto (SKU resolvido via lookup)
   var dlP = document.getElementById('dl-produtos-fab');
   if (dlP) {
     dlP.innerHTML = produtosFabricacaoPropria().map(function(p){
-      return '<option value="' + (p.nome + ' (' + p.sku_pai + ')').replace(/"/g,'&quot;') + '">';
+      return '<option value="' + (p.nome || '').replace(/"/g,'&quot;') + '">';
     }).join('');
   }
   // Costureiros ativos
@@ -3808,11 +3808,21 @@ function popularDatalistCores() {
   }
 }
 
-// Extrai SKU de string "Nome (SKU)" ou retorna a string uppercase direto
+// Resolve SKU pai a partir de: "Nome (SKU)" (legado), nome do produto, ou SKU direto.
 function extrairSkuProduto(texto) {
   if (!texto) return '';
-  var m = String(texto).match(/\(([^)]+)\)\s*$/);
-  return m ? m[1].trim() : String(texto).trim().toUpperCase();
+  var t = String(texto).trim();
+  // Modo legado "Nome (SKU)" — mantém compat
+  var m = t.match(/\(([^)]+)\)\s*$/);
+  if (m) return m[1].trim();
+  // Tenta resolver pelo nome do produto (case-insensitive)
+  var prods = produtosFabricacaoPropria();
+  var byNome = prods.find(function(p) {
+    return (p.nome || '').trim().toLowerCase() === t.toLowerCase();
+  });
+  if (byNome) return byNome.sku_pai;
+  // Fallback: assume que é SKU direto
+  return t.toUpperCase();
 }
 
 // Lookup costureiro por nome exato
@@ -4597,7 +4607,7 @@ function coletarInsumosRows() {
 function buildEditOPForm(op) {
   var prodOpts = produtosPais().map(function(p) {
     var sel = p.sku_pai === op.sku_produto ? ' selected' : '';
-    return '<option value="' + p.sku_pai + '"' + sel + '>' + p.nome + ' (' + p.sku_pai + ')</option>';
+    return '<option value="' + p.sku_pai + '"' + sel + '>' + p.nome + '</option>';
   }).join('');
   var coresDisp = coresDoSKU(op.sku_produto);
   var corAtual = (op.cor || '').trim();
