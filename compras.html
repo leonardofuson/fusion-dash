@@ -533,22 +533,27 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
   <div class="tab-panel" id="panel-planejamento">
     <div class="kpi-grid" id="kpis-planejamento"></div>
     <div class="filtros">
+      <input type="text" id="flt-plan-busca" class="dinput" placeholder="Buscar produto..." oninput="renderPlanejamento()" style="min-width:220px">
+      <select id="flt-plan-categoria" class="dselect" onchange="renderPlanejamento()">
+        <option value="">Todas categorias</option>
+      </select>
       <select id="flt-plan-prioridade" class="dselect" onchange="renderPlanejamento()">
         <option value="">Todas prioridades</option>
         <option value="critica">🔴 Críticas</option>
         <option value="alta">🟠 Atenção</option>
         <option value="media">🟡 Média</option>
+        <option value="baixa">🟢 OK / Excesso</option>
       </select>
       <span id="plan-updated" style="margin-left:auto;font-size:11px;color:var(--txt3)"></span>
     </div>
     <div class="card">
       <div class="card-header">
-        <span class="card-title">Sugestões de Produção<small style="color:var(--txt3);margin-left:6px">clique em "Abrir OP" pra criar com tudo pré-preenchido</small></span>
+        <span class="card-title">Produtos<small id="plan-count" style="color:var(--txt3);margin-left:6px"></small></span>
       </div>
       <div class="card-body" id="mrp-cards"></div>
     </div>
     <div class="card">
-      <div class="card-header"><span class="card-title">Cobertura Geral por SKU<small style="color:var(--txt3);margin-left:6px">dias de venda cobertos (estoque + em produção)</small></span></div>
+      <div class="card-header"><span class="card-title">Cobertura Geral<small style="color:var(--txt3);margin-left:6px">dias de venda cobertos (estoque + em produção)</small></span></div>
       <div class="card-body" id="cobertura-bars"></div>
     </div>
   </div>
@@ -2639,6 +2644,24 @@ function tecidoPrincipalDoSku(sku) {
   return bom ? bom.tecido_nome : null;
 }
 
+// Helper: nome do produto a partir do sku_pai (esconde código pra UI)
+function nomeProduto(skuPai) {
+  if (!skuPai) return '—';
+  var p = (STATE.produtos || []).find(function(x){
+    return (x.sku_pai === skuPai || x.sku === skuPai) && x.nome;
+  });
+  return p ? (p.nome || '').trim() : skuPai;
+}
+
+// Helper: categoria do produto pai (lê de produtos.categoria)
+function categoriaProduto(skuPai) {
+  if (!skuPai) return null;
+  var p = (STATE.produtos || []).find(function(x){
+    return (x.sku_pai === skuPai || x.sku === skuPai);
+  });
+  return p ? (p.categoria || null) : null;
+}
+
 function renderPlanejamento() {
   var plan = STATE.planejamento || [];
 
@@ -2650,7 +2673,7 @@ function renderPlanejamento() {
     return;
   }
 
-  // KPIs
+  // KPIs (inalterado)
   var criticos = plan.filter(function(p){return p.prioridade==='critica';}).length;
   var altos = plan.filter(function(p){return p.prioridade==='alta';}).length;
   var cobMediana = (function() {
@@ -2661,19 +2684,43 @@ function renderPlanejamento() {
   document.getElementById('plan-updated').textContent = ultimoCalc ? 'MRP de ' + formatDate(ultimoCalc) : '';
 
   document.getElementById('kpis-planejamento').innerHTML = [
-    kpiHtml('SKUs Críticos', criticos, 'cobertura < 30d', '--kpi-accent:var(--red)'),
-    kpiHtml('SKUs Atenção', altos, 'cobertura 30-60d', '--kpi-accent:var(--orange)'),
+    kpiHtml('Críticos', criticos, 'cobertura < 30d', '--kpi-accent:var(--red)'),
+    kpiHtml('Atenção', altos, 'cobertura 30-60d', '--kpi-accent:var(--orange)'),
     kpiHtml('Cobertura Mediana', cobMediana + 'd', '', '--kpi-accent:var(--indigo)'),
-    kpiHtml('Total Analisados', plan.length, 'SKUs', '--kpi-accent:var(--green)'),
+    kpiHtml('Total Analisados', plan.length, 'produtos', '--kpi-accent:var(--green)'),
   ].join('');
 
-  // Cards de sugestão (filtrados por prioridade)
-  var fPri = document.getElementById('flt-plan-prioridade').value;
+  // Popula select de categoria (uma vez por render — pega cats únicas dos produtos planejados)
+  var selCat = document.getElementById('flt-plan-categoria');
+  if (selCat && selCat.options.length <= 1) {
+    var cats = {};
+    plan.forEach(function(p){
+      var c = categoriaProduto(p.sku_produto);
+      if (c) cats[c] = 1;
+    });
+    Object.keys(cats).sort().forEach(function(c){
+      var o = document.createElement('option');
+      o.value = c; o.textContent = c;
+      selCat.appendChild(o);
+    });
+  }
+
+  // Filtros
+  var busca = ((document.getElementById('flt-plan-busca')||{}).value || '').trim().toLowerCase();
+  var fCat = (document.getElementById('flt-plan-categoria')||{}).value || '';
+  var fPri = (document.getElementById('flt-plan-prioridade')||{}).value || '';
+
   var ordem = { critica: 0, alta: 1, media: 2, baixa: 3 };
+  // Default: mostra TODOS os produtos (não esconde mais OK/excesso)
   var sugestoes = plan.slice()
     .filter(function(p) {
-      if (fPri) return p.prioridade === fPri;
-      return p.acao_sugerida && p.acao_sugerida !== 'ok' && p.acao_sugerida !== 'excesso';
+      if (fPri && p.prioridade !== fPri) return false;
+      if (fCat && categoriaProduto(p.sku_produto) !== fCat) return false;
+      if (busca) {
+        var nome = nomeProduto(p.sku_produto).toLowerCase();
+        if (nome.indexOf(busca) < 0) return false;
+      }
+      return true;
     })
     .sort(function(a, b) {
       var pa = ordem[a.prioridade] != null ? ordem[a.prioridade] : 9;
@@ -2682,20 +2729,22 @@ function renderPlanejamento() {
       return (a.cobertura_dias || 0) - (b.cobertura_dias || 0);
     });
 
+  document.getElementById('plan-count').textContent = sugestoes.length + ' de ' + plan.length;
+
   if (!sugestoes.length) {
-    document.getElementById('mrp-cards').innerHTML = '<div class="empty">Nenhum SKU precisando atenção com os filtros atuais.</div>';
+    document.getElementById('mrp-cards').innerHTML = '<div class="empty">Nenhum produto encontrado com os filtros.</div>';
   } else {
     document.getElementById('mrp-cards').innerHTML = sugestoes.map(renderCardSugestao).join('');
   }
 
-  // Barras de cobertura geral (todos SKUs, ordenados)
-  var sorted = plan.slice().sort(function(a, b){ return (a.cobertura_dias||0) - (b.cobertura_dias||0); });
+  // Barras de cobertura geral (todos os filtrados, ordenados por cobertura)
+  var sorted = sugestoes.slice().sort(function(a, b){ return (a.cobertura_dias||0) - (b.cobertura_dias||0); });
   var maxCob = 150;
   var barsHtml = sorted.map(function(p) {
     var dias = Math.min(p.cobertura_dias || 0, 999);
     var pct = Math.min(100, Math.round(dias / maxCob * 100));
     var color = dias < 30 ? 'var(--red)' : dias < 60 ? 'var(--orange)' : dias < 100 ? 'var(--amber)' : 'var(--green)';
-    return '<div class="cov-row"><span class="cov-label">' + p.sku_produto + '</span>' +
+    return '<div class="cov-row"><span class="cov-label">' + nomeProduto(p.sku_produto) + '</span>' +
       '<div class="cov-bar-track"><div class="cov-bar-fill" style="width:' + pct + '%;background:' + color + '"></div></div>' +
       '<span class="cov-val" style="color:' + color + '">' + (p.cobertura_dias >= 9999 ? '∞' : p.cobertura_dias + 'd') + '</span></div>';
   }).join('');
@@ -2705,28 +2754,44 @@ function renderPlanejamento() {
 function renderCardSugestao(p) {
   var pill = p.prioridade === 'critica' ? '<span class="pill pill-danger">🔴 Crítico</span>'
            : p.prioridade === 'alta' ? '<span class="pill pill-delayed">🟠 Atenção</span>'
-           : '<span class="pill pill-warning">🟡 Monitorar</span>';
+           : p.prioridade === 'media' ? '<span class="pill pill-warning">🟡 Monitorar</span>'
+           : '<span class="pill pill-ok">🟢 ' + (p.acao_sugerida === 'excesso' ? 'Excesso' : 'OK') + '</span>';
 
-  var prodNome = (produtosPais().find(function(x){return x.sku_pai === p.sku_produto;}) || {}).nome || p.sku_produto;
+  var prodNome = nomeProduto(p.sku_produto);
+  var categoria = categoriaProduto(p.sku_produto);
+  var catBadge = categoria ? '<span style="display:inline-block;padding:2px 6px;background:rgba(99,102,241,0.12);color:var(--indigo);border-radius:3px;font-size:10px;font-weight:600;text-transform:uppercase;margin-left:8px">'+categoria+'</span>' : '';
 
-  // Grade em proporcao
-  var gradeBox = '';
-  if (p.grade_tamanhos && p.grade_proporcao) {
-    gradeBox = '<div style="padding:10px 12px;background:var(--bg);border:1px solid var(--bdr);border-radius:8px;margin-bottom:10px">' +
-      '<div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">Grade sugerida (vendas ecommerce 90d)</div>' +
-      '<div style="font-family:monospace;font-size:14px;color:var(--indigo);font-weight:700">' +
-        p.grade_tamanhos + ' &nbsp;·&nbsp; ' + p.grade_proporcao +
-      '</div></div>';
-  }
-
-  // Cor top
-  var cores = p.cores_sugeridas || [];
-  var corBox = '';
-  if (cores.length) {
-    var top3 = cores.slice(0, 3).map(function(c) {
-      return '<span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px"><span style="width:10px;height:10px;border-radius:2px;background:'+corToColor(c.cor)+'"></span>' + c.cor + ' <small style="color:var(--txt3)">' + c.pct + '%</small></span>';
+  // Grades por cor (do MRP — pré-calculado)
+  var gradesPorCor = p.grades_por_cor || [];
+  var coresValidas = gradesPorCor.filter(function(c){ return c.qtd_vendida >= 5; }); // ignora cores residuais
+  var gradesBox = '';
+  if (coresValidas.length) {
+    var topCores = coresValidas.slice(0, 5).map(function(c) {
+      var corDot = '<span style="width:10px;height:10px;border-radius:2px;background:'+corToColor(c.cor)+';display:inline-block"></span>';
+      var tamRow = c.tamanhos && c.proporcao
+        ? '<div style="font-family:monospace;font-size:12px;color:var(--indigo);margin-top:2px">' + c.tamanhos + ' &nbsp;·&nbsp; ' + c.proporcao + '</div>'
+        : '';
+      return '<div style="padding:8px 10px;background:var(--bg);border:1px solid var(--bdr);border-radius:6px;margin-bottom:6px">' +
+        '<div style="display:flex;align-items:center;gap:6px;font-size:12px">' +
+          corDot + '<strong>' + c.cor + '</strong>' +
+          '<small style="color:var(--txt3);margin-left:auto">' + fmt(c.qtd_vendida) + ' pç · ' + c.pct + '%</small>' +
+        '</div>' +
+        tamRow +
+      '</div>';
     }).join('');
-    corBox = '<div style="font-size:12px;margin-bottom:8px"><strong style="color:var(--txt3);font-size:10px;text-transform:uppercase;margin-right:8px">Cores:</strong>' + top3 + '</div>';
+    var resto = coresValidas.length > 5 ? '<small style="color:var(--txt3);font-size:11px">+ ' + (coresValidas.length - 5) + ' cor(es) com vendas menores</small>' : '';
+    gradesBox = '<div style="margin-bottom:10px">' +
+      '<div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Grade sugerida por cor (vendas ecommerce 90d)</div>' +
+      topCores + resto +
+    '</div>';
+  } else if (p.grade_tamanhos && p.grade_proporcao) {
+    // Fallback: grade agregada se não tiver split por cor
+    gradesBox = '<div style="padding:10px 12px;background:var(--bg);border:1px solid var(--bdr);border-radius:8px;margin-bottom:10px">' +
+      '<div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">Grade sugerida</div>' +
+      '<div style="font-family:monospace;font-size:14px;color:var(--indigo);font-weight:700">' +
+        p.grade_tamanhos + ' &nbsp;·&nbsp; p.grade_proporcao' +
+      '</div></div>';
+    gradesBox = gradesBox.replace('p.grade_proporcao', p.grade_proporcao);
   }
 
   // Tecido + saldo
@@ -2734,38 +2799,40 @@ function renderCardSugestao(p) {
   var saldoTec = saldoTecidoDoSku(p.sku_produto);
   var necTec = p.necessidade_tecido || 0;
   var temTecido = saldoTec >= necTec && necTec > 0;
-  var tecColor = temTecido ? 'var(--green)' : 'var(--red)';
+  var tecColor = temTecido ? 'var(--green)' : (necTec > 0 ? 'var(--red)' : 'var(--txt3)');
 
   // Costureiro sugerido
   var topCost = (p.costureiros_sugeridos || [])[0] || null;
-  var custBox = topCost ? '<div style="font-size:12px"><strong style="color:var(--txt3);font-size:10px;text-transform:uppercase">Costureiro:</strong> ' + topCost.nome + (topCost.valor_peca ? ' · ' + fmtR(topCost.valor_peca) + '/pç' : '') + '</div>' : '';
+  var custBox = topCost ? '<div style="font-size:12px;margin-bottom:8px"><strong style="color:var(--txt3);font-size:10px;text-transform:uppercase">Costureiro sugerido:</strong> ' + topCost.nome + (topCost.valor_peca ? ' · ' + fmtR(topCost.valor_peca) + '/pç' : '') + '</div>' : '';
 
-  // CTA
-  var ctaBtn;
-  if (necTec > 0 && !temTecido) {
-    ctaBtn = '<button class="btnf" style="background:var(--orange);color:#fff;margin-left:auto" onclick="abrirCompraTecidoDaSugestao(\''+p.sku_produto+'\')">Comprar Tecido</button>';
-  } else {
-    ctaBtn = '<button class="btnf" onclick="abrirOPDaSugestao(\''+p.sku_produto+'\')">Abrir OP</button>';
+  // CTA — só pra prioridades acionáveis
+  var ctaBtn = '';
+  if (p.prioridade !== 'baixa') {
+    if (necTec > 0 && !temTecido) {
+      ctaBtn = '<button class="btnf" style="background:var(--orange);color:#fff;margin-left:auto" onclick="abrirCompraTecidoDaSugestao(\''+p.sku_produto+'\')">Comprar Tecido</button>';
+    } else {
+      ctaBtn = '<button class="btnf" style="margin-left:auto" onclick="abrirOPDaSugestao(\''+p.sku_produto+'\')">Abrir OP</button>';
+    }
   }
 
   return '<div style="padding:16px;border:1px solid var(--bdr);border-radius:10px;margin-bottom:12px;background:var(--bg3)">' +
     '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">' +
       pill +
-      '<div style="flex:1"><strong style="font-size:14px">' + prodNome + '</strong> <span style="color:var(--txt3);font-size:11px">(' + p.sku_produto + ')</span></div>' +
+      '<div style="flex:1"><strong style="font-size:14px">' + prodNome + '</strong>' + catBadge + '</div>' +
       '<span style="color:var(--txt3);font-size:12px">' + (p.cobertura_dias >= 9999 ? 'cobertura ∞' : p.cobertura_dias + 'd de cobertura') + '</span>' +
     '</div>' +
     '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px;font-size:12px">' +
       '<div><div style="color:var(--txt3);font-size:10px;text-transform:uppercase">Estoque</div><strong>' + fmt(p.estoque_atual) + ' pç</strong></div>' +
-      '<div title="Total de peças vendidas nos últimos 90 dias (ecommerce + lojas KWID, excluindo cancelados/devolvidos)"><div style="color:var(--txt3);font-size:10px;text-transform:uppercase">Vendas 90d · ecom+lojas</div><strong>' + fmt(p.vendas_90d) + ' pç</strong><div style="font-size:10px;color:var(--txt3)">' + (p.velocidade_diaria||0).toFixed(1) + ' pç/dia</div></div>' +
+      '<div title="Total de peças vendidas nos últimos 90 dias (ecommerce + lojas KWID, excluindo cancelados/devolvidos)"><div style="color:var(--txt3);font-size:10px;text-transform:uppercase">Vendas 90d</div><strong>' + fmt(p.vendas_90d) + ' pç</strong><div style="font-size:10px;color:var(--txt3)">' + (p.velocidade_diaria||0).toFixed(1) + ' pç/dia</div></div>' +
       '<div><div style="color:var(--txt3);font-size:10px;text-transform:uppercase">Em Produção</div><strong>' + fmt(p.em_producao) + ' pç</strong></div>' +
       '<div><div style="color:var(--txt3);font-size:10px;text-transform:uppercase">Necessidade</div><strong style="color:var(--indigo)">' + fmt(p.necessidade_pecas) + ' pç</strong></div>' +
     '</div>' +
-    gradeBox +
-    corBox +
-    '<div style="font-size:12px;margin-bottom:8px"><strong style="color:var(--txt3);font-size:10px;text-transform:uppercase">Tecido:</strong> ' + tecNome + ' · ' +
-      '<span style="color:' + tecColor + '">saldo ' + fmt(Math.round(saldoTec)) + ' / necessidade ' + fmt(necTec) + ' ' + (p.unidade_tecido || 'M') + '</span></div>' +
+    gradesBox +
+    '<div style="font-size:12px;margin-bottom:8px"><strong style="color:var(--txt3);font-size:10px;text-transform:uppercase">Tecido:</strong> ' + tecNome +
+      (necTec > 0 ? ' · <span style="color:' + tecColor + '">saldo ' + fmt(Math.round(saldoTec)) + ' / necessidade ' + fmt(necTec) + ' ' + (p.unidade_tecido || 'M') + '</span>' : '') +
+    '</div>' +
     custBox +
-    '<div style="display:flex;justify-content:flex-end;margin-top:12px">' + ctaBtn + '</div>' +
+    (ctaBtn ? '<div style="display:flex;justify-content:flex-end;margin-top:12px">' + ctaBtn + '</div>' : '') +
   '</div>';
 }
 
