@@ -1112,8 +1112,18 @@ function renderAds(){
   var totGasto=camps.reduce(function(s,r){return s+(parseFloat(r.gasto)||0);},0);
   var totReceita=camps.reduce(function(s,r){return s+(parseFloat(r.receita_total)||0);},0);
   var acosMedio=totReceita>0?(totGasto/totReceita*100):0;
-  // TACOS = gasto / receita TOTAL ML do dash (não só atribuída)
-  var receitaMl=(STATE.pedidos||[]).filter(function(p){return!p._canc&&(/mercado/i.test(p._nome));}).reduce(function(s,p){return s+(parseFloat(p.valor_bruto)||0);},0);
+  // TACOS = gasto / receita TOTAL ML do dash (não só atribuída).
+  // _nome é o nome curto ("ML Fio" / "ML Confecções") via getNome — não "Mercado Livre".
+  // Filtra também por conta selecionada se aplicável.
+  var contaTacos = STATE.adsConta;
+  var receitaMl=(STATE.pedidos||[]).filter(function(p){
+    if(p._canc) return false;
+    if(!p._nome) return false;
+    if(p._nome.indexOf('ML ')!==0) return false;  // "ML Fio" / "ML Confecções"
+    if(contaTacos==='fio_e_trama' && p._nome!=='ML Fio') return false;
+    if(contaTacos==='confeccoes' && p._nome!=='ML Confecções') return false;
+    return true;
+  }).reduce(function(s,p){return s+(parseFloat(p.valor_bruto)||0);},0);
   var tacos=receitaMl>0?(totGasto/receitaMl*100):0;
 
   var kpis=document.getElementById('ads-kpis');
