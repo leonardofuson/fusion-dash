@@ -2644,13 +2644,22 @@ function tecidoPrincipalDoSku(sku) {
   return bom ? bom.tecido_nome : null;
 }
 
-// Helper: nome do produto a partir do sku_pai (esconde código pra UI)
+// Helper: nome do produto a partir do sku_pai (esconde código pra UI).
+// Prefere o registro raiz (sku == sku_pai) — pra SKUs sem raiz, deriva o nome curto
+// truncando no primeiro separador de variante (" - 44 - VERDE" → "Calça de Malha").
 function nomeProduto(skuPai) {
   if (!skuPai) return '—';
-  var p = (STATE.produtos || []).find(function(x){
-    return (x.sku_pai === skuPai || x.sku === skuPai) && x.nome;
-  });
-  return p ? (p.nome || '').trim() : skuPai;
+  var produtos = STATE.produtos || [];
+  // 1. Preferir o registro raiz (produto pai)
+  var raiz = produtos.find(function(x){ return x.sku === skuPai && x.nome; });
+  if (raiz) return (raiz.nome || '').trim();
+  // 2. Fallback: qualquer variante com esse sku_pai
+  var p = produtos.find(function(x){ return x.sku_pai === skuPai && x.nome; });
+  if (!p) return skuPai;
+  // Trunca o nome no primeiro " - " (sufixos típicos: " - 44 - VERDE")
+  var nomeCompleto = (p.nome || '').trim();
+  var idxSep = nomeCompleto.indexOf(' - ');
+  return idxSep > 0 ? nomeCompleto.slice(0, idxSep).trim() : nomeCompleto;
 }
 
 // Helper: categoria do produto pai (lê de produtos.categoria)
@@ -2663,7 +2672,14 @@ function categoriaProduto(skuPai) {
 }
 
 function renderPlanejamento() {
-  var plan = STATE.planejamento || [];
+  // Dedup: mantém só a run mais recente por sku_produto.
+  // STATE.planejamento vem ordenado por data_calculo desc; mantém a 1ª ocorrência por SKU.
+  var visto = {};
+  var plan = (STATE.planejamento || []).filter(function(p) {
+    if (!p.sku_produto || visto[p.sku_produto]) return false;
+    visto[p.sku_produto] = 1;
+    return true;
+  });
 
   if (!plan.length) {
     document.getElementById('kpis-planejamento').innerHTML =
