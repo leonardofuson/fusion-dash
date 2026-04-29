@@ -462,14 +462,14 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
       <div id="chips-localizacao" style="display:flex;gap:6px;flex-wrap:wrap;width:100%;margin-top:6px;align-items:center"></div>
     </div>
     <div class="card">
-      <div class="card-header"><span class="card-title">Estoque de Insumos<small id="insumo-count"></small><small style="color:var(--txt3);margin-left:6px">(ordenado por saldo, maior primeiro)</small></span></div>
+      <div class="card-header"><span class="card-title">Estoque de Insumos<small id="insumo-count"></small><small style="color:var(--txt3);margin-left:6px">(ordenado por saldo livre, maior primeiro)</small></span></div>
       <div class="tb-wrap tb-wrap-scroll">
         <table class="tb"><thead><tr>
           <th style="width:40px"></th>
           <th>Tecido / Cor</th>
-          <th class="r">Total</th>
-          <th class="r">Em Produção</th>
-          <th class="r">Saldo</th>
+          <th class="r" title="Quantidade física total (incluindo o que está em OPs ativas)">Total</th>
+          <th class="r" title="Tecido alocado em OPs ativas (Em Produção / Devolvido Fornecedor)">Em Produção</th>
+          <th class="r" title="Saldo disponível pra novas OPs = Total − Em Produção">Saldo Livre</th>
           <th>Localização</th>
           <th>Un.</th>
           <th>Produtos</th>
@@ -1998,8 +1998,10 @@ function buildEditInsumoForm(i) {
   var emProducao = (STATE.ops || []).filter(function(o) {
     return o.insumo_id === i.id && o.quantidade_tecido_usada && o.status !== 'Entregue' && o.status !== 'Cancelado';
   }).reduce(function(s, o) { return s + (o.quantidade_tecido_usada || 0); }, 0);
-  var saldo = i.quantidade_atual || 0;
-  var totalComprado = saldo + emProducao;
+  // Total = quantidade_atual (físico). em_producao já está incluído nele.
+  // Saldo Livre = Total − em_producao (disponível pra novas OPs).
+  var totalComprado = i.quantidade_atual || 0;
+  var saldoLivreInicial = totalComprado - emProducao;
 
   // Saldo por localização (event log via vw_insumo_saldo_local)
   var saldosPorLoc = (STATE.saldoLocalIdx || {})[i.id] || {};
@@ -2011,10 +2013,10 @@ function buildEditInsumoForm(i) {
   var breakdownHtml;
   if (locsComSaldo.length) {
     breakdownHtml = locsComSaldo.map(function(l){return '<span style="display:inline-block;margin-right:10px"><strong style="color:var(--txt1)">'+l+':</strong> '+fmt(saldosPorLoc[l])+' '+(i.unidade||'')+'</span>';}).join('');
-  } else if (saldo > 0) {
+  } else if (totalComprado > 0) {
     // Sem movs no event log mas tem saldo (ex: insumo migrado) — mostra localização do cadastro
     var locDef = i.localizacao || 'CD FUSION';
-    breakdownHtml = '<span style="color:var(--orange)">⚠ sem movs registradas — saldo agregado em <strong style="color:var(--txt1)">'+locDef+'</strong>: '+fmt(saldo)+' '+(i.unidade||'')+'</span>';
+    breakdownHtml = '<span style="color:var(--orange)">⚠ sem movs registradas — saldo agregado em <strong style="color:var(--txt1)">'+locDef+'</strong>: '+fmt(totalComprado)+' '+(i.unidade||'')+'</span>';
   } else {
     breakdownHtml = '<span style="color:var(--txt3)">sem saldo</span>';
   }
@@ -2030,7 +2032,7 @@ function buildEditInsumoForm(i) {
         '<input type="number" step="0.01" id="f-ei-total" value="' + totalComprado + '" data-original="' + totalComprado + '" style="width:120px;padding:4px 8px;background:var(--bg3);border:1px solid var(--bdr);border-radius:4px;color:var(--txt1);font-weight:700;font-size:13px" oninput="atualizarSaldoEditInsumo()">' +
         '<span>' + (i.unidade||'') + '</span>' +
         '<span style="color:var(--amber);margin-left:auto" title="Tecido em OPs ativas">Em Produção: ' + fmt(emProducao) + '</span>' +
-        '<span style="color:var(--green)">Saldo: <span id="f-ei-saldo-calc">' + fmt(saldo) + '</span></span>' +
+        '<span style="color:var(--green)">Saldo Livre: <span id="f-ei-saldo-calc">' + fmt(saldoLivreInicial) + '</span></span>' +
       '</div>' +
       '<div style="margin-top:8px;font-size:10px;color:var(--txt3)">Editar Total Comprado gera ajuste no event log. Em Produção vem das OPs ativas (Em Produção / Devolvido Fornecedor); Saldo = Total − Em Produção.</div>' +
       '<div style="margin-top:6px;font-size:11px">Saldo por local: ' + breakdownHtml + '</div>' +
@@ -2439,20 +2441,23 @@ function renderInsumos() {
         key: key, nf: i.numero_nf, tecido: i.nome, unidade: i.unidade,
         data_faturamento: i.data_faturamento, fornecedor_id: i.fornecedor_id,
         skus_pai: i.skus_pai || [],
-        variantes: [], total: 0, em_producao: 0, saldo: 0,
+        variantes: [], total: 0, em_producao: 0, saldo_livre: 0,
       };
     }
     var em_producao = emProducaoPorInsumo[i.id] || 0;
-    var saldo = i.quantidade_atual || 0;
-    grupos[key].variantes.push({ item: i, em_producao: em_producao, saldo: saldo, total: saldo + em_producao });
-    grupos[key].total += saldo + em_producao;
+    // Total = quantidade física (quantidade_atual). Em Produção é subset (já incluído).
+    // Saldo Livre = Total - Em Produção (disponível pra novas OPs).
+    var total_v = i.quantidade_atual || 0;
+    var saldo_livre = total_v - em_producao;
+    grupos[key].variantes.push({ item: i, em_producao: em_producao, saldo_livre: saldo_livre, total: total_v });
+    grupos[key].total += total_v;
     grupos[key].em_producao += em_producao;
-    grupos[key].saldo += saldo;
+    grupos[key].saldo_livre += saldo_livre;
   });
 
-  // Ordenar grupos por SALDO DESC (mais saldo primeiro); empates pela NF mais recente.
+  // Ordenar grupos por SALDO LIVRE DESC (mais livre primeiro); empates pela NF mais recente.
   var gruposArr = Object.values(grupos).sort(function(a, b) {
-    var sa = a.saldo || 0, sb = b.saldo || 0;
+    var sa = a.saldo_livre || 0, sb = b.saldo_livre || 0;
     if (sa !== sb) return sb - sa;
     var da = a.data_faturamento || '0000-00-00';
     var db = b.data_faturamento || '0000-00-00';
@@ -2462,7 +2467,7 @@ function renderInsumos() {
   var html = gruposArr.slice(0, 200).map(function(g) {
     var dataTxt = g.data_faturamento ? formatDate(g.data_faturamento) : '—';
     var fornecedor = g.fornecedor_id ? (STATE.fornecedores.find(function(f){return f.id===g.fornecedor_id;}) || {}).nome : null;
-    var corTotal = g.saldo <= 0 ? 'var(--red)' : g.saldo < 50 ? 'var(--orange)' : 'var(--green)';
+    var corTotal = g.saldo_livre <= 0 ? 'var(--red)' : g.saldo_livre < 50 ? 'var(--orange)' : 'var(--green)';
     var skusHtml = (g.skus_pai || []).map(function(s) {
       return '<span style="display:inline-block;padding:1px 6px;margin:1px 2px;border-radius:3px;background:rgba(99,102,241,0.15);color:var(--indigo);font-size:10px;font-weight:600">'+s+'</span>';
     }).join('') || '<span style="color:var(--txt4);font-size:11px">—</span>';
@@ -2484,10 +2489,10 @@ function renderInsumos() {
           temMov = true;
         }
       });
-      if (!temMov && v.saldo > 0.001) {
+      if (!temMov && v.total > 0.001) {
         var locD = ii.localizacao || 'CD FUSION';
-        locsDefaultGrupo[locD] = (locsDefaultGrupo[locD] || 0) + v.saldo;
-        saldoSemMovsGrupo += v.saldo;
+        locsDefaultGrupo[locD] = (locsDefaultGrupo[locD] || 0) + v.total;
+        saldoSemMovsGrupo += v.total;
       }
     });
     var locsGrupoSorted = Object.keys(saldoLocGrupo).sort(function(a,b){
@@ -2523,7 +2528,7 @@ function renderInsumos() {
       '</td>' +
       '<td class="r" style="font-weight:700">' + fmt(g.total) + '</td>' +
       '<td class="r" style="color:var(--amber);font-weight:700" title="Tecido em OPs ativas (status Em Produção / Devolvido Fornecedor)">' + fmt(g.em_producao) + '</td>' +
-      '<td class="r" style="color:'+corTotal+';font-weight:800;font-size:14px">' + fmt(g.saldo) + '</td>' +
+      '<td class="r" style="color:'+corTotal+';font-weight:800;font-size:14px">' + fmt(g.saldo_livre) + '</td>' +
       '<td style="line-height:1.5">' + locGrupoHtml + '</td>' +
       '<td>' + (g.unidade || '') + '</td>' +
       '<td>' + skusHtml + '</td>' +
@@ -2533,10 +2538,10 @@ function renderInsumos() {
 
     // Linhas filhas (só se expanded) — cada uma clicável para editar
     if (expanded) {
-      g.variantes.sort(function(a,b){return (b.saldo||0) - (a.saldo||0);});
+      g.variantes.sort(function(a,b){return (b.saldo_livre||0) - (a.saldo_livre||0);});
       g.variantes.forEach(function(v) {
         var i = v.item;
-        var corSaldo = v.saldo <= 0 ? 'var(--red)' : v.saldo < 50 ? 'var(--orange)' : 'var(--txt2)';
+        var corSaldo = v.saldo_livre <= 0 ? 'var(--red)' : v.saldo_livre < 50 ? 'var(--orange)' : 'var(--txt2)';
         // Localização da variante
         var saldoPorLoc = (STATE.saldoLocalIdx || {})[i.id] || {};
         var locParts = Object.keys(saldoPorLoc).filter(function(l){return saldoPorLoc[l] > 0;}).sort(function(a,b){
@@ -2548,11 +2553,11 @@ function renderInsumos() {
             var lbl = l==='CD FUSION' ? 'CD' : l;
             return '<span style="display:inline-block;margin-right:6px;font-size:11px"><strong>'+lbl+'</strong>: '+fmt(saldoPorLoc[l])+'</span>';
           }).join('');
-        } else if (v.saldo > 0.001) {
+        } else if (v.total > 0.001) {
           // Sem movs (migração) — usa localização default do cadastro
           var locD = i.localizacao || 'CD FUSION';
           var lbl = locD==='CD FUSION' ? 'CD' : locD;
-          locVarHtml = '<span style="color:var(--orange);font-size:11px" title="Sem movs registradas — saldo agregado">⚠ <strong>'+lbl+'</strong>: '+fmt(v.saldo)+'</span>';
+          locVarHtml = '<span style="color:var(--orange);font-size:11px" title="Sem movs registradas — saldo agregado">⚠ <strong>'+lbl+'</strong>: '+fmt(v.total)+'</span>';
         } else {
           locVarHtml = '<span style="color:var(--txt4);font-size:10px">—</span>';
         }
@@ -2561,14 +2566,14 @@ function renderInsumos() {
           '<td style="padding-left:24px" class="dim">↳ ' + ((i.cor || '—').trim()) + '<span style="color:var(--txt4);font-size:10px;margin-left:6px">(editar)</span></td>' +
           '<td class="r">' + fmt(v.total) + '</td>' +
           '<td class="r" style="color:var(--amber)">' + fmt(v.em_producao) + '</td>' +
-          '<td class="r" style="color:'+corSaldo+';font-weight:600">' + fmt(v.saldo) + '</td>' +
+          '<td class="r" style="color:'+corSaldo+';font-weight:600">' + fmt(v.saldo_livre) + '</td>' +
           '<td style="line-height:1.5">' + locVarHtml + '</td>' +
           '<td class="dim">' + (i.unidade || '') + '</td>' +
           '<td></td>' +
           '<td class="dim" style="font-size:10px">' + (i.valor_unitario_referencia ? fmtR(i.valor_unitario_referencia) : '') + '</td>' +
           '<td onclick="event.stopPropagation()" style="text-align:center;white-space:nowrap">' +
             '<button class="btnf" style="font-size:10px;padding:3px 8px;margin-right:3px" onclick="openDrawerEditInsumo('+i.id+')" title="Editar tecido">Editar</button>' +
-            (((Object.values(saldoPorLoc)).some(function(s){return s>0.001;}) || v.saldo > 0) ? '<button class="btnf ghost" style="font-size:10px;padding:3px 8px;margin-right:3px" onclick="abrirTransferenciaTecido('+i.id+')" title="Mover tecido entre CD e costureiros">Transferir</button>' : '') +
+            (((Object.values(saldoPorLoc)).some(function(s){return s>0.001;}) || v.total > 0) ? '<button class="btnf ghost" style="font-size:10px;padding:3px 8px;margin-right:3px" onclick="abrirTransferenciaTecido('+i.id+')" title="Mover tecido entre CD e costureiros">Transferir</button>' : '') +
             '<button class="btnf ghost" style="font-size:10px;padding:3px 8px;color:var(--red);border-color:rgba(248,113,113,0.4)" onclick="excluirInsumo('+i.id+')" title="Excluir tecido">Excluir</button>' +
           '</td>' +
         '</tr>';
