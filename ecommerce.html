@@ -267,8 +267,8 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
       <button class="chip" data-preset="hoje" onclick="setPeriodo('hoje',this)">Hoje</button>
       <button class="chip" data-preset="ontem" onclick="setPeriodo('ontem',this)">Ontem</button>
       <button class="chip" data-preset="7d" onclick="setPeriodo('7d',this)">7d</button>
-      <button class="chip on" data-preset="30d" onclick="setPeriodo('30d',this)">30d</button>
-      <button class="chip" data-preset="mtd" onclick="setPeriodo('mtd',this)">MTD</button>
+      <button class="chip" data-preset="30d" onclick="setPeriodo('30d',this)">30d</button>
+      <button class="chip on" data-preset="mtd" onclick="setPeriodo('mtd',this)">MTD</button>
       <button class="chip" data-preset="qtd" onclick="setPeriodo('qtd',this)">QTD</button>
       <button class="chip" data-preset="ytd" onclick="setPeriodo('ytd',this)">YTD</button>
       <button class="chip" data-preset="12m" onclick="setPeriodo('12m',this)">12m</button>
@@ -1373,7 +1373,7 @@ document.addEventListener('keydown',function(e){
   const auth=await fusionAuth.requireAuth('ecommerce');if(!auth)return;
   AUTH_HEADERS=auth.headers;
   var ui=document.getElementById('user-info-tb');if(ui)ui.textContent=(auth.role.nome||auth.role.email);
-  var h=hojeSP();DE=somaDias(h,-29);ATE=h;
+  var h=hojeSP();DE=inicioMesSP();ATE=h;
   document.getElementById('dt-de').value=DE;document.getElementById('dt-ate').value=ATE;
   setupProdSearch();
   carregar();

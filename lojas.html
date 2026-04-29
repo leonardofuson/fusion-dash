@@ -280,8 +280,8 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
       <button class="chip" data-preset="hoje" onclick="setPeriodo('hoje',this)">Hoje</button>
       <button class="chip" data-preset="ontem" onclick="setPeriodo('ontem',this)">Ontem</button>
       <button class="chip" data-preset="7d" onclick="setPeriodo('7d',this)">7 dias</button>
-      <button class="chip on" data-preset="30d" onclick="setPeriodo('30d',this)">30 dias</button>
-      <button class="chip" data-preset="mtd" onclick="setPeriodo('mtd',this)">Este Mês</button>
+      <button class="chip" data-preset="30d" onclick="setPeriodo('30d',this)">30 dias</button>
+      <button class="chip on" data-preset="mtd" onclick="setPeriodo('mtd',this)">Este Mês</button>
       <button class="chip" data-preset="ytd" onclick="setPeriodo('ytd',this)">Este Ano</button>
       <button class="chip" data-preset="12m" onclick="setPeriodo('12m',this)">12m</button>
     </div>
@@ -1810,7 +1810,7 @@ function renderVendedores(){
   if(ui) ui.textContent=(auth.role.nome||auth.role.email);
   var h=hojeSP();
   var urlPreset=loadFromURL();
-  if(!DE){DE=somaDias(h,-29);ATE=h;}
+  if(!DE){DE=inicioMesSP();ATE=h;}
   document.getElementById('dt-de').value=DE;
   document.getElementById('dt-ate').value=ATE;
   if(urlPreset){

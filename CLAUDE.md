@@ -81,6 +81,7 @@ Pra criar um novo dash (ex: `marketing`):
 - **Charts**: `.destroy()` antes de recriar (objeto `CHARTS = {}` global). Sparklines em arrays próprios.
 - **Cores oficiais** em `LOJA_CORES` no `auth.js` — não inventar.
 - **Datas**: fuso `America/Sao_Paulo` em todo agrupamento.
+- **Período default = MTD (Este Mês)**: chip `mtd` com classe `on` no HTML, init JS com `DE=inicioMesSP();ATE=h;`. Decisão padrão da Fusion (29/04/2026) — diretoria pensa em mês corrente. Não usar 30d/7d como default.
 - **Pedidos**: fetch paralelo de `pedidos` + `pedidos_historico` com `.concat()`. Sempre filtrar `status NOT IN ('cancelado', 'devolvido')` em receita.
 - **Mobile**: breakpoint principal 768px. Cards empilhados em mobile, lado-a-lado em desktop.
 - **Export PNG**: html2canvas. Aplicar em todo card de KPI relevante.
