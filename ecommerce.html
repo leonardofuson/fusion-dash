@@ -156,13 +156,80 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
 
 /* Product ranking */
 .prod-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;margin-bottom:4px;transition:background 0.15s;cursor:pointer;}
-.prod-row:hover{background:rgba(255,255,255,0.03);}
+.prod-row:hover{background:rgba(255,255,255,0.06);}
 .prod-rank{font-size:11px;font-weight:800;color:var(--txt3);width:22px;text-align:right;}
 .prod-info{flex:1;min-width:0;}
 .prod-name{font-size:12px;font-weight:600;color:var(--txt1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .prod-meta{font-size:10px;color:var(--txt3);margin-top:2px;}
 .prod-val{font-size:13px;font-weight:700;color:var(--txt1);font-variant-numeric:tabular-nums;text-align:right;min-width:80px;}
 .prod-pct{font-size:10px;font-weight:700;text-align:right;min-width:45px;}
+
+/* Typeahead search */
+.search-wrap{position:relative;margin-bottom:14px;}
+.search-input{width:100%;background:var(--bg);border:1px solid var(--bdr);border-radius:10px;padding:11px 14px 11px 38px;font-size:13px;color:var(--txt1);font-family:inherit;outline:none;transition:border-color 0.15s;}
+.search-input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(99,102,241,0.15);}
+.search-input::placeholder{color:var(--txt3);}
+.search-icon{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--txt3);font-size:14px;pointer-events:none;}
+.search-results{position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--bg2);border:1px solid var(--bdr);border-radius:10px;max-height:340px;overflow-y:auto;z-index:50;display:none;box-shadow:0 10px 40px rgba(0,0,0,0.4);}
+.search-results.open{display:block;}
+.search-results .prod-row{margin-bottom:0;border-radius:0;border-bottom:1px solid rgba(255,255,255,0.04);}
+.search-results .prod-row:last-child{border-bottom:none;}
+.search-empty{padding:20px;text-align:center;color:var(--txt3);font-size:12px;}
+
+/* Drawer (Product Detail) */
+.drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);z-index:9998;opacity:0;pointer-events:none;transition:opacity 0.2s ease;}
+.drawer-overlay.open{opacity:1;pointer-events:auto;}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(720px,90vw);background:var(--bg2);border-left:1px solid var(--bdr);z-index:9999;transform:translateX(100%);transition:transform 0.25s cubic-bezier(0.4,0,0.2,1);display:flex;flex-direction:column;}
+.drawer-overlay.open .drawer{transform:translateX(0);}
+.drawer-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:18px 22px;border-bottom:1px solid var(--bdr);background:linear-gradient(180deg,var(--bg2) 0%,#141417 100%);}
+.drawer-title-wrap{flex:1;min-width:0;}
+.drawer-title{font-size:15px;font-weight:700;color:var(--txt1);margin:0 0 4px 0;line-height:1.2;}
+.drawer-subtitle{font-size:11px;color:var(--txt3);font-variant-numeric:tabular-nums;letter-spacing:0.04em;}
+.drawer-close{width:30px;height:30px;border-radius:6px;border:1px solid var(--bdr);background:transparent;color:var(--txt2);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;line-height:1;flex-shrink:0;}
+.drawer-close:hover{background:var(--bg3);color:var(--txt1);border-color:var(--red);}
+.drawer-body{flex:1;overflow-y:auto;padding:18px 22px 28px;}
+.drawer-section{margin-bottom:22px;}
+.drawer-section-title{font-size:10px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;}
+
+/* Drawer KPIs (4 cards) */
+.dr-kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:18px;}
+.dr-kpi{background:var(--bg3);border:1px solid var(--bdr);border-radius:10px;padding:12px;}
+.dr-kpi-lbl{font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;}
+.dr-kpi-val{font-size:1.1rem;font-weight:800;color:var(--txt1);font-variant-numeric:tabular-nums;line-height:1.1;}
+.dr-kpi-sub{font-size:10px;color:var(--txt3);margin-top:2px;}
+
+/* Drawer canal stacked bar */
+.dr-canalbar{height:28px;display:flex;border-radius:6px;overflow:hidden;background:var(--bg3);margin-bottom:10px;}
+.dr-canalbar-seg{display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.5);min-width:0;overflow:hidden;white-space:nowrap;transition:opacity 0.15s;cursor:default;}
+.dr-canallist{display:flex;flex-direction:column;gap:5px;}
+.dr-canalrow{display:flex;align-items:center;gap:8px;font-size:11px;}
+.dr-canaldot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.dr-canalname{flex:1;color:var(--txt1);font-weight:600;}
+.dr-canalqtd{color:var(--txt3);font-variant-numeric:tabular-nums;min-width:60px;text-align:right;}
+.dr-canalrec{color:var(--txt1);font-weight:700;font-variant-numeric:tabular-nums;min-width:80px;text-align:right;}
+.dr-canalpct{color:var(--txt2);font-variant-numeric:tabular-nums;min-width:42px;text-align:right;font-weight:700;}
+
+/* Drawer heatmap grade × cor */
+.dr-heat{display:grid;gap:2px;}
+.dr-heat-cell{padding:6px 4px;text-align:center;font-size:10px;font-weight:700;font-variant-numeric:tabular-nums;border-radius:3px;color:var(--txt1);min-height:26px;display:flex;align-items:center;justify-content:center;}
+.dr-heat-cell.empty{color:var(--txt3);background:var(--bg3);}
+.dr-heat-cell.lbl{background:transparent;color:var(--txt2);font-size:9px;text-transform:uppercase;letter-spacing:0.04em;justify-content:flex-start;padding-left:6px;}
+.dr-heat-cell.lbl-col{justify-content:center;padding-left:0;}
+.dr-heat-cell.corner{background:transparent;color:var(--txt3);font-size:8px;}
+
+/* Drawer chart */
+.dr-chart{position:relative;height:200px;}
+
+/* Drawer detail table */
+.dr-tbl{width:100%;border-collapse:separate;border-spacing:0;font-size:11px;margin-top:6px;}
+.dr-tbl th{background:transparent;color:var(--txt2);font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;padding:6px 8px;text-align:left;white-space:nowrap;border-bottom:1px solid var(--bdr);}
+.dr-tbl th.r{text-align:right;}
+.dr-tbl td{padding:6px 8px;color:var(--txt1);border-bottom:1px solid rgba(255,255,255,0.04);font-variant-numeric:tabular-nums;}
+.dr-tbl td.r{text-align:right;color:var(--txt2);}
+.dr-tbl tr:hover td{background:rgba(255,255,255,0.03);}
+
+/* Drawer empty/loading */
+.dr-empty{padding:32px 20px;text-align:center;color:var(--txt3);font-size:12px;border:1px dashed var(--bdr);border-radius:10px;}
 
 @media(max-width:1100px){.kpi-grid{grid-template-columns:repeat(3,1fr);}}
 @media(max-width:768px){
@@ -173,6 +240,11 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
   #user-info-tb{display:none;}
   .topbar{height:56px!important;padding:0 1rem!important;}
   .canal-tbl{font-size:11px;}
+  .drawer{width:100vw;}
+  .dr-kpi-grid{grid-template-columns:1fr 1fr;}
+  .dr-kpi-val{font-size:1rem;}
+  .drawer-body{padding:14px 16px 24px;}
+  .drawer-header{padding:14px 16px;}
 }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -254,9 +326,17 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
     </div>
   </div>
 
-  <!-- 4. PRODUTOS — TOP 5 RECEITA vs TOP 5 LUCRO -->
+  <!-- 4. PRODUTOS — BUSCA + TOP 5 RECEITA vs TOP 5 LUCRO -->
   <div class="card">
-    <div class="card-title">Produtos — Top 5 receita vs Top 5 lucro</div>
+    <div class="card-title">
+      <span>Análise por produto</span>
+      <span style="font-size:10px;font-weight:500;color:var(--txt3);">Clique em qualquer produto pra abrir detalhes</span>
+    </div>
+    <div class="search-wrap">
+      <span class="search-icon">🔍</span>
+      <input type="text" class="search-input" id="prod-search" placeholder="Buscar produto por SKU ou nome…" autocomplete="off">
+      <div class="search-results" id="prod-search-results"></div>
+    </div>
     <div class="grid2">
       <div>
         <div class="small-title">Top 5 por receita</div>
@@ -355,6 +435,20 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
     <div id="alerts"></div>
   </div>
 
+</div>
+
+<!-- DRAWER — Análise por Produto -->
+<div class="drawer-overlay" id="prod-drawer-overlay" onclick="closeProdDrawer()">
+  <div class="drawer" onclick="event.stopPropagation()">
+    <div class="drawer-header">
+      <div class="drawer-title-wrap">
+        <h2 class="drawer-title" id="prod-drawer-title">Produto</h2>
+        <div class="drawer-subtitle" id="prod-drawer-subtitle">—</div>
+      </div>
+      <button class="drawer-close" onclick="closeProdDrawer()" title="Fechar (ESC)">✕</button>
+    </div>
+    <div class="drawer-body" id="prod-drawer-body"></div>
+  </div>
 </div>
 
 <script>
@@ -923,7 +1017,7 @@ function renderTopProdutos(){
   var recEl=document.getElementById('top-receita');
   if(topRev.length===0){recEl.innerHTML='<div class="geo-empty">Sem dados de itens no período.</div>';}
   else{recEl.innerHTML=topRev.map(function(s,i){
-    return'<div class="prod-row"><span class="prod-rank">'+(i+1)+'</span><div class="prod-info"><div class="prod-name">'+(s.nome||s.sku_pai)+'</div><div class="prod-meta">'+s.cat+' · '+fmtN(s.qtd)+' un</div></div><span class="prod-val">'+fmt(s.receita)+'</span></div>';}).join('');}
+    return'<div class="prod-row" onclick="openProdDrawer(\''+s.sku_pai.replace(/'/g,"\\'")+'\')"><span class="prod-rank">'+(i+1)+'</span><div class="prod-info"><div class="prod-name">'+(s.nome||s.sku_pai)+'</div><div class="prod-meta">'+s.cat+' · '+fmtN(s.qtd)+' un</div></div><span class="prod-val">'+fmt(s.receita)+'</span></div>';}).join('');}
   // Top by margin %
   var topMarg=groups.filter(function(s){return s.receita>100&&s.custoTotal>0;}).map(function(s){
     var m=s.receita-s.custoTotal;var mp=s.receita>0?m/s.receita*100:0;return{nome:s.nome,sku_pai:s.sku_pai,cat:s.cat,receita:s.receita,qtd:s.qtd,margem:m,margemPct:mp};
@@ -931,7 +1025,7 @@ function renderTopProdutos(){
   var margEl=document.getElementById('top-margem');
   if(topMarg.length===0){margEl.innerHTML='<div class="geo-empty">Sem dados de custo.</div>';}
   else{margEl.innerHTML=topMarg.map(function(s,i){var cls=s.margemPct>=50?'good':(s.margemPct>=25?'mid':'bad');
-    return'<div class="prod-row"><span class="prod-rank">'+(i+1)+'</span><div class="prod-info"><div class="prod-name">'+(s.nome||s.sku_pai)+'</div><div class="prod-meta">'+s.cat+' · '+fmtN(s.qtd)+' un · <span class="margem-pill '+cls+'">'+Math.round(s.margemPct)+'%</span></div></div><span class="prod-val" style="color:#22c55e">'+fmt(s.margem)+'</span></div>';}).join('');}
+    return'<div class="prod-row" onclick="openProdDrawer(\''+s.sku_pai.replace(/'/g,"\\'")+'\')"><span class="prod-rank">'+(i+1)+'</span><div class="prod-info"><div class="prod-name">'+(s.nome||s.sku_pai)+'</div><div class="prod-meta">'+s.cat+' · '+fmtN(s.qtd)+' un · <span class="margem-pill '+cls+'">'+Math.round(s.margemPct)+'%</span></div></div><span class="prod-val" style="color:#22c55e">'+fmt(s.margem)+'</span></div>';}).join('');}
 }
 
 // ── PARETO ──
@@ -980,6 +1074,189 @@ function renderAlerts(){
     return'<div class="alert-row '+a.level+'"><span class="alert-dot '+a.level+'"></span>'+a.text+'</div>';}).join('');
 }
 
+// ── PRODUCT DRAWER (Análise por Produto) ──
+// Estado isolado: filtros globais (data, canais selecionados) já aplicados em STATE.itensFocus.
+// Drawer recebe sku_pai e renderiza recortes específicos.
+var PROD_DRAWER={open:false,sku:null};
+
+function openProdDrawer(skuPai){
+  if(!skuPai)return;
+  PROD_DRAWER.sku=skuPai;PROD_DRAWER.open=true;
+  document.getElementById('prod-drawer-overlay').classList.add('open');
+  closeProdSearch();
+  renderProdDrawer();
+  document.body.style.overflow='hidden';
+}
+function closeProdDrawer(){
+  PROD_DRAWER.open=false;PROD_DRAWER.sku=null;
+  document.getElementById('prod-drawer-overlay').classList.remove('open');
+  document.body.style.overflow='';
+  if(CHARTS.prodTrend){CHARTS.prodTrend.destroy();CHARTS.prodTrend=null;}
+}
+
+function renderProdDrawer(){
+  var sku=PROD_DRAWER.sku;if(!sku)return;
+  // Filtra itens do produto no período corrente (já filtrado pelos filtros globais)
+  var itens=(STATE.itensFocus||[]).filter(function(it){return it._sku_pai===sku;});
+  // Contagem de pedidos únicos
+  var pedidoIds={};itens.forEach(function(it){if(it.pedido_id)pedidoIds[it.pedido_id]=true;});
+  var nPedidos=Object.keys(pedidoIds).length;
+
+  var nome=(itens[0]&&itens[0]._nome)||sku;
+  var cat=(itens[0]&&itens[0]._cat)||'—';
+  document.getElementById('prod-drawer-title').textContent=nome;
+  document.getElementById('prod-drawer-subtitle').textContent='SKU: '+sku+'  ·  '+cat;
+
+  if(itens.length===0){
+    document.getElementById('prod-drawer-body').innerHTML=
+      '<div class="dr-empty"><div style="font-size:24px;margin-bottom:8px;">📦</div>Sem vendas deste produto no período/canais selecionados.<br><span style="font-size:11px;color:var(--txt3);">Ajuste filtros pra ampliar a janela.</span></div>';
+    return;
+  }
+
+  // KPIs
+  var receita=itens.reduce(function(s,it){return s+(it._receita||0);},0);
+  var qtd=itens.reduce(function(s,it){return s+(it._qtd||0);},0);
+  var custoTot=itens.reduce(function(s,it){return s+((it._custoUn||0)*(it._qtd||0));},0);
+  // Comissão estimada por canal
+  var comissao=itens.reduce(function(s,it){return s+(it._receita||0)*custoPct(it._canal);},0);
+  var margem=receita-custoTot-comissao;
+  var margemPct=receita>0?(margem/receita*100):0;
+  var ticketMed=nPedidos>0?(receita/nPedidos):0;
+
+  var html='';
+  // KPIs
+  html+='<div class="dr-kpi-grid">';
+  html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Receita</div><div class="dr-kpi-val">'+fmtK(receita)+'</div><div class="dr-kpi-sub">'+fmt(receita)+'</div></div>';
+  html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Pedidos</div><div class="dr-kpi-val">'+fmtN(nPedidos)+'</div><div class="dr-kpi-sub">Ticket: '+fmt(ticketMed)+'</div></div>';
+  html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Unidades</div><div class="dr-kpi-val">'+fmtN(qtd)+'</div><div class="dr-kpi-sub">'+fmtD(qtd/Math.max(nPedidos,1))+' un/ped</div></div>';
+  var mcls=margemPct>=40?'good':(margemPct>=20?'mid':'bad');
+  html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Margem</div><div class="dr-kpi-val">'+fmtK(margem)+'</div><div class="dr-kpi-sub"><span class="margem-pill '+mcls+'">'+Math.round(margemPct)+'%</span></div></div>';
+  html+='</div>';
+
+  // Mix por canal — stacked horizontal bar + lista
+  var byCanal={};itens.forEach(function(it){var c=it._canal||'—';if(!byCanal[c])byCanal[c]={qtd:0,receita:0};byCanal[c].qtd+=it._qtd||0;byCanal[c].receita+=it._receita||0;});
+  var canalArr=Object.keys(byCanal).map(function(c){return{nome:c,qtd:byCanal[c].qtd,receita:byCanal[c].receita,cor:getCor(c)};}).sort(function(a,b){return b.receita-a.receita;});
+  html+='<div class="drawer-section"><div class="drawer-section-title">Mix por canal</div>';
+  // Stacked bar
+  html+=  '<div class="dr-canalbar">';
+  canalArr.forEach(function(c){var pct=receita>0?(c.receita/receita*100):0;if(pct<0.5)return;
+    html+='<div class="dr-canalbar-seg" style="background:'+c.cor+';width:'+pct.toFixed(2)+'%;" title="'+c.nome+': '+fmt(c.receita)+' ('+pct.toFixed(1)+'%)">'+(pct>=8?Math.round(pct)+'%':'')+'</div>';
+  });
+  html+=  '</div>';
+  // Lista detalhada
+  html+=  '<div class="dr-canallist">';
+  canalArr.forEach(function(c){var pct=receita>0?(c.receita/receita*100):0;
+    html+='<div class="dr-canalrow"><span class="dr-canaldot" style="background:'+c.cor+';"></span><span class="dr-canalname">'+c.nome+'</span><span class="dr-canalqtd">'+fmtN(c.qtd)+' un</span><span class="dr-canalrec">'+fmt(c.receita)+'</span><span class="dr-canalpct">'+pct.toFixed(1)+'%</span></div>';
+  });
+  html+=  '</div></div>';
+
+  // Heatmap grade × cor
+  var byGC={};var tamSet={};var corSet={};
+  itens.forEach(function(it){
+    var t=(it._tam||'-').toString().trim()||'-';var c=(it._cor||'-').toString().trim()||'-';
+    var k=t+'__'+c;if(!byGC[k])byGC[k]=0;byGC[k]+=it._qtd||0;tamSet[t]=true;corSet[c]=true;
+  });
+  // Ordenar tamanhos numericamente quando possível, senão alfabético
+  var tams=Object.keys(tamSet).sort(function(a,b){var na=parseInt(a),nb=parseInt(b);if(!isNaN(na)&&!isNaN(nb))return na-nb;return a.localeCompare(b);});
+  var cores=Object.keys(corSet).sort();
+  var hasGrade=(tams.length>1||cores.length>1)&&!(tams.length===1&&tams[0]==='-'&&cores.length===1&&cores[0]==='-');
+  if(hasGrade){
+    var maxQ=Math.max.apply(null,Object.values(byGC).concat([1]));
+    html+='<div class="drawer-section"><div class="drawer-section-title">Vendas por grade × cor (unidades)</div>';
+    html+=  '<div class="dr-heat" style="grid-template-columns:80px repeat('+cores.length+',minmax(48px,1fr));">';
+    // Cabeçalho
+    html+=    '<div class="dr-heat-cell corner">tam ↓ / cor →</div>';
+    cores.forEach(function(c){html+='<div class="dr-heat-cell lbl lbl-col" title="'+c+'">'+(c==='-'?'(s/cor)':(c.length>10?c.slice(0,9)+'…':c))+'</div>';});
+    // Linhas
+    tams.forEach(function(t){
+      html+='<div class="dr-heat-cell lbl">'+(t==='-'?'(s/tam)':t)+'</div>';
+      cores.forEach(function(c){var v=byGC[t+'__'+c]||0;
+        if(v===0){html+='<div class="dr-heat-cell empty">·</div>';}
+        else{var intensity=v/maxQ;var bg='rgba(99,102,241,'+(0.15+intensity*0.6).toFixed(2)+')';
+          html+='<div class="dr-heat-cell" style="background:'+bg+';" title="Tam '+t+' / '+c+': '+v+' un">'+v+'</div>';}
+      });
+    });
+    html+=  '</div></div>';
+  }
+
+  // Série temporal — receita/qtd por dia
+  var byDate={};itens.forEach(function(it){var d=(it._data||'').slice(0,10);if(!d)return;if(!byDate[d])byDate[d]={r:0,q:0};byDate[d].r+=it._receita||0;byDate[d].q+=it._qtd||0;});
+  var dates=Object.keys(byDate).sort();
+  if(dates.length>=2){
+    html+='<div class="drawer-section"><div class="drawer-section-title">Receita diária no período</div><div class="dr-chart"><canvas id="prod-trend-chart"></canvas></div></div>';
+  }
+
+  // Tabela detalhada — variante × canal (top 20)
+  var byVar={};itens.forEach(function(it){
+    var k=(it.sku_raw||'-')+'__'+(it._canal||'-');if(!byVar[k])byVar[k]={sku:it.sku_raw||'-',canal:it._canal||'-',cor:it._cor||'-',tam:it._tam||'-',qtd:0,receita:0};
+    byVar[k].qtd+=it._qtd||0;byVar[k].receita+=it._receita||0;
+  });
+  var vars_=Object.values(byVar).sort(function(a,b){return b.receita-a.receita;}).slice(0,20);
+  if(vars_.length>0){
+    html+='<div class="drawer-section"><div class="drawer-section-title">Detalhamento por variante (top 20 por receita)</div>';
+    html+=  '<table class="dr-tbl"><thead><tr><th>SKU</th><th>Cor</th><th>Tam</th><th>Canal</th><th class="r">Qtd</th><th class="r">Receita</th></tr></thead><tbody>';
+    vars_.forEach(function(v){
+      var corOut=v.cor==='-'?'<span style="color:var(--txt3)">—</span>':v.cor;
+      var tamOut=v.tam==='-'?'<span style="color:var(--txt3)">—</span>':v.tam;
+      html+='<tr><td style="font-family:monospace;font-size:10px;">'+v.sku+'</td><td>'+corOut+'</td><td>'+tamOut+'</td><td><span class="dr-canaldot" style="background:'+getCor(v.canal)+';display:inline-block;margin-right:6px;vertical-align:middle;"></span>'+v.canal+'</td><td class="r">'+fmtN(v.qtd)+'</td><td class="r" style="color:var(--txt1);font-weight:700;">'+fmt(v.receita)+'</td></tr>';
+    });
+    html+=  '</tbody></table></div>';
+  }
+
+  document.getElementById('prod-drawer-body').innerHTML=html;
+
+  // Render trend chart
+  if(dates.length>=2){
+    var ctx=document.getElementById('prod-trend-chart');
+    if(ctx){
+      if(CHARTS.prodTrend)CHARTS.prodTrend.destroy();
+      CHARTS.prodTrend=new Chart(ctx,{
+        type:'line',
+        data:{labels:dates.map(function(d){return d.slice(5);}),datasets:[{
+          label:'Receita',data:dates.map(function(d){return byDate[d].r;}),
+          borderColor:'#6366f1',backgroundColor:'rgba(99,102,241,0.15)',borderWidth:2,fill:true,tension:0.3,pointRadius:2,pointHoverRadius:5
+        }]},
+        options:{responsive:true,maintainAspectRatio:false,
+          plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return fmt(c.parsed.y);}}}},
+          scales:{
+            x:{grid:{display:false},ticks:{color:'#a1a1aa',font:{size:10}}},
+            y:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#a1a1aa',font:{size:10},callback:function(v){return fmtK(v);}}}
+          }
+        }
+      });
+    }
+  }
+}
+
+// ── TYPEAHEAD (Search produtos) ──
+function openProdSearch(){var el=document.getElementById('prod-search-results');if(el)el.classList.add('open');}
+function closeProdSearch(){var el=document.getElementById('prod-search-results');if(el)el.classList.remove('open');}
+function renderProdSearch(query){
+  var groups=STATE.skuGroups||[];
+  var q=(query||'').toLowerCase().trim();
+  var filtered=q?groups.filter(function(s){return((s.sku_pai||'').toLowerCase().indexOf(q)>=0)||((s.nome||'').toLowerCase().indexOf(q)>=0)||((s.cat||'').toLowerCase().indexOf(q)>=0);}):groups.slice(0,30);
+  var el=document.getElementById('prod-search-results');if(!el)return;
+  if(filtered.length===0){el.innerHTML='<div class="search-empty">Nenhum produto encontrado pra "'+(query||'')+'"</div>';openProdSearch();return;}
+  el.innerHTML=filtered.slice(0,30).map(function(s,i){
+    return'<div class="prod-row" onclick="openProdDrawer(\''+s.sku_pai.replace(/'/g,"\\'")+'\')"><span class="prod-rank">'+(i+1)+'</span><div class="prod-info"><div class="prod-name">'+(s.nome||s.sku_pai)+'</div><div class="prod-meta">'+s.cat+' · '+fmtN(s.qtd)+' un · '+s.sku_pai+'</div></div><span class="prod-val">'+fmt(s.receita)+'</span></div>';
+  }).join('');
+  openProdSearch();
+}
+function setupProdSearch(){
+  var inp=document.getElementById('prod-search');if(!inp)return;
+  inp.addEventListener('focus',function(){renderProdSearch(inp.value);});
+  inp.addEventListener('input',function(){renderProdSearch(inp.value);});
+  inp.addEventListener('keydown',function(e){if(e.key==='Escape'){inp.blur();closeProdSearch();}});
+  document.addEventListener('click',function(e){
+    if(!e.target.closest('.search-wrap'))closeProdSearch();
+  });
+}
+
+// ESC fecha drawer
+document.addEventListener('keydown',function(e){
+  if(e.key==='Escape'&&PROD_DRAWER.open)closeProdDrawer();
+});
+
 // ── Init ──
 (async()=>{
   const auth=await fusionAuth.requireAuth('ecommerce');if(!auth)return;
@@ -987,6 +1264,7 @@ function renderAlerts(){
   var ui=document.getElementById('user-info-tb');if(ui)ui.textContent=(auth.role.nome||auth.role.email);
   var h=hojeSP();DE=somaDias(h,-29);ATE=h;
   document.getElementById('dt-de').value=DE;document.getElementById('dt-ate').value=ATE;
+  setupProdSearch();
   carregar();
 })();
 </script>
