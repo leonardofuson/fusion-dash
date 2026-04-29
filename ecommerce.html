@@ -549,9 +549,11 @@ async function fetchPedidos(de,ate){
 async function fetchItensForIds(ids,tabela){
   if(!ids.length)return[];
   var tab=tabela||'itens_pedido';
-  var limitedIds=ids.slice(-3000);
+  // ANTES: ids.slice(-3000) — descartava ~87% dos itens em volumes >3k pedidos.
+  // Removido em 29/04/2026: drawer Análise por Produto precisa do dataset completo
+  // pra somar receita/qtd corretamente cross-canal (ex: CLMALHA com 12k pedidos/mês).
   var batches=[];
-  for(var i=0;i<limitedIds.length;i+=BATCH_SZ){var chunk=limitedIds.slice(i,i+BATCH_SZ);batches.push(buscarTudo(tab,'select=pedido_id,quantidade,preco_unitario,desconto_item,produto_id&pedido_id=in.('+chunk.join(',')+')'));}
+  for(var i=0;i<ids.length;i+=BATCH_SZ){var chunk=ids.slice(i,i+BATCH_SZ);batches.push(buscarTudo(tab,'select=pedido_id,quantidade,preco_unitario,desconto_item,produto_id,sku_raw,nome_raw&pedido_id=in.('+chunk.join(',')+')'));}
   var all=[];
   for(var g=0;g<batches.length;g+=5){
     var grupo=batches.slice(g,g+5);
