@@ -327,7 +327,7 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
     <button class="tab-btn" data-tab="historico">Histórico</button>
     <button class="tab-btn" data-tab="planejamento">Planejamento</button>
     <button class="tab-btn" data-tab="custos">Custos</button>
-    <button class="tab-btn" data-tab="costureiros">Fornecedores</button>
+    <button class="tab-btn" data-tab="costureiros">Costureiros e Fornecedores</button>
   </nav>
 
   <!-- ═══════════════ TAB: PIPELINE ═══════════════ -->
@@ -2223,6 +2223,50 @@ function injetarBtnDesmembrarOP(opId) {
 }
 
 // ═══════════════ TAB: COSTUREIROS ═══════════════
+// Valida o input de costureiro na Nova OP — se nome não casa com nenhum ativo, oferece cadastrar inline
+function validarCostureiroNovaOP() {
+  var inp = document.getElementById('f-nova-costureiro');
+  var hint = document.getElementById('f-nova-costureiro-hint');
+  if (!inp || !hint) return;
+  var nome = (inp.value || '').trim();
+  if (!nome) { hint.innerHTML = ''; return; }
+  var existe = (STATE.costureiros || []).some(function(c){
+    return c.ativo !== false && (c.nome || '').trim().toUpperCase() === nome.toUpperCase();
+  });
+  if (existe) { hint.innerHTML = ''; return; }
+  var nomeEsc = nome.replace(/'/g,"\\'").replace(/</g,'&lt;');
+  hint.innerHTML = '<span style="color:var(--orange)">⚠ "' + nomeEsc + '" não cadastrado.</span> ' +
+    '<a href="javascript:void(0)" onclick="cadastrarCostureiroDoFlowOP(\'' + nomeEsc + '\')" style="color:var(--indigo);font-weight:600;text-decoration:underline">+ Cadastrar agora</a>';
+}
+
+// Wrapper: avisa que cadastro fecha a OP atual antes de prosseguir
+function cadastrarCostureiroDoFlowOP(nome) {
+  if (!confirm('Cadastrar um costureiro novo vai fechar este formulário de OP (você precisa começar de novo depois).\n\nContinuar?')) return;
+  abrirNovoCostureiro(nome);
+}
+
+// Abre drawer pra editar costureiro existente
+function abrirEditCostureiro(costuId) {
+  var c = (STATE.costureiros || []).find(function(x){ return x.id === costuId; });
+  if (!c) return;
+  STATE.editingCostureiro = c;
+  openDrawer('edit-costureiro');
+}
+
+// Abre drawer pra cadastrar costureiro novo (opcionalmente pre-fill nome)
+function abrirNovoCostureiro(nomePre) {
+  STATE.editingCostureiro = null;
+  STATE.cadastroCostureiroPreNome = nomePre || null;
+  openDrawer('edit-costureiro');
+  // Pre-fill nome após render do form
+  if (nomePre) {
+    setTimeout(function(){
+      var inp = document.getElementById('f-nome');
+      if (inp) inp.value = nomePre;
+    }, 0);
+  }
+}
+
 function renderCostureiros() {
   var costureiros = STATE.costureiros.filter(function(c) { return c.ativo; });
   var ops = STATE.ops;
@@ -2238,8 +2282,11 @@ function renderCostureiros() {
     }
   });
 
-  var sorted = Object.values(perf).filter(function(p) { return p.ordens > 0; }).sort(function(a, b) { return b.pecas - a.pecas; });
-  var maxPecas = sorted.length ? sorted[0].pecas : 1;
+  // Inclui todos os costureiros ativos (mesmo sem ordens) pra permitir edit
+  var sorted = costureiros.map(function(c) {
+    return Object.assign({ id: c.id }, perf[c.id] || { nome: c.nome, pecas: 0, entregues: 0, ordens: 0 });
+  }).sort(function(a, b) { return b.pecas - a.pecas; });
+  var maxPecas = sorted.length && sorted[0].pecas > 0 ? sorted[0].pecas : 1;
 
   // KPIs
   document.getElementById('kpis-costureiros').innerHTML = [
@@ -2249,15 +2296,16 @@ function renderCostureiros() {
     kpiHtml('Capacidade Total', fmt(costureiros.reduce(function(s, c) { return s + (c.capacidade_mensal || 0); }, 0)) + '/mês', '', '--kpi-accent:var(--green)'),
   ].join('');
 
-  // Bars
+  // Bars — click abre drawer em modo edit
   var barsHtml = sorted.map(function(p) {
     var pct = Math.round(p.pecas / maxPecas * 100);
     var entPct = p.pecas ? Math.round(p.entregues / p.pecas * 100) : 0;
-    return '<div class="bar-row"><span class="bar-lbl">' + p.nome + '</span>' +
+    var subInfo = p.ordens > 0 ? fmt(Math.round(p.pecas)) + ' pç (' + entPct + '% ent.)' : '<span style="color:var(--txt3)">sem ordens</span>';
+    return '<div class="bar-row" style="cursor:pointer" onclick="abrirEditCostureiro('+p.id+')" title="Editar costureiro"><span class="bar-lbl">' + p.nome + '</span>' +
       '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%;background:var(--indigo)"></div></div>' +
-      '<span class="bar-val">' + fmt(Math.round(p.pecas)) + ' pç (' + entPct + '% ent.)</span></div>';
+      '<span class="bar-val">' + subInfo + '</span></div>';
   }).join('');
-  document.getElementById('costureiro-bars').innerHTML = barsHtml || '<div class="empty">Sem dados</div>';
+  document.getElementById('costureiro-bars').innerHTML = barsHtml || '<div class="empty">Sem dados — clique em "+ Cadastrar" pra adicionar</div>';
 
   // Pagamentos previstos
   // (Tabela 'Previsão de Pagamentos' removida 26/04/2026 — substituída pela aba Pagamentos com régua D+15/D+30)
@@ -3511,8 +3559,9 @@ function openDrawer(type) {
     title.textContent = 'Nova Ordem de Produção';
     body.innerHTML = buildOPForm();
   } else if (type === 'edit-costureiro') {
-    title.textContent = 'Cadastrar Costureiro';
-    body.innerHTML = buildCostureiroForm();
+    var c = STATE.editingCostureiro;
+    title.textContent = c ? ('Editar Costureiro — ' + (c.nome || '')) : 'Cadastrar Costureiro';
+    body.innerHTML = buildCostureiroForm(c);
   } else if (type === 'novo-insumo') {
     title.textContent = 'Cadastrar Insumo';
     body.innerHTML = buildInsumoForm();
@@ -3536,6 +3585,8 @@ function closeDrawer() {
   STATE.editingInsumo = null;
   STATE.editingEntrega = null;
   STATE.transferindoInsumoId = null;
+  STATE.editingCostureiro = null;
+  STATE.cadastroCostureiroPreNome = null;
   configurarBtnExcluir(null);
 }
 
@@ -3831,7 +3882,9 @@ function buildOPForm() {
       '<input class="form-input" id="f-nova-produto" list="dl-produtos-fab" placeholder="ex: CLAF, calça, duna..." oninput="onProdutoOPChange()" autocomplete="off">' +
     '</div>' +
     '<div class="form-group"><label class="form-label">Costureiro <small style="color:var(--txt3);font-weight:400">(digite pra buscar)</small></label>' +
-      '<input class="form-input" id="f-nova-costureiro" list="dl-costureiros" placeholder="ex: GJ, MF, Deb..." autocomplete="off" oninput="ajustarSecaoGradeMaior(\'nova\')"></div>' +
+      '<input class="form-input" id="f-nova-costureiro" list="dl-costureiros" placeholder="ex: GJ, MF, Deb..." autocomplete="off" oninput="ajustarSecaoGradeMaior(\'nova\')" onblur="validarCostureiroNovaOP()">' +
+      '<div id="f-nova-costureiro-hint" style="margin-top:6px;font-size:11px"></div>' +
+    '</div>' +
     '<div id="f-nova-lbl-menor" style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.04em;margin:8px 0 4px">Custo de costura por peça</div>' +
     '<div class="form-row">' +
       '<div class="form-group"><label class="form-label">Por dentro <small style="color:var(--txt3);font-weight:400">(com NF)</small></label>' +
@@ -4259,19 +4312,32 @@ function sugerirDataEntrega(prefixo) {
   prevEl.value = d.toISOString().slice(0, 10);
 }
 
-function buildCostureiroForm() {
-  return '<div class="form-group"><label class="form-label">Nome</label><input class="form-input" id="f-nome" placeholder="Nome do costureiro"></div>' +
-    '<div class="form-row"><div class="form-group"><label class="form-label">Tipo NF</label><select class="form-select" id="f-tipo-nf"><option value="com_nf">Com NF (D+10)</option><option value="sem_nf">Sem NF (D+15)</option></select></div>' +
-    '<div class="form-group"><label class="form-label">Capacidade Mensal</label><input class="form-input" id="f-capacidade" type="number" placeholder="2000"></div></div>' +
-    '<div class="form-group"><label class="form-label">SKUs Habilitados (separar por vírgula)</label><input class="form-input" id="f-skus" placeholder="CLAF01, CMBB, CLOX01"></div>' +
+function buildCostureiroForm(c) {
+  c = c || {};
+  var nome = (c.nome || '').replace(/"/g,'&quot;');
+  var tipoNf = c.tipo_nf || 'com_nf';
+  var cap = c.capacidade_mensal != null ? c.capacidade_mensal : '';
+  var skus = (c.skus_habilitados || []).join(', ').replace(/"/g,'&quot;');
+  var transp = c.valor_transporte_peca != null ? c.valor_transporte_peca : '';
+  var corte = c.tamanho_corte_menor_max != null ? c.tamanho_corte_menor_max : '';
+  var contato = (c.contato || '').replace(/"/g,'&quot;');
+  var ativoChk = c.id ? (c.ativo === false ? '' : ' checked') : ' checked';
+  return '<div class="form-group"><label class="form-label">Nome</label><input class="form-input" id="f-nome" placeholder="Nome do costureiro" value="' + nome + '"></div>' +
+    '<div class="form-row"><div class="form-group"><label class="form-label">Tipo NF</label><select class="form-select" id="f-tipo-nf">' +
+      '<option value="com_nf"' + (tipoNf==='com_nf'?' selected':'') + '>Com NF (D+10)</option>' +
+      '<option value="sem_nf"' + (tipoNf==='sem_nf'?' selected':'') + '>Sem NF (D+15)</option>' +
+    '</select></div>' +
+    '<div class="form-group"><label class="form-label">Capacidade Mensal</label><input class="form-input" id="f-capacidade" type="number" placeholder="2000" value="' + cap + '"></div></div>' +
+    '<div class="form-group"><label class="form-label">SKUs Habilitados (separar por vírgula)</label><input class="form-input" id="f-skus" placeholder="CLAF01, CMBB, CLOX01" value="' + skus + '"></div>' +
     '<div class="form-row">' +
-      '<div class="form-group"><label class="form-label">Valor Transporte/Peça (R$)</label><input class="form-input" id="f-transporte" type="number" step="0.01" placeholder="0.15"></div>' +
+      '<div class="form-group"><label class="form-label">Valor Transporte/Peça (R$)</label><input class="form-input" id="f-transporte" type="number" step="0.01" placeholder="0.15" value="' + transp + '"></div>' +
       '<div class="form-group"><label class="form-label">Tamanho máx grade menor <small style="color:var(--txt3);font-weight:400">(opcional)</small></label>' +
-        '<input class="form-input" id="f-tamanho-corte" type="number" placeholder="ex: 50">' +
+        '<input class="form-input" id="f-tamanho-corte" type="number" placeholder="ex: 50" value="' + corte + '">' +
         '<small style="color:var(--txt3)">Tamanhos ≤ esse valor pagam preço da grade menor; acima, grade maior. Vazio = sem distinção.</small>' +
       '</div>' +
     '</div>' +
-    '<div class="form-group"><label class="form-label">Contato</label><input class="form-input" id="f-contato" placeholder="Telefone ou WhatsApp"></div>';
+    '<div class="form-group"><label class="form-label">Contato</label><input class="form-input" id="f-contato" placeholder="Telefone ou WhatsApp" value="' + contato + '"></div>' +
+    (c.id ? '<div class="form-group"><label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="f-ativo"' + ativoChk + '> Ativo</label></div>' : '');
 }
 
 // Retorna nomes únicos de TECIDO (apenas insumos tipo='tecido' + ordens_compra.tecido)
@@ -5302,7 +5368,8 @@ async function submitDrawer() {
       }
     } else if (type === 'edit-costureiro') {
       var skus = document.getElementById('f-skus').value.split(',').map(function(s) { return s.trim().toUpperCase(); }).filter(Boolean);
-      var body = {
+      var ativoEl = document.getElementById('f-ativo');
+      var bodyCostu = {
         nome: document.getElementById('f-nome').value.trim(),
         tipo_nf: document.getElementById('f-tipo-nf').value,
         capacidade_mensal: parseInt(document.getElementById('f-capacidade').value) || null,
@@ -5310,9 +5377,17 @@ async function submitDrawer() {
         valor_transporte_peca: parseFloat(document.getElementById('f-transporte').value) || null,
         contato: document.getElementById('f-contato').value.trim() || null,
         tamanho_corte_menor_max: parseInt(document.getElementById('f-tamanho-corte').value) || null,
-        ativo: true,
       };
-      await postSupabase('costureiros', body);
+      if (!bodyCostu.nome) { alert('Nome obrigatório'); btn.textContent='Salvar'; btn.disabled=false; return; }
+      if (STATE.editingCostureiro && STATE.editingCostureiro.id) {
+        // Modo edit — PATCH
+        bodyCostu.ativo = ativoEl ? ativoEl.checked : true;
+        await patchSupabase('costureiros', STATE.editingCostureiro.id, bodyCostu);
+      } else {
+        // Modo novo — POST
+        bodyCostu.ativo = true;
+        await postSupabase('costureiros', bodyCostu);
+      }
     } else if (type === 'novo-insumo') {
       var insumos = coletarInsumosRows();
       if (!insumos.length) { alert('Preencha ao menos um tecido/insumo'); btn.textContent='Salvar'; btn.disabled=false; return; }
