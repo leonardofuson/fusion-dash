@@ -3958,8 +3958,8 @@ function buildOPCorRow(idx, firstRow) {
     '<div class="form-row">' +
       '<div class="form-group"><label class="form-label">Metragem a produzir</label>' +
         '<input class="form-input" data-field="metragem" type="number" step="0.01" placeholder="ex: 150" oninput="recalcularPecasRow('+idx+')"></div>' +
-      '<div class="form-group"><label class="form-label">Consumo/peça</label>' +
-        '<input class="form-input" data-field="consumo" type="text" readonly style="background:var(--bg3)"></div>' +
+      '<div class="form-group"><label class="form-label">Consumo/peça <small style="color:var(--txt3);font-weight:400">(auto-preenchido — editável)</small></label>' +
+        '<input class="form-input" data-field="consumo" type="number" step="0.001" placeholder="0.00" oninput="recalcularPecasRow('+idx+')"></div>' +
     '</div>' +
     '<div class="form-row">' +
       '<div class="form-group"><label class="form-label">Peças projetadas (sistema)</label>' +
@@ -4129,19 +4129,25 @@ function atualizarSaldoRow(idx) {
 
   var sku = extrairSkuProduto(document.getElementById('f-nova-produto').value);
   var cons = ultimoConsumoDoSku(sku);
-  if (consumoEl && cons) consumoEl.value = cons.consumo + ' ' + cons.unidade + '/pç';
-  else if (consumoEl) consumoEl.value = '—';
+  // Auto-fill só se o input estiver vazio (não sobrescreve valor que o user já digitou)
+  if (consumoEl && cons && (!consumoEl.value || consumoEl.value === '0')) {
+    consumoEl.value = cons.consumo;
+  }
   recalcularPecasRow(idx);
 }
 
 function recalcularPecasRow(idx) {
   var row = document.getElementById('op-cor-row-'+idx);
   if (!row) return;
-  var insumoId = parseInt(row.querySelector('[data-field="cor"]').value);
   var metragem = parseFloat(row.querySelector('[data-field="metragem"]').value) || 0;
-  var sku = extrairSkuProduto(document.getElementById('f-nova-produto').value);
-  var cons = ultimoConsumoDoSku(sku);
-  var consumo = cons ? cons.consumo : 0;
+  // Lê consumo do input editável; fallback pra última OP do SKU
+  var consumoEditado = parseFloat(row.querySelector('[data-field="consumo"]').value) || 0;
+  var consumo = consumoEditado;
+  if (consumo <= 0) {
+    var sku = extrairSkuProduto(document.getElementById('f-nova-produto').value);
+    var cons = ultimoConsumoDoSku(sku);
+    consumo = cons ? cons.consumo : 0;
+  }
   var pecas = (metragem > 0 && consumo > 0) ? Math.floor(metragem / consumo) : 0;
   row.querySelector('[data-field="pecas-sist"]').value = pecas;
   atualizarPecasFinaisRow(idx);
@@ -5257,10 +5263,15 @@ async function submitDrawer() {
         if (!pecasFinal) continue;
 
         var corTexto = opt && opt.dataset.cor ? opt.dataset.cor : '';
+        // Consumo digitado/auto-preenchido na row (editável)
+        var consumoRow = parseFloat(row.querySelector('[data-field="consumo"]').value) || null;
+        var insSelRow = insumoId ? STATE.insumos.find(function(x){return x.id===insumoId;}) : null;
+        var tecidoNomeRow = insSelRow ? (insSelRow.nome || '') : '';
+        var tipoTecidoRow = (insSelRow && insSelRow.subtipo === 'circular') ? 'circular' : 'plano';
 
         // Validação: metragem solicitada não pode passar do saldo daquela NF
         if (insumoId && metragem) {
-          var insSel = STATE.insumos.find(function(x){return x.id===insumoId;});
+          var insSel = insSelRow;
           var saldoNF = insSel ? (insSel.quantidade_atual || 0) : 0;
           if (metragem > saldoNF + 0.01) {
             if (!confirm('Cor "'+corTexto+'": metragem solicitada ('+fmt(metragem)+') excede saldo da NF '+(opt.dataset.nf||'')+' ('+fmt(saldoNF)+').\n\nSalvar mesmo assim?')) {
@@ -5302,6 +5313,9 @@ async function submitDrawer() {
           status: 'Em Produção',
           insumo_id: insumoId,
           quantidade_tecido_usada: metragem,
+          consumo_por_peca: consumoRow,
+          tecido: tecidoNomeRow || null,
+          tipo_tecido: tipoTecidoRow,
         });
         baixas.push({ insumoId: insumoId, metragem: (metragem || 0) });
       }
