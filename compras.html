@@ -2090,9 +2090,13 @@ function buildEditInsumoForm(i) {
 async function excluirInsumo(insumoId) {
   var insumo = STATE.insumos.find(function(i) { return i.id === insumoId; });
   if (!insumo) return;
-  var opsLigadas = (STATE.ops || []).filter(function(o) { return o.insumo_id === insumoId; });
-  if (opsLigadas.length > 0) {
-    alert('Não é possível excluir: há ' + opsLigadas.length + ' OP(s) vinculada(s) a este tecido.\n\nExclua ou cancele as OPs primeiro.');
+  // Bloqueia só se houver OP em status ATIVO (Em Produção / Devolvido Fornecedor).
+  // OPs Entregue/Cancelado não devem impedir exclusão — já encerraram.
+  var opsAtivas = (STATE.ops || []).filter(function(o) {
+    return o.insumo_id === insumoId && o.status !== 'Entregue' && o.status !== 'Cancelado';
+  });
+  if (opsAtivas.length > 0) {
+    alert('Não é possível excluir: há ' + opsAtivas.length + ' OP(s) ATIVA(s) (Em Produção ou Devolvido Fornecedor) vinculada(s) a este tecido.\n\nFeche, exclua ou cancele essas OPs primeiro.');
     return;
   }
 
@@ -5166,7 +5170,9 @@ async function submitDrawer() {
       // Detectar transição de status pra gerar movimentação de tecido (Sprint 6)
       var statusAntigo = op.status;
       var costureiroNomeAtual = costuName(body.costureiro_id);
-      var metrosKg = parseFloat(op.metros_kg) || 0;
+      // Quantidade real de tecido: prefere quantidade_tecido_usada (preenchido na criação via dash),
+      // fallback pra metros_kg (dado de migração antigo). Ambos representam metros/kg.
+      var metrosKg = parseFloat(op.quantidade_tecido_usada) || parseFloat(op.metros_kg) || 0;
       var movsExtras = [];
       if (statusAntigo === 'Em Produção' && novoStatus === 'Entregue' && op.insumo_id && metrosKg > 0) {
         // Consumo: tecido virou produto, sai do saldo total (-X no costureiro)
