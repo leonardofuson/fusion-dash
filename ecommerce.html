@@ -419,13 +419,29 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
     <div class="chart-sm" style="height:280px"><canvas id="chart-pareto"></canvas></div>
   </div>
 
-  <!-- 10. TACOS/ACOS placeholder -->
+  <!-- 10. ADS — TACOS / ACOS / Top campanhas -->
   <div class="card">
-    <div class="card-title">Eficiência publicitária — TACOS / ACOS</div>
-    <div class="tacos-placeholder">
-      <div class="tp-icon">📊</div>
-      <div class="tp-title">Em breve — Conecte Meta Ads, Google Ads e ML Ads</div>
-      <div class="tp-sub">TACOS = gasto total em ads / receita total. Será preenchido quando as APIs de publicidade forem conectadas.</div>
+    <div class="card-title">
+      <span>Eficiência publicitária — Mercado Ads</span>
+      <div class="chips" style="gap:4px;" id="ads-conta-chips">
+        <button class="chip-sm on" data-ads-conta="all" onclick="setAdsConta('all')">Total</button>
+        <button class="chip-sm" data-ads-conta="fio_e_trama" onclick="setAdsConta('fio_e_trama')">FIO</button>
+        <button class="chip-sm" data-ads-conta="confeccoes" onclick="setAdsConta('confeccoes')">Confecções</button>
+      </div>
+    </div>
+    <div id="ads-kpis" class="kpi-grid" style="margin-bottom:14px;grid-template-columns:repeat(4,1fr);"></div>
+    <div class="grid2">
+      <div>
+        <div class="small-title">Top campanhas por gasto</div>
+        <div id="ads-campanhas"></div>
+      </div>
+      <div>
+        <div class="small-title">Top items anunciados</div>
+        <div id="ads-items"></div>
+      </div>
+    </div>
+    <div class="small-title" style="margin-top:14px;color:var(--txt3);font-size:9px">
+      Próximas plataformas: Meta Ads · Google Ads (em breve)
     </div>
   </div>
 
@@ -590,7 +606,7 @@ async function fetchRecebiveis(){
 
 // ── State ──
 var DE=null,ATE=null;
-var STATE={pedidos:[],pedidosFull:[],anteriores:[],anterioresFull:[],itens:[],itensFocus:[],canais:[],canaisSel:{},stackMode:'abs',focusCanal:null,skuGroups:[],recebiveis:[]};
+var STATE={pedidos:[],pedidosFull:[],anteriores:[],anterioresFull:[],itens:[],itensFocus:[],canais:[],canaisSel:{},stackMode:'abs',focusCanal:null,skuGroups:[],recebiveis:[],ads:[],adsConta:'all'};
 var CHARTS={hero:null,pareto:null,recvWeeks:null};
 var GEO_UF_SEL=null;
 
@@ -622,9 +638,13 @@ async function carregar(){
     // Recebíveis só na 1ª carga da sessão (independente do período)
     var rcvIdx=-1;
     if(!STATE.recebiveisLoaded){rcvIdx=fetches.length;fetches.push(fetchRecebiveis().catch(function(){return[];}));}
+    // Ads — buscar do período do filtro (level=campaign+item, ambas plataformas eventualmente)
+    var adsIdx=fetches.length;
+    fetches.push(buscarTudo('ads_metrics','select=*&data=gte.'+DE+'&data=lte.'+ATE+'&order=gasto.desc').catch(function(){return[];}));
     var res=await Promise.all(fetches);
     STATE.pedidosRaw=res[0];STATE.anterioresRaw=usarComp?res[1]:[];
     if(rcvIdx>=0){STATE.recebiveis=res[rcvIdx]||[];STATE.recebiveisLoaded=true;}
+    STATE.ads=res[adsIdx]||[];
     if(STATE.canais.length===0){var seen={};STATE.pedidosRaw.forEach(function(p){if(shouldDedup(p))return;var n=getNome(p.canal_nome_raw,p.origem_conta);if(!seen[n]){seen[n]=true;STATE.canaisSel[n]=true;}});STATE.canais=Object.keys(seen).sort();renderCanalChips();}
 
     // RENDER IMEDIATO — sem itens (waterfall, canais, geo, pagamentos, alertas)
@@ -681,7 +701,7 @@ function renderAll(){
     STATE.itensFocus=STATE.itens.filter(function(it){return it._canal===STATE.focusCanal;});
   }else{STATE.itensFocus=STATE.itens;}
   agruparSkus(STATE.itensFocus);
-  var fns=[renderWaterfall,renderKPIs,renderCanalTable,renderTopProdutos,renderHero,renderGeo,renderPayments,renderRecebiveis,renderDowHeat,renderPareto,renderAlerts];
+  var fns=[renderWaterfall,renderKPIs,renderCanalTable,renderTopProdutos,renderHero,renderGeo,renderPayments,renderRecebiveis,renderDowHeat,renderPareto,renderAds,renderAlerts];
   fns.forEach(function(fn){try{fn();}catch(e){console.error(fn.name+':',e);}});
 }
 
@@ -1074,6 +1094,84 @@ function renderAlerts(){
   if(alerts.length===0)alerts.push({level:'green',text:'Tudo operando normalmente — sem alertas no período'});
   document.getElementById('alerts').innerHTML=alerts.map(function(a){
     return'<div class="alert-row '+a.level+'"><span class="alert-dot '+a.level+'"></span>'+a.text+'</div>';}).join('');
+}
+
+// ── ADS — Eficiência publicitária ──
+function setAdsConta(c){
+  STATE.adsConta=c;
+  document.querySelectorAll('[data-ads-conta]').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-ads-conta')===c);});
+  renderAds();
+}
+
+function renderAds(){
+  var ads=(STATE.ads||[]);
+  if(STATE.adsConta!=='all'){ads=ads.filter(function(r){return r.conta===STATE.adsConta;});}
+  // Agregar por entidade (campaign vs item) + somar
+  var camps=ads.filter(function(r){return r.level==='campaign';});
+  var items=ads.filter(function(r){return r.level==='item';});
+  var totGasto=camps.reduce(function(s,r){return s+(parseFloat(r.gasto)||0);},0);
+  var totReceita=camps.reduce(function(s,r){return s+(parseFloat(r.receita_total)||0);},0);
+  var acosMedio=totReceita>0?(totGasto/totReceita*100):0;
+  // TACOS = gasto / receita TOTAL ML do dash (não só atribuída)
+  var receitaMl=(STATE.pedidos||[]).filter(function(p){return!p._canc&&(/mercado/i.test(p._nome));}).reduce(function(s,p){return s+(parseFloat(p.valor_bruto)||0);},0);
+  var tacos=receitaMl>0?(totGasto/receitaMl*100):0;
+
+  var kpis=document.getElementById('ads-kpis');
+  if(camps.length===0){
+    kpis.innerHTML='<div class="kpi" style="grid-column:span 4;text-align:center"><div class="kpi-lbl">Sem dados de ads no período</div><div class="kpi-sub">Aguardando próximo sync ML Ads (cron diário 02h BRT)</div></div>';
+    document.getElementById('ads-campanhas').innerHTML='';
+    document.getElementById('ads-items').innerHTML='';
+    return;
+  }
+  var acosCls=acosMedio<10?'good':(acosMedio<20?'mid':'bad');
+  kpis.innerHTML=[
+    '<div class="kpi" style="--kpi-accent:#f43f5e"><div class="kpi-lbl">Gasto em Ads</div><div class="kpi-val">'+fmtK(totGasto)+'</div><div class="kpi-sub">'+fmt(totGasto)+'</div></div>',
+    '<div class="kpi" style="--kpi-accent:#22c55e"><div class="kpi-lbl">Vendas Atribuídas</div><div class="kpi-val">'+fmtK(totReceita)+'</div><div class="kpi-sub">'+fmt(totReceita)+'</div></div>',
+    '<div class="kpi" style="--kpi-accent:#a855f7"><div class="kpi-lbl">ACOS Médio</div><div class="kpi-val">'+fmtD(acosMedio)+'%</div><div class="kpi-sub"><span class="margem-pill '+acosCls+'">'+(acosMedio<10?'Eficiente':(acosMedio<20?'Médio':'Alto'))+'</span></div></div>',
+    '<div class="kpi" style="--kpi-accent:#06b6d4"><div class="kpi-lbl">TACOS (ML)</div><div class="kpi-val">'+fmtD(tacos)+'%</div><div class="kpi-sub">gasto / receita ML total</div></div>',
+  ].join('');
+
+  // Top campanhas
+  var sortedC=camps.slice().sort(function(a,b){return (parseFloat(b.gasto)||0)-(parseFloat(a.gasto)||0);}).slice(0,8);
+  var maxG=sortedC.length>0?(parseFloat(sortedC[0].gasto)||1):1;
+  var campHtml=sortedC.map(function(c){
+    var g=parseFloat(c.gasto)||0,r=parseFloat(c.receita_total)||0,a=parseFloat(c.acos)||0;
+    var pct=Math.round(g/maxG*100);
+    var ac=a<10?'#22c55e':(a<20?'#eab308':'#f43f5e');
+    var statusBadge=c.campaign_status==='active'?'<span style="font-size:9px;color:#22c55e">●</span>':'<span style="font-size:9px;color:var(--txt3)">○</span>';
+    return '<div style="margin-bottom:8px">'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">'+
+        statusBadge+
+        '<span style="font-size:12px;font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(c.campaign_name||c.campaign_id)+'</span>'+
+        '<span style="font-size:11px;color:var(--txt3)">'+(c.conta==='fio_e_trama'?'FIO':'CONFEC')+'</span>'+
+      '</div>'+
+      '<div style="display:flex;align-items:center;gap:6px">'+
+        '<div style="flex:1;background:var(--bg);border-radius:4px;height:6px;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:#f43f5e"></div></div>'+
+        '<span style="font-size:11px;font-variant-numeric:tabular-nums;min-width:75px;text-align:right;font-weight:700">'+fmt(g)+'</span>'+
+        '<span style="font-size:10px;color:var(--txt3);min-width:60px;text-align:right">→ '+fmtK(r)+'</span>'+
+        '<span style="font-size:10px;font-weight:700;min-width:42px;text-align:right;color:'+ac+'">'+fmtD(a)+'%</span>'+
+      '</div></div>';
+  }).join('');
+  document.getElementById('ads-campanhas').innerHTML=campHtml||'<div class="geo-empty">Sem campanhas com gasto</div>';
+
+  // Top items
+  var sortedI=items.filter(function(it){return (parseFloat(it.gasto)||0)>0;}).sort(function(a,b){return (parseFloat(b.gasto)||0)-(parseFloat(a.gasto)||0);}).slice(0,8);
+  var maxIG=sortedI.length>0?(parseFloat(sortedI[0].gasto)||1):1;
+  var itemHtml=sortedI.map(function(it){
+    var g=parseFloat(it.gasto)||0,r=parseFloat(it.receita_total)||0,a=parseFloat(it.acos)||0;
+    var pct=Math.round(g/maxIG*100);
+    var ac=a<10?'#22c55e':(a<20?'#eab308':'#f43f5e');
+    var t=(it.item_title||it.item_id||'').slice(0,42);
+    return '<div style="margin-bottom:8px">'+
+      '<div style="font-size:11px;font-weight:600;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+(it.item_title||'')+'">'+t+'</div>'+
+      '<div style="display:flex;align-items:center;gap:6px">'+
+        '<div style="flex:1;background:var(--bg);border-radius:4px;height:6px;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:#a855f7"></div></div>'+
+        '<span style="font-size:11px;font-variant-numeric:tabular-nums;min-width:65px;text-align:right;font-weight:700">'+fmt(g)+'</span>'+
+        '<span style="font-size:10px;color:var(--txt3);min-width:60px;text-align:right">→ '+fmtK(r)+'</span>'+
+        '<span style="font-size:10px;font-weight:700;min-width:42px;text-align:right;color:'+ac+'">'+fmtD(a)+'%</span>'+
+      '</div></div>';
+  }).join('');
+  document.getElementById('ads-items').innerHTML=itemHtml||'<div class="geo-empty">Sem items com gasto no período</div>';
 }
 
 // ── PRODUCT DRAWER (Análise por Produto) ──
