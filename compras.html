@@ -1016,7 +1016,7 @@ function renderOPsLista() {
   var q = ((document.getElementById('flt-busca-op') || {}).value || '').toLowerCase();
 
   if (fSt) ops = ops.filter(function(o) { return o.status === fSt; });
-  if (fProd) ops = ops.filter(function(o) { return (o.produto||'').trim() === fProd || o.sku_produto === fProd; });
+  if (fProd) ops = ops.filter(function(o) { return nomeProduto(o.sku_produto) === fProd || (o.produto||'').trim() === fProd || o.sku_produto === fProd; });
   if (fCost) ops = ops.filter(function(o) { return o.costureiro_id == fCost; });
   if (q) ops = ops.filter(function(o) {
     var blob = [(o.produto||''), (o.sku_produto||''), (o.cor||''), costuName(o.costureiro_id)].join(' ').toLowerCase();
@@ -1128,7 +1128,7 @@ function renderGantt() {
   var fProd = document.getElementById('flt-produto-gantt').value;
   var fCost = document.getElementById('flt-costureiro-gantt').value;
   if (fSt) ops = ops.filter(function(o) { return o.status === fSt; });
-  if (fProd) ops = ops.filter(function(o) { return (o.produto||'').trim() === fProd || o.sku_produto === fProd; });
+  if (fProd) ops = ops.filter(function(o) { return nomeProduto(o.sku_produto) === fProd || (o.produto||'').trim() === fProd || o.sku_produto === fProd; });
   if (fCost) ops = ops.filter(function(o) { return o.costureiro_id == fCost; });
 
   // Excluir concluídas/entregues do gantt
@@ -3434,9 +3434,12 @@ function populateFilters() {
   var sel = document.getElementById('flt-status-op');
   sel.innerHTML = '<option value="">Todos status</option>' + Object.keys(statuses).sort().map(function(s) { return '<option value="' + s + '">' + s + '</option>'; }).join('');
 
-  // Produto filter (Gantt)
+  // Produto filter (Gantt) — agrupa pelo NOME DO PAI (nomeProduto), nunca pela variante longa
   var produtos = {};
-  STATE.ops.forEach(function(o) { var p = (o.produto||'').trim(); if (p) produtos[p] = 1; });
+  STATE.ops.forEach(function(o) {
+    var nome = nomeProduto(o.sku_produto) || (o.produto || '').trim();
+    if (nome && nome !== '—') produtos[nome] = 1;
+  });
   var selP = document.getElementById('flt-produto-gantt');
   if (selP) selP.innerHTML = '<option value="">Todos produtos</option>' + Object.keys(produtos).sort().map(function(p) { return '<option value="' + p + '">' + p + '</option>'; }).join('');
 
