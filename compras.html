@@ -347,6 +347,7 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
         </div>
         <div style="padding:12px;">
           <div class="gantt-filters" style="margin-bottom:12px">
+            <input type="text" id="flt-busca-pipeline" class="dinput" placeholder="Buscar produto, costureiro, NF, tecido, cor, OP..." style="min-width:280px" oninput="renderGantt();renderOPsLista()">
             <select id="flt-produto-gantt" class="dselect" onchange="renderGantt();renderOPsLista()"><option value="">Todos produtos</option></select>
             <select id="flt-costureiro-gantt" class="dselect" onchange="renderGantt();renderOPsLista()"><option value="">Todos costureiros</option></select>
             <select id="flt-status-op" class="dselect" onchange="renderGantt();renderOPsLista()"><option value="">Todos status</option></select>
@@ -732,6 +733,8 @@ function limparFiltrosPipeline() {
   document.getElementById('flt-produto-gantt').value='';
   document.getElementById('flt-costureiro-gantt').value='';
   document.getElementById('flt-status-op').value='';
+  var bp = document.getElementById('flt-busca-pipeline'); if (bp) bp.value='';
+  var bo = document.getElementById('flt-busca-op'); if (bo) bo.value='';
   STATE.kpiFilter = null;
   renderPipeline();
 }
@@ -1013,15 +1016,15 @@ function renderOPsLista() {
   var fSt = document.getElementById('flt-status-op').value;
   var fProd = document.getElementById('flt-produto-gantt').value;
   var fCost = document.getElementById('flt-costureiro-gantt').value;
-  var q = ((document.getElementById('flt-busca-op') || {}).value || '').toLowerCase();
+  // Busca: prioriza input principal do Pipeline; cai pro antigo busca-op se existir
+  var qPrincipal = ((document.getElementById('flt-busca-pipeline') || {}).value || '').trim().toLowerCase();
+  var qLocal = ((document.getElementById('flt-busca-op') || {}).value || '').trim().toLowerCase();
+  var q = qPrincipal || qLocal;
 
   if (fSt) ops = ops.filter(function(o) { return o.status === fSt; });
   if (fProd) ops = ops.filter(function(o) { return nomeProduto(o.sku_produto) === fProd || (o.produto||'').trim() === fProd || o.sku_produto === fProd; });
   if (fCost) ops = ops.filter(function(o) { return o.costureiro_id == fCost; });
-  if (q) ops = ops.filter(function(o) {
-    var blob = [(o.produto||''), (o.sku_produto||''), (o.cor||''), costuName(o.costureiro_id)].join(' ').toLowerCase();
-    return blob.indexOf(q) >= 0;
-  });
+  if (q) ops = ops.filter(function(o){ return buscaBlobOP(o).indexOf(q) >= 0; });
 
   // Filtros de KPI (ativos via clique): aplicam AQUI tambem pra lista e cronograma ficarem sincronizados
   if (STATE.kpiFilter === 'atrasadas') {
@@ -1120,6 +1123,22 @@ function colapsarTodosGantt() {
   renderGantt();
 }
 
+// Blob de busca pra OP — usado pelo input "Buscar..." do Pipeline
+function buscaBlobOP(o) {
+  var insumo = o.insumo_id ? (STATE.insumos || []).find(function(i){return i.id === o.insumo_id;}) : null;
+  return [
+    (o.produto || ''),
+    nomeProduto(o.sku_produto) || '',
+    (o.sku_produto || ''),
+    (o.cor || ''),
+    costuName(o.costureiro_id) || '',
+    (o.tecido || ''),
+    insumo ? (insumo.nome || '') : '',
+    insumo ? (insumo.numero_nf || '') : '',
+    'op #' + o.id, 'op' + o.id, '#' + o.id, String(o.id),
+  ].join(' ').toLowerCase();
+}
+
 function renderGantt() {
   var ops = STATE.ops.slice();
 
@@ -1127,9 +1146,11 @@ function renderGantt() {
   var fSt = document.getElementById('flt-status-op').value;
   var fProd = document.getElementById('flt-produto-gantt').value;
   var fCost = document.getElementById('flt-costureiro-gantt').value;
+  var qBusca = ((document.getElementById('flt-busca-pipeline') || {}).value || '').trim().toLowerCase();
   if (fSt) ops = ops.filter(function(o) { return o.status === fSt; });
   if (fProd) ops = ops.filter(function(o) { return nomeProduto(o.sku_produto) === fProd || (o.produto||'').trim() === fProd || o.sku_produto === fProd; });
   if (fCost) ops = ops.filter(function(o) { return o.costureiro_id == fCost; });
+  if (qBusca) ops = ops.filter(function(o){ return buscaBlobOP(o).indexOf(qBusca) >= 0; });
 
   // Excluir concluídas/entregues do gantt
   var ativas = ops.filter(function(o) { return o.status !== 'Entregue'; });
