@@ -116,7 +116,7 @@ Fonte única: tabela `contas_pagar` (só Fio e Trama).
 
 **Conceitos-chave para código:**
 - Query filtra `ativo=eq.true` — correções de grade feitas via `ativo=false` no Supabase (NÃO deletar).
-- Whitelist fabricação própria (`SKU_FINALIZADOS`, 19 SKUs): `CLAFEL01, CLAF01, CLAJUSTE, CLTECH, CLMALHA, CLSJ01, CLMC01, CLOX01, CMBB, CMINDIANO, CMMC, CMEL01, CMLS01, CMPL01, CMGPD, SJPREMIUM, TNMC01, TNPV01, TNPVAJ`.
+- Whitelist fabricação própria (`SKU_FINALIZADOS`, 21 SKUs): `CLAFEL01, CLAF01, CLAJUSTE, CLTECH, CLMALHA, CLSJ01, CLMC01, CLOX01, CLDENIM01, CLSPIN01, CMBB, CMINDIANO, CMMC, CMEL01, CMLS01, CMPL01, CMGPD, SJPREMIUM, TNMC01, TNPV01, TNPVAJ`. **Manter sincronizado** em 3 lugares: `compras.html`, `estoque.html`, `fusion-sync/fusion_sync_producao.py`.
 - **Pipeline de custo**: dash consome `produtos.custo_total`. Pipeline completo (RPC `recalcular_custos_sku`, `custos_sku`) em [../fusion-sync/MRP.md](../fusion-sync/MRP.md).
 - Aba **Insumos** é stub (não implementada).
 - Render CLI disponível (`render login` se token expirar, `render jobs create` para disparar syncs).

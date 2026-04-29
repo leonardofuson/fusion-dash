@@ -3876,7 +3876,7 @@ function atualizarCamposProduto(prefixo) {
 }
 
 // Lista de SKUs fabricação própria
-var SKU_FINALIZADOS = ['CLAFEL01','CLAF01','CLAJUSTE','CLTECH','CLMALHA','CLSJ01','CLMC01','CLOX01','CMBB','CMINDIANO','CMMC','CMEL01','CMLS01','CMPL01','CMGPD','SJPREMIUM','TNMC01','TNPV01','TNPVAJ'];
+var SKU_FINALIZADOS = ['CLAFEL01','CLAF01','CLAJUSTE','CLTECH','CLMALHA','CLSJ01','CLMC01','CLOX01','CLDENIM01','CLSPIN01','CMBB','CMINDIANO','CMMC','CMEL01','CMLS01','CMPL01','CMGPD','SJPREMIUM','TNMC01','TNPV01','TNPVAJ'];
 
 function produtosFabricacaoPropria() {
   return produtosPais().filter(function(p) { return SKU_FINALIZADOS.indexOf(p.sku_pai) >= 0; });
