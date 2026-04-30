@@ -430,18 +430,34 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
       </div>
     </div>
     <div id="ads-kpis" class="kpi-grid" style="margin-bottom:14px;grid-template-columns:repeat(4,1fr);"></div>
-    <div class="grid2">
-      <div>
-        <div class="small-title">Top campanhas por gasto</div>
-        <div id="ads-campanhas"></div>
-      </div>
-      <div>
-        <div class="small-title">Top items anunciados</div>
-        <div id="ads-items"></div>
-      </div>
+
+    <!-- Toolbar: View toggle + Search -->
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px;padding:10px 12px;background:var(--bg);border:1px solid var(--bdr);border-radius:8px;">
+      <span class="small-title" style="margin:0;font-size:10px">Ver:</span>
+      <select id="ads-view" class="dinput" style="padding:5px 10px;font-size:12px;" onchange="renderAds()">
+        <option value="campaigns">Campanhas</option>
+        <option value="produtos">Por produto (família)</option>
+      </select>
+      <select id="ads-filter" class="dinput" style="padding:5px 10px;font-size:12px;flex:1;min-width:200px;max-width:340px;" onchange="renderAds()">
+        <option value="all">Todas</option>
+      </select>
+      <input type="text" id="ads-search" class="dinput" placeholder="🔍 Buscar..." style="padding:5px 10px;font-size:12px;flex:1;min-width:140px;" oninput="renderAds()">
+      <span id="ads-count" style="font-size:10px;color:var(--txt3);font-variant-numeric:tabular-nums;"></span>
     </div>
+
+    <!-- Totalizador da seleção -->
+    <div id="ads-tot" style="display:none;padding:10px 14px;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.2);border-radius:8px;margin-bottom:10px;font-size:11px;"></div>
+
+    <!-- Tabela principal -->
+    <div style="overflow-x:auto;">
+      <table class="canal-tbl" id="ads-table" style="font-size:11px;">
+        <thead id="ads-thead"></thead>
+        <tbody id="ads-tbody"></tbody>
+      </table>
+    </div>
+
     <div class="small-title" style="margin-top:14px;color:var(--txt3);font-size:9px">
-      Próximas plataformas: Meta Ads · Google Ads (em breve)
+      Próximas plataformas: Meta Ads · Google Ads (em breve)  ·  agregação por produto usa <code style="color:var(--txt2)">family_name</code> da ML
     </div>
   </div>
 
@@ -1104,25 +1120,31 @@ function setAdsConta(c){
   renderAds();
 }
 
+// Helper: extrai family_name do metadata JSONB
+function adsFamilyOf(it){
+  try{var m=typeof it.metadata==='string'?JSON.parse(it.metadata||'{}'):(it.metadata||{});return m.family_name||'(sem família)';}
+  catch(e){return '(sem família)';}
+}
+function adsAcosColor(a){return a<10?'#22c55e':(a<20?'#eab308':'#f43f5e');}
+function adsAcosCls(a){return a<10?'good':(a<20?'mid':'bad');}
+
 function renderAds(){
   var ads=(STATE.ads||[]);
   if(STATE.adsConta!=='all'){ads=ads.filter(function(r){return r.conta===STATE.adsConta;});}
-  // Agregar por entidade (campaign vs item) + somar
   var camps=ads.filter(function(r){return r.level==='campaign';});
   var items=ads.filter(function(r){return r.level==='item';});
+
+  // KPIs (calculados sobre TODAS as campanhas — não filtradas pela toolbar)
   var totGasto=camps.reduce(function(s,r){return s+(parseFloat(r.gasto)||0);},0);
   var totReceita=camps.reduce(function(s,r){return s+(parseFloat(r.receita_total)||0);},0);
   var acosMedio=totReceita>0?(totGasto/totReceita*100):0;
-  // TACOS = gasto / receita TOTAL ML do dash (não só atribuída).
-  // _nome é o nome curto ("ML Fio" / "ML Confecções") via getNome — não "Mercado Livre".
-  // Filtra também por conta selecionada se aplicável.
-  var contaTacos = STATE.adsConta;
+  var contaTacos=STATE.adsConta;
   var receitaMl=(STATE.pedidos||[]).filter(function(p){
-    if(p._canc) return false;
-    if(!p._nome) return false;
-    if(p._nome.indexOf('ML ')!==0) return false;  // "ML Fio" / "ML Confecções"
-    if(contaTacos==='fio_e_trama' && p._nome!=='ML Fio') return false;
-    if(contaTacos==='confeccoes' && p._nome!=='ML Confecções') return false;
+    if(p._canc)return false;
+    if(!p._nome)return false;
+    if(p._nome.indexOf('ML ')!==0)return false;
+    if(contaTacos==='fio_e_trama'&&p._nome!=='ML Fio')return false;
+    if(contaTacos==='confeccoes'&&p._nome!=='ML Confecções')return false;
     return true;
   }).reduce(function(s,p){return s+(parseFloat(p.valor_bruto)||0);},0);
   var tacos=receitaMl>0?(totGasto/receitaMl*100):0;
@@ -1130,59 +1152,139 @@ function renderAds(){
   var kpis=document.getElementById('ads-kpis');
   if(camps.length===0){
     kpis.innerHTML='<div class="kpi" style="grid-column:span 4;text-align:center"><div class="kpi-lbl">Sem dados de ads no período</div><div class="kpi-sub">Aguardando próximo sync ML Ads (cron diário 02h BRT)</div></div>';
-    document.getElementById('ads-campanhas').innerHTML='';
-    document.getElementById('ads-items').innerHTML='';
+    document.getElementById('ads-tot').style.display='none';
+    document.getElementById('ads-thead').innerHTML='';
+    document.getElementById('ads-tbody').innerHTML='';
+    document.getElementById('ads-count').textContent='';
     return;
   }
-  var acosCls=acosMedio<10?'good':(acosMedio<20?'mid':'bad');
   kpis.innerHTML=[
     '<div class="kpi" style="--kpi-accent:#f43f5e"><div class="kpi-lbl">Gasto em Ads</div><div class="kpi-val">'+fmtK(totGasto)+'</div><div class="kpi-sub">'+fmt(totGasto)+'</div></div>',
     '<div class="kpi" style="--kpi-accent:#22c55e"><div class="kpi-lbl">Vendas Atribuídas</div><div class="kpi-val">'+fmtK(totReceita)+'</div><div class="kpi-sub">'+fmt(totReceita)+'</div></div>',
-    '<div class="kpi" style="--kpi-accent:#a855f7"><div class="kpi-lbl">ACOS Médio</div><div class="kpi-val">'+fmtD(acosMedio)+'%</div><div class="kpi-sub"><span class="margem-pill '+acosCls+'">'+(acosMedio<10?'Eficiente':(acosMedio<20?'Médio':'Alto'))+'</span></div></div>',
+    '<div class="kpi" style="--kpi-accent:#a855f7"><div class="kpi-lbl">ACOS Médio</div><div class="kpi-val">'+fmtD(acosMedio)+'%</div><div class="kpi-sub"><span class="margem-pill '+adsAcosCls(acosMedio)+'">'+(acosMedio<10?'Eficiente':(acosMedio<20?'Médio':'Alto'))+'</span></div></div>',
     '<div class="kpi" style="--kpi-accent:#06b6d4"><div class="kpi-lbl">TACOS (ML)</div><div class="kpi-val">'+fmtD(tacos)+'%</div><div class="kpi-sub">gasto / receita ML total</div></div>',
   ].join('');
 
-  // Top campanhas
-  var sortedC=camps.slice().sort(function(a,b){return (parseFloat(b.gasto)||0)-(parseFloat(a.gasto)||0);}).slice(0,8);
-  var maxG=sortedC.length>0?(parseFloat(sortedC[0].gasto)||1):1;
-  var campHtml=sortedC.map(function(c){
-    var g=parseFloat(c.gasto)||0,r=parseFloat(c.receita_total)||0,a=parseFloat(c.acos)||0;
-    var pct=Math.round(g/maxG*100);
-    var ac=a<10?'#22c55e':(a<20?'#eab308':'#f43f5e');
-    var statusBadge=c.campaign_status==='active'?'<span style="font-size:9px;color:#22c55e">●</span>':'<span style="font-size:9px;color:var(--txt3)">○</span>';
-    return '<div style="margin-bottom:8px">'+
-      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">'+
-        statusBadge+
-        '<span style="font-size:12px;font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(c.campaign_name||c.campaign_id)+'</span>'+
-        '<span style="font-size:11px;color:var(--txt3)">'+(c.conta==='fio_e_trama'?'FIO':'CONFEC')+'</span>'+
-      '</div>'+
-      '<div style="display:flex;align-items:center;gap:6px">'+
-        '<div style="flex:1;background:var(--bg);border-radius:4px;height:6px;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:#f43f5e"></div></div>'+
-        '<span style="font-size:11px;font-variant-numeric:tabular-nums;min-width:75px;text-align:right;font-weight:700">'+fmt(g)+'</span>'+
-        '<span style="font-size:10px;color:var(--txt3);min-width:60px;text-align:right">→ '+fmtK(r)+'</span>'+
-        '<span style="font-size:10px;font-weight:700;min-width:42px;text-align:right;color:'+ac+'">'+fmtD(a)+'%</span>'+
-      '</div></div>';
-  }).join('');
-  document.getElementById('ads-campanhas').innerHTML=campHtml||'<div class="geo-empty">Sem campanhas com gasto</div>';
+  var view=document.getElementById('ads-view').value;       // 'campaigns' | 'produtos'
+  var filter=document.getElementById('ads-filter').value;   // 'all' | <campaign_id> | <family_name>
+  var search=(document.getElementById('ads-search').value||'').toLowerCase().trim();
 
-  // Top items
-  var sortedI=items.filter(function(it){return (parseFloat(it.gasto)||0)>0;}).sort(function(a,b){return (parseFloat(b.gasto)||0)-(parseFloat(a.gasto)||0);}).slice(0,8);
-  var maxIG=sortedI.length>0?(parseFloat(sortedI[0].gasto)||1):1;
-  var itemHtml=sortedI.map(function(it){
-    var g=parseFloat(it.gasto)||0,r=parseFloat(it.receita_total)||0,a=parseFloat(it.acos)||0;
-    var pct=Math.round(g/maxIG*100);
-    var ac=a<10?'#22c55e':(a<20?'#eab308':'#f43f5e');
-    var t=(it.item_title||it.item_id||'').slice(0,42);
-    return '<div style="margin-bottom:8px">'+
-      '<div style="font-size:11px;font-weight:600;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+(it.item_title||'')+'">'+t+'</div>'+
-      '<div style="display:flex;align-items:center;gap:6px">'+
-        '<div style="flex:1;background:var(--bg);border-radius:4px;height:6px;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:#a855f7"></div></div>'+
-        '<span style="font-size:11px;font-variant-numeric:tabular-nums;min-width:65px;text-align:right;font-weight:700">'+fmt(g)+'</span>'+
-        '<span style="font-size:10px;color:var(--txt3);min-width:60px;text-align:right">→ '+fmtK(r)+'</span>'+
-        '<span style="font-size:10px;font-weight:700;min-width:42px;text-align:right;color:'+ac+'">'+fmtD(a)+'%</span>'+
-      '</div></div>';
-  }).join('');
-  document.getElementById('ads-items').innerHTML=itemHtml||'<div class="geo-empty">Sem items com gasto no período</div>';
+  // Popular dropdown de filtro com base no view
+  var sel=document.getElementById('ads-filter');
+  var prevVal=sel.value;
+  var opts=['<option value="all">Todas</option>'];
+  if(view==='campaigns'){
+    var sortedAll=camps.slice().sort(function(a,b){return (parseFloat(b.gasto)||0)-(parseFloat(a.gasto)||0);});
+    sortedAll.forEach(function(c){
+      var nome=(c.campaign_name||c.campaign_id)+' ('+(c.conta==='fio_e_trama'?'FIO':'CONFEC')+')';
+      opts.push('<option value="'+c.campaign_id+'_'+c.conta+'">'+nome+'</option>');
+    });
+  }else{
+    // Group items by family_name + sort by gasto desc
+    var fam={};items.forEach(function(it){var f=adsFamilyOf(it);if(!fam[f])fam[f]={g:0};fam[f].g+=parseFloat(it.gasto)||0;});
+    Object.keys(fam).sort(function(a,b){return fam[b].g-fam[a].g;}).forEach(function(f){
+      opts.push('<option value="'+f.replace(/"/g,'&quot;')+'">'+f.slice(0,60)+'</option>');
+    });
+  }
+  if(sel.innerHTML!==opts.join('')){sel.innerHTML=opts.join('');sel.value=prevVal;if(!sel.value)sel.value='all';}
+
+  // Construir lista de rows pra renderizar (agregando se preciso)
+  var rows=[];var headerCols;
+  if(view==='campaigns'){
+    headerCols=['Status','Conta','Campanha','Gasto','Vendas','ACOS','CTR','CPC','Cliques'];
+    var list=camps.slice();
+    if(filter!=='all'){list=list.filter(function(c){return c.campaign_id+'_'+c.conta===filter;});}
+    if(search){list=list.filter(function(c){return ((c.campaign_name||'')+(c.campaign_id||'')).toLowerCase().indexOf(search)>=0;});}
+    list.sort(function(a,b){return (parseFloat(b.gasto)||0)-(parseFloat(a.gasto)||0);});
+    rows=list.map(function(c){
+      var g=parseFloat(c.gasto)||0,r=parseFloat(c.receita_total)||0,a=parseFloat(c.acos)||0;
+      var ctr=parseFloat(c.ctr)||0,cpc=parseFloat(c.cpc)||0,cli=parseInt(c.cliques)||0;
+      var statusDot=c.campaign_status==='active'?'<span style="color:#22c55e">●</span>':(c.campaign_status==='paused'?'<span style="color:#eab308">⏸</span>':'<span style="color:var(--txt3)">○</span>');
+      return '<tr>'+
+        '<td>'+statusDot+'</td>'+
+        '<td style="font-size:10px;color:var(--txt3)">'+(c.conta==='fio_e_trama'?'FIO':'CONFEC')+'</td>'+
+        '<td style="font-weight:600;max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+(c.campaign_name||'')+'">'+(c.campaign_name||c.campaign_id)+'</td>'+
+        '<td class="r" style="font-weight:700">'+fmt(g)+'</td>'+
+        '<td class="r">'+fmt(r)+'</td>'+
+        '<td class="r" style="color:'+adsAcosColor(a)+';font-weight:700">'+fmtD(a)+'%</td>'+
+        '<td class="r">'+fmtD(ctr)+'%</td>'+
+        '<td class="r">'+fmt(cpc)+'</td>'+
+        '<td class="r">'+fmtN(cli)+'</td>'+
+      '</tr>';
+    });
+  }else{
+    headerCols=['Produto','Variantes','Gasto','Vendas','ACOS','CTR','Cliques','Imp.'];
+    // Group items by family_name
+    var grupos={};items.forEach(function(it){
+      var f=adsFamilyOf(it);
+      if(!grupos[f])grupos[f]={family:f,n:0,gasto:0,receita:0,cliques:0,prints:0};
+      grupos[f].n+=1;
+      grupos[f].gasto+=parseFloat(it.gasto)||0;
+      grupos[f].receita+=parseFloat(it.receita_total)||0;
+      grupos[f].cliques+=parseInt(it.cliques)||0;
+      grupos[f].prints+=parseInt(it.impressoes)||0;
+    });
+    var arr=Object.values(grupos);
+    if(filter!=='all'){arr=arr.filter(function(g){return g.family===filter;});}
+    if(search){arr=arr.filter(function(g){return g.family.toLowerCase().indexOf(search)>=0;});}
+    arr.sort(function(a,b){return b.gasto-a.gasto;});
+    rows=arr.map(function(g){
+      var acos=g.receita>0?(g.gasto/g.receita*100):0;
+      var ctr=g.prints>0?(g.cliques/g.prints*100):0;
+      return '<tr>'+
+        '<td style="font-weight:600;max-width:340px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+g.family+'">'+g.family+'</td>'+
+        '<td class="r"><span style="color:var(--txt3);font-size:10px">'+g.n+' un</span></td>'+
+        '<td class="r" style="font-weight:700">'+fmt(g.gasto)+'</td>'+
+        '<td class="r">'+fmt(g.receita)+'</td>'+
+        '<td class="r" style="color:'+adsAcosColor(acos)+';font-weight:700">'+fmtD(acos)+'%</td>'+
+        '<td class="r">'+fmtD(ctr)+'%</td>'+
+        '<td class="r">'+fmtN(g.cliques)+'</td>'+
+        '<td class="r">'+fmtN(g.prints)+'</td>'+
+      '</tr>';
+    });
+  }
+
+  // Header
+  var thead='<tr>';
+  headerCols.forEach(function(h,i){thead+='<th'+(i>=2?' class="r"':'')+'>'+h+'</th>';});
+  thead+='</tr>';
+  document.getElementById('ads-thead').innerHTML=thead;
+
+  // Totalizador (mostra quando algum filtro está ativo OU sempre se quiser)
+  var totEl=document.getElementById('ads-tot');
+  if(rows.length>0&&(filter!=='all'||search)){
+    var sumG=0,sumR=0,sumC=0,sumP=0;
+    if(view==='campaigns'){
+      var fc=camps.slice();
+      if(filter!=='all')fc=fc.filter(function(c){return c.campaign_id+'_'+c.conta===filter;});
+      if(search)fc=fc.filter(function(c){return ((c.campaign_name||'')+(c.campaign_id||'')).toLowerCase().indexOf(search)>=0;});
+      fc.forEach(function(c){sumG+=parseFloat(c.gasto)||0;sumR+=parseFloat(c.receita_total)||0;sumC+=parseInt(c.cliques)||0;sumP+=parseInt(c.impressoes)||0;});
+    }else{
+      var fi=items.slice();
+      if(filter!=='all')fi=fi.filter(function(it){return adsFamilyOf(it)===filter;});
+      if(search)fi=fi.filter(function(it){return adsFamilyOf(it).toLowerCase().indexOf(search)>=0;});
+      fi.forEach(function(it){sumG+=parseFloat(it.gasto)||0;sumR+=parseFloat(it.receita_total)||0;sumC+=parseInt(it.cliques)||0;sumP+=parseInt(it.impressoes)||0;});
+    }
+    var totalAcos=sumR>0?(sumG/sumR*100):0;
+    var totalCtr=sumP>0?(sumC/sumP*100):0;
+    totEl.style.display='block';
+    totEl.innerHTML=
+      '<strong style="color:var(--blue);font-size:10px;text-transform:uppercase;letter-spacing:0.05em">Totalizador da seleção</strong>'+
+      '<div style="display:flex;gap:18px;margin-top:5px;flex-wrap:wrap;font-variant-numeric:tabular-nums">'+
+        '<span><span style="color:var(--txt3);font-size:10px">Gasto</span> <strong>'+fmt(sumG)+'</strong></span>'+
+        '<span><span style="color:var(--txt3);font-size:10px">Vendas</span> <strong>'+fmt(sumR)+'</strong></span>'+
+        '<span><span style="color:var(--txt3);font-size:10px">ACOS</span> <strong style="color:'+adsAcosColor(totalAcos)+'">'+fmtD(totalAcos)+'%</strong></span>'+
+        '<span><span style="color:var(--txt3);font-size:10px">CTR</span> <strong>'+fmtD(totalCtr)+'%</strong></span>'+
+        '<span><span style="color:var(--txt3);font-size:10px">Cliques</span> <strong>'+fmtN(sumC)+'</strong></span>'+
+        '<span><span style="color:var(--txt3);font-size:10px">Impressões</span> <strong>'+fmtN(sumP)+'</strong></span>'+
+      '</div>';
+  }else{
+    totEl.style.display='none';
+  }
+
+  // Tbody
+  document.getElementById('ads-tbody').innerHTML=rows.length?rows.join(''):'<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--txt3);font-size:12px">Nenhum resultado pra seleção</td></tr>';
+  document.getElementById('ads-count').textContent=rows.length+' '+(view==='campaigns'?'campanhas':'produtos');
 }
 
 // ── PRODUCT DRAWER (Análise por Produto) ──
