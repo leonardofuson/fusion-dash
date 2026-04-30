@@ -380,12 +380,9 @@ const LOCS = [
   { key:'shopify',       label:'Shopify',        cor:'#06b6d4' },
 ];
 
-const SKU_FINALIZADOS = new Set([
-  'CLAFEL01','CLAF01','CLAJUSTE','CLTECH','CLMALHA','CLSJ01','CLMC01','CLOX01',
-  'CLDENIM01','CLSPIN01',
-  'CMBB','CMINDIANO','CMMC','CMEL01','CMLS01','CMPL01','CMGPD',
-  'SJPREMIUM','TNMC01','TNPV01','TNPVAJ',
-]);
+// Whitelist de fabricação própria — fonte da verdade: produtos.fabricacao_propria.
+// Computado a partir do STATE.produtos depois do fetch.
+let SKU_FINALIZADOS = new Set();
 
 const ORDEM_TAM = ['PP','P','M','G','G1','GG','GG1','XG','XGG','EG','EGG','36','38','40','42','44','46','48','50','52','54','56','Único','UN'];
 
@@ -482,9 +479,13 @@ async function apiAll(base) {
 async function carregar() {
   try {
     const [prods, est] = await Promise.all([
-      apiAll('produtos?select=id,sku,descricao,nome,categoria,tipo,sku_pai,cor,tamanho,preco_venda&ativo=eq.true'),
+      apiAll('produtos?select=id,sku,descricao,nome,categoria,tipo,sku_pai,cor,tamanho,preco_venda,fabricacao_propria&ativo=eq.true'),
       apiAll('estoque?select=produto_id,sku,quantidade,localizacao'),
     ]);
+
+    // Popula SKU_FINALIZADOS a partir de produtos.fabricacao_propria (live, não-hardcoded)
+    SKU_FINALIZADOS = new Set();
+    prods.forEach(p => { if (p.fabricacao_propria === true && p.sku_pai) SKU_FINALIZADOS.add(p.sku_pai); });
 
     const eBySku = {}, eById = {};
     est.forEach(e => {

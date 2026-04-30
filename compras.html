@@ -328,6 +328,7 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
     <button class="tab-btn" data-tab="planejamento">Planejamento</button>
     <button class="tab-btn" data-tab="custos">Custos</button>
     <button class="tab-btn" data-tab="costureiros">Costureiros e Fornecedores</button>
+    <button class="tab-btn" data-tab="produtos">Produtos</button>
   </nav>
 
   <!-- ═══════════════ TAB: PIPELINE ═══════════════ -->
@@ -577,6 +578,37 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
     </div>
   </div>
 
+  <!-- ═══════════════ TAB: PRODUTOS ═══════════════ -->
+  <div class="tab-panel" id="panel-produtos">
+    <div class="kpi-grid" id="kpis-produtos"></div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Cadastro de Produtos<small id="produtos-count" style="color:var(--txt3);margin-left:6px"></small></span>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="text" id="flt-prod-busca" class="dinput" placeholder="Buscar produto..." oninput="renderProdutos()" style="min-width:220px">
+          <select id="flt-prod-categoria" class="dselect" onchange="renderProdutos()"><option value="">Todas categorias</option></select>
+          <select id="flt-prod-fab" class="dselect" onchange="renderProdutos()">
+            <option value="">Todos</option>
+            <option value="true">Fabricação própria</option>
+            <option value="false">Externos</option>
+          </select>
+          <button class="btnf" onclick="abrirNovoProduto()">+ Cadastrar Produto</button>
+        </div>
+      </div>
+      <div class="tb-wrap">
+        <table class="tb"><thead><tr>
+          <th>Produto</th>
+          <th>Categoria</th>
+          <th class="r">Variantes</th>
+          <th>Cores</th>
+          <th>Tamanhos</th>
+          <th>Fabricação Própria</th>
+          <th>Ações</th>
+        </tr></thead><tbody id="tbody-produtos"></tbody></table>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <!-- ═══════════════ DRAWER (Slide-out) ═══════════════ -->
@@ -668,7 +700,7 @@ async function carregar() {
       buscarTudo('consumo_tecido', 'select=*&ativo=eq.true'),
       buscarTudo('planejamento_producao', 'select=*&order=data_calculo.desc&limit=50'),
       buscarTudo('fornecedores', 'select=*&ativo=eq.true&order=nome'),
-      buscarTudo('produtos', 'select=id,sku,sku_pai,nome,categoria,tipo,cor,tamanho,ativo&ativo=eq.true'),
+      buscarTudo('produtos', 'select=id,sku,sku_pai,nome,categoria,tipo,cor,tamanho,ativo,fabricacao_propria&ativo=eq.true'),
       buscarTudo('produto_cores_validas', 'select=sku_pai,cor,origem&ativo=eq.true&order=sku_pai,cor'),
       buscarTudo('custos_sku', 'select=*&order=sku_pai'),
       buscarTudo('vw_insumo_saldo_local', 'select=*'),
@@ -708,6 +740,7 @@ function renderAll() {
   renderPlanejamento();
   renderCustos();
   renderReguaPagamentos();
+  renderProdutos();
   populateFilters();
   populateHistoricoFilters();
   populateReguaPagFilters();
@@ -2425,7 +2458,217 @@ function renderCostureiros() {
   // (Tabela 'Previsão de Pagamentos' removida 26/04/2026 — substituída pela aba Pagamentos com régua D+15/D+30)
 }
 
-// ═══════════════ TAB: INSUMOS ═══════════════
+// ═══════════════ TAB: PRODUTOS (Gap 3 — cadastro centralizado) ═══════════════
+
+// Agrega produtos por sku_pai pra montar a lista da aba Produtos
+function agregarProdutosPorPai() {
+  var grupos = {};
+  (STATE.produtos || []).forEach(function(p) {
+    var pai = p.sku_pai || p.sku;
+    if (!pai) return;
+    if (!grupos[pai]) {
+      grupos[pai] = {
+        sku_pai: pai,
+        nome: '',
+        categoria: null,
+        fabricacao_propria: false,
+        cores: {},
+        tamanhos: {},
+        n_variantes_ativas: 0,
+        produto_pai_id: null,
+      };
+    }
+    var g = grupos[pai];
+    if (p.sku === pai && p.tipo === 'pai') {
+      g.nome = p.nome || g.nome;
+      g.categoria = p.categoria || g.categoria;
+      g.fabricacao_propria = p.fabricacao_propria === true;
+      g.produto_pai_id = p.id;
+    }
+    if (p.cor) g.cores[p.cor.trim().toUpperCase()] = 1;
+    if (p.tamanho) g.tamanhos[p.tamanho.trim()] = 1;
+    if (p.ativo !== false && p.sku !== pai) g.n_variantes_ativas++;
+    if (!g.nome) g.nome = (p.nome || '').replace(/\s*-\s*\d+\s*-.*$/i, '').trim();
+    if (!g.categoria && p.categoria) g.categoria = p.categoria;
+    if (g.fabricacao_propria === false && p.fabricacao_propria === true) g.fabricacao_propria = true;
+  });
+  return Object.values(grupos);
+}
+
+function renderProdutos() {
+  var grupos = agregarProdutosPorPai();
+
+  // Popula select de categoria
+  var selCat = document.getElementById('flt-prod-categoria');
+  if (selCat && selCat.options.length <= 1) {
+    var cats = {};
+    grupos.forEach(function(g){ if (g.categoria) cats[g.categoria] = 1; });
+    Object.keys(cats).sort().forEach(function(c){
+      var o = document.createElement('option'); o.value = c; o.textContent = c;
+      selCat.appendChild(o);
+    });
+  }
+
+  // Filtros
+  var busca = ((document.getElementById('flt-prod-busca')||{}).value || '').trim().toLowerCase();
+  var fCat = (document.getElementById('flt-prod-categoria')||{}).value || '';
+  var fFab = (document.getElementById('flt-prod-fab')||{}).value;
+
+  var filtrados = grupos.filter(function(g) {
+    if (fCat && g.categoria !== fCat) return false;
+    if (fFab === 'true' && !g.fabricacao_propria) return false;
+    if (fFab === 'false' && g.fabricacao_propria) return false;
+    if (busca && (g.nome || '').toLowerCase().indexOf(busca) < 0) return false;
+    return true;
+  }).sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||''); });
+
+  // KPIs
+  var totalPais = grupos.length;
+  var fabPropria = grupos.filter(function(g){return g.fabricacao_propria;}).length;
+  var totalVariantes = grupos.reduce(function(s,g){return s + g.n_variantes_ativas;}, 0);
+  document.getElementById('kpis-produtos').innerHTML = [
+    kpiHtml('Produtos pai', totalPais, '', '--kpi-accent:var(--indigo)'),
+    kpiHtml('Fabricação Própria', fabPropria, 'no MRP', '--kpi-accent:var(--green)'),
+    kpiHtml('Variantes Ativas', fmt(totalVariantes), 'cor × tamanho', '--kpi-accent:var(--purple)'),
+    kpiHtml('Categorias', Object.keys(grupos.reduce(function(o,g){if(g.categoria)o[g.categoria]=1;return o;},{})).length, '', '--kpi-accent:var(--amber)'),
+  ].join('');
+
+  document.getElementById('produtos-count').textContent = ' — ' + filtrados.length + ' de ' + totalPais;
+
+  // Tabela
+  var tbody = document.getElementById('tbody-produtos');
+  if (!tbody) return;
+  if (!filtrados.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty">Nenhum produto encontrado</td></tr>';
+    return;
+  }
+  tbody.innerHTML = filtrados.map(function(g) {
+    var cores = Object.keys(g.cores).sort();
+    var coresStr = cores.length > 4
+      ? cores.slice(0,4).join(', ') + ' +' + (cores.length - 4)
+      : cores.join(', ') || '—';
+    var tams = Object.keys(g.tamanhos).sort(function(a,b){
+      var na = parseInt(a), nb = parseInt(b);
+      if (!isNaN(na) && !isNaN(nb)) return na - nb;
+      return a.localeCompare(b);
+    });
+    var tamStr = tams.length ? tams[0] + (tams.length > 1 ? ' a ' + tams[tams.length-1] : '') : '—';
+    var fabBadge = g.fabricacao_propria
+      ? '<span style="display:inline-block;padding:2px 8px;background:rgba(74,222,128,0.15);color:var(--green);border-radius:3px;font-size:11px;font-weight:600">SIM</span>'
+      : '<span style="color:var(--txt3);font-size:11px">não</span>';
+    var catBadge = g.categoria
+      ? '<span style="display:inline-block;padding:2px 6px;background:rgba(99,102,241,0.12);color:var(--indigo);border-radius:3px;font-size:10px;font-weight:600;text-transform:uppercase">'+g.categoria+'</span>'
+      : '<span style="color:var(--txt4);font-size:11px">—</span>';
+    var keyEsc = (g.sku_pai || '').replace(/'/g, "\\'");
+    return '<tr style="cursor:pointer" onclick="abrirEditProduto(\''+keyEsc+'\')" title="Editar">' +
+      '<td><strong>' + (g.nome || g.sku_pai) + '</strong></td>' +
+      '<td>' + catBadge + '</td>' +
+      '<td class="r">' + g.n_variantes_ativas + '</td>' +
+      '<td class="dim" style="font-size:11px">' + coresStr + '</td>' +
+      '<td class="dim" style="font-size:11px">' + tamStr + '</td>' +
+      '<td>' + fabBadge + '</td>' +
+      '<td onclick="event.stopPropagation()"><button class="btnf ghost" style="font-size:10px;padding:3px 8px" onclick="abrirEditProduto(\''+keyEsc+'\')">Editar</button></td>' +
+    '</tr>';
+  }).join('');
+}
+
+// Range de tamanhos default por categoria
+function rangeTamanhosCategoria(cat) {
+  cat = (cat || '').toUpperCase();
+  if (cat === 'CALCA' || cat === 'CALÇA' || cat === 'BERMUDA') return ['36','38','40','42','44','46','48','50','52','54'];
+  if (cat === 'CAMISA') return ['2','3','4','5','6'];
+  if (cat === 'TERNO') return ['44','46','48','50','52','54','56','58','60','62','64'];
+  return [];
+}
+
+function abrirNovoProduto() {
+  STATE.editingProdutoSkuPai = null;
+  openDrawer('edit-produto');
+}
+function abrirEditProduto(skuPai) {
+  STATE.editingProdutoSkuPai = skuPai;
+  openDrawer('edit-produto');
+}
+
+function buildProdutoForm() {
+  var skuPai = STATE.editingProdutoSkuPai;
+  var grupos = agregarProdutosPorPai();
+  var g = skuPai ? grupos.find(function(x){return x.sku_pai === skuPai;}) : null;
+  var isEdit = !!g;
+
+  var nome = g ? (g.nome || '') : '';
+  var categoria = g ? (g.categoria || '') : '';
+  var sku = g ? g.sku_pai : '';
+  var fab = g ? !!g.fabricacao_propria : true;
+  var coresAtuais = g ? Object.keys(g.cores).sort().join(', ') : '';
+
+  // Variantes existentes (modo edit) — pra mostrar lista com toggle
+  var variantesHtml = '';
+  if (isEdit) {
+    var variantes = (STATE.produtos || []).filter(function(p){
+      return (p.sku_pai === skuPai || p.sku === skuPai) && p.sku !== skuPai;
+    }).sort(function(a,b){
+      var ta = parseInt(a.tamanho), tb = parseInt(b.tamanho);
+      if (!isNaN(ta) && !isNaN(tb) && ta !== tb) return ta - tb;
+      return (a.cor||'').localeCompare(b.cor||'');
+    });
+    if (variantes.length) {
+      variantesHtml = '<div class="form-group"><label class="form-label">Variantes existentes ('+variantes.length+')</label>' +
+        '<div style="max-height:240px;overflow-y:auto;border:1px solid var(--bdr);border-radius:6px;padding:6px;background:var(--bg)">' +
+        variantes.map(function(v){
+          var corChk = v.ativo !== false ? ' checked' : '';
+          return '<label style="display:flex;align-items:center;gap:8px;padding:3px 6px;font-size:11px;cursor:pointer">' +
+            '<input type="checkbox" class="f-prod-variante-ativa" data-id="'+v.id+'"'+corChk+'>' +
+            '<span style="flex:1">'+(v.tamanho||'?')+' · '+(v.cor||'?')+'</span>' +
+            '<span style="color:var(--txt3);font-size:10px">'+v.sku+'</span>' +
+            '</label>';
+        }).join('') + '</div>' +
+        '<small style="color:var(--txt3)">Desmarque pra desativar (não deleta — preserva FK).</small>' +
+      '</div>';
+    }
+  }
+
+  return '<div class="form-row">' +
+      '<div class="form-group" style="flex:2"><label class="form-label">Nome do produto *</label>' +
+        '<input class="form-input" id="f-prod-nome" placeholder="Ex: Calça Cargo Tech" value="'+nome.replace(/"/g,'&quot;')+'"></div>' +
+      '<div class="form-group" style="flex:1"><label class="form-label">SKU pai *</label>' +
+        '<input class="form-input" id="f-prod-sku" placeholder="Ex: CLCARGO01" value="'+sku.replace(/"/g,'&quot;')+'"' + (isEdit?' readonly style="background:var(--bg3);color:var(--txt3)"':'') + '>' +
+        (isEdit ? '<small style="color:var(--txt3)">SKU pai não pode ser alterado.</small>' : '<small style="color:var(--txt3)">Use letras maiúsculas, sem espaços.</small>') +
+      '</div>' +
+    '</div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label class="form-label">Categoria *</label>' +
+        '<select class="form-select" id="f-prod-categoria" onchange="onProdutoCategoriaChange()">' +
+          '<option value="">Selecione...</option>' +
+          ['CALCA','CAMISA','TERNO','BERMUDA'].map(function(c){
+            var sel = c === categoria ? ' selected' : '';
+            return '<option value="'+c+'"'+sel+'>'+c+'</option>';
+          }).join('') +
+        '</select></div>' +
+      '<div class="form-group"><label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;margin-top:24px">' +
+        '<input type="checkbox" id="f-prod-fabricacao"' + (fab ? ' checked' : '') + '>' +
+        '<span><strong>Fabricação própria</strong> <small style="color:var(--txt3)">(entra no MRP)</small></span>' +
+      '</label></div>' +
+    '</div>' +
+    '<div class="form-group"><label class="form-label">Tamanhos <small style="color:var(--txt3);font-weight:400">(separados por vírgula — auto-preenchido pela categoria)</small></label>' +
+      '<input class="form-input" id="f-prod-tamanhos" placeholder="36, 38, 40, 42, 44, 46, 48, 50, 52, 54" value="">' +
+    '</div>' +
+    '<div class="form-group"><label class="form-label">Cores ' + (isEdit ? 'a adicionar' : 'iniciais') + ' <small style="color:var(--txt3);font-weight:400">(separadas por vírgula)</small></label>' +
+      '<input class="form-input" id="f-prod-cores" placeholder="PRETO, AZUL MARINHO, BEGE" value="'+coresAtuais.replace(/"/g,'&quot;')+'">' +
+      '<small style="color:var(--txt3)">' + (isEdit ? 'Cores novas aqui geram variantes adicionais. Cores existentes são ignoradas.' : 'Pra cada cor × tamanho, uma variante é criada.') + '</small>' +
+    '</div>' +
+    variantesHtml;
+}
+
+function onProdutoCategoriaChange() {
+  var sel = document.getElementById('f-prod-categoria');
+  var inp = document.getElementById('f-prod-tamanhos');
+  if (!sel || !inp) return;
+  // Só auto-preenche se vazio (não sobrescreve)
+  if (inp.value && inp.value.trim()) return;
+  var range = rangeTamanhosCategoria(sel.value);
+  if (range.length) inp.value = range.join(', ');
+}
 // STATE.locFilt: '' (todos) | 'CD FUSION' | '__costureiros__' (qualquer costureiro) | '<nome do costureiro>'
 function renderLocChips() {
   if (STATE.locFilt === undefined) STATE.locFilt = '';
@@ -3774,6 +4017,11 @@ function openDrawer(type) {
   } else if (type === 'transferir-nf') {
     title.textContent = 'Transferir NF inteira';
     body.innerHTML = buildTransferirNFForm(STATE.transferindoNFKey);
+  } else if (type === 'edit-produto') {
+    title.textContent = STATE.editingProdutoSkuPai ? ('Editar Produto — ' + STATE.editingProdutoSkuPai) : 'Cadastrar Produto';
+    body.innerHTML = buildProdutoForm();
+    // Auto-preenche tamanhos quando categoria já vem definida (edit) e o input está vazio
+    setTimeout(onProdutoCategoriaChange, 0);
   } else if (type === 'desmembrar-op') {
     title.textContent = 'Desmembrar OP #' + (STATE.desmembrandoOP ? STATE.desmembrandoOP.id : '');
     body.innerHTML = buildDesmembrarOPForm();
@@ -3794,6 +4042,7 @@ function closeDrawer() {
   STATE.editingCostureiro = null;
   STATE.cadastroCostureiroPreNome = null;
   STATE.transferindoNFKey = null;
+  STATE.editingProdutoSkuPai = null;
   configurarBtnExcluir(null);
 }
 
@@ -4084,7 +4333,16 @@ function atualizarCamposProduto(prefixo) {
 }
 
 // Lista de SKUs fabricação própria
-var SKU_FINALIZADOS = ['CLAFEL01','CLAF01','CLAJUSTE','CLTECH','CLMALHA','CLSJ01','CLMC01','CLOX01','CLDENIM01','CLSPIN01','CMBB','CMINDIANO','CMMC','CMEL01','CMLS01','CMPL01','CMGPD','SJPREMIUM','TNMC01','TNPV01','TNPVAJ'];
+// Whitelist de fabricação própria — fonte da verdade: produtos.fabricacao_propria.
+// Computed live a partir de STATE.produtos. Função substitui o array hardcoded antigo.
+function isFabricacaoPropria(skuPai) {
+  if (!skuPai) return false;
+  return (STATE.produtos || []).some(function(p){
+    return (p.sku === skuPai || p.sku_pai === skuPai) && p.fabricacao_propria === true;
+  });
+}
+// Compat: alguns lugares ainda usam .indexOf(...) >= 0. Provê um Set-like via Object com getter.
+var SKU_FINALIZADOS = { indexOf: function(sku){ return isFabricacaoPropria(sku) ? 0 : -1; } };
 
 function produtosFabricacaoPropria() {
   return produtosPais().filter(function(p) { return SKU_FINALIZADOS.indexOf(p.sku_pai) >= 0; });
@@ -5759,6 +6017,98 @@ async function submitDrawer() {
       }
       await postSupabase('movimentacao_insumos', movsBatch);
       STATE.transferindoNFKey = null;
+    } else if (type === 'edit-produto') {
+      var nomeProd = (document.getElementById('f-prod-nome').value || '').trim();
+      var skuProd = (document.getElementById('f-prod-sku').value || '').trim().toUpperCase();
+      var catProd = document.getElementById('f-prod-categoria').value;
+      var fabProd = document.getElementById('f-prod-fabricacao').checked;
+      var tamsRaw = (document.getElementById('f-prod-tamanhos').value || '').trim();
+      var coresRaw = (document.getElementById('f-prod-cores').value || '').trim();
+
+      if (!nomeProd) { alert('Nome obrigatório'); btn.textContent='Salvar'; btn.disabled=false; return; }
+      if (!skuProd) { alert('SKU pai obrigatório'); btn.textContent='Salvar'; btn.disabled=false; return; }
+      if (!catProd) { alert('Categoria obrigatória'); btn.textContent='Salvar'; btn.disabled=false; return; }
+
+      var tamanhos = tamsRaw.split(',').map(function(s){return s.trim();}).filter(Boolean);
+      var cores = coresRaw.split(',').map(function(s){return s.trim().toUpperCase();}).filter(Boolean);
+
+      var skuPaiEdit = STATE.editingProdutoSkuPai;
+      if (skuPaiEdit) {
+        // Modo edit
+        var grupoEdit = agregarProdutosPorPai().find(function(g){return g.sku_pai === skuPaiEdit;});
+        if (!grupoEdit) { alert('Produto pai não encontrado'); btn.textContent='Salvar'; btn.disabled=false; return; }
+
+        // 1. PATCH no produto pai (nome, categoria, fabricacao_propria)
+        if (grupoEdit.produto_pai_id) {
+          await patchSupabase('produtos', grupoEdit.produto_pai_id, {
+            nome: nomeProd, categoria: catProd, fabricacao_propria: fabProd, atualizado_em: new Date().toISOString()
+          });
+        }
+
+        // 2. Toggle ativo nas variantes (checkboxes)
+        var togglePromessas = [];
+        document.querySelectorAll('.f-prod-variante-ativa').forEach(function(el){
+          var pid = parseInt(el.dataset.id);
+          var prod = (STATE.produtos || []).find(function(p){return p.id === pid;});
+          if (!prod) return;
+          var novoAtivo = el.checked;
+          if (prod.ativo !== novoAtivo) togglePromessas.push(patchSupabase('produtos', pid, { ativo: novoAtivo }));
+        });
+        if (togglePromessas.length) await Promise.all(togglePromessas);
+
+        // 3. Adicionar variantes novas pra cores que ainda não existem
+        var coresExistentes = Object.keys(grupoEdit.cores || {});
+        var coresNovas = cores.filter(function(c){ return coresExistentes.indexOf(c) < 0; });
+        if (coresNovas.length && tamanhos.length) {
+          var novas = [];
+          coresNovas.forEach(function(cor) {
+            tamanhos.forEach(function(tam) {
+              novas.push({
+                sku: skuPaiEdit + '-' + tam + '-' + cor.replace(/\s+/g,'_'),
+                sku_pai: skuPaiEdit,
+                nome: nomeProd + ' - ' + tam + ' - ' + cor,
+                categoria: catProd,
+                tipo: 'variante',
+                tamanho: tam,
+                cor: cor,
+                fabricacao_propria: fabProd,
+                ativo: true,
+              });
+            });
+          });
+          if (novas.length) await postSupabase('produtos', novas);
+        }
+      } else {
+        // Modo novo: cria pai + N variantes
+        if (!tamanhos.length || !cores.length) {
+          alert('Preencha pelo menos 1 tamanho e 1 cor pra gerar variantes'); btn.textContent='Salvar'; btn.disabled=false; return;
+        }
+        // Verifica se SKU pai já existe
+        var jaExiste = (STATE.produtos || []).some(function(p){return p.sku === skuProd;});
+        if (jaExiste) { alert('Já existe um produto com SKU "'+skuProd+'". Use outro SKU.'); btn.textContent='Salvar'; btn.disabled=false; return; }
+
+        var rowsNovos = [{
+          sku: skuProd, sku_pai: skuProd, nome: nomeProd, categoria: catProd,
+          tipo: 'pai', fabricacao_propria: fabProd, ativo: true,
+        }];
+        cores.forEach(function(cor) {
+          tamanhos.forEach(function(tam) {
+            rowsNovos.push({
+              sku: skuProd + '-' + tam + '-' + cor.replace(/\s+/g,'_'),
+              sku_pai: skuProd,
+              nome: nomeProd + ' - ' + tam + ' - ' + cor,
+              categoria: catProd,
+              tipo: 'variante',
+              tamanho: tam,
+              cor: cor,
+              fabricacao_propria: fabProd,
+              ativo: true,
+            });
+          });
+        });
+        await postSupabase('produtos', rowsNovos);
+      }
+      STATE.editingProdutoSkuPai = null;
     }
     closeDrawer();
     await carregar();
