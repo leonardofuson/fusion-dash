@@ -559,7 +559,7 @@ async function buscarTudo(tab,filtro){
   }
   return todos;
 }
-var SEL_PED='id,data_pedido,valor_bruto,canal_nome_raw,origem_conta,status,frete,desconto,valor_liquido,uf,cidade,fee_canal,metodo_pagamento,parcelas';
+var SEL_PED='id,data_pedido,valor_bruto,canal_nome_raw,origem_conta,status,frete,frete_ml_seller,desconto,valor_liquido,uf,cidade,fee_canal,metodo_pagamento,parcelas';
 var SEL_HIST='id,id_tiny_origem,data_pedido,valor_bruto,canal_nome_raw,origem_conta,status,uf';
 function buildFilt(de,ate,cols){
   return'select='+cols+'&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&origem_conta=in.(fio_e_trama,confeccoes,shopify,tiktok_shop)';
@@ -754,7 +754,10 @@ function calcPnL(pedidos,itens){
     var v=parseFloat(p.valor_bruto||0);
     if(p._canc){devolucoes+=v;return;}
     receita+=v;
-    frete+=parseFloat(p.frete||0);
+    // Frete: prioriza frete_ml_seller (custo real Fusion via /shipments/{id} ML ou
+    // shipping_fee_seller_discount TikTok); fallback pra p.frete (lado-cliente).
+    var fSeller=parseFloat(p.frete_ml_seller||0);
+    frete+=fSeller>0?fSeller:parseFloat(p.frete||0);
     var fee=parseFloat(p.fee_canal||0);
     comissao+=fee>0?fee:v*custoPct(p._nome);
   });
@@ -791,7 +794,8 @@ function renderCanalTable(){
     var n=p._nome;if(!byCanal[n])byCanal[n]={r:0,ped:0,canc:0,frete:0,fee:0,cor:p._cor,diario:{}};
     if(p._canc){byCanal[n].canc++;return;}
     var v=parseFloat(p.valor_bruto||0);
-    byCanal[n].r+=v;byCanal[n].ped++;byCanal[n].frete+=parseFloat(p.frete||0);
+    var fSel=parseFloat(p.frete_ml_seller||0);
+    byCanal[n].r+=v;byCanal[n].ped++;byCanal[n].frete+=(fSel>0?fSel:parseFloat(p.frete||0));
     var f=parseFloat(p.fee_canal||0);byCanal[n].fee+=f>0?f:v*custoPct(n);
     var d=(p.data_pedido||'').slice(0,10);byCanal[n].diario[d]=(byCanal[n].diario[d]||0)+v;
   });
