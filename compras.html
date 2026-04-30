@@ -4593,6 +4593,13 @@ function buildInsumoRow(idx, firstRow) {
       '<input type="checkbox" class="f-insumo-sku-'+idx+'" value="' + p.sku_pai + '" style="accent-color:var(--indigo);">' +
       '<span>' + p.nome + '</span></label>';
   }).join('');
+  // Locais elegíveis pra entrada inicial: CD FUSION + costureiros ativos
+  var costuAtivosNomes = (STATE.costureiros || []).filter(function(c){return c.ativo !== false;})
+    .map(function(c){return c.nome;}).sort(function(a,b){return (a||'').localeCompare(b||'');});
+  var locaisHtml = ['CD FUSION'].concat(costuAtivosNomes).map(function(l){
+    var sel = l === 'CD FUSION' ? ' selected' : '';
+    return '<option value="'+l.replace(/"/g,'&quot;')+'"'+sel+'>'+l+'</option>';
+  }).join('');
 
   var removeBtn = firstRow ? '' :
     '<button type="button" class="btnf ghost" style="font-size:11px;padding:4px 10px;color:var(--red);border-color:rgba(248,113,113,0.3)" onclick="removerInsumoRow('+idx+')">✕ Remover</button>';
@@ -4634,7 +4641,14 @@ function buildInsumoRow(idx, firstRow) {
       '<div class="form-group"><label class="form-label">Número NF</label><input class="form-input" data-field="nf" placeholder="Ex: 060054"></div>' +
       '<div class="form-group"><label class="form-label">Data Faturamento</label><input class="form-input" data-field="data_fat" type="date"></div>' +
     '</div>' +
-    '<div class="form-group"><label class="form-label">Data Entrega do Tecido</label><input class="form-input" data-field="data_ent" type="date"></div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label class="form-label">Data Entrega do Tecido</label>' +
+        '<input class="form-input" data-field="data_ent" type="date"></div>' +
+      '<div class="form-group"><label class="form-label">Local de estoque <small style="color:var(--txt3);font-weight:400">(onde o tecido fica fisicamente)</small></label>' +
+        '<select class="form-select" data-field="localizacao">' + locaisHtml + '</select>' +
+        '<small style="color:var(--txt3)">Default CD FUSION. Mude se o tecido foi direto pra um costureiro.</small>' +
+      '</div>' +
+    '</div>' +
     '<div class="form-group"><label class="form-label">Produtos que usam este tecido <small style="color:var(--txt3);font-weight:400">(fabricação própria)</small></label>' +
       '<div style="display:flex;flex-wrap:wrap;gap:4px;padding:8px;background:var(--bg3);border:1px solid var(--bdr);border-radius:6px;max-height:160px;overflow-y:auto;" data-field="skus">' + paisHtml + '</div>' +
     '</div>' +
@@ -4716,6 +4730,8 @@ function coletarInsumosRows() {
     var vDentro = parseFloat(row.querySelector('[data-field="valor_dentro"]').value) || null;
     var vFora = parseFloat(row.querySelector('[data-field="valor_fora"]').value) || null;
     var vTotal = (vDentro || 0) + (vFora || 0);
+    var locEl = row.querySelector('[data-field="localizacao"]');
+    var localizacaoNova = (locEl && locEl.value) ? locEl.value : 'CD FUSION';
     insumos.push({
       tipo: tipo,
       subtipo: row.querySelector('[data-field="subtipo"]').value,
@@ -4729,6 +4745,7 @@ function coletarInsumosRows() {
       numero_nf: (row.querySelector('[data-field="nf"]').value || '').trim() || null,
       data_faturamento: row.querySelector('[data-field="data_fat"]').value || null,
       data_entrega: row.querySelector('[data-field="data_ent"]').value || null,
+      localizacao: localizacaoNova,
       skus_pai: skusChecked.length ? skusChecked : null,
     });
   });
