@@ -3118,6 +3118,131 @@ function renderPlanejamento() {
   document.getElementById('cobertura-bars').innerHTML = barsHtml;
 }
 
+// Abre drawer com heatmaps cor × tam (Estoque, Vendas 90d, Cobertura) pro SKU pai.
+async function abrirDetalheSKU(skuPai) {
+  STATE.detalheSKU = skuPai;
+  openDrawer('detalhe-sku');
+  // Fetch async do estoque das variantes
+  var variantes = (STATE.produtos || []).filter(function(p){
+    return (p.sku_pai === skuPai || p.sku === skuPai) && p.tipo !== 'pai';
+  });
+  var ids = variantes.map(function(v){return v.id;}).filter(Boolean);
+  var rows = [];
+  if (ids.length) {
+    try {
+      var url = SB_URL + '/rest/v1/estoque?produto_id=in.(' + ids.join(',') + ')&select=produto_id,sku,quantidade,localizacao';
+      var r = await fetch(url, { headers: await getAuthHeaders() });
+      if (r.ok) rows = await r.json();
+    } catch(e) { console.warn('Erro fetching estoque:', e); }
+  }
+  var body = document.getElementById('drawer-body');
+  if (body) body.innerHTML = buildDetalheSKUForm(skuPai, variantes, rows);
+}
+
+function buildDetalheSKUForm(skuPai, variantes, estoqueRows) {
+  // 1. Estoque agregado por (cor, tamanho)
+  var prodById = {}; variantes.forEach(function(p){ prodById[p.id] = p; });
+  var estoqueByCT = {};
+  estoqueRows.forEach(function(e) {
+    var p = prodById[e.produto_id]; if (!p) return;
+    var c = (p.cor || '?').trim().toUpperCase();
+    var t = (p.tamanho || '?').trim();
+    if (!estoqueByCT[c]) estoqueByCT[c] = {};
+    estoqueByCT[c][t] = (estoqueByCT[c][t] || 0) + (parseFloat(e.quantidade) || 0);
+  });
+
+  // 2. Vendas 90d por (cor, tamanho) — vem de planejamento_producao.grades_por_cor
+  var plan = (STATE.planejamento || []).find(function(p){ return p.sku_produto === skuPai; });
+  var gpc = plan ? (plan.grades_por_cor || []) : [];
+  var vendasByCT = {};
+  gpc.forEach(function(g){
+    var c = (g.cor || '').trim().toUpperCase();
+    if (c) vendasByCT[c] = g.por_tamanho || {};
+  });
+
+  // 3. União dos eixos (mesmo cor×tam pros 3 heatmaps)
+  var corSet = {}, tamSet = {};
+  Object.keys(estoqueByCT).forEach(function(c){ corSet[c] = 1; Object.keys(estoqueByCT[c]).forEach(function(t){ tamSet[t] = 1; }); });
+  Object.keys(vendasByCT).forEach(function(c){ corSet[c] = 1; Object.keys(vendasByCT[c]).forEach(function(t){ tamSet[t] = 1; }); });
+  var cores = Object.keys(corSet).filter(function(c){return c && c !== '?';}).sort();
+  var tams = Object.keys(tamSet).filter(function(t){return t && t !== '?';}).sort(function(a,b){
+    var na=parseInt(a), nb=parseInt(b);
+    if (!isNaN(na) && !isNaN(nb)) return na - nb;
+    return a.localeCompare(b);
+  });
+
+  if (!cores.length || !tams.length) {
+    return '<div class="empty" style="padding:24px;text-align:center;color:var(--txt3)">' +
+      'Sem dados de cor × tamanho pra este produto. Cadastre variantes ou aguarde vendas.</div>';
+  }
+
+  // Cobertura por (cor, tam): estoque[c][t] / (vendas[c][t]/90)
+  var coberturaByCT = {};
+  cores.forEach(function(c){
+    coberturaByCT[c] = {};
+    tams.forEach(function(t){
+      var est = (estoqueByCT[c]||{})[t] || 0;
+      var vendas90 = (vendasByCT[c]||{})[t] || 0;
+      var velDia = vendas90 / 90;
+      if (velDia <= 0) coberturaByCT[c][t] = est > 0 ? 9999 : null;
+      else coberturaByCT[c][t] = Math.round(est / velDia);
+    });
+  });
+
+  function renderHeatmap(titulo, dataByCT, fmtFn, bgFn, sub) {
+    var maxV = 0;
+    cores.forEach(function(c){ tams.forEach(function(t){ var v = (dataByCT[c]||{})[t]; if (v != null && v > maxV && v < 9999) maxV = v; }); });
+    if (maxV === 0) {
+      return '<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;margin-bottom:6px">'+titulo+'</div>' +
+        '<div style="padding:12px;color:var(--txt3);font-size:12px;background:var(--bg);border-radius:6px">Sem dados.</div></div>';
+    }
+    var html = '<div style="margin-bottom:18px"><div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px">'+titulo+
+      (sub ? ' <small style="color:var(--txt4);font-weight:400;text-transform:none">'+sub+'</small>' : '') + '</div>';
+    html += '<div style="overflow-x:auto;border:1px solid var(--bdr);border-radius:6px"><table style="border-collapse:collapse;font-size:11px;width:100%"><thead><tr>';
+    html += '<th style="padding:6px;background:var(--bg3);text-align:left;font-size:10px;color:var(--txt3);border-bottom:1px solid var(--bdr);position:sticky;left:0;z-index:1">Cor</th>';
+    tams.forEach(function(t){
+      html += '<th style="padding:6px;background:var(--bg3);text-align:center;font-size:10px;color:var(--txt3);border-bottom:1px solid var(--bdr);min-width:48px">'+t+'</th>';
+    });
+    html += '</tr></thead><tbody>';
+    cores.forEach(function(c){
+      html += '<tr><td style="padding:6px;background:var(--bg);font-weight:600;border-bottom:1px solid rgba(255,255,255,0.04);position:sticky;left:0;z-index:1">'+c+'</td>';
+      tams.forEach(function(t){
+        var v = (dataByCT[c]||{})[t];
+        if (v == null) {
+          html += '<td style="padding:6px;text-align:center;color:var(--txt4);background:var(--bg)">—</td>';
+        } else if (v === 0) {
+          html += '<td style="padding:6px;text-align:center;color:var(--txt4);background:var(--bg)">·</td>';
+        } else {
+          var bg = bgFn(v / maxV, v);
+          html += '<td style="padding:6px;text-align:center;font-weight:700;color:#fff;background:'+bg+'" title="'+c+' '+t+': '+fmtFn(v)+'">'+fmtFn(v)+'</td>';
+        }
+      });
+      html += '</tr>';
+    });
+    html += '</tbody></table></div></div>';
+    return html;
+  }
+
+  var nome = nomeProduto(skuPai);
+  var totEst = 0; cores.forEach(function(c){ tams.forEach(function(t){ totEst += (estoqueByCT[c]||{})[t]||0; }); });
+  var totVendas = 0; cores.forEach(function(c){ tams.forEach(function(t){ totVendas += (vendasByCT[c]||{})[t]||0; }); });
+
+  return '<div style="padding:12px;background:rgba(99,102,241,0.06);border-radius:8px;margin-bottom:14px">' +
+      '<div style="font-size:14px;font-weight:700">'+nome+'</div>' +
+      '<div style="font-size:12px;color:var(--txt3);margin-top:2px">Estoque total: <strong>'+fmt(Math.round(totEst))+'</strong> pç · Vendas 90d: <strong>'+fmt(totVendas)+'</strong> pç · '+cores.length+' cor(es) × '+tams.length+' tamanho(s)</div>' +
+    '</div>' +
+    renderHeatmap('Estoque atual', estoqueByCT, function(v){return fmt(Math.round(v));}, function(i){return 'rgba(74,222,128,'+(0.30+i*0.55).toFixed(2)+')';}) +
+    renderHeatmap('Vendas 90d (peças)', vendasByCT, function(v){return fmt(v);}, function(i){return 'rgba(99,102,241,'+(0.30+i*0.55).toFixed(2)+')';}) +
+    renderHeatmap('Cobertura (dias)', coberturaByCT, function(v){return v >= 9999 ? '∞' : v + 'd';},
+      function(i,v){
+        if (v >= 9999) return 'rgba(74,222,128,0.55)';
+        if (v < 30) return 'rgba(248,113,113,0.85)';
+        if (v < 60) return 'rgba(251,146,60,0.85)';
+        if (v < 100) return 'rgba(251,191,36,0.75)';
+        return 'rgba(74,222,128,0.75)';
+      }, 'estoque ÷ velocidade · vermelho <30d, laranja <60d, amarelo <100d, verde >100d');
+}
+
 function renderCardSugestao(p) {
   var pill = p.prioridade === 'critica' ? '<span class="pill pill-danger">🔴 Crítico</span>'
            : p.prioridade === 'alta' ? '<span class="pill pill-delayed">🟠 Atenção</span>'
@@ -3172,13 +3297,14 @@ function renderCardSugestao(p) {
   var topCost = (p.costureiros_sugeridos || [])[0] || null;
   var custBox = topCost ? '<div style="font-size:12px;margin-bottom:8px"><strong style="color:var(--txt3);font-size:10px;text-transform:uppercase">Costureiro sugerido:</strong> ' + topCost.nome + (topCost.valor_peca ? ' · ' + fmtR(topCost.valor_peca) + '/pç' : '') + '</div>' : '';
 
-  // CTA — só pra prioridades acionáveis
+  // CTAs
+  var detalheBtn = '<button class="btnf ghost" style="margin-left:auto" onclick="abrirDetalheSKU(\''+p.sku_produto+'\')" title="Heatmap cor × tamanho: estoque, vendas, cobertura">Ver detalhe</button>';
   var ctaBtn = '';
   if (p.prioridade !== 'baixa') {
     if (necTec > 0 && !temTecido) {
-      ctaBtn = '<button class="btnf" style="background:var(--orange);color:#fff;margin-left:auto" onclick="abrirCompraTecidoDaSugestao(\''+p.sku_produto+'\')">Comprar Tecido</button>';
+      ctaBtn = '<button class="btnf" style="background:var(--orange);color:#fff" onclick="abrirCompraTecidoDaSugestao(\''+p.sku_produto+'\')">Comprar Tecido</button>';
     } else {
-      ctaBtn = '<button class="btnf" style="margin-left:auto" onclick="abrirOPDaSugestao(\''+p.sku_produto+'\')">Abrir OP</button>';
+      ctaBtn = '<button class="btnf" onclick="abrirOPDaSugestao(\''+p.sku_produto+'\')">Abrir OP</button>';
     }
   }
 
@@ -3199,7 +3325,7 @@ function renderCardSugestao(p) {
       (necTec > 0 ? ' · <span style="color:' + tecColor + '">saldo ' + fmt(Math.round(saldoTec)) + ' / necessidade ' + fmt(necTec) + ' ' + (p.unidade_tecido || 'M') + '</span>' : '') +
     '</div>' +
     custBox +
-    (ctaBtn ? '<div style="display:flex;justify-content:flex-end;margin-top:12px">' + ctaBtn + '</div>' : '') +
+    '<div style="display:flex;gap:8px;margin-top:12px">' + detalheBtn + ctaBtn + '</div>' +
   '</div>';
 }
 
@@ -4022,6 +4148,10 @@ function openDrawer(type) {
     body.innerHTML = buildProdutoForm();
     // Auto-preenche tamanhos quando categoria já vem definida (edit) e o input está vazio
     setTimeout(onProdutoCategoriaChange, 0);
+  } else if (type === 'detalhe-sku') {
+    title.textContent = 'Detalhe — ' + nomeProduto(STATE.detalheSKU);
+    body.innerHTML = '<div class="empty" style="padding:32px;text-align:center;color:var(--txt3)">Carregando heatmaps...</div>';
+    // O fetch + render acontece no abrirDetalheSKU (substitui o body quando termina)
   } else if (type === 'desmembrar-op') {
     title.textContent = 'Desmembrar OP #' + (STATE.desmembrandoOP ? STATE.desmembrandoOP.id : '');
     body.innerHTML = buildDesmembrarOPForm();
@@ -4029,6 +4159,10 @@ function openDrawer(type) {
   }
   document.getElementById('drawer-footer').style.display = 'flex';
   configurarBtnExcluir(null);  // esconde em forms de criacao
+  // Drawers só de visualização (sem Salvar): esconde footer
+  if (type === 'detalhe-sku') {
+    document.getElementById('drawer-footer').style.display = 'none';
+  }
   overlay.classList.add('open');
 }
 
@@ -4043,6 +4177,7 @@ function closeDrawer() {
   STATE.cadastroCostureiroPreNome = null;
   STATE.transferindoNFKey = null;
   STATE.editingProdutoSkuPai = null;
+  STATE.detalheSKU = null;
   configurarBtnExcluir(null);
 }
 
