@@ -1945,16 +1945,23 @@ function abrirTransferirNF(groupKey) {
 
 function gruposInsumosCache() {
   // Reconstrói grupos por NF a partir do STATE.insumos (mesma lógica que renderInsumos)
+  // Mesma key usada em renderInsumos: tecido (sem NF) — Transferir tudo move todas as NFs.
   var grupos = {};
   (STATE.insumos || []).forEach(function(i) {
     if (!i.ativo) return;
-    var nf = (i.numero_nf || '').trim() || '__sem_nf__';
-    var tec = (i.nome || '').trim().toUpperCase();
-    var key = nf + '::' + tec;
+    var tec = (i.nome || '').trim().toUpperCase() || '__sem_tecido__';
+    var key = tec;
     if (!grupos[key]) {
-      grupos[key] = { key: key, nf: i.numero_nf, tecido: i.nome, unidade: i.unidade, variantes: [] };
+      grupos[key] = { key: key, nf: null, tecido: i.nome, unidade: i.unidade, variantes: [], nfs: [] };
     }
     grupos[key].variantes.push(i);
+    if (i.numero_nf && grupos[key].nfs.indexOf(String(i.numero_nf).trim()) < 0) {
+      grupos[key].nfs.push(String(i.numero_nf).trim());
+    }
+  });
+  // Set g.nf legacy = string consolidada das NFs (pra observação da mov de transferência)
+  Object.values(grupos).forEach(function(g){
+    g.nf = g.nfs.length === 1 ? g.nfs[0] : (g.nfs.length + ' NFs');
   });
   return grupos;
 }
@@ -1986,16 +1993,19 @@ function buildTransferirNFForm(groupKey) {
       ? locsComSaldo.map(function(l){ return l+': '+fmt(saldosLoc[l]); }).join(' · ')
       : '<span style="color:var(--txt3)">sem saldo</span>';
     var checked = locsComSaldo.length ? ' checked' : ' disabled';
+    var nfBadge = ins.numero_nf ? ' <small style="color:var(--txt4)">NF '+ins.numero_nf+'</small>' : '';
     return '<tr><td style="padding:6px 4px"><label style="display:inline-flex;align-items:center;gap:6px;font-size:12px">' +
         '<input type="checkbox" class="f-trfnf-include" data-ins-id="'+ins.id+'"' + checked + '>' +
-        '<span><strong>'+(ins.cor || '—')+'</strong></span></label></td>' +
+        '<span><strong>'+(ins.cor || '—')+'</strong>'+nfBadge+'</span></label></td>' +
       '<td style="padding:6px 4px;font-size:11px;color:var(--txt2)">' + saldoTxt + '</td></tr>';
   }).join('');
 
+  var nNfsHdr = (g.nfs || []).length;
+  var nfsHdrTxt = nNfsHdr === 0 ? 'sem NF' : (nNfsHdr === 1 ? 'NF: <strong>'+g.nfs[0]+'</strong>' : '<strong>'+nNfsHdr+' NFs</strong> ('+g.nfs.slice(0,3).join(', ')+(nNfsHdr>3?' …':'')+')');
   return '<div class="form-group" style="background:rgba(99,102,241,0.06);padding:12px;border-radius:8px;margin-bottom:12px">' +
-      '<div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px">Tecido / NF</div>' +
+      '<div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px">Tecido</div>' +
       '<div style="font-weight:700;font-size:14px">' + (g.tecido || '—') + '</div>' +
-      '<div style="font-size:12px;color:var(--txt2);margin-top:2px">NF: <strong>'+(g.nf||'—')+'</strong> · '+g.variantes.length+' cor(es)</div>' +
+      '<div style="font-size:12px;color:var(--txt2);margin-top:2px">'+nfsHdrTxt+' · '+g.variantes.length+' lote(s)</div>' +
     '</div>' +
     '<div class="form-group"><label class="form-label">Destino *</label>' +
       '<select id="f-trfnf-destino" class="form-select">' +
@@ -2782,31 +2792,42 @@ function renderInsumos() {
   if (!STATE.insumoExpanded) STATE.insumoExpanded = {};
 
   // Agrupar por NF + Tecido (agrupa variantes de cor da mesma compra)
+  // Grupo principal AGORA é por TECIDO (nome) — antes era NF+tecido. Reduz a quantidade de linhas
+  // ("Sarja Senna Plus" comprada em 5 NFs vira 1 linha em vez de 5). NFs aparecem na expansão e
+  // como contagem no header. Pra editar uma NF específica, o user clica na linha da variante (cor).
   var grupos = {};
   filtered.forEach(function(i) {
-    var nf = (i.numero_nf || '').trim() || '__sem_nf__';
-    var tec = (i.nome || '').trim().toUpperCase();
-    var key = nf + '::' + tec;
+    var tec = (i.nome || '').trim().toUpperCase() || '__sem_tecido__';
+    var key = tec;
     if (!grupos[key]) {
       grupos[key] = {
-        key: key, nf: i.numero_nf, tecido: i.nome, unidade: i.unidade,
+        key: key, tecido: i.nome, unidade: i.unidade,
         data_faturamento: i.data_faturamento, fornecedor_id: i.fornecedor_id,
-        skus_pai: i.skus_pai || [],
+        skus_pai_set: {}, nfs_set: {},
         variantes: [], total: 0, em_producao: 0, saldo_livre: 0,
       };
     }
+    var g = grupos[key];
     var em_producao = emProducaoPorInsumo[i.id] || 0;
-    // Total = quantidade física (quantidade_atual). Em Produção é subset (já incluído).
-    // Saldo Livre = Total - Em Produção (disponível pra novas OPs).
     var total_v = i.quantidade_atual || 0;
     var saldo_livre = total_v - em_producao;
-    grupos[key].variantes.push({ item: i, em_producao: em_producao, saldo_livre: saldo_livre, total: total_v });
-    grupos[key].total += total_v;
-    grupos[key].em_producao += em_producao;
-    grupos[key].saldo_livre += saldo_livre;
+    g.variantes.push({ item: i, em_producao: em_producao, saldo_livre: saldo_livre, total: total_v });
+    g.total += total_v;
+    g.em_producao += em_producao;
+    g.saldo_livre += saldo_livre;
+    // Coleta cross-NF: SKUs pai vinculados, lista de NFs distintas, data mais recente, fornecedor mais usado
+    (i.skus_pai || []).forEach(function(s){ if (s) g.skus_pai_set[s] = 1; });
+    if (i.numero_nf) g.nfs_set[String(i.numero_nf).trim()] = 1;
+    if (i.data_faturamento && (!g.data_faturamento || i.data_faturamento > g.data_faturamento)) g.data_faturamento = i.data_faturamento;
+    if (i.fornecedor_id) g.fornecedor_id = g.fornecedor_id || i.fornecedor_id;
+  });
+  // Pós-processa: skus_pai e nfs viram arrays
+  Object.values(grupos).forEach(function(g){
+    g.skus_pai = Object.keys(g.skus_pai_set);
+    g.nfs = Object.keys(g.nfs_set);
   });
 
-  // Ordenar grupos por SALDO LIVRE DESC (mais livre primeiro); empates pela NF mais recente.
+  // Ordenar grupos por SALDO LIVRE DESC (mais livre primeiro); empates pela data mais recente.
   var gruposArr = Object.values(grupos).sort(function(a, b) {
     var sa = a.saldo_livre || 0, sb = b.saldo_livre || 0;
     if (sa !== sb) return sb - sa;
@@ -2866,20 +2887,30 @@ function renderInsumos() {
       locGrupoHtml = '<span style="color:var(--txt4);font-size:10px">—</span>';
     }
 
-    // Botão "Transferir NF" no header do grupo (só se houver saldo total > 0)
+    // Botão "Transferir Tecido" no header do grupo (só se houver saldo total > 0)
     var keyEsc = g.key.replace(/'/g, "\\'");
     var btnTrfNF = (g.total > 0.001) ?
-      '<button class="btnf ghost" style="font-size:10px;padding:3px 8px" onclick="event.stopPropagation();abrirTransferirNF(\''+keyEsc+'\')" title="Transferir todas as cores desta NF de uma vez">⇄ Transferir NF</button>' : '';
+      '<button class="btnf ghost" style="font-size:10px;padding:3px 8px" onclick="event.stopPropagation();abrirTransferirNF(\''+keyEsc+'\')" title="Transferir todas as cores deste tecido de uma vez">⇄ Transferir tudo</button>' : '';
 
-    // Header da NF (clicavel)
+    // Conta NFs e cores únicas (consolida múltiplas NFs do mesmo tecido)
+    var coresSet = {};
+    g.variantes.forEach(function(v){ if (v.item && v.item.cor) coresSet[v.item.cor.trim().toUpperCase()] = 1; });
+    var nNfs = (g.nfs || []).length;
+    var nCoresUnicas = Object.keys(coresSet).length;
+    var nfTxt = nNfs <= 1
+      ? 'NF: <strong style="color:var(--indigo)">' + ((g.nfs||[])[0] || '—') + '</strong>'
+      : '<strong style="color:var(--indigo)">' + nNfs + ' NFs</strong> <small style="color:var(--txt4)">(' + (g.nfs||[]).slice(0,3).join(', ') + (nNfs>3?' …':'') + ')</small>';
+
+    // Header do tecido (clicavel)
     var htmlGrupo = '<tr style="background:rgba(99,102,241,0.06);border-top:2px solid var(--bdr);cursor:pointer;user-select:none" onclick="toggleInsumoGrupo(\'' + keyEsc + '\')">' +
       '<td style="text-align:center;color:var(--txt3);font-size:10px">' + toggleIcon + '</td>' +
       '<td><strong style="color:var(--txt1)">' + (g.tecido || '—').trim() + '</strong>' +
         '<div style="font-size:10px;color:var(--txt3);margin-top:2px">' +
-          'NF: <strong style="color:var(--indigo)">' + (g.nf || '—') + '</strong>' +
+          nfTxt +
           (fornecedor ? ' · ' + fornecedor : '') +
-          (g.data_faturamento ? ' · ' + dataTxt : '') +
-          ' · ' + g.variantes.length + ' cor' + (g.variantes.length>1?'es':'') +
+          (g.data_faturamento ? ' · última: ' + dataTxt : '') +
+          ' · ' + nCoresUnicas + ' cor' + (nCoresUnicas>1?'es':'') +
+          (g.variantes.length > nCoresUnicas ? ' · ' + g.variantes.length + ' lotes' : '') +
         '</div>' +
       '</td>' +
       '<td class="r" style="font-weight:700">' + fmt(g.total) + '</td>' +
@@ -2917,9 +2948,10 @@ function renderInsumos() {
         } else {
           locVarHtml = '<span style="color:var(--txt4);font-size:10px">—</span>';
         }
+        var nfLote = i.numero_nf ? ' <small style="color:var(--txt4);margin-left:4px">NF '+i.numero_nf+'</small>' : '';
         htmlGrupo += '<tr style="background:rgba(255,255,255,0.01);cursor:pointer" onclick="event.stopPropagation();openDrawerEditInsumo('+i.id+')" title="Click para editar">' +
           '<td></td>' +
-          '<td style="padding-left:24px" class="dim">↳ ' + ((i.cor || '—').trim()) + '<span style="color:var(--txt4);font-size:10px;margin-left:6px">(editar)</span></td>' +
+          '<td style="padding-left:24px" class="dim">↳ ' + ((i.cor || '—').trim()) + nfLote + '<span style="color:var(--txt4);font-size:10px;margin-left:6px">(editar)</span></td>' +
           '<td class="r">' + fmt(v.total) + '</td>' +
           '<td class="r" style="color:var(--amber)">' + fmt(v.em_producao) + '</td>' +
           '<td class="r" style="color:'+corSaldo+';font-weight:600">' + fmt(v.saldo_livre) + '</td>' +
@@ -4141,7 +4173,7 @@ function openDrawer(type) {
     title.textContent = 'Transferir Tecido';
     body.innerHTML = buildTransferirTecidoForm(STATE.transferindoInsumoId);
   } else if (type === 'transferir-nf') {
-    title.textContent = 'Transferir NF inteira';
+    title.textContent = 'Transferir Tecido (todas as NFs)';
     body.innerHTML = buildTransferirNFForm(STATE.transferindoNFKey);
   } else if (type === 'edit-produto') {
     title.textContent = STATE.editingProdutoSkuPai ? ('Editar Produto — ' + STATE.editingProdutoSkuPai) : 'Cadastrar Produto';
