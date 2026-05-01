@@ -165,11 +165,18 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
       <div class="card">
         <div class="card-header"><div class="card-title">Inputs</div></div>
         <div class="card-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Categoria</label>
+              <select id="in-categoria" class="form-select"><option value="">Todas</option></select>
+              <div class="form-help">Filtra os SKUs disponíveis abaixo</div>
+            </div>
+          </div>
           <div class="form-group">
             <label class="form-label">Produto / SKU pai</label>
             <input id="in-sku" class="form-input" list="dl-skus" placeholder="Digite SKU pai (ex: CLMALHA)" autocomplete="off">
             <datalist id="dl-skus"></datalist>
-            <div id="sku-info" class="form-help">Apenas SKUs pai de revenda (insumos como TECIDO/TROCA são excluídos).</div>
+            <div id="sku-info" class="form-help">Apenas SKUs pai de revenda (insumos TECIDO e TROCA excluídos).</div>
           </div>
           <div class="form-group">
             <label class="form-label">Canal</label>
@@ -268,9 +275,13 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
         </div>
         <div class="form-row" id="curva-grp-sku" style="display:none;">
           <div class="form-group">
+            <label class="form-label">Categoria</label>
+            <select id="curva-categoria" class="form-select"><option value="">Todas</option></select>
+          </div>
+          <div class="form-group">
             <label class="form-label">SKU pai</label>
             <select id="curva-sku" class="form-select"></select>
-            <div class="form-help">Apenas SKUs <strong>pai</strong> com ≥7 dias de histórico de ads + fit válido aparecem (anúncios ML são por pai — variantes ficam agregadas).</div>
+            <div class="form-help">Apenas SKUs <strong>pai</strong> com ≥7 dias de histórico de ads + fit válido (anúncios ML são por pai — variantes agregadas).</div>
           </div>
         </div>
       </div>
@@ -297,8 +308,12 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
       <div class="card-body">
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label">SKU</label>
-            <input id="ad-sku" class="form-input" list="dl-skus" placeholder="Digite o SKU" autocomplete="off">
+            <label class="form-label">Categoria</label>
+            <select id="ad-categoria" class="form-select"><option value="">Todas</option></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">SKU pai</label>
+            <input id="ad-sku" class="form-input" list="dl-skus" placeholder="Digite SKU pai" autocomplete="off">
           </div>
           <div class="form-group">
             <label class="form-label">Tipo</label>
@@ -483,13 +498,28 @@ function popularCanaisDropdown(){
   $('#curva-canal').innerHTML = opts;
 }
 
-function popularDataListSkus(){
-  // Lista só SKUs PAI (já filtrados em carregarReferencias) — ordenado por nome
-  const items = STATE.produtos
+function getCategoriasDistinct(){
+  return Array.from(new Set(STATE.produtos.map(p => p.categoria).filter(Boolean))).sort();
+}
+
+function popularCategoriaDropdowns(){
+  const cats = getCategoriasDistinct();
+  const opts = cats.map(c => `<option value="${c}">${c}</option>`).join('');
+  ['#in-categoria', '#curva-categoria', '#ad-categoria'].forEach(sel => {
+    const el = $(sel); if (!el) return;
+    el.innerHTML = '<option value="">Todas</option>' + opts;
+  });
+}
+
+function popularDataListSkus(filtroCategoria){
+  // Datalist genérico (sem filtro) — usado como fonte default
+  // Pra filtrar, regenera ao trocar categoria nas Abas que tem o filtro
+  const lista = STATE.produtos
     .filter(p => p.sku)
-    .sort((a,b) => (a.nome||'').localeCompare(b.nome||'', 'pt-BR'))
+    .filter(p => !filtroCategoria || p.categoria === filtroCategoria)
+    .sort((a,b) => (a.nome||'').localeCompare(b.nome||'', 'pt-BR'));
+  $('#dl-skus').innerHTML = lista
     .map(p => `<option value="${p.sku}">${(p.nome||'').replace(/"/g,'&quot;')} · ${p.categoria||''}</option>`).join('');
-  $('#dl-skus').innerHTML = items;
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -715,11 +745,18 @@ async function salvarCenarioConfirma(){
 // Aba 2: Curva ótima
 // ═════════════════════════════════════════════════════════════
 function popularCurvaSkus(){
-  const skus = Array.from(new Set(
-    STATE.curvas.filter(c => c.sku_raw).map(c => c.sku_raw)
-  )).sort();
-  $('#curva-sku').innerHTML = skus.map(s =>
-    `<option value="${s}">${s}</option>`).join('') || '<option value="">— sem SKUs com fit —</option>';
+  const cat = $('#curva-categoria').value;
+  const skusComFit = new Set(STATE.curvas.filter(c => c.sku_raw).map(c => c.sku_raw));
+  const lista = STATE.produtos
+    .filter(p => skusComFit.has(p.sku))
+    .filter(p => !cat || p.categoria === cat)
+    .sort((a,b) => (a.nome||'').localeCompare(b.nome||'', 'pt-BR'));
+  if (!lista.length) {
+    $('#curva-sku').innerHTML = '<option value="">— sem SKUs com fit nesta categoria —</option>';
+    return;
+  }
+  $('#curva-sku').innerHTML = lista
+    .map(p => `<option value="${p.sku}">${p.sku} · ${p.nome||''}</option>`).join('');
 }
 
 function renderCurva(){
@@ -813,10 +850,19 @@ function renderCurva(){
 async function carregarEventos(){
   const sku = $('#ad-sku').value.trim();
   const tipo = $('#ad-tipo').value;
-  let qs = 'select=*&order=data.desc&limit=200';
+  const cat = $('#ad-categoria').value;
+  let qs = 'select=*&order=data.desc&limit=500';
   if (sku) qs += '&sku_raw=eq.' + encodeURIComponent(sku);
   if (tipo) qs += '&tipo=eq.' + encodeURIComponent(tipo);
-  STATE.eventos = await sbGet('produto_evento', qs);
+  let eventos = await sbGet('produto_evento', qs);
+  // Filtro de categoria client-side (resolvido via STATE.produtosBySku)
+  if (cat && !sku) {
+    eventos = eventos.filter(e => {
+      const p = STATE.produtosBySku[e.sku_raw||''];
+      return p && p.categoria === cat;
+    });
+  }
+  STATE.eventos = eventos;
   renderTimeline();
 }
 
@@ -1146,12 +1192,37 @@ async function resolverDrift(id, resolucao){
   document.getElementById(id).addEventListener('input', recalcular);
   document.getElementById(id).addEventListener('change', recalcular);
 });
+// Filtro de categoria na Aba Calculadora — re-popula datalist e limpa SKU se fora da categoria
+$('#in-categoria').addEventListener('change', () => {
+  const cat = $('#in-categoria').value;
+  popularDataListSkus(cat);
+  // Se SKU atual está fora da categoria, limpa
+  const skuAtual = $('#in-sku').value;
+  if (skuAtual && cat) {
+    const p = STATE.produtosBySku[skuAtual];
+    if (!p || p.categoria !== cat) $('#in-sku').value = '';
+  }
+  recalcular();
+});
 $('#curva-canal').addEventListener('change', renderCurva);
 $('#curva-plat').addEventListener('change', renderCurva);
 $('#curva-sku').addEventListener('change', renderCurva);
 $('#curva-modo').addEventListener('change', renderCurva);
+$('#curva-categoria').addEventListener('change', () => { popularCurvaSkus(); renderCurva(); });
 $('#ad-sku').addEventListener('change', carregarEventos);
 $('#ad-tipo').addEventListener('change', carregarEventos);
+$('#ad-categoria').addEventListener('change', () => {
+  // Filtra datalist pro autocomplete da Aba 3
+  popularDataListSkus($('#ad-categoria').value);
+  // Se SKU atual está fora da categoria, limpa
+  const skuAtual = $('#ad-sku').value;
+  const cat = $('#ad-categoria').value;
+  if (skuAtual && cat) {
+    const p = STATE.produtosBySku[skuAtual];
+    if (!p || p.categoria !== cat) $('#ad-sku').value = '';
+  }
+  carregarEventos();
+});
 
 // ═════════════════════════════════════════════════════════════
 // Bootstrap
@@ -1162,6 +1233,7 @@ $('#ad-tipo').addEventListener('change', carregarEventos);
   $('#user-info-tb').textContent = AUTH.role.nome;
   await carregarReferencias();
   popularCanaisDropdown();
+  popularCategoriaDropdowns();
   popularDataListSkus();
   popularCurvaSkus();
   recalcular();
