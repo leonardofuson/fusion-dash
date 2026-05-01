@@ -846,11 +846,44 @@ function renderCurva(){
     ? `<div class="alert alert-warn" style="font-size:12px;"><strong>⚠️ Ponto ótimo extrapola</strong> — o fit sugere ${fmt(otimo)}/dia, mas você nunca passou de ${fmt(gastoMaxHist)}. A curva é uma projeção matemática; alcançar esse gasto exigiria capacidade operacional não testada (estoque, tráfego, conversão).</div>`
     : '';
 
+  // Bloco "Receita atribuída pela ML" — atribuição direta + indireta
+  const gastoTotalJan = stats.gasto_total || 0;
+  const recAdsTotalJan = stats.rec_ads_total || 0;
+  const recAdsMed = stats.rec_ads_med || 0;
+  const roasAtrib = stats.roas_atribuido || 0;
+  const lucroTotalJan = pontos.reduce((s,p)=>s+p.l,0);
+
+  // Decompor direta vs indireta na janela toda
+  let recDireta = 0, recIndireta = 0, unDir = 0, unInd = 0;
+  pontos.forEach(p => {
+    recDireta += p.rd || 0; recIndireta += p.ri || 0;
+    unDir += p.ud || 0; unInd += p.ui || 0;
+  });
+
+  const blocoROAS = recAdsTotalJan > 0 ? `
+    <div style="background:linear-gradient(135deg,rgba(34,211,238,.08),rgba(34,211,238,.02));border:1px solid rgba(34,211,238,.3);border-radius:10px;padding:14px;margin-bottom:14px;">
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--cyan);margin-bottom:8px;">💰 Receita atribuída pela ML (janela ${c.janela_dias}d)</div>
+      <div style="font-size:1.5rem;font-weight:800;font-variant-numeric:tabular-nums;">${fmt(recAdsTotalJan)}</div>
+      <div style="font-size:12px;color:var(--txt3);margin-top:4px;">
+        Investimento: <strong style="color:var(--txt1);">${fmt(gastoTotalJan)}</strong> · ROAS:
+        <strong style="color:${roasAtrib >= 5 ? 'var(--green)' : roasAtrib >= 3 ? 'var(--amber)' : 'var(--red)'};">${roasAtrib.toFixed(2)}x</strong>
+      </div>
+      <div style="font-size:11px;color:var(--txt4);margin-top:6px;border-top:1px solid var(--bdr);padding-top:6px;">
+        Direta (clique→compra): <strong>${fmt(recDireta)}</strong> · ${unDir} un<br>
+        Indireta (assistida): <strong>${fmt(recIndireta)}</strong> · ${unInd} un
+      </div>
+    </div>
+  ` : `
+    <div class="alert alert-info" style="font-size:12px;">Sem dados de receita atribuída pela ML nessa janela. (Acontece em SKUs com poucas conversões diretas.)</div>
+  `;
+
   $('#curva-resumo').innerHTML = `
+    ${blocoROAS}
     ${tendencia}
-    <h3 style="font-size:12px;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;">📊 O que aconteceu (histórico)</h3>
-    <div class="kpi" style="margin-bottom:8px;"><div class="kpi-lbl">Gasto médio diário</div><div class="kpi-val" style="font-size:1.2rem;">${fmt(gastoMedHist)}</div><div class="kpi-sub">Máx: ${fmt(gastoMaxHist)} · Mín: ${fmt(stats.gasto_min||0)}</div></div>
-    <div class="kpi" style="margin-bottom:8px;"><div class="kpi-lbl">Lucro líquido médio diário</div><div class="kpi-val ${lucroMedHist<0?'neg':'pos'}" style="font-size:1.2rem;">${fmt(lucroMedHist)}</div><div class="kpi-sub">Receita média: ${fmt(stats.receita_med||0)}</div></div>
+    <h3 style="font-size:12px;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;">📊 Diário (médias)</h3>
+    <div class="kpi" style="margin-bottom:8px;"><div class="kpi-lbl">Gasto médio</div><div class="kpi-val" style="font-size:1.2rem;">${fmt(gastoMedHist)}</div><div class="kpi-sub">Máx: ${fmt(gastoMaxHist)} · Mín: ${fmt(stats.gasto_min||0)}</div></div>
+    <div class="kpi" style="margin-bottom:8px;"><div class="kpi-lbl">Receita atribuída média</div><div class="kpi-val" style="font-size:1.2rem;color:var(--cyan);">${fmt(recAdsMed)}</div><div class="kpi-sub">Por dia (atribuição ML)</div></div>
+    <div class="kpi" style="margin-bottom:8px;"><div class="kpi-lbl">Lucro líquido médio</div><div class="kpi-val ${lucroMedHist<0?'neg':'pos'}" style="font-size:1.2rem;">${fmt(lucroMedHist)}</div><div class="kpi-sub">Receita pedidos: ${fmt(stats.receita_med||0)}</div></div>
     <div class="kpi" style="margin-bottom:14px;"><div class="kpi-lbl">Pontos observados</div><div class="kpi-val" style="font-size:1.2rem;">${c.amostra} dias</div><div class="kpi-sub">Janela ${c.janela_dias}d</div></div>
 
     <h3 style="font-size:12px;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em;margin:18px 0 10px;">🧮 Referência teórica do fit</h3>
@@ -872,55 +905,127 @@ function renderCurva(){
 
   const ctx = document.getElementById('cv-curva').getContext('2d');
   const otimoForaGrafico = otimo > xMaxGrafico;
+
+  // Scatter de receita atribuída ML (eixo Y secundário)
+  const scatterRecAds = pontos.filter(p => (p.ra||0) > 0).map(p => ({
+    x: p.g, y: p.ra, _meta: p
+  }));
+
+  // Lookup de meta por (gasto, lucro) pra tooltip do scatter principal
+  const metaPorPonto = new Map();
+  pontos.forEach(p => metaPorPonto.set(`${p.g}|${p.l}`, p));
+
   STATE.charts.curva = new Chart(ctx, {
     data: {
       datasets: [
-        // 1) Histórico — destaque visual primário
+        // 1) Histórico de lucro (eixo Y principal)
         {
-          type: 'scatter', label: 'Histórico real (cada dia)',
+          type: 'scatter', label: 'Lucro líquido (cada dia)',
           data: scatterHist,
           backgroundColor: 'rgba(99,102,241,.7)',
           borderColor: '#818cf8',
           pointRadius: 4, pointHoverRadius: 6,
+          yAxisID: 'y',
           order: 1,
         },
-        // 2) Curva ajustada — secundário, tracejado
+        // 2) Receita atribuída ML (eixo Y secundário) — só pontos com receita > 0
         {
-          type: 'line', label: 'Fit logarítmico (projeção)',
+          type: 'scatter', label: 'Receita atribuída ML (cada dia)',
+          data: scatterRecAds,
+          backgroundColor: 'rgba(34,211,238,.55)',
+          borderColor: '#22d3ee',
+          pointStyle: 'triangle',
+          pointRadius: 4, pointHoverRadius: 6,
+          yAxisID: 'y1',
+          order: 1,
+        },
+        // 3) Curva ajustada — secundário, tracejado
+        {
+          type: 'line', label: 'Fit logarítmico (projeção lucro)',
           data: linhaFit,
           borderColor: 'rgba(167,139,250,.6)',
           borderWidth: 1.5, borderDash: [4,4],
           pointRadius: 0, fill: false, tension: 0,
+          yAxisID: 'y',
           order: 2,
         },
-        // 3) Marcador da faixa praticada (sombreamento da área histórica)
+        // 4) Marcador da faixa praticada
         {
           type: 'line', label: `Faixa praticada (até ${fmt(gastoMaxHist)})`,
           data: [{x: 0, y: 0}, {x: gastoMaxHist, y: 0}],
           borderColor: 'rgba(74,222,128,.5)',
           borderWidth: 4, pointRadius: 0,
+          yAxisID: 'y',
           order: 3,
         },
-        // 4) Linha vertical no ponto ótimo (se dentro do gráfico)
+        // 5) Linha vertical no ponto ótimo
         ...(otimo > 0 && !otimoForaGrafico ? [{
           type: 'line', label: `Ótimo teórico (${fmt(otimo)})`,
           data: [{x: otimo, y: 0}, {x: otimo, y: c.lucro_no_otimo}],
           borderColor: extrapola ? 'rgba(250,204,21,.5)' : 'rgba(250,204,21,.8)',
           borderWidth: 1.5, borderDash: [6,4],
           pointRadius: [0, 4], pointBackgroundColor: '#facc15',
-          showLine: true, order: 4,
+          showLine: true, yAxisID: 'y', order: 4,
         }] : []),
       ]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'point', intersect: true },
       scales: {
         x: { type:'linear', title:{display:true,text:'Gasto diário (R$)',color:'#a1a1aa'}, ticks:{color:'#a1a1aa', callback:v=>'R$ '+fmtN(v)}, grid:{color:'rgba(255,255,255,.05)'} },
-        y: { title:{display:true,text:'Lucro líquido / dia (R$)',color:'#a1a1aa'}, ticks:{color:'#a1a1aa', callback:v=>'R$ '+fmtN(v)}, grid:{color:'rgba(255,255,255,.05)'} },
+        y: {
+          position: 'left',
+          title:{display:true,text:'Lucro líquido / dia (R$)',color:'#818cf8'},
+          ticks:{color:'#a1a1aa', callback:v=>'R$ '+fmtN(v)},
+          grid:{color:'rgba(255,255,255,.05)'},
+        },
+        y1: {
+          position: 'right',
+          title:{display:true,text:'Receita atribuída ML / dia (R$)',color:'#22d3ee'},
+          ticks:{color:'#22d3ee', callback:v=>'R$ '+fmtN(v)},
+          grid:{drawOnChartArea: false},
+        },
       },
       plugins: {
         legend: { labels: { color:'#d4d4d8', usePointStyle: true } },
-        tooltip: { callbacks: { label: c => c.dataset.label + ': ' + fmt(c.parsed.y) + ' @ ' + fmt(c.parsed.x) + '/dia' } },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const dl = ctx.dataset.label;
+              if (dl.startsWith('Lucro')) {
+                const meta = metaPorPonto.get(`${ctx.parsed.x}|${ctx.parsed.y}`);
+                const lines = [
+                  `Gasto: ${fmt(ctx.parsed.x)}`,
+                  `Lucro líquido: ${fmt(ctx.parsed.y)}`,
+                ];
+                if (meta) {
+                  lines.push(`Data: ${fmtDt(meta.d)}`);
+                  if (meta.ra > 0) {
+                    const roasDay = ctx.parsed.x > 0 ? (meta.ra / ctx.parsed.x) : 0;
+                    lines.push(`Receita atribuída: ${fmt(meta.ra)} (ROAS ${roasDay.toFixed(2)}x)`);
+                  }
+                }
+                return lines;
+              }
+              if (dl.startsWith('Receita atribuída')) {
+                const m = ctx.dataset.data[ctx.dataIndex] && ctx.dataset.data[ctx.dataIndex]._meta;
+                const roasDay = ctx.parsed.x > 0 ? (ctx.parsed.y / ctx.parsed.x) : 0;
+                const lines = [
+                  `Gasto: ${fmt(ctx.parsed.x)}`,
+                  `Receita atribuída: ${fmt(ctx.parsed.y)}`,
+                  `ROAS: ${roasDay.toFixed(2)}x`,
+                ];
+                if (m) {
+                  lines.push(`Data: ${fmtDt(m.d)}`);
+                  lines.push(`Direta: ${fmt(m.rd)} · Indireta: ${fmt(m.ri)}`);
+                }
+                return lines;
+              }
+              return `${dl}: ${fmt(ctx.parsed.y)}`;
+            }
+          }
+        },
       },
     }
   });
