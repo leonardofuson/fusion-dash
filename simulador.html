@@ -166,10 +166,10 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
         <div class="card-header"><div class="card-title">Inputs</div></div>
         <div class="card-body">
           <div class="form-group">
-            <label class="form-label">Produto / SKU</label>
-            <input id="in-sku" class="form-input" list="dl-skus" placeholder="Digite ou cole o SKU" autocomplete="off">
+            <label class="form-label">Produto / SKU pai</label>
+            <input id="in-sku" class="form-input" list="dl-skus" placeholder="Digite SKU pai (ex: CLMALHA)" autocomplete="off">
             <datalist id="dl-skus"></datalist>
-            <div id="sku-info" class="form-help"></div>
+            <div id="sku-info" class="form-help">Apenas SKUs pai de revenda (insumos como TECIDO/TROCA são excluídos).</div>
           </div>
           <div class="form-group">
             <label class="form-label">Canal</label>
@@ -440,9 +440,20 @@ async function sbDelete(path, qs){
 // ═════════════════════════════════════════════════════════════
 // Bootstrap: load reference data
 // ═════════════════════════════════════════════════════════════
+// Categorias de insumo (não-revenda) — sempre excluídas
+const CATEGORIAS_INSUMO = ['TECIDO', 'TROCA'];
+
 async function carregarReferencias(){
+  // Filtra: só produtos PAI + exclui categorias de insumo
+  const insumoFilter = CATEGORIAS_INSUMO.map(c => 'categoria.neq.' + encodeURIComponent(c)).join(',');
+  const produtosQs =
+    'select=id,sku,nome,categoria,custo_total,sku_ml,sku_shopify,sku_shopee'
+    + '&ativo=eq.true'
+    + '&tipo=eq.pai'
+    + `&and=(${insumoFilter})`
+    + '&limit=10000';
   const [produtos, faixas, devSku, devCanal, freteSku, freteCanal, curvas, cenarios] = await Promise.all([
-    sbGet('produtos', 'select=id,sku,nome,custo_total,sku_ml,sku_shopify,sku_shopee&ativo=eq.true&limit=10000'),
+    sbGet('produtos', produtosQs),
     sbGet('canal_custos_faixa', 'select=*&ativo=eq.true&order=canal_pattern,faixa_min'),
     sbGet('vw_taxa_devolucao_sku_canal', 'select=*&limit=5000'),
     sbGet('vw_taxa_devolucao_canal', 'select=*'),
@@ -453,9 +464,9 @@ async function carregarReferencias(){
   ]);
   STATE.produtos = produtos;
   STATE.faixas = faixas;
-  produtos.forEach(p => {
-    [p.sku, p.sku_ml, p.sku_shopify, p.sku_shopee].forEach(k => { if (k) STATE.produtosBySku[k] = p; });
-  });
+  // Indexa só pelo SKU pai (sku_ml/shopify/shopee de pais raramente preenchidos e geralmente
+  // apontam pro item_id ML, não SKU vendedor — não confundir o lookup).
+  produtos.forEach(p => { if (p.sku) STATE.produtosBySku[p.sku] = p; });
   devSku.forEach(r => { STATE.taxaDevSku[(r.sku_raw||'')+'|'+(r.canal_nome_raw||'')] = parseFloat(r.taxa_devolucao||0); });
   devCanal.forEach(r => { STATE.taxaDevCanal[r.canal_nome_raw] = parseFloat(r.taxa_devolucao||0); });
   freteSku.forEach(r => { STATE.freteSku[(r.sku_raw||'')+'|'+(r.canal_nome_raw||'')] = parseFloat(r.frete_medio||0); });
@@ -473,10 +484,11 @@ function popularCanaisDropdown(){
 }
 
 function popularDataListSkus(){
+  // Lista só SKUs PAI (já filtrados em carregarReferencias) — ordenado por nome
   const items = STATE.produtos
     .filter(p => p.sku)
-    .slice(0, 5000)
-    .map(p => `<option value="${p.sku}">${(p.nome||'').replace(/"/g,'&quot;')}</option>`).join('');
+    .sort((a,b) => (a.nome||'').localeCompare(b.nome||'', 'pt-BR'))
+    .map(p => `<option value="${p.sku}">${(p.nome||'').replace(/"/g,'&quot;')} · ${p.categoria||''}</option>`).join('');
   $('#dl-skus').innerHTML = items;
 }
 
