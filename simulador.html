@@ -807,10 +807,17 @@ function renderCurva(){
     : xMaxOperacional;
   const N = 60;
   // Linha = curva ajustada de RECEITA (eixo Y do gráfico)
-  const linhaFitReceita = (ar !== null && br !== null)
+  // ⚠️ Fit log só vale dentro da faixa observada — extrapolar pra esquerda
+  // (gastos abaixo do mínimo histórico) gera valores negativos sem sentido.
+  // Por isso a linha começa em gasto_min e termina em xMaxGrafico, e clipamos
+  // qualquer y < 0 que ainda apareça por instabilidade numérica.
+  const gastoMinHist = stats.gasto_min || 0;
+  const xInicioFit = Math.max(gastoMinHist, 1);
+  const linhaFitReceita = (ar !== null && br !== null && xMaxGrafico > xInicioFit)
     ? Array.from({length: N+1}, (_, i) => {
-        const x = (xMaxGrafico * i / N);
-        return { x, y: ar + br * Math.log(x + 1) };
+        const x = xInicioFit + ((xMaxGrafico - xInicioFit) * i / N);
+        const y = ar + br * Math.log(x + 1);
+        return { x, y: Math.max(0, y) };
       })
     : [];
   // Scatter = receita atribuída ML por dia
@@ -943,9 +950,9 @@ function renderCurva(){
           pointRadius: 4, pointHoverRadius: 7,
           order: 1,
         },
-        // 2) Curva ajustada de receita (tendência)
+        // 2) Curva ajustada de receita (tendência) — só dentro da faixa observada
         ...(linhaFitReceita.length ? [{
-          type: 'line', label: 'Tendência (fit log)',
+          type: 'line', label: `Tendência (fit log · ${fmt(gastoMinHist)} → ${fmt(gastoMaxHist)})`,
           data: linhaFitReceita,
           borderColor: 'rgba(167,139,250,.6)',
           borderWidth: 1.5, borderDash: [4,4],
@@ -976,7 +983,13 @@ function renderCurva(){
       interaction: { mode: 'point', intersect: true },
       scales: {
         x: { type:'linear', title:{display:true,text:'Gasto diário em ads (R$)',color:'#a1a1aa'}, ticks:{color:'#a1a1aa', callback:v=>'R$ '+fmtN(v)}, grid:{color:'rgba(255,255,255,.05)'} },
-        y: { title:{display:true,text:'Receita atribuída ML / dia (R$)',color:'#22d3ee'}, ticks:{color:'#a1a1aa', callback:v=>'R$ '+fmtN(v)}, grid:{color:'rgba(255,255,255,.05)'}, beginAtZero: true },
+        y: {
+          title: {display:true, text:'Receita atribuída ML / dia (R$)', color:'#22d3ee'},
+          ticks: {color:'#a1a1aa', callback: v => 'R$ '+fmtN(v)},
+          grid:  {color:'rgba(255,255,255,.05)'},
+          min: 0,                              // nunca mostrar negativo (receita não pode ser <0)
+          suggestedMax: yMaxObs * 1.05,
+        },
       },
       plugins: {
         legend: { labels: { color:'#d4d4d8', usePointStyle: true } },
