@@ -7,7 +7,7 @@
 - Login via Supabase Auth → JWT → PostgREST com RLS
 - Catálogo de dashes hardcoded em `auth.js` (objeto `DASHES`)
 - Cada dash usa `fusionAuth.requireAuth('key')` como gate
-- Dashes ativos: `lojas`, `ecommerce`, `diretoria`, `estoque`, `financeiro`, `compras`
+- Dashes ativos: `lojas`, `ecommerce`, `diretoria`, `estoque`, `financeiro`, `compras`, `simulador`
 - Padrão de fetch: paralelo de `pedidos` + `pedidos_historico` com `.concat()` no cliente
 - RLS em tudo (`pedidos`, `pedidos_historico`, `produtos`, `estoque`, `contas_pagar`, `user_roles`, `metas_lojas`) — sem login = sem dado
 
@@ -133,6 +133,13 @@ Fonte única: tabela `contas_pagar` (só Fio e Trama).
 - Visão consolidada (todos os canais). Receita, top SKUs, anomalias.
 - **Pendência**: refatorar pra usar `vw_pedidos_completo` em vez de fetch paralelo.
 
+## Dash Simulador (`simulador.html`)
+
+- Calculadora de margem por SKU+canal+preço, curva ótima de ads, antes/depois (snapshot+manual), cenários salvos por user (RLS).
+- Detalhes de fórmula, fontes e limitações em [SIMULADOR.md](SIMULADOR.md).
+- Depende de tabelas `canal_custos_faixa`, `simulacao_cenarios`, `produtos_snapshot`, `produto_evento`, `ads_curva_otima` e views `vw_taxa_devolucao_*`/`vw_frete_medio_*` (criadas em `sql/2026-05-01_*.sql`).
+- Crons que alimentam: `fusion-sync-snapshot` (08h BRT) e `fusion-sync-curva-ads` (09h BRT) — ver [../fusion-sync/CLAUDE.md](../fusion-sync/CLAUDE.md).
+
 ## Smoke checks pós-deploy
 
 Rodar após qualquer push em fusion-dash. **A skill [`fusion-sanity-check`](../.claude/skills/fusion-sanity-check/SKILL.md) automatiza isso.**
@@ -162,6 +169,16 @@ echo "$HTML" | grep -qE "'</script>'" && echo "🔴 </script> literal em string 
 
 # 4. jsPDF carregado (necessário pra Sprint 7 do refactor)
 echo "$HTML" | grep -q "jspdf" && echo "✅ jsPDF presente" || echo "🔴 jsPDF ausente"
+
+# 5. simulador.html — invariantes (4 abas + chamadas pra views + sem armadilhas)
+HTML=$(curl -s "$BASE/simulador.html")
+echo "$HTML" | grep -q 'id="tab-calc"' && echo "✅ simulador aba calc" || echo "🔴 aba calc ausente"
+echo "$HTML" | grep -q 'id="tab-curva"' && echo "✅ simulador aba curva" || echo "🔴 aba curva ausente"
+echo "$HTML" | grep -q 'id="tab-antesdepois"' && echo "✅ simulador aba antesdepois" || echo "🔴 aba antesdepois ausente"
+echo "$HTML" | grep -q 'id="tab-cenarios"' && echo "✅ simulador aba cenarios" || echo "🔴 aba cenarios ausente"
+echo "$HTML" | grep -q 'canal_custos_faixa' && echo "✅ simulador lê canal_custos_faixa" || echo "🔴 canal_custos_faixa ausente"
+echo "$HTML" | grep -q 'ads_curva_otima' && echo "✅ simulador lê ads_curva_otima" || echo "🔴 ads_curva_otima ausente"
+echo "$HTML" | grep -qE "'</script>'" && echo "🔴 simulador </script> literal" || echo "✅ simulador sem </script> literal"
 ```
 
 **Invariantes cross-arquivo críticos**:
