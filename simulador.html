@@ -296,6 +296,17 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
         <div id="curva-resumo" class="card-body"></div>
       </div>
     </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Evolução temporal <small>(ROAS, receita atribuída e gasto por dia · mais antigo → mais recente)</small></div>
+        <div style="display:flex;gap:6px;">
+          <button class="tab-btn active" data-tl="roas" onclick="setTimelineMetric('roas')">ROAS</button>
+          <button class="tab-btn" data-tl="receita" onclick="setTimelineMetric('receita')">Receita</button>
+          <button class="tab-btn" data-tl="lucro" onclick="setTimelineMetric('lucro')">Lucro atrib.</button>
+        </div>
+      </div>
+      <div class="card-body"><canvas id="cv-timeline" height="220"></canvas></div>
+    </div>
   </section>
 
   <!-- ───────────── Aba 3: Antes / Depois ───────────── -->
@@ -1019,6 +1030,142 @@ function renderCurva(){
               if (dl.startsWith('Tendência')) return `Fit: ${fmt(ctx.parsed.y)} a ${fmt(ctx.parsed.x)}/dia`;
               if (dl.startsWith('Ótimo')) return `Onde lucro marginal = R$ 1`;
               return `${dl}: ${fmt(ctx.parsed.y)}`;
+            }
+          }
+        },
+      },
+    }
+  });
+
+  // Renderiza também a timeline com a métrica atualmente selecionada
+  renderRoasTimeline(c);
+}
+
+// ═════════════════════════════════════════════════════════════
+// Aba 2 — Timeline temporal (ROAS / Receita / Lucro por dia)
+// ═════════════════════════════════════════════════════════════
+STATE.tlMetric = 'roas';
+
+function setTimelineMetric(m){
+  STATE.tlMetric = m;
+  document.querySelectorAll('.tab-btn[data-tl]').forEach(b => b.classList.toggle('active', b.dataset.tl === m));
+  // Re-render usando a curva atual selecionada
+  renderCurva();
+}
+
+function mediaMovel(arr, k){
+  // Centrada onde possível, antes-only nas pontas. Preserva NaN se input é NaN.
+  const out = new Array(arr.length).fill(null);
+  for (let i = 0; i < arr.length; i++) {
+    const ini = Math.max(0, i - k + 1);
+    const slice = arr.slice(ini, i + 1).filter(v => v != null && !isNaN(v));
+    out[i] = slice.length > 0 ? slice.reduce((a,b)=>a+b,0) / slice.length : null;
+  }
+  return out;
+}
+
+function renderRoasTimeline(c){
+  if (STATE.charts.timeline) { STATE.charts.timeline.destroy(); STATE.charts.timeline = null; }
+  if (!c || !c.historico || !c.historico.pontos || !c.historico.pontos.length) return;
+
+  const pontos = c.historico.pontos;  // já vem ordenado por data
+  const labels = pontos.map(p => fmtDt(p.d));
+  const metric = STATE.tlMetric || 'roas';
+
+  let serieDiaria, label, color, fmtFn, sufixo = '';
+  if (metric === 'roas') {
+    serieDiaria = pontos.map(p => p.g > 0 ? p.ra / p.g : null);
+    label = 'ROAS diário';
+    color = '#22d3ee';
+    fmtFn = v => v == null ? '-' : v.toFixed(2) + 'x';
+    sufixo = 'x';
+  } else if (metric === 'receita') {
+    serieDiaria = pontos.map(p => p.ra || 0);
+    label = 'Receita atribuída ML / dia';
+    color = '#4ade80';
+    fmtFn = v => fmt(v);
+  } else {
+    serieDiaria = pontos.map(p => p.la || 0);
+    label = 'Lucro atribuído / dia';
+    color = '#a78bfa';
+    fmtFn = v => fmt(v);
+  }
+  const mm7 = mediaMovel(serieDiaria, 7);
+
+  // Para legibilidade: gasto sempre visível como barras secundárias (eixo Y2)
+  const gastos = pontos.map(p => p.g || 0);
+
+  const ctx = document.getElementById('cv-timeline').getContext('2d');
+  STATE.charts.timeline = new Chart(ctx, {
+    data: {
+      labels,
+      datasets: [
+        // 1) Gasto diário em barras suaves (contexto)
+        {
+          type: 'bar', label: 'Gasto diário (R$)',
+          data: gastos,
+          backgroundColor: 'rgba(99,102,241,.18)',
+          borderColor: 'rgba(99,102,241,.4)',
+          borderWidth: 1,
+          yAxisID: 'yGasto',
+          order: 3,
+        },
+        // 2) Métrica diária (linha fina)
+        {
+          type: 'line', label,
+          data: serieDiaria,
+          borderColor: color + 'aa',
+          backgroundColor: 'transparent',
+          borderWidth: 1.5, tension: 0.15,
+          pointRadius: 0, pointHoverRadius: 4,
+          spanGaps: true,
+          yAxisID: 'yMetric',
+          order: 2,
+        },
+        // 3) Média móvel 7 dias (linha grossa, destaque)
+        {
+          type: 'line', label: label + ' — média móvel 7d',
+          data: mm7,
+          borderColor: color,
+          backgroundColor: color + '20',
+          borderWidth: 2.5, tension: 0.3,
+          pointRadius: 0, pointHoverRadius: 5,
+          fill: true,
+          yAxisID: 'yMetric',
+          order: 1,
+        },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: { ticks: {color:'#a1a1aa', maxRotation: 0, autoSkip: true, maxTicksLimit: 12}, grid:{display:false} },
+        yMetric: {
+          position: 'left',
+          title: {display:true, text: label, color},
+          ticks: {color: '#a1a1aa', callback: v => fmtFn(v)},
+          grid: {color: 'rgba(255,255,255,.05)'},
+          beginAtZero: true,
+        },
+        yGasto: {
+          position: 'right',
+          title: {display:true, text: 'Gasto (R$)', color: 'rgba(99,102,241,.7)'},
+          ticks: {color: 'rgba(99,102,241,.7)', callback: v => 'R$ ' + fmtN(v)},
+          grid: {drawOnChartArea: false},
+          beginAtZero: true,
+        },
+      },
+      plugins: {
+        legend: { labels: { color:'#d4d4d8', usePointStyle: true } },
+        tooltip: {
+          callbacks: {
+            title: items => items[0]?.label || '',
+            label: ctx => {
+              const v = ctx.parsed.y;
+              const dl = ctx.dataset.label || '';
+              if (dl.startsWith('Gasto')) return `Gasto: ${fmt(v)}`;
+              return `${dl}: ${fmtFn(v)}`;
             }
           }
         },
