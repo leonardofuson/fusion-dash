@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fusion — Simulador de Preço</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<style>
+:root{--bg:#09090b;--bg2:#111113;--bg3:#1a1a1e;--bdr:#2a2a2e;--bdr-hover:#3f3f46;
+  --txt1:#fafafa;--txt2:#d4d4d8;--txt3:#a1a1aa;--txt4:#71717a;
+  --indigo:#6366f1;--green:#4ade80;--red:#f87171;--amber:#facc15;--orange:#fb923c;--purple:#a78bfa;--cyan:#22d3ee;--pink:#ec4899;}
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Inter',sans-serif;}
+body{background:var(--bg);color:var(--txt1);min-height:100vh;}
+
+.topbar{background:rgba(9,9,11,.85);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--bdr);height:64px;display:flex;align-items:center;padding:0 1.5rem;gap:16px;position:sticky;top:0;z-index:100;}
+.topbar img{height:32px;object-fit:contain;}
+.topbar-div{width:1px;height:18px;background:var(--bdr);}
+.topbar-label{font-size:15px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--txt1);}
+.topbar-actions{display:flex;align-items:center;gap:14px;margin-left:auto;}
+#user-info-tb{font-size:13px;color:var(--txt2);}
+.btn-back,.btn-logout-tb{background:transparent;border:1px solid var(--bdr);color:var(--txt2);padding:7px 14px;border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit;text-decoration:none;display:inline-block;transition:all .15s;}
+.btn-back:hover{border-color:var(--indigo);color:var(--indigo);}
+.btn-logout-tb:hover{border-color:var(--red);color:var(--red);}
+
+.main{max-width:1440px;margin:0 auto;padding:1.5rem;}
+
+.tab-nav{display:flex;gap:4px;padding:4px;background:var(--bg2);border:1px solid var(--bdr);border-radius:10px;width:fit-content;margin-bottom:24px;flex-wrap:wrap;}
+.tab-btn{padding:8px 18px;border:none;border-radius:8px;background:transparent;color:var(--txt3);font-family:'Inter',sans-serif;font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;white-space:nowrap;}
+.tab-btn:hover{color:var(--txt2);background:rgba(255,255,255,.04);}
+.tab-btn.active{background:var(--indigo);color:#fff;box-shadow:0 1px 3px rgba(99,102,241,.3);}
+.tab-panel{display:none;}
+.tab-panel.active{display:block;}
+
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:24px;}
+.kpi{background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;padding:18px;position:relative;overflow:hidden;}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--kpi-accent,var(--indigo));opacity:.7;}
+.kpi.highlight{border-color:var(--kpi-accent,var(--green));box-shadow:0 0 0 1px var(--kpi-accent,var(--green));}
+.kpi-lbl{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--txt3);margin-bottom:8px;}
+.kpi-val{font-size:1.5rem;font-weight:800;color:var(--txt1);line-height:1;font-variant-numeric:tabular-nums;}
+.kpi-sub{font-size:12px;color:var(--txt3);margin-top:6px;}
+.kpi-val.neg{color:var(--red);}
+.kpi-val.pos{color:var(--green);}
+
+.card{background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;margin-bottom:16px;}
+.card-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--bdr);}
+.card-title{font-size:15px;font-weight:600;color:var(--txt1);}
+.card-title small{font-size:12px;font-weight:400;color:var(--txt3);margin-left:8px;}
+.card-body{padding:20px;}
+
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.grid3{display:grid;grid-template-columns:2fr 1fr;gap:16px;}
+
+.form-group{margin-bottom:16px;}
+.form-label{display:block;font-size:12px;font-weight:500;color:var(--txt2);margin-bottom:6px;}
+.form-input,.form-select,.form-textarea{width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--bdr);border-radius:8px;color:var(--txt1);font-family:inherit;font-size:14px;transition:border-color .15s;}
+.form-input:focus,.form-select:focus,.form-textarea:focus{outline:none;border-color:var(--indigo);box-shadow:0 0 0 3px rgba(99,102,241,.12);}
+.form-input::placeholder{color:var(--txt4);}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.form-textarea{min-height:60px;resize:vertical;}
+.form-help{font-size:11px;color:var(--txt4);margin-top:4px;}
+
+.btn{padding:9px 18px;border-radius:8px;border:1px solid var(--bdr);background:var(--bg2);color:var(--txt1);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;}
+.btn:hover{border-color:var(--indigo);background:var(--bg3);}
+.btn-primary{background:var(--indigo);border-color:var(--indigo);color:#fff;}
+.btn-primary:hover{background:#4f46e5;border-color:#4f46e5;}
+.btn-danger{border-color:#7f1d1d;color:var(--red);}
+.btn-danger:hover{background:rgba(248,113,113,.1);}
+.btn-sm{padding:5px 11px;font-size:12px;}
+
+.tb{width:100%;border-collapse:collapse;font-size:13px;}
+.tb th,.tb td{padding:10px 14px;text-align:left;border-bottom:1px solid var(--bdr);}
+.tb th{background:var(--bg3);font-weight:600;color:var(--txt2);font-size:11px;text-transform:uppercase;letter-spacing:.05em;}
+.tb tbody tr:hover{background:rgba(255,255,255,.02);}
+.tb .num{text-align:right;font-variant-numeric:tabular-nums;}
+
+.breakdown{font-size:13px;}
+.breakdown .row{display:flex;justify-content:space-between;padding:9px 14px;border-bottom:1px solid var(--bdr);}
+.breakdown .row:last-child{border-bottom:none;}
+.breakdown .row.head{background:var(--bg3);font-weight:600;}
+.breakdown .row.total{background:linear-gradient(90deg,rgba(74,222,128,.08),rgba(74,222,128,.02));border-top:1px solid var(--green);font-weight:700;color:var(--green);}
+.breakdown .row.total.neg{background:linear-gradient(90deg,rgba(248,113,113,.08),rgba(248,113,113,.02));border-top-color:var(--red);color:var(--red);}
+.breakdown .lbl{color:var(--txt2);}
+.breakdown .val{font-variant-numeric:tabular-nums;color:var(--txt1);}
+
+.empty{text-align:center;color:var(--txt3);padding:32px;font-size:13px;}
+.spin{width:24px;height:24px;border:2px solid var(--bdr);border-top-color:var(--indigo);border-radius:50%;animation:spin .7s linear infinite;margin:24px auto;}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(4px);z-index:999;opacity:0;pointer-events:none;transition:opacity .2s;}
+.drawer-overlay.open{opacity:1;pointer-events:auto;}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(560px,90vw);background:var(--bg2);border-left:1px solid var(--bdr);z-index:1000;transform:translateX(100%);transition:transform .25s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;}
+.drawer-overlay.open .drawer{transform:translateX(0);}
+.drawer-header{display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid var(--bdr);}
+.drawer-header h2{font-size:16px;font-weight:600;}
+.drawer-close{width:32px;height:32px;border-radius:6px;border:1px solid var(--bdr);background:transparent;color:var(--txt3);cursor:pointer;font-size:18px;}
+.drawer-body{flex:1;overflow-y:auto;padding:24px;}
+.drawer-footer{padding:16px 24px;border-top:1px solid var(--bdr);display:flex;gap:12px;justify-content:flex-end;}
+
+.alert{padding:12px 14px;border-radius:8px;font-size:13px;margin-bottom:12px;}
+.alert-warn{background:rgba(250,204,21,.08);border:1px solid rgba(250,204,21,.3);color:var(--amber);}
+.alert-info{background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.3);color:var(--txt2);}
+.alert-bad{background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.3);color:var(--red);}
+
+.timeline{padding:8px 0;}
+.tl-evt{display:flex;gap:14px;padding:10px 14px;border-radius:8px;cursor:pointer;border:1px solid transparent;}
+.tl-evt:hover{background:var(--bg3);border-color:var(--bdr);}
+.tl-evt.active{background:rgba(99,102,241,.08);border-color:var(--indigo);}
+.tl-icon{width:36px;height:36px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+.tl-body{flex:1;}
+.tl-title{font-size:13px;font-weight:600;color:var(--txt1);}
+.tl-meta{font-size:11px;color:var(--txt3);margin-top:2px;}
+
+.scn-card{background:var(--bg2);border:1px solid var(--bdr);border-radius:10px;padding:14px 16px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:12px;}
+.scn-card:hover{border-color:var(--bdr-hover);}
+.scn-card .scn-info{flex:1;min-width:0;}
+.scn-card .scn-name{font-size:14px;font-weight:600;}
+.scn-card .scn-meta{font-size:11px;color:var(--txt3);margin-top:3px;}
+.scn-card .scn-margem{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums;}
+.scn-card .scn-margem.pos{color:var(--green);}
+.scn-card .scn-margem.neg{color:var(--red);}
+
+.r2-good{color:var(--green);}
+.r2-mid{color:var(--amber);}
+.r2-bad{color:var(--red);}
+
+@media(max-width:900px){.grid2,.grid3{grid-template-columns:1fr;}}
+@media(max-width:768px){
+  .topbar{height:56px;padding:0 1rem;}.topbar img{height:26px;}.topbar-label{font-size:12px;}
+  .btn-back,.btn-logout-tb{padding:5px 10px;font-size:11px;}#user-info-tb{display:none;}.topbar-actions{gap:8px;}
+  .main{padding:1rem;}
+  .kpi-grid{grid-template-columns:repeat(2,1fr);}.kpi-val{font-size:1.2rem;}
+}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/auth.js"></script>
+</head>
+<body>
+
+<header class="topbar">
+  <img src="/logo-urso.png" alt="Fusion">
+  <div class="topbar-div"></div>
+  <span class="topbar-label">🎯 Simulador de Preço</span>
+  <div class="topbar-actions">
+    <span id="user-info-tb"></span>
+    <a href="/index.html" class="btn-back">Menu</a>
+    <button class="btn-logout-tb" onclick="fusionAuth.signOut()">Sair</button>
+  </div>
+</header>
+
+<main class="main">
+  <nav class="tab-nav" role="tablist">
+    <button class="tab-btn active" data-tab="calc">Calculadora</button>
+    <button class="tab-btn" data-tab="curva">Curva Ótima de Ads</button>
+    <button class="tab-btn" data-tab="antesdepois">Antes / Depois</button>
+    <button class="tab-btn" data-tab="cenarios">Cenários Salvos</button>
+  </nav>
+
+  <!-- ───────────── Aba 1: Calculadora ───────────── -->
+  <section id="tab-calc" class="tab-panel active">
+    <div class="grid3">
+      <!-- Inputs -->
+      <div class="card">
+        <div class="card-header"><div class="card-title">Inputs</div></div>
+        <div class="card-body">
+          <div class="form-group">
+            <label class="form-label">Produto / SKU</label>
+            <input id="in-sku" class="form-input" list="dl-skus" placeholder="Digite ou cole o SKU" autocomplete="off">
+            <datalist id="dl-skus"></datalist>
+            <div id="sku-info" class="form-help"></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Canal</label>
+            <select id="in-canal" class="form-select"></select>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Preço de venda (R$)</label>
+              <input id="in-preco" class="form-input" type="number" min="0" step="0.01" value="0">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Investimento ads (R$)</label>
+              <input id="in-ads" class="form-input" type="number" min="0" step="0.01" value="0">
+              <div class="form-help">Por unidade vendida</div>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group" id="grp-cupom" style="display:none;">
+              <label class="form-label">Cupom (% — só Site)</label>
+              <input id="in-cupom" class="form-input" type="number" min="0" max="100" step="0.1" value="0">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Custos fixos (% receita)</label>
+              <input id="in-fixo" class="form-input" type="number" min="0" max="100" step="0.5" value="8">
+              <div class="form-help">Aluguel, salários, log interna</div>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Rebate da plataforma (R$)</label>
+              <input id="in-rebate" class="form-input" type="number" min="0" step="0.01" value="0">
+              <div class="form-help">Bônus que a plataforma repassa</div>
+            </div>
+            <div class="form-group" id="grp-afiliado" style="display:none;">
+              <label class="form-label">Comissão afiliado TikTok</label>
+              <select id="in-afiliado" class="form-select">
+                <option value="0">Sem afiliado (6%)</option>
+                <option value="1">Com afiliado (+12%)</option>
+              </select>
+            </div>
+          </div>
+          <hr style="border:none;border-top:1px solid var(--bdr);margin:16px 0;">
+          <div class="form-row">
+            <button class="btn" onclick="resetForm()">Limpar</button>
+            <button class="btn btn-primary" onclick="abrirSalvar()">💾 Salvar cenário</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Outputs -->
+      <div>
+        <div id="kpis-calc" class="kpi-grid"></div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Breakdown <small id="brk-meta"></small></div>
+          </div>
+          <div id="brk-body" class="card-body breakdown"></div>
+        </div>
+        <div id="calc-alerts"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────── Aba 2: Curva Ótima ───────────── -->
+  <section id="tab-curva" class="tab-panel">
+    <div class="card">
+      <div class="card-header"><div class="card-title">Filtros</div></div>
+      <div class="card-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Canal</label>
+            <select id="curva-canal" class="form-select"></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Plataforma</label>
+            <select id="curva-plat" class="form-select">
+              <option value="mercado_ads">Mercado Ads</option>
+              <option value="meta_ads">Meta Ads (em construção)</option>
+              <option value="google_ads">Google Ads (em construção)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="grid3">
+      <div class="card">
+        <div class="card-header"><div class="card-title">Gasto × Lucro líquido <small>(últimos 90 dias)</small></div></div>
+        <div class="card-body"><canvas id="cv-curva" height="320"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">Resumo</div></div>
+        <div id="curva-resumo" class="card-body"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────── Aba 3: Antes / Depois ───────────── -->
+  <section id="tab-antesdepois" class="tab-panel">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Filtros</div>
+        <button class="btn btn-primary btn-sm" onclick="abrirEventoManual()">+ Marcar evento manual</button>
+      </div>
+      <div class="card-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">SKU</label>
+            <input id="ad-sku" class="form-input" list="dl-skus" placeholder="Digite o SKU" autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tipo</label>
+            <select id="ad-tipo" class="form-select">
+              <option value="">Todos</option>
+              <option value="preco">Preço</option>
+              <option value="descricao">Descrição</option>
+              <option value="imagem">Imagem</option>
+              <option value="ativo">Ativo/Inativo</option>
+              <option value="ads_budget">Budget Ads</option>
+              <option value="campanha">Campanha</option>
+              <option value="outro">Outro</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="grid3">
+      <div class="card">
+        <div class="card-header"><div class="card-title">Timeline de eventos</div></div>
+        <div id="tl-body" class="card-body timeline"></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">Comparação 14d antes × 14d depois</div></div>
+        <div id="cmp-body" class="card-body"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────── Aba 4: Cenários Salvos ───────────── -->
+  <section id="tab-cenarios" class="tab-panel">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Meus cenários <small id="scn-count"></small></div>
+        <div>
+          <button class="btn btn-sm" id="btn-comparar" onclick="compararSelecionados()" disabled>Comparar selecionados</button>
+          <button class="btn btn-sm" id="btn-pdf" onclick="exportarPDF()" disabled>📄 Exportar PDF</button>
+        </div>
+      </div>
+      <div id="scn-body" class="card-body"></div>
+    </div>
+    <div id="cmp-cenarios"></div>
+  </section>
+</main>
+
+<!-- Drawer (compartilhado): salvar cenário OU evento manual -->
+<div id="drawer-overlay" class="drawer-overlay" onclick="if(event.target===this)fecharDrawer()">
+  <aside class="drawer">
+    <div class="drawer-header">
+      <h2 id="drawer-title">Salvar cenário</h2>
+      <button class="drawer-close" onclick="fecharDrawer()">×</button>
+    </div>
+    <div id="drawer-body" class="drawer-body"></div>
+    <div class="drawer-footer">
+      <button class="btn" onclick="fecharDrawer()">Cancelar</button>
+      <button class="btn btn-primary" id="drawer-submit">Salvar</button>
+    </div>
+  </aside>
+</div>
+
+<script>
+// ═════════════════════════════════════════════════════════════
+// Helpers
+// ═════════════════════════════════════════════════════════════
+const SB = 'https://spulbhnmkomvgohzhfvj.supabase.co';
+let AUTH = null;
+const STATE = {
+  produtos: [],          // {id, sku, nome, custo_total, sku_ml, sku_shopify, sku_shopee}
+  produtosBySku: {},     // sku → produto (qualquer dos sku_*)
+  faixas: [],            // canal_custos_faixa
+  taxaDevSku: {},        // (sku||canal) → taxa
+  taxaDevCanal: {},      // canal → taxa
+  freteSku: {},          // (sku||canal) → frete medio
+  freteCanal: {},        // canal → frete medio
+  curvas: [],            // ads_curva_otima
+  cenarios: [],          // simulacao_cenarios do user
+  eventos: [],           // produto_evento (filtrado por SKU)
+  cenariosSelecionados: new Set(),
+  charts: {},
+  modoDrawer: 'cenario', // 'cenario' | 'evento'
+};
+
+function fmt(v){ return (v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
+function fmtP(v){ return (v||0).toFixed(1)+'%'; }
+function fmtN(v,d=0){ return (v||0).toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d}); }
+function fmtDt(s){ if(!s)return''; return s.slice(0,10).split('-').reverse().join('/'); }
+function $(sel){ return document.querySelector(sel); }
+function $$(sel){ return Array.from(document.querySelectorAll(sel)); }
+
+async function getAuthHeaders(){
+  const session = await fusionAuth.getSession();
+  if (!session) { window.location.href = '/index.html'; return null; }
+  return {
+    apikey: fusionAuth.SUPABASE_ANON_KEY,
+    Authorization: 'Bearer ' + session.access_token,
+    'Content-Type': 'application/json',
+  };
+}
+
+async function sbGet(path, qs=''){
+  const h = await getAuthHeaders(); if (!h) return [];
+  const url = SB + '/rest/v1/' + path + (qs?'?'+qs:'');
+  const r = await fetch(url, {headers:h});
+  if (!r.ok) { console.error('sbGet '+path, r.status, await r.text()); return []; }
+  return r.json();
+}
+
+async function sbPost(path, body, prefer=''){
+  const h = await getAuthHeaders(); if (!h) return null;
+  if (prefer) h['Prefer'] = prefer;
+  const r = await fetch(SB + '/rest/v1/' + path, {method:'POST', headers:h, body:JSON.stringify(body)});
+  if (!r.ok) { alert('Erro ao salvar: ' + r.status + ' ' + await r.text()); return null; }
+  return r.json().catch(()=>null);
+}
+
+async function sbDelete(path, qs){
+  const h = await getAuthHeaders(); if (!h) return false;
+  const r = await fetch(SB + '/rest/v1/' + path + '?' + qs, {method:'DELETE', headers:h});
+  return r.ok;
+}
+
+// ═════════════════════════════════════════════════════════════
+// Bootstrap: load reference data
+// ═════════════════════════════════════════════════════════════
+async function carregarReferencias(){
+  const [produtos, faixas, devSku, devCanal, freteSku, freteCanal, curvas, cenarios] = await Promise.all([
+    sbGet('produtos', 'select=id,sku,nome,custo_total,sku_ml,sku_shopify,sku_shopee&ativo=eq.true&limit=10000'),
+    sbGet('canal_custos_faixa', 'select=*&ativo=eq.true&order=canal_pattern,faixa_min'),
+    sbGet('vw_taxa_devolucao_sku_canal', 'select=*&limit=5000'),
+    sbGet('vw_taxa_devolucao_canal', 'select=*'),
+    sbGet('vw_frete_medio_sku_canal', 'select=*&limit=5000'),
+    sbGet('vw_frete_medio_canal', 'select=*'),
+    sbGet('ads_curva_otima', 'select=*'),
+    sbGet('simulacao_cenarios', 'select=*&order=criado_em.desc&limit=200'),
+  ]);
+  STATE.produtos = produtos;
+  STATE.faixas = faixas;
+  produtos.forEach(p => {
+    [p.sku, p.sku_ml, p.sku_shopify, p.sku_shopee].forEach(k => { if (k) STATE.produtosBySku[k] = p; });
+  });
+  devSku.forEach(r => { STATE.taxaDevSku[(r.sku_raw||'')+'|'+(r.canal_nome_raw||'')] = parseFloat(r.taxa_devolucao||0); });
+  devCanal.forEach(r => { STATE.taxaDevCanal[r.canal_nome_raw] = parseFloat(r.taxa_devolucao||0); });
+  freteSku.forEach(r => { STATE.freteSku[(r.sku_raw||'')+'|'+(r.canal_nome_raw||'')] = parseFloat(r.frete_medio||0); });
+  freteCanal.forEach(r => { STATE.freteCanal[r.canal_nome_raw] = parseFloat(r.frete_medio||0); });
+  STATE.curvas = curvas;
+  STATE.cenarios = cenarios;
+}
+
+function popularCanaisDropdown(){
+  // Distinct canal_label da tabela faixas
+  const labels = Array.from(new Set(STATE.faixas.map(f => f.canal_label)));
+  const opts = labels.map(l => `<option value="${l}">${l}</option>`).join('');
+  $('#in-canal').innerHTML = opts;
+  $('#curva-canal').innerHTML = opts;
+}
+
+function popularDataListSkus(){
+  const items = STATE.produtos
+    .filter(p => p.sku)
+    .slice(0, 5000)
+    .map(p => `<option value="${p.sku}">${(p.nome||'').replace(/"/g,'&quot;')}</option>`).join('');
+  $('#dl-skus').innerHTML = items;
+}
+
+// ═════════════════════════════════════════════════════════════
+// Cálculo de margem
+// ═════════════════════════════════════════════════════════════
+function lookupFaixa(canal_label, valor){
+  const fs = STATE.faixas.filter(f => f.canal_label === canal_label);
+  for (const f of fs) {
+    const fmin = parseFloat(f.faixa_min || 0);
+    const fmax = f.faixa_max != null ? parseFloat(f.faixa_max) : null;
+    if (valor < fmin) continue;
+    if (fmax != null && valor >= fmax) continue;
+    return f;
+  }
+  return fs[0] || null; // fallback primeira faixa
+}
+
+function patternToCanaisRaw(pattern){
+  // 'Mercado Livre%' → matchea 'Mercado Livre FIO', 'Mercado Livre Confecções', etc
+  const prefix = pattern.replace(/%$/, '');
+  return prefix;
+}
+
+function lookupTaxaDev(sku, canal_label){
+  // Tenta SKU+canal_raw — itera canais raw que casam o pattern do label
+  const faixa = STATE.faixas.find(f => f.canal_label === canal_label);
+  if (!faixa) return 0;
+  const prefix = patternToCanaisRaw(faixa.canal_pattern);
+  // Busca SKU+canal_raw
+  for (const k of Object.keys(STATE.taxaDevSku)) {
+    const [sk, cr] = k.split('|');
+    if (sk === sku && cr.startsWith(prefix)) return STATE.taxaDevSku[k];
+  }
+  // Fallback canal agregado
+  for (const cr of Object.keys(STATE.taxaDevCanal)) {
+    if (cr.startsWith(prefix)) return STATE.taxaDevCanal[cr];
+  }
+  return 0;
+}
+
+function lookupFrete(sku, canal_label){
+  const faixa = STATE.faixas.find(f => f.canal_label === canal_label);
+  if (!faixa) return 0;
+  const prefix = patternToCanaisRaw(faixa.canal_pattern);
+  for (const k of Object.keys(STATE.freteSku)) {
+    const [sk, cr] = k.split('|');
+    if (sk === sku && cr.startsWith(prefix)) return STATE.freteSku[k];
+  }
+  for (const cr of Object.keys(STATE.freteCanal)) {
+    if (cr.startsWith(prefix)) return STATE.freteCanal[cr];
+  }
+  return 0;
+}
+
+function calcular(inputs){
+  // inputs: {sku, canal_label, preco, ads, cupom_pct, fixo_pct, rebate, afiliado_tiktok}
+  const p = STATE.produtosBySku[inputs.sku];
+  const cmv = p ? parseFloat(p.custo_total||0) : 0;
+  const faixa = lookupFaixa(inputs.canal_label, inputs.preco);
+  const com_pct = faixa ? parseFloat(faixa.comissao_pct||0) : 0;
+  const taxa_fixa = faixa ? parseFloat(faixa.taxa_fixa||0) : 0;
+  const taxa_extra = (inputs.afiliado_tiktok && faixa) ? parseFloat(faixa.taxa_extra_pct||0) : 0;
+  const com_pct_total = com_pct + taxa_extra;
+  const desconto_cupom = (inputs.canal_label === 'Site Próprio') ? (inputs.preco * inputs.cupom_pct/100) : 0;
+  const receita_liq = inputs.preco - desconto_cupom + (inputs.rebate || 0);
+  const comissao = (inputs.preco * com_pct_total) + taxa_fixa;
+  const taxa_dev = lookupTaxaDev(inputs.sku, inputs.canal_label);
+  const frete = lookupFrete(inputs.sku, inputs.canal_label);
+  const devolucao_estim = inputs.preco * taxa_dev;
+  const fixos = receita_liq * (inputs.fixo_pct||0) / 100;
+  const margem_rs = receita_liq - comissao - cmv - frete - devolucao_estim - inputs.ads - fixos;
+  const margem_pct = receita_liq > 0 ? (margem_rs / receita_liq * 100) : 0;
+  return {
+    receita_liq, desconto_cupom, comissao, com_pct_total, taxa_fixa, cmv,
+    frete, taxa_dev, devolucao_estim, ads: inputs.ads, fixos, rebate: inputs.rebate||0,
+    margem_rs, margem_pct, produto: p,
+  };
+}
+
+// ═════════════════════════════════════════════════════════════
+// Aba 1: Calculadora
+// ═════════════════════════════════════════════════════════════
+function lerInputs(){
+  return {
+    sku: $('#in-sku').value.trim(),
+    canal_label: $('#in-canal').value,
+    preco: parseFloat($('#in-preco').value)||0,
+    ads: parseFloat($('#in-ads').value)||0,
+    cupom_pct: parseFloat($('#in-cupom').value)||0,
+    fixo_pct: parseFloat($('#in-fixo').value)||0,
+    rebate: parseFloat($('#in-rebate').value)||0,
+    afiliado_tiktok: $('#in-afiliado').value === '1',
+  };
+}
+
+function recalcular(){
+  const inputs = lerInputs();
+  // toggle Site/TikTok-only fields
+  $('#grp-cupom').style.display = (inputs.canal_label === 'Site Próprio') ? '' : 'none';
+  $('#grp-afiliado').style.display = (inputs.canal_label === 'TikTok Shop') ? '' : 'none';
+
+  // SKU info
+  const p = STATE.produtosBySku[inputs.sku];
+  if (p) {
+    $('#sku-info').innerHTML = `<strong>${p.nome||''}</strong> · CMV: ${fmt(p.custo_total||0)}`;
+  } else {
+    $('#sku-info').innerHTML = inputs.sku ? `<span style="color:var(--amber)">⚠️ SKU não encontrado em produtos</span>` : '';
+  }
+
+  if (!inputs.sku || !inputs.canal_label || !inputs.preco) { renderKPIsVazio(); return; }
+
+  const o = calcular(inputs);
+  renderKPIs(o);
+  renderBreakdown(inputs, o);
+  renderAlerts(inputs, o);
+}
+
+function renderKPIsVazio(){
+  $('#kpis-calc').innerHTML = '<div class="empty">Preencha SKU, canal e preço pra ver a margem.</div>';
+  $('#brk-body').innerHTML = '';
+  $('#calc-alerts').innerHTML = '';
+}
+
+function renderKPIs(o){
+  const margemColor = o.margem_pct >= 15 ? 'var(--green)' : (o.margem_pct >= 5 ? 'var(--amber)' : 'var(--red)');
+  $('#kpis-calc').innerHTML = `
+    <div class="kpi"><div class="kpi-lbl">Receita líquida</div><div class="kpi-val">${fmt(o.receita_liq)}</div></div>
+    <div class="kpi"><div class="kpi-lbl">Comissão canal</div><div class="kpi-val">${fmt(o.comissao)}</div><div class="kpi-sub">${fmtP(o.com_pct_total*100)} + ${fmt(o.taxa_fixa)} fixo</div></div>
+    <div class="kpi"><div class="kpi-lbl">CMV</div><div class="kpi-val">${fmt(o.cmv)}</div></div>
+    <div class="kpi"><div class="kpi-lbl">Devolução estim.</div><div class="kpi-val">${fmt(o.devolucao_estim)}</div><div class="kpi-sub">${fmtP(o.taxa_dev*100)} dos pedidos</div></div>
+    <div class="kpi highlight" style="--kpi-accent:${margemColor};"><div class="kpi-lbl">Margem líquida</div><div class="kpi-val ${o.margem_rs<0?'neg':'pos'}">${fmt(o.margem_rs)}</div><div class="kpi-sub" style="color:${margemColor};font-weight:600;">${fmtP(o.margem_pct)}</div></div>
+  `;
+}
+
+function renderBreakdown(inputs, o){
+  $('#brk-meta').textContent = `${o.produto?.nome || inputs.sku} · ${inputs.canal_label}`;
+  const rows = [
+    ['+ Preço de venda', fmt(inputs.preco), 'pos'],
+    ...(o.desconto_cupom>0 ? [['− Cupom', fmt(-o.desconto_cupom), 'neg']] : []),
+    ...(o.rebate>0 ? [['+ Rebate plataforma', fmt(o.rebate), 'pos']] : []),
+    ['= Receita líquida', fmt(o.receita_liq), 'head'],
+    ['− Comissão canal', fmt(-o.comissao), 'neg'],
+    ['− CMV', fmt(-o.cmv), 'neg'],
+    ['− Frete (méd.histórico)', fmt(-o.frete), 'neg'],
+    ['− Devolução estim.', fmt(-o.devolucao_estim), 'neg'],
+    ['− Ads', fmt(-o.ads), 'neg'],
+    ['− Custos fixos rateados', fmt(-o.fixos), 'neg'],
+    ['= Margem líquida', fmt(o.margem_rs) + ' (' + fmtP(o.margem_pct) + ')', o.margem_rs<0?'total neg':'total'],
+  ];
+  $('#brk-body').innerHTML = rows.map(([l,v,c]) =>
+    `<div class="row ${c||''}"><span class="lbl">${l}</span><span class="val">${v}</span></div>`).join('');
+}
+
+function renderAlerts(inputs, o){
+  const al = [];
+  if (!o.produto) al.push(['warn', 'SKU não encontrado em produtos — CMV foi assumido como R$ 0. Verifique o cadastro.']);
+  if (o.cmv === 0 && o.produto) al.push(['warn', 'Produto sem custo_total cadastrado — margem está superestimada.']);
+  if (o.margem_rs < 0) al.push(['bad', 'Margem negativa — esse cenário dá prejuízo.']);
+  if (o.taxa_dev === 0) al.push(['info', 'Sem histórico de devolução pra esse SKU/canal — taxa assumida 0%.']);
+  if (o.frete === 0) al.push(['info', 'Sem histórico de frete pra esse SKU/canal — assumido R$ 0.']);
+  $('#calc-alerts').innerHTML = al.map(([t,m]) => `<div class="alert alert-${t}">${m}</div>`).join('');
+}
+
+function resetForm(){
+  ['in-sku','in-preco','in-ads','in-cupom','in-rebate'].forEach(id => $('#'+id).value = id==='in-sku'?'':'0');
+  $('#in-fixo').value = '8';
+  $('#in-afiliado').value = '0';
+  recalcular();
+}
+
+// ═════════════════════════════════════════════════════════════
+// Aba 1: Salvar cenário (drawer)
+// ═════════════════════════════════════════════════════════════
+function abrirSalvar(){
+  const inputs = lerInputs();
+  if (!inputs.sku || !inputs.canal_label || !inputs.preco) { alert('Preencha SKU, canal e preço primeiro.'); return; }
+  STATE.modoDrawer = 'cenario';
+  $('#drawer-title').textContent = 'Salvar cenário';
+  $('#drawer-body').innerHTML = `
+    <div class="form-group">
+      <label class="form-label">Nome do cenário</label>
+      <input id="scn-nome" class="form-input" placeholder="Ex: CMPL01 ML preço novo maio" autofocus>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Notas (opcional)</label>
+      <textarea id="scn-notas" class="form-textarea" placeholder="Contexto, premissas, etc"></textarea>
+    </div>
+    <div class="alert alert-info">Cenário será salvo só pra você (RLS).</div>
+  `;
+  $('#drawer-submit').textContent = 'Salvar cenário';
+  $('#drawer-overlay').classList.add('open');
+}
+
+async function salvarCenarioConfirma(){
+  const inputs = lerInputs();
+  const o = calcular(inputs);
+  const nome = $('#scn-nome').value.trim();
+  if (!nome) { alert('Dê um nome ao cenário'); return; }
+  const session = await fusionAuth.getSession();
+  const payload = {
+    user_id: session.user.id,
+    nome,
+    sku: inputs.sku,
+    produto_id: o.produto?.id || null,
+    canal_label: inputs.canal_label,
+    inputs,
+    outputs: {
+      receita_liq: o.receita_liq, comissao: o.comissao, cmv: o.cmv, frete: o.frete,
+      devolucao_estim: o.devolucao_estim, ads: o.ads, fixos: o.fixos,
+      margem_rs: o.margem_rs, margem_pct: o.margem_pct,
+    },
+    notas: $('#scn-notas').value.trim() || null,
+  };
+  const res = await sbPost('simulacao_cenarios', payload, 'return=representation');
+  if (res) {
+    fecharDrawer();
+    await recarregarCenarios();
+    alert('Cenário salvo.');
+  }
+}
+
+// ═════════════════════════════════════════════════════════════
+// Aba 2: Curva ótima
+// ═════════════════════════════════════════════════════════════
+function renderCurva(){
+  const canal = $('#curva-canal').value;
+  const plat = $('#curva-plat').value;
+  // Match ads_curva_otima por canal_label → canal_nome_raw
+  const faixa = STATE.faixas.find(f => f.canal_label === canal);
+  const prefix = faixa ? patternToCanaisRaw(faixa.canal_pattern) : canal;
+  const candidatos = STATE.curvas.filter(c =>
+    c.plataforma === plat && (c.canal_nome_raw||'').startsWith(prefix) && c.sku_raw == null);
+  const c = candidatos[0];
+
+  if (STATE.charts.curva) { STATE.charts.curva.destroy(); STATE.charts.curva = null; }
+
+  if (!c) {
+    $('#curva-resumo').innerHTML = `<div class="empty">Sem dados pra ${canal} / ${plat}.<br><br>${plat!=='mercado_ads' ? 'Esse canal de ads ainda não está integrado.' : 'Ainda não houve fit pra esse canal — aguarde o cron diário.'}</div>`;
+    const ctx = document.getElementById('cv-curva').getContext('2d');
+    ctx.clearRect(0, 0, 1000, 400);
+    return;
+  }
+
+  const a = c.params.a, b = c.params.b;
+  // Gera curva: gasto de 0 até 2× ponto_otimo (ou 5000 se otimo=0)
+  const xMax = Math.max(c.ponto_otimo_gasto * 2 || 5000, 1000);
+  const N = 50;
+  const points = Array.from({length: N+1}, (_, i) => {
+    const x = (xMax * i / N);
+    return { x, y: a + b * Math.log(x + 1) };
+  });
+  // Linha vertical no ponto ótimo
+  const otimo = c.ponto_otimo_gasto;
+
+  const r2cls = c.r2 >= 0.5 ? 'r2-good' : (c.r2 >= 0.3 ? 'r2-mid' : 'r2-bad');
+  const aviso = c.r2 < 0.3
+    ? '<div class="alert alert-warn">⚠️ R² < 0.3 — fit fraco. Ponto ótimo deve ser tratado como referência, não como recomendação dura.</div>'
+    : c.amostra < 30 ? '<div class="alert alert-warn">⚠️ Amostra pequena (n='+c.amostra+'). Curva pode mudar com mais dados.</div>'
+    : '';
+
+  $('#curva-resumo').innerHTML = `
+    ${aviso}
+    <div class="kpi" style="margin-bottom:12px;"><div class="kpi-lbl">Gasto ótimo / dia</div><div class="kpi-val">${fmt(c.ponto_otimo_gasto)}</div></div>
+    <div class="kpi" style="margin-bottom:12px;"><div class="kpi-lbl">Lucro estimado no ótimo</div><div class="kpi-val ${c.lucro_no_otimo<0?'neg':'pos'}">${fmt(c.lucro_no_otimo)}</div></div>
+    <div class="breakdown">
+      <div class="row"><span class="lbl">Modelo</span><span class="val">y = ${a.toFixed(0)} + ${b.toFixed(0)}·ln(x+1)</span></div>
+      <div class="row"><span class="lbl">R² (qualidade do fit)</span><span class="val ${r2cls}">${(c.r2||0).toFixed(3)}</span></div>
+      <div class="row"><span class="lbl">Amostra (dias)</span><span class="val">${c.amostra}</span></div>
+      <div class="row"><span class="lbl">Janela</span><span class="val">${c.janela_dias}d</span></div>
+      <div class="row"><span class="lbl">Atualizado</span><span class="val">${fmtDt(c.atualizado_em)}</span></div>
+    </div>
+    <p style="font-size:11px;color:var(--txt4);margin-top:12px;">
+      O ponto ótimo é onde 1 R$ adicional de ads gera exatamente 1 R$ adicional de lucro líquido (derivada = 1).
+      Acima desse ponto, cada R$ extra rende menos que 1 R$ de lucro.
+    </p>
+  `;
+
+  const ctx = document.getElementById('cv-curva').getContext('2d');
+  STATE.charts.curva = new Chart(ctx, {
+    type: 'line',
+    data: {
+      datasets: [
+        { label: 'Curva ajustada', data: points, borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,.15)',
+          borderWidth: 2, pointRadius: 0, fill: true, tension: 0 },
+        ...(otimo > 0 ? [{ label: 'Ponto ótimo', data: [{x:otimo,y:0},{x:otimo,y:c.lucro_no_otimo}],
+          borderColor: '#4ade80', borderWidth: 2, borderDash: [6,4], pointRadius: [0,5], pointBackgroundColor:'#4ade80', showLine:true }] : []),
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { type:'linear', title:{display:true,text:'Gasto diário (R$)',color:'#a1a1aa'}, ticks:{color:'#a1a1aa', callback:v=>'R$ '+fmtN(v)}, grid:{color:'rgba(255,255,255,.05)'} },
+        y: { title:{display:true,text:'Lucro líquido (R$)',color:'#a1a1aa'}, ticks:{color:'#a1a1aa', callback:v=>'R$ '+fmtN(v)}, grid:{color:'rgba(255,255,255,.05)'} },
+      },
+      plugins: { legend: { labels: { color:'#d4d4d8' } }, tooltip: { callbacks: { label: c => c.dataset.label + ': ' + fmt(c.parsed.y) + ' a R$ ' + fmtN(c.parsed.x) + '/dia' } } },
+    }
+  });
+}
+
+// ═════════════════════════════════════════════════════════════
+// Aba 3: Antes / Depois
+// ═════════════════════════════════════════════════════════════
+async function carregarEventos(){
+  const sku = $('#ad-sku').value.trim();
+  const tipo = $('#ad-tipo').value;
+  let qs = 'select=*&order=data.desc&limit=200';
+  if (sku) qs += '&sku_raw=eq.' + encodeURIComponent(sku);
+  if (tipo) qs += '&tipo=eq.' + encodeURIComponent(tipo);
+  STATE.eventos = await sbGet('produto_evento', qs);
+  renderTimeline();
+}
+
+function renderTimeline(){
+  if (!STATE.eventos.length) { $('#tl-body').innerHTML = '<div class="empty">Nenhum evento. Marque um manual, ou aguarde o snapshot diário detectar mudanças.</div>'; $('#cmp-body').innerHTML=''; return; }
+  const icons = { preco:'💰', descricao:'📝', imagem:'🖼️', ativo:'🔁', ads_budget:'📈', campanha:'🎯', outro:'📌' };
+  $('#tl-body').innerHTML = STATE.eventos.map(e => {
+    const auto = (e.fonte||'').startsWith('auto');
+    const sub = auto ? `Auto · ${e.fonte}` : `Manual · ${e.observacao||'sem nota'}`;
+    return `<div class="tl-evt" data-id="${e.id}" onclick="selecionarEvento(${e.id})">
+      <div class="tl-icon">${icons[e.tipo]||'📌'}</div>
+      <div class="tl-body">
+        <div class="tl-title">${e.tipo} · ${e.sku_raw || 'sem SKU'} <span style="color:var(--txt3);font-weight:400;font-size:11px;">${fmtDt(e.data)}</span></div>
+        <div class="tl-meta">${sub}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function selecionarEvento(id){
+  const e = STATE.eventos.find(x => x.id === id);
+  if (!e) return;
+  $$('#tl-body .tl-evt').forEach(el => el.classList.toggle('active', +el.dataset.id === id));
+  if (!e.sku_raw) { $('#cmp-body').innerHTML = '<div class="empty">Evento sem SKU — sem comparação possível.</div>'; return; }
+
+  const dt = e.data;
+  const dtIni = new Date(dt); dtIni.setDate(dtIni.getDate()-14);
+  const dtFim = new Date(dt); dtFim.setDate(dtFim.getDate()+14);
+  const sku = e.sku_raw;
+  const ini = dtIni.toISOString().slice(0,10);
+  const fim = dtFim.toISOString().slice(0,10);
+
+  $('#cmp-body').innerHTML = '<div class="spin"></div>';
+
+  // Busca itens_pedido + pedidos no range
+  const itens = await sbGet('itens_pedido',
+    `select=quantidade,preco_unitario,pedido_id,sku_raw&sku_raw=eq.${encodeURIComponent(sku)}&limit=5000`);
+  if (!itens.length) { $('#cmp-body').innerHTML = '<div class="empty">Nenhum item desse SKU em pedidos vivos (60d).</div>'; return; }
+  const pids = Array.from(new Set(itens.map(i=>i.pedido_id)));
+  // chunks
+  const peds = [];
+  for (let i=0; i<pids.length; i+=200) {
+    const ch = pids.slice(i, i+200).join(',');
+    const rows = await sbGet('pedidos', `select=id,data_pedido,status,canal_nome_raw&id=in.(${ch})&data_pedido=gte.${ini}&data_pedido=lte.${fim}`);
+    peds.push(...rows);
+  }
+  const pedById = Object.fromEntries(peds.map(p => [p.id, p]));
+
+  // Antes (data-14 a data-1) | Depois (data a data+14)
+  const dtMs = new Date(dt).getTime();
+  const ant = { qty:0, receita:0, devs:0, n:0 };
+  const dep = { qty:0, receita:0, devs:0, n:0 };
+  itens.forEach(it => {
+    const p = pedById[it.pedido_id]; if (!p) return;
+    const t = new Date(p.data_pedido).getTime();
+    const target = (t < dtMs) ? ant : dep;
+    target.qty += parseInt(it.quantidade||0);
+    target.receita += parseFloat(it.preco_unitario||0) * parseInt(it.quantidade||0);
+    if (p.status === 'devolvido') target.devs += 1;
+    target.n += 1;
+  });
+
+  function delta(a, b){
+    if (a === 0) return b > 0 ? '+∞' : '0';
+    return ((b - a) / a * 100).toFixed(1) + '%';
+  }
+  function arrow(a, b){
+    if (b > a) return '<span style="color:var(--green);">▲</span>';
+    if (b < a) return '<span style="color:var(--red);">▼</span>';
+    return '<span style="color:var(--txt3);">•</span>';
+  }
+
+  $('#cmp-body').innerHTML = `
+    <div style="font-size:12px;color:var(--txt3);margin-bottom:12px;">Janela: 14 dias antes e 14 dias depois de ${fmtDt(dt)}</div>
+    <table class="tb">
+      <thead><tr><th>Métrica</th><th class="num">Antes</th><th class="num">Depois</th><th class="num">Δ</th></tr></thead>
+      <tbody>
+        <tr><td>Pedidos</td><td class="num">${ant.n}</td><td class="num">${dep.n}</td><td class="num">${arrow(ant.n,dep.n)} ${delta(ant.n,dep.n)}</td></tr>
+        <tr><td>Unidades</td><td class="num">${ant.qty}</td><td class="num">${dep.qty}</td><td class="num">${arrow(ant.qty,dep.qty)} ${delta(ant.qty,dep.qty)}</td></tr>
+        <tr><td>Receita</td><td class="num">${fmt(ant.receita)}</td><td class="num">${fmt(dep.receita)}</td><td class="num">${arrow(ant.receita,dep.receita)} ${delta(ant.receita,dep.receita)}</td></tr>
+        <tr><td>Devoluções</td><td class="num">${ant.devs}</td><td class="num">${dep.devs}</td><td class="num">${arrow(dep.devs,ant.devs)} ${delta(ant.devs,dep.devs)}</td></tr>
+      </tbody>
+    </table>
+    <div class="alert alert-info" style="margin-top:12px;">Janela curta (28d total) — sinal só é confiável com ≥30 pedidos no período.</div>
+  `;
+}
+
+// Marcar evento manual
+function abrirEventoManual(){
+  STATE.modoDrawer = 'evento';
+  $('#drawer-title').textContent = 'Marcar evento manual';
+  $('#drawer-body').innerHTML = `
+    <div class="form-group">
+      <label class="form-label">SKU</label>
+      <input id="evt-sku" class="form-input" list="dl-skus" placeholder="SKU afetado" autofocus>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Tipo</label>
+        <select id="evt-tipo" class="form-select">
+          <option value="preco">Preço</option><option value="descricao">Descrição</option>
+          <option value="imagem">Imagem</option><option value="ads_budget">Budget Ads</option>
+          <option value="campanha">Campanha</option><option value="outro" selected>Outro</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Data do evento</label>
+        <input id="evt-data" class="form-input" type="date" value="${new Date().toISOString().slice(0,10)}">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Descrição</label>
+      <textarea id="evt-obs" class="form-textarea" placeholder="Ex: Troquei foto principal, mantive layout. Nova estética 'minimalista'."></textarea>
+    </div>
+  `;
+  $('#drawer-submit').textContent = 'Marcar evento';
+  $('#drawer-overlay').classList.add('open');
+}
+
+async function salvarEventoManual(){
+  const sku = $('#evt-sku').value.trim();
+  const tipo = $('#evt-tipo').value;
+  const data = $('#evt-data').value;
+  const obs = $('#evt-obs').value.trim();
+  if (!sku || !data) { alert('Preencha SKU e data'); return; }
+  const session = await fusionAuth.getSession();
+  const p = STATE.produtosBySku[sku];
+  const payload = {
+    data, fonte: 'manual',
+    produto_id: p?.id || null, sku_raw: sku,
+    tipo, observacao: obs || null,
+    criado_por: session.user.id,
+  };
+  const res = await sbPost('produto_evento', payload, 'return=representation');
+  if (res) { fecharDrawer(); await carregarEventos(); }
+}
+
+// ═════════════════════════════════════════════════════════════
+// Aba 4: Cenários salvos
+// ═════════════════════════════════════════════════════════════
+async function recarregarCenarios(){
+  STATE.cenarios = await sbGet('simulacao_cenarios', 'select=*&order=criado_em.desc&limit=200');
+  renderCenarios();
+}
+
+function renderCenarios(){
+  STATE.cenariosSelecionados.clear();
+  $('#scn-count').textContent = '(' + STATE.cenarios.length + ')';
+  if (!STATE.cenarios.length) { $('#scn-body').innerHTML = '<div class="empty">Você ainda não salvou nenhum cenário. Use a aba Calculadora.</div>'; return; }
+  $('#scn-body').innerHTML = STATE.cenarios.map(c => {
+    const o = c.outputs || {};
+    const margemCls = o.margem_rs >= 0 ? 'pos' : 'neg';
+    return `<div class="scn-card">
+      <input type="checkbox" data-id="${c.id}" onchange="toggleSelCenario(${c.id})">
+      <div class="scn-info">
+        <div class="scn-name">${c.nome}</div>
+        <div class="scn-meta">${c.sku || '-'} · ${c.canal_label||'-'} · preço ${fmt(c.inputs?.preco)} · ${fmtDt(c.criado_em)}</div>
+      </div>
+      <div class="scn-margem ${margemCls}">${fmt(o.margem_rs)} <span style="font-size:11px;color:var(--txt3);">(${fmtP(o.margem_pct)})</span></div>
+      <button class="btn btn-sm btn-danger" onclick="deletarCenario(${c.id})">×</button>
+    </div>`;
+  }).join('');
+  atualizarBtnComparar();
+}
+
+function toggleSelCenario(id){
+  if (STATE.cenariosSelecionados.has(id)) STATE.cenariosSelecionados.delete(id);
+  else STATE.cenariosSelecionados.add(id);
+  atualizarBtnComparar();
+}
+
+function atualizarBtnComparar(){
+  $('#btn-comparar').disabled = STATE.cenariosSelecionados.size !== 2;
+  $('#btn-pdf').disabled = STATE.cenariosSelecionados.size === 0;
+}
+
+function compararSelecionados(){
+  const ids = Array.from(STATE.cenariosSelecionados);
+  if (ids.length !== 2) return;
+  const a = STATE.cenarios.find(x => x.id === ids[0]);
+  const b = STATE.cenarios.find(x => x.id === ids[1]);
+  function row(label, va, vb, fmtFn=fmt){
+    const dif = (vb||0) - (va||0);
+    const cls = dif > 0 ? 'pos' : (dif < 0 ? 'neg' : '');
+    return `<tr><td>${label}</td><td class="num">${fmtFn(va)}</td><td class="num">${fmtFn(vb)}</td><td class="num"><span class="${cls==='pos'?'r2-good':cls==='neg'?'r2-bad':''}">${dif>0?'+':''}${fmtFn(dif)}</span></td></tr>`;
+  }
+  $('#cmp-cenarios').innerHTML = `
+    <div class="card"><div class="card-header"><div class="card-title">Comparação</div></div><div class="card-body">
+      <table class="tb">
+        <thead><tr><th></th><th>${a.nome}</th><th>${b.nome}</th><th>Δ</th></tr></thead>
+        <tbody>
+          ${row('Preço', a.inputs?.preco, b.inputs?.preco)}
+          ${row('Receita líquida', a.outputs?.receita_liq, b.outputs?.receita_liq)}
+          ${row('Comissão', a.outputs?.comissao, b.outputs?.comissao)}
+          ${row('CMV', a.outputs?.cmv, b.outputs?.cmv)}
+          ${row('Frete', a.outputs?.frete, b.outputs?.frete)}
+          ${row('Devolução estim.', a.outputs?.devolucao_estim, b.outputs?.devolucao_estim)}
+          ${row('Ads', a.outputs?.ads, b.outputs?.ads)}
+          ${row('Custos fixos', a.outputs?.fixos, b.outputs?.fixos)}
+          ${row('Margem R$', a.outputs?.margem_rs, b.outputs?.margem_rs)}
+          ${row('Margem %', a.outputs?.margem_pct, b.outputs?.margem_pct, fmtP)}
+        </tbody>
+      </table>
+    </div></div>
+  `;
+}
+
+async function deletarCenario(id){
+  if (!confirm('Apagar cenário?')) return;
+  const ok = await sbDelete('simulacao_cenarios', 'id=eq.'+id);
+  if (ok) recarregarCenarios();
+}
+
+function exportarPDF(){
+  const ids = Array.from(STATE.cenariosSelecionados);
+  if (!ids.length) return;
+  const list = STATE.cenarios.filter(c => ids.includes(c.id));
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  let y = 12;
+  doc.setFontSize(14); doc.text('Fusion — Simulador (cenários)', 12, y); y += 8;
+  doc.setFontSize(10); doc.text('Gerado em ' + new Date().toLocaleString('pt-BR'), 12, y); y += 10;
+  list.forEach(c => {
+    doc.setFontSize(11); doc.text(c.nome, 12, y); y += 6;
+    doc.setFontSize(9);
+    const linhas = [
+      `SKU: ${c.sku||'-'}  Canal: ${c.canal_label||'-'}  Criado: ${fmtDt(c.criado_em)}`,
+      `Preço: ${fmt(c.inputs?.preco)}  Ads: ${fmt(c.inputs?.ads)}  Cupom: ${fmtP(c.inputs?.cupom_pct||0)}  Fixo: ${fmtP(c.inputs?.fixo_pct||0)}`,
+      `Receita líq: ${fmt(c.outputs?.receita_liq)}  Comissão: ${fmt(c.outputs?.comissao)}  CMV: ${fmt(c.outputs?.cmv)}`,
+      `Frete: ${fmt(c.outputs?.frete)}  Devolução: ${fmt(c.outputs?.devolucao_estim)}  Fixos: ${fmt(c.outputs?.fixos)}`,
+      `Margem: ${fmt(c.outputs?.margem_rs)} (${fmtP(c.outputs?.margem_pct||0)})`,
+    ];
+    linhas.forEach(l => { doc.text(l, 12, y); y += 5; });
+    y += 4;
+    if (y > 270) { doc.addPage(); y = 12; }
+  });
+  doc.save('simulador-cenarios.pdf');
+}
+
+// ═════════════════════════════════════════════════════════════
+// Drawer (compartilhado)
+// ═════════════════════════════════════════════════════════════
+function fecharDrawer(){ $('#drawer-overlay').classList.remove('open'); }
+$('#drawer-submit').addEventListener('click', () => {
+  if (STATE.modoDrawer === 'cenario') salvarCenarioConfirma();
+  else if (STATE.modoDrawer === 'evento') salvarEventoManual();
+});
+
+// ═════════════════════════════════════════════════════════════
+// Tabs
+// ═════════════════════════════════════════════════════════════
+$$('.tab-btn').forEach(b => b.addEventListener('click', () => {
+  $$('.tab-btn').forEach(x => x.classList.remove('active'));
+  $$('.tab-panel').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  const t = b.dataset.tab;
+  $('#tab-'+t).classList.add('active');
+  if (t === 'curva') renderCurva();
+  if (t === 'antesdepois') carregarEventos();
+  if (t === 'cenarios') renderCenarios();
+}));
+
+// ═════════════════════════════════════════════════════════════
+// Listeners
+// ═════════════════════════════════════════════════════════════
+['in-sku','in-canal','in-preco','in-ads','in-cupom','in-fixo','in-rebate','in-afiliado'].forEach(id => {
+  document.getElementById(id).addEventListener('input', recalcular);
+  document.getElementById(id).addEventListener('change', recalcular);
+});
+$('#curva-canal').addEventListener('change', renderCurva);
+$('#curva-plat').addEventListener('change', renderCurva);
+$('#ad-sku').addEventListener('change', carregarEventos);
+$('#ad-tipo').addEventListener('change', carregarEventos);
+
+// ═════════════════════════════════════════════════════════════
+// Bootstrap
+// ═════════════════════════════════════════════════════════════
+(async function() {
+  AUTH = await fusionAuth.requireAuth('simulador');
+  if (!AUTH) return;
+  $('#user-info-tb').textContent = AUTH.role.nome;
+  await carregarReferencias();
+  popularCanaisDropdown();
+  popularDataListSkus();
+  recalcular();
+})();
+</script>
+</body>
+</html>

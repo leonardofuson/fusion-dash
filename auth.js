@@ -28,6 +28,7 @@
     estoque:    { titulo: 'Estoque',     descricao: 'Posição multi-canal',       url: '/estoque.html',    icone: '📦' },
     compras:    { titulo: 'Compras',     descricao: 'Ordens e fornecedores',     url: '/compras.html',    icone: '🧾' },
     financeiro: { titulo: 'Financeiro',  descricao: 'Receitas e despesas',       url: '/financeiro.html', icone: '💰' },
+    simulador:  { titulo: 'Simulador',   descricao: 'Margem por produto + curva ótima de ads', url: '/simulador.html', icone: '🎯' },
   };
 
   async function getSession() {
