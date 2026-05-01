@@ -155,6 +155,7 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
     <button class="tab-btn" data-tab="curva">Curva Ótima de Ads</button>
     <button class="tab-btn" data-tab="antesdepois">Antes / Depois</button>
     <button class="tab-btn" data-tab="cenarios">Cenários Salvos</button>
+    <button class="tab-btn" data-tab="drifts">Drifts ML <span id="badge-drifts" class="badge" style="display:none;background:rgba(250,204,21,.2);color:var(--amber);"></span></button>
   </nav>
 
   <!-- ───────────── Aba 1: Calculadora ───────────── -->
@@ -234,13 +235,21 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
 
   <!-- ───────────── Aba 2: Curva Ótima ───────────── -->
   <section id="tab-curva" class="tab-panel">
+    <div id="drift-banner" style="display:none;" class="alert alert-warn">
+      <strong>⚠️ Drifts de mapeamento ML pendentes:</strong>
+      <span id="drift-count">0</span> items com SKU divergente entre planilha DePara e API ML.
+      <button class="btn btn-sm" style="margin-left:12px;" onclick="$('.tab-btn[data-tab=drifts]').click()">Ver lista</button>
+    </div>
     <div class="card">
       <div class="card-header"><div class="card-title">Filtros</div></div>
       <div class="card-body">
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label">Canal</label>
-            <select id="curva-canal" class="form-select"></select>
+            <label class="form-label">Modo</label>
+            <select id="curva-modo" class="form-select">
+              <option value="canal">Por Canal (agregado)</option>
+              <option value="sku">Por SKU pai (granular)</option>
+            </select>
           </div>
           <div class="form-group">
             <label class="form-label">Plataforma</label>
@@ -249,6 +258,19 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
               <option value="meta_ads">Meta Ads (em construção)</option>
               <option value="google_ads">Google Ads (em construção)</option>
             </select>
+          </div>
+        </div>
+        <div class="form-row" id="curva-grp-canal">
+          <div class="form-group">
+            <label class="form-label">Canal</label>
+            <select id="curva-canal" class="form-select"></select>
+          </div>
+        </div>
+        <div class="form-row" id="curva-grp-sku" style="display:none;">
+          <div class="form-group">
+            <label class="form-label">SKU pai (44 com fit válido)</label>
+            <select id="curva-sku" class="form-select"></select>
+            <div class="form-help">Apenas SKUs com ≥7 dias de histórico de ads + fit estatístico válido aparecem.</div>
           </div>
         </div>
       </div>
@@ -302,6 +324,23 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
       <div class="card">
         <div class="card-header"><div class="card-title">Comparação 14d antes × 14d depois</div></div>
         <div id="cmp-body" class="card-body"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────── Aba 5: Drifts ML (mapping divergence) ───────────── -->
+  <section id="tab-drifts" class="tab-panel">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Drifts de mapeamento ML <small id="drift-resumo"></small></div>
+        <button class="btn btn-sm" onclick="recarregarDrifts()">↻ Atualizar</button>
+      </div>
+      <div class="card-body">
+        <div class="alert alert-info">
+          Lista de discrepâncias entre <strong>FUSION_DePara_Final_v4.xlsx</strong> e o que a API ML retorna pra <code>seller_custom_field</code>.
+          Categorias: <em>API tem variante</em> (esperado em anúncios de variação) · <em>Agrupado</em> (anúncio multi-categoria) · <em>Outro</em> (potencial erro de cadastro — revisar).
+        </div>
+        <div id="drift-body"></div>
       </div>
     </div>
   </section>
@@ -663,22 +702,40 @@ async function salvarCenarioConfirma(){
 // ═════════════════════════════════════════════════════════════
 // Aba 2: Curva ótima
 // ═════════════════════════════════════════════════════════════
+function popularCurvaSkus(){
+  const skus = Array.from(new Set(
+    STATE.curvas.filter(c => c.sku_raw).map(c => c.sku_raw)
+  )).sort();
+  $('#curva-sku').innerHTML = skus.map(s =>
+    `<option value="${s}">${s}</option>`).join('') || '<option value="">— sem SKUs com fit —</option>';
+}
+
 function renderCurva(){
-  const canal = $('#curva-canal').value;
+  const modo = $('#curva-modo').value;
+  $('#curva-grp-canal').style.display = modo === 'canal' ? '' : 'none';
+  $('#curva-grp-sku').style.display = modo === 'sku' ? '' : 'none';
+
   const plat = $('#curva-plat').value;
-  // Match ads_curva_otima por canal_label → canal_nome_raw
-  const faixa = STATE.faixas.find(f => f.canal_label === canal);
-  const prefix = faixa ? patternToCanaisRaw(faixa.canal_pattern) : canal;
-  const candidatos = STATE.curvas.filter(c =>
-    c.plataforma === plat && (c.canal_nome_raw||'').startsWith(prefix) && c.sku_raw == null);
-  const c = candidatos[0];
+  let c = null;
+  if (modo === 'canal') {
+    const canal = $('#curva-canal').value;
+    const faixa = STATE.faixas.find(f => f.canal_label === canal);
+    const prefix = faixa ? patternToCanaisRaw(faixa.canal_pattern) : canal;
+    const candidatos = STATE.curvas.filter(x =>
+      x.plataforma === plat && (x.canal_nome_raw||'').startsWith(prefix) && x.sku_raw == null);
+    c = candidatos[0];
+  } else {
+    const sku = $('#curva-sku').value;
+    c = STATE.curvas.find(x => x.sku_raw === sku && x.plataforma === plat);
+  }
 
   if (STATE.charts.curva) { STATE.charts.curva.destroy(); STATE.charts.curva = null; }
 
   if (!c) {
-    $('#curva-resumo').innerHTML = `<div class="empty">Sem dados pra ${canal} / ${plat}.<br><br>${plat!=='mercado_ads' ? 'Esse canal de ads ainda não está integrado.' : 'Ainda não houve fit pra esse canal — aguarde o cron diário.'}</div>`;
+    const alvo = modo === 'canal' ? $('#curva-canal').value : $('#curva-sku').value || '(sem SKU)';
+    $('#curva-resumo').innerHTML = `<div class="empty">Sem fit pra ${alvo} / ${plat}.<br><br>${plat!=='mercado_ads' ? 'Esse canal de ads ainda não está integrado.' : 'Aguarde o cron diário ou amostra acumular (mín. 7 dias).'}</div>`;
     const ctx = document.getElementById('cv-curva').getContext('2d');
-    ctx.clearRect(0, 0, 1000, 400);
+    if (STATE.charts.curva) { STATE.charts.curva.destroy(); STATE.charts.curva = null; }
     return;
   }
 
@@ -1008,7 +1065,67 @@ $$('.tab-btn').forEach(b => b.addEventListener('click', () => {
   if (t === 'curva') renderCurva();
   if (t === 'antesdepois') carregarEventos();
   if (t === 'cenarios') renderCenarios();
+  if (t === 'drifts') recarregarDrifts();
 }));
+
+// ═════════════════════════════════════════════════════════════
+// Drifts ML
+// ═════════════════════════════════════════════════════════════
+async function recarregarDrifts(){
+  const drifts = await sbGet('ml_item_sku_drift', 'select=*&resolucao=is.null&order=detectado_em.desc&limit=500');
+  const tot = drifts.length;
+  if (tot > 0) {
+    $('#badge-drifts').style.display = '';
+    $('#badge-drifts').textContent = tot;
+    $('#drift-banner').style.display = '';
+    $('#drift-count').textContent = tot;
+  } else {
+    $('#badge-drifts').style.display = 'none';
+    $('#drift-banner').style.display = 'none';
+  }
+  // Categoriza
+  function cat(d){
+    if (d.sku_api === 'Agrupado') return 'agrupado';
+    if (d.sku_api && d.sku_depara && d.sku_api.startsWith(d.sku_depara + '-')) return 'variante';
+    return 'outro';
+  }
+  const por_cat = { agrupado: [], variante: [], outro: [] };
+  drifts.forEach(d => por_cat[cat(d)].push(d));
+  $('#drift-resumo').textContent = `(${tot} pendentes — ${por_cat.outro.length} OUTRO ⚠️)`;
+  function tabela(titulo, lista, cor){
+    if (!lista.length) return '';
+    return `<h3 style="margin:16px 0 8px;font-size:13px;color:${cor};">${titulo} (${lista.length})</h3>
+      <table class="tb">
+        <thead><tr><th>Item ID</th><th>Conta</th><th>SKU DePara</th><th>SKU API</th><th>Detectado</th><th></th></tr></thead>
+        <tbody>${lista.map(d => `<tr>
+          <td><a href="https://produto.mercadolivre.com.br/${d.item_id}" target="_blank" style="color:var(--indigo);text-decoration:none;">${d.item_id} ↗</a></td>
+          <td>${d.conta}</td>
+          <td>${d.sku_depara||'-'}</td>
+          <td>${d.sku_api||'-'}</td>
+          <td>${fmtDt(d.detectado_em)}</td>
+          <td><button class="btn btn-sm" onclick="resolverDrift(${d.id},'manter_depara')">Manter DePara</button>
+              <button class="btn btn-sm" onclick="resolverDrift(${d.id},'usar_api')">Usar API</button>
+              <button class="btn btn-sm" onclick="resolverDrift(${d.id},'ignorado')">Ignorar</button></td>
+        </tr>`).join('')}</tbody>
+      </table>`;
+  }
+  $('#drift-body').innerHTML =
+    tabela('⚠️ OUTRO — revisar', por_cat.outro, 'var(--red)') +
+    tabela('Variante (DePara=pai, API=variante)', por_cat.variante, 'var(--amber)') +
+    tabela('Agrupado (multi-categoria)', por_cat.agrupado, 'var(--txt2)');
+  if (tot === 0) $('#drift-body').innerHTML = '<div class="empty">Sem drifts pendentes ✅</div>';
+}
+
+async function resolverDrift(id, resolucao){
+  const session = await fusionAuth.getSession();
+  const h = await getAuthHeaders(); if (!h) return;
+  const r = await fetch(SB + '/rest/v1/ml_item_sku_drift?id=eq.' + id, {
+    method: 'PATCH', headers: h,
+    body: JSON.stringify({ resolucao, resolvido_por: session.user.id, resolvido_em: new Date().toISOString() })
+  });
+  if (r.ok) recarregarDrifts();
+  else alert('Erro: ' + r.status + ' ' + await r.text());
+}
 
 // ═════════════════════════════════════════════════════════════
 // Listeners
@@ -1019,6 +1136,8 @@ $$('.tab-btn').forEach(b => b.addEventListener('click', () => {
 });
 $('#curva-canal').addEventListener('change', renderCurva);
 $('#curva-plat').addEventListener('change', renderCurva);
+$('#curva-sku').addEventListener('change', renderCurva);
+$('#curva-modo').addEventListener('change', renderCurva);
 $('#ad-sku').addEventListener('change', carregarEventos);
 $('#ad-tipo').addEventListener('change', carregarEventos);
 
@@ -1032,7 +1151,10 @@ $('#ad-tipo').addEventListener('change', carregarEventos);
   await carregarReferencias();
   popularCanaisDropdown();
   popularDataListSkus();
+  popularCurvaSkus();
   recalcular();
+  // Carrega drifts em background pra atualizar badge no header
+  recarregarDrifts();
 })();
 </script>
 </body>
