@@ -288,7 +288,7 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
     </div>
     <div class="grid3">
       <div class="card">
-        <div class="card-header"><div class="card-title">Histórico de gasto × lucro líquido <small>(últimos 90 dias · cada ponto é um dia)</small></div></div>
+        <div class="card-header"><div class="card-title">Investimento × Receita atribuída ML <small>(últimos 90 dias · cada ponto é um dia)</small></div></div>
         <div class="card-body"><canvas id="cv-curva" height="340"></canvas></div>
       </div>
       <div class="card">
@@ -788,52 +788,57 @@ function renderCurva(){
     return;
   }
 
-  const a = c.params.a, b = c.params.b;
+  const a = c.params.a, b = c.params.b;          // fit do LUCRO (define ponto ótimo)
+  const ar = c.params.ar, br = c.params.br;      // fit da RECEITA (linha mostrada no gráfico)
   const otimo = c.ponto_otimo_gasto;
   const stats = (c.historico && c.historico.stats) || {};
   const pontos = (c.historico && c.historico.pontos) || [];
   const gastoMaxHist = stats.gasto_max || 0;
   const gastoMedHist = stats.gasto_med || 0;
-  const lucroMedHist = stats.lucro_med || 0;
+  const lucroAtribMed = stats.lucro_atrib_med || 0;
+  const lucroAtribTotal = stats.lucro_atrib_total || 0;
+  const r2Receita = stats.r2_receita || 0;
   const extrapola = !!stats.extrapola_otimo;
 
-  // Domínio do gráfico: até 1.3× do max histórico (foco no que foi vivido).
-  // Ponto ótimo é overlay; se cair fora do domínio, fica indicado como "fora do gráfico".
+  // Domínio do gráfico: até 1.3× do gasto máximo histórico
   const xMaxOperacional = Math.max(gastoMaxHist * 1.3, 100);
   const xMaxGrafico = otimo > 0 && otimo <= gastoMaxHist * 1.3
-    ? Math.max(otimo * 1.15, xMaxOperacional)   // ótimo dentro: estende um pouco
-    : xMaxOperacional;                           // ótimo fora ou não existe: ancora no histórico
+    ? Math.max(otimo * 1.15, xMaxOperacional)
+    : xMaxOperacional;
   const N = 60;
-  const linhaFit = Array.from({length: N+1}, (_, i) => {
-    const x = (xMaxGrafico * i / N);
-    return { x, y: a + b * Math.log(x + 1) };
-  });
-  const scatterHist = pontos.map(p => ({ x: p.g, y: p.l }));
+  // Linha = curva ajustada de RECEITA (eixo Y do gráfico)
+  const linhaFitReceita = (ar !== null && br !== null)
+    ? Array.from({length: N+1}, (_, i) => {
+        const x = (xMaxGrafico * i / N);
+        return { x, y: ar + br * Math.log(x + 1) };
+      })
+    : [];
+  // Scatter = receita atribuída ML por dia
+  const scatterHist = pontos.map(p => ({ x: p.g, y: p.ra, _meta: p }));
 
-  // Tendência observada nos últimos 14 vs 14 dias anteriores
+  // Tendência: 1ª vs 2ª metade da janela — gasto, receita atribuída, lucro atribuído
   let tendencia = '';
   if (pontos.length >= 14) {
     const half = Math.floor(pontos.length / 2);
     const ant = pontos.slice(0, half);
     const dep = pontos.slice(half);
     const gAnt = ant.reduce((s,p)=>s+p.g,0)/ant.length;
-    const lAnt = ant.reduce((s,p)=>s+p.l,0)/ant.length;
     const gDep = dep.reduce((s,p)=>s+p.g,0)/dep.length;
-    const lDep = dep.reduce((s,p)=>s+p.l,0)/dep.length;
-    const dGasto = gAnt > 0 ? (gDep - gAnt) / gAnt * 100 : 0;
-    const dLucro = lAnt !== 0 ? (lDep - lAnt) / Math.abs(lAnt) * 100 : 0;
-    const arrowG = dGasto > 5 ? '▲' : dGasto < -5 ? '▼' : '•';
-    const arrowL = dLucro > 5 ? '▲' : dLucro < -5 ? '▼' : '•';
-    const colorL = dLucro > 5 ? 'var(--green)' : dLucro < -5 ? 'var(--red)' : 'var(--txt3)';
+    const rAnt = ant.reduce((s,p)=>s+(p.ra||0),0)/ant.length;
+    const rDep = dep.reduce((s,p)=>s+(p.ra||0),0)/dep.length;
+    const laAnt = ant.reduce((s,p)=>s+(p.la||0),0)/ant.length;
+    const laDep = dep.reduce((s,p)=>s+(p.la||0),0)/dep.length;
+    const dG = gAnt > 0 ? (gDep - gAnt)/gAnt*100 : 0;
+    const dR = rAnt > 0 ? (rDep - rAnt)/rAnt*100 : 0;
+    const dL = laAnt !== 0 ? (laDep - laAnt)/Math.abs(laAnt)*100 : 0;
+    const arr = v => v > 5 ? '▲' : v < -5 ? '▼' : '•';
+    const col = v => v > 5 ? 'var(--green)' : v < -5 ? 'var(--red)' : 'var(--txt3)';
     tendencia = `
       <div style="background:var(--bg3);border-radius:8px;padding:12px 14px;margin-bottom:12px;font-size:12px;">
-        <div style="font-weight:600;margin-bottom:6px;color:var(--txt2);">Tendência (1ª metade vs 2ª metade da janela)</div>
-        <div style="display:flex;justify-content:space-between;">
-          <span>Gasto médio: ${fmt(gAnt)} → ${fmt(gDep)} ${arrowG} <strong>${dGasto>0?'+':''}${dGasto.toFixed(1)}%</strong></span>
-        </div>
-        <div style="display:flex;justify-content:space-between;margin-top:4px;">
-          <span style="color:${colorL};">Lucro médio: ${fmt(lAnt)} → ${fmt(lDep)} ${arrowL} <strong>${dLucro>0?'+':''}${dLucro.toFixed(1)}%</strong></span>
-        </div>
+        <div style="font-weight:600;margin-bottom:6px;color:var(--txt2);">Tendência — 1ª metade vs 2ª metade da janela</div>
+        <div>Gasto: ${fmt(gAnt)} → ${fmt(gDep)} ${arr(dG)} <strong>${dG>0?'+':''}${dG.toFixed(1)}%</strong></div>
+        <div style="margin-top:4px;color:${col(dR)};">Receita atribuída: ${fmt(rAnt)} → ${fmt(rDep)} ${arr(dR)} <strong>${dR>0?'+':''}${dR.toFixed(1)}%</strong></div>
+        <div style="margin-top:4px;color:${col(dL)};">Lucro atribuído: ${fmt(laAnt)} → ${fmt(laDep)} ${arr(dL)} <strong>${dL>0?'+':''}${dL.toFixed(1)}%</strong></div>
       </div>
     `;
   }
@@ -846,126 +851,123 @@ function renderCurva(){
     ? `<div class="alert alert-warn" style="font-size:12px;"><strong>⚠️ Ponto ótimo extrapola</strong> — o fit sugere ${fmt(otimo)}/dia, mas você nunca passou de ${fmt(gastoMaxHist)}. A curva é uma projeção matemática; alcançar esse gasto exigiria capacidade operacional não testada (estoque, tráfego, conversão).</div>`
     : '';
 
-  // Bloco "Receita atribuída pela ML" — atribuição direta + indireta
   const gastoTotalJan = stats.gasto_total || 0;
   const recAdsTotalJan = stats.rec_ads_total || 0;
   const recAdsMed = stats.rec_ads_med || 0;
   const roasAtrib = stats.roas_atribuido || 0;
-  const lucroTotalJan = pontos.reduce((s,p)=>s+p.l,0);
 
-  // Decompor direta vs indireta na janela toda
   let recDireta = 0, recIndireta = 0, unDir = 0, unInd = 0;
   pontos.forEach(p => {
     recDireta += p.rd || 0; recIndireta += p.ri || 0;
     unDir += p.ud || 0; unInd += p.ui || 0;
   });
+  const margemPctMed = recAdsTotalJan > 0 ? (lucroAtribTotal / recAdsTotalJan * 100) : 0;
 
-  const blocoROAS = recAdsTotalJan > 0 ? `
+  const blocoTopo = recAdsTotalJan > 0 ? `
     <div style="background:linear-gradient(135deg,rgba(34,211,238,.08),rgba(34,211,238,.02));border:1px solid rgba(34,211,238,.3);border-radius:10px;padding:14px;margin-bottom:14px;">
-      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--cyan);margin-bottom:8px;">💰 Receita atribuída pela ML (janela ${c.janela_dias}d)</div>
-      <div style="font-size:1.5rem;font-weight:800;font-variant-numeric:tabular-nums;">${fmt(recAdsTotalJan)}</div>
-      <div style="font-size:12px;color:var(--txt3);margin-top:4px;">
-        Investimento: <strong style="color:var(--txt1);">${fmt(gastoTotalJan)}</strong> · ROAS:
-        <strong style="color:${roasAtrib >= 5 ? 'var(--green)' : roasAtrib >= 3 ? 'var(--amber)' : 'var(--red)'};">${roasAtrib.toFixed(2)}x</strong>
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--cyan);margin-bottom:8px;">💰 Janela ${c.janela_dias}d (atribuição ML)</div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;">
+        <div>
+          <div style="font-size:11px;color:var(--txt3);">Receita atribuída</div>
+          <div style="font-size:1.5rem;font-weight:800;font-variant-numeric:tabular-nums;">${fmt(recAdsTotalJan)}</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:11px;color:var(--txt3);">ROAS</div>
+          <div style="font-size:1.5rem;font-weight:800;color:${roasAtrib >= 5 ? 'var(--green)' : roasAtrib >= 3 ? 'var(--amber)' : 'var(--red)'};">${roasAtrib.toFixed(2)}x</div>
+        </div>
       </div>
-      <div style="font-size:11px;color:var(--txt4);margin-top:6px;border-top:1px solid var(--bdr);padding-top:6px;">
-        Direta (clique→compra): <strong>${fmt(recDireta)}</strong> · ${unDir} un<br>
-        Indireta (assistida): <strong>${fmt(recIndireta)}</strong> · ${unInd} un
+      <div style="font-size:12px;color:var(--txt3);margin-top:8px;border-top:1px solid var(--bdr);padding-top:8px;">
+        Investimento: <strong style="color:var(--txt1);">${fmt(gastoTotalJan)}</strong>
+      </div>
+      <div style="font-size:12px;color:${lucroAtribTotal>=0?'var(--green)':'var(--red)'};margin-top:4px;">
+        <strong>Lucro líquido atribuído: ${fmt(lucroAtribTotal)}</strong> (margem ${margemPctMed.toFixed(1)}%)
+      </div>
+      <div style="font-size:11px;color:var(--txt4);margin-top:6px;">
+        Direta: ${fmt(recDireta)} · ${unDir} un  ·  Indireta: ${fmt(recIndireta)} · ${unInd} un
       </div>
     </div>
   ` : `
-    <div class="alert alert-info" style="font-size:12px;">Sem dados de receita atribuída pela ML nessa janela. (Acontece em SKUs com poucas conversões diretas.)</div>
+    <div class="alert alert-info" style="font-size:12px;">Sem dados de receita atribuída pela ML nessa janela.</div>
   `;
 
   $('#curva-resumo').innerHTML = `
-    ${blocoROAS}
+    ${blocoTopo}
     ${tendencia}
-    <h3 style="font-size:12px;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;">📊 Diário (médias)</h3>
-    <div class="kpi" style="margin-bottom:8px;"><div class="kpi-lbl">Gasto médio</div><div class="kpi-val" style="font-size:1.2rem;">${fmt(gastoMedHist)}</div><div class="kpi-sub">Máx: ${fmt(gastoMaxHist)} · Mín: ${fmt(stats.gasto_min||0)}</div></div>
-    <div class="kpi" style="margin-bottom:8px;"><div class="kpi-lbl">Receita atribuída média</div><div class="kpi-val" style="font-size:1.2rem;color:var(--cyan);">${fmt(recAdsMed)}</div><div class="kpi-sub">Por dia (atribuição ML)</div></div>
-    <div class="kpi" style="margin-bottom:8px;"><div class="kpi-lbl">Lucro líquido médio</div><div class="kpi-val ${lucroMedHist<0?'neg':'pos'}" style="font-size:1.2rem;">${fmt(lucroMedHist)}</div><div class="kpi-sub">Receita pedidos: ${fmt(stats.receita_med||0)}</div></div>
-    <div class="kpi" style="margin-bottom:14px;"><div class="kpi-lbl">Pontos observados</div><div class="kpi-val" style="font-size:1.2rem;">${c.amostra} dias</div><div class="kpi-sub">Janela ${c.janela_dias}d</div></div>
+    <h3 style="font-size:12px;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;">📊 Médias diárias</h3>
+    <div class="kpi" style="margin-bottom:8px;"><div class="kpi-lbl">Gasto médio</div><div class="kpi-val" style="font-size:1.2rem;">${fmt(gastoMedHist)}</div><div class="kpi-sub">Máx: ${fmt(gastoMaxHist)}</div></div>
+    <div class="kpi" style="margin-bottom:8px;"><div class="kpi-lbl">Receita atribuída média</div><div class="kpi-val" style="font-size:1.2rem;color:var(--cyan);">${fmt(recAdsMed)}</div></div>
+    <div class="kpi" style="margin-bottom:14px;"><div class="kpi-lbl">Lucro atribuído médio</div><div class="kpi-val ${lucroAtribMed<0?'neg':'pos'}" style="font-size:1.2rem;">${fmt(lucroAtribMed)}</div></div>
 
     <h3 style="font-size:12px;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em;margin:18px 0 10px;">🧮 Referência teórica do fit</h3>
     ${avisoExtrap}
     ${avisoFit}
     <div class="breakdown" style="font-size:12px;">
-      <div class="row"><span class="lbl">Ponto ótimo (matemático)</span><span class="val"><strong>${fmt(otimo)}/dia</strong></span></div>
-      <div class="row"><span class="lbl">Lucro estimado no ótimo</span><span class="val ${c.lucro_no_otimo<0?'r2-bad':'r2-good'}">${fmt(c.lucro_no_otimo)}</span></div>
-      <div class="row"><span class="lbl">Modelo</span><span class="val">y = ${a.toFixed(0)} + ${b.toFixed(0)}·ln(x+1)</span></div>
-      <div class="row"><span class="lbl">R²</span><span class="val ${r2cls}">${(c.r2||0).toFixed(3)}</span></div>
-      <div class="row"><span class="lbl">Última atualização</span><span class="val">${fmtDt(c.atualizado_em)}</span></div>
+      <div class="row"><span class="lbl">Ponto ótimo de gasto</span><span class="val"><strong>${fmt(otimo)}/dia</strong></span></div>
+      <div class="row"><span class="lbl">Lucro líquido projetado</span><span class="val ${c.lucro_no_otimo<0?'r2-bad':'r2-good'}">${fmt(c.lucro_no_otimo)}</span></div>
+      <div class="row"><span class="lbl">R² (fit do lucro)</span><span class="val ${r2cls}">${(c.r2||0).toFixed(3)}</span></div>
+      <div class="row"><span class="lbl">R² (fit da receita)</span><span class="val">${r2Receita.toFixed(3)}</span></div>
+      <div class="row"><span class="lbl">Pontos observados</span><span class="val">${c.amostra} dias</span></div>
     </div>
-    <p style="font-size:11px;color:var(--txt4);margin-top:10px;line-height:1.5;">
-      <strong>Como ler:</strong> os pontos azuis são dias reais. A linha tracejada é o fit logarítmico —
-      uma projeção do que <em>poderia</em> acontecer se o gasto subisse. Considere capacidade operacional
-      (estoque, conversão, tráfego) antes de usar o ótimo teórico como meta.
-    </p>
+    <details style="margin-top:10px;font-size:11px;color:var(--txt3);">
+      <summary style="cursor:pointer;color:var(--txt2);">Como o lucro é calculado?</summary>
+      <p style="margin-top:8px;line-height:1.6;">
+        <strong>Lucro líquido atribuído</strong> = receita_atribuída × (1 − comissão_canal − cmv_unitário) − gasto_ads<br><br>
+        • <em>receita_atribuída</em>: o que ML retorna em <code>direct_amount + indirect_amount</code><br>
+        • <em>comissão_canal</em>: % efetiva derivada do que vendeu no dia (canal_custos_faixa por faixa de ticket)<br>
+        • <em>cmv_unitário</em>: % derivado de produtos.custo_total via itens_pedido do dia<br>
+        • <em>gasto_ads</em>: <code>ads_metrics.gasto</code><br><br>
+        <strong>Ponto ótimo</strong>: derivada do fit log do lucro = 1 (próximo R$ de ads gera só R$ 1 de lucro adicional). Acima desse gasto, ROI marginal cai.<br><br>
+        <strong>Não inclui</strong>: frete (varia por região), custos fixos rateados, devoluções (subtraídas separadamente).
+      </p>
+    </details>
   `;
 
   const ctx = document.getElementById('cv-curva').getContext('2d');
   const otimoForaGrafico = otimo > xMaxGrafico;
-
-  // Scatter de receita atribuída ML (eixo Y secundário)
-  const scatterRecAds = pontos.filter(p => (p.ra||0) > 0).map(p => ({
-    x: p.g, y: p.ra, _meta: p
-  }));
-
-  // Lookup de meta por (gasto, lucro) pra tooltip do scatter principal
-  const metaPorPonto = new Map();
-  pontos.forEach(p => metaPorPonto.set(`${p.g}|${p.l}`, p));
+  // Para o eixo Y (receita), o teto deve englobar pontos + curva
+  const yMaxObs = Math.max(
+    ...scatterHist.map(p => p.y),
+    ...linhaFitReceita.map(p => p.y || 0),
+    100
+  );
 
   STATE.charts.curva = new Chart(ctx, {
     data: {
       datasets: [
-        // 1) Histórico de lucro (eixo Y principal)
-        {
-          type: 'scatter', label: 'Lucro líquido (cada dia)',
-          data: scatterHist,
-          backgroundColor: 'rgba(99,102,241,.7)',
-          borderColor: '#818cf8',
-          pointRadius: 4, pointHoverRadius: 6,
-          yAxisID: 'y',
-          order: 1,
-        },
-        // 2) Receita atribuída ML (eixo Y secundário) — só pontos com receita > 0
+        // 1) Receita atribuída por dia — destaque primário
         {
           type: 'scatter', label: 'Receita atribuída ML (cada dia)',
-          data: scatterRecAds,
-          backgroundColor: 'rgba(34,211,238,.55)',
+          data: scatterHist,
+          backgroundColor: 'rgba(34,211,238,.7)',
           borderColor: '#22d3ee',
-          pointStyle: 'triangle',
-          pointRadius: 4, pointHoverRadius: 6,
-          yAxisID: 'y1',
+          pointRadius: 4, pointHoverRadius: 7,
           order: 1,
         },
-        // 3) Curva ajustada — secundário, tracejado
-        {
-          type: 'line', label: 'Fit logarítmico (projeção lucro)',
-          data: linhaFit,
+        // 2) Curva ajustada de receita (tendência)
+        ...(linhaFitReceita.length ? [{
+          type: 'line', label: 'Tendência (fit log)',
+          data: linhaFitReceita,
           borderColor: 'rgba(167,139,250,.6)',
           borderWidth: 1.5, borderDash: [4,4],
           pointRadius: 0, fill: false, tension: 0,
-          yAxisID: 'y',
           order: 2,
-        },
-        // 4) Marcador da faixa praticada
+        }] : []),
+        // 3) Faixa praticada (linha verde no eixo X)
         {
           type: 'line', label: `Faixa praticada (até ${fmt(gastoMaxHist)})`,
           data: [{x: 0, y: 0}, {x: gastoMaxHist, y: 0}],
           borderColor: 'rgba(74,222,128,.5)',
           borderWidth: 4, pointRadius: 0,
-          yAxisID: 'y',
           order: 3,
         },
-        // 5) Linha vertical no ponto ótimo
+        // 4) Linha vertical no ponto ótimo de LUCRO (marcador no eixo X)
         ...(otimo > 0 && !otimoForaGrafico ? [{
-          type: 'line', label: `Ótimo teórico (${fmt(otimo)})`,
-          data: [{x: otimo, y: 0}, {x: otimo, y: c.lucro_no_otimo}],
-          borderColor: extrapola ? 'rgba(250,204,21,.5)' : 'rgba(250,204,21,.8)',
+          type: 'line', label: `Ótimo teórico de gasto (${fmt(otimo)})`,
+          data: [{x: otimo, y: 0}, {x: otimo, y: yMaxObs}],
+          borderColor: extrapola ? 'rgba(250,204,21,.4)' : 'rgba(250,204,21,.7)',
           borderWidth: 1.5, borderDash: [6,4],
-          pointRadius: [0, 4], pointBackgroundColor: '#facc15',
-          showLine: true, yAxisID: 'y', order: 4,
+          pointRadius: 0, showLine: true,
+          order: 4,
         }] : []),
       ]
     },
@@ -973,55 +975,36 @@ function renderCurva(){
       responsive: true, maintainAspectRatio: false,
       interaction: { mode: 'point', intersect: true },
       scales: {
-        x: { type:'linear', title:{display:true,text:'Gasto diário (R$)',color:'#a1a1aa'}, ticks:{color:'#a1a1aa', callback:v=>'R$ '+fmtN(v)}, grid:{color:'rgba(255,255,255,.05)'} },
-        y: {
-          position: 'left',
-          title:{display:true,text:'Lucro líquido / dia (R$)',color:'#818cf8'},
-          ticks:{color:'#a1a1aa', callback:v=>'R$ '+fmtN(v)},
-          grid:{color:'rgba(255,255,255,.05)'},
-        },
-        y1: {
-          position: 'right',
-          title:{display:true,text:'Receita atribuída ML / dia (R$)',color:'#22d3ee'},
-          ticks:{color:'#22d3ee', callback:v=>'R$ '+fmtN(v)},
-          grid:{drawOnChartArea: false},
-        },
+        x: { type:'linear', title:{display:true,text:'Gasto diário em ads (R$)',color:'#a1a1aa'}, ticks:{color:'#a1a1aa', callback:v=>'R$ '+fmtN(v)}, grid:{color:'rgba(255,255,255,.05)'} },
+        y: { title:{display:true,text:'Receita atribuída ML / dia (R$)',color:'#22d3ee'}, ticks:{color:'#a1a1aa', callback:v=>'R$ '+fmtN(v)}, grid:{color:'rgba(255,255,255,.05)'}, beginAtZero: true },
       },
       plugins: {
         legend: { labels: { color:'#d4d4d8', usePointStyle: true } },
         tooltip: {
           callbacks: {
             label: ctx => {
-              const dl = ctx.dataset.label;
-              if (dl.startsWith('Lucro')) {
-                const meta = metaPorPonto.get(`${ctx.parsed.x}|${ctx.parsed.y}`);
-                const lines = [
-                  `Gasto: ${fmt(ctx.parsed.x)}`,
-                  `Lucro líquido: ${fmt(ctx.parsed.y)}`,
-                ];
-                if (meta) {
-                  lines.push(`Data: ${fmtDt(meta.d)}`);
-                  if (meta.ra > 0) {
-                    const roasDay = ctx.parsed.x > 0 ? (meta.ra / ctx.parsed.x) : 0;
-                    lines.push(`Receita atribuída: ${fmt(meta.ra)} (ROAS ${roasDay.toFixed(2)}x)`);
-                  }
-                }
-                return lines;
-              }
+              const dl = ctx.dataset.label || '';
               if (dl.startsWith('Receita atribuída')) {
                 const m = ctx.dataset.data[ctx.dataIndex] && ctx.dataset.data[ctx.dataIndex]._meta;
-                const roasDay = ctx.parsed.x > 0 ? (ctx.parsed.y / ctx.parsed.x) : 0;
+                const gasto = ctx.parsed.x;
+                const rec = ctx.parsed.y;
+                const roas = gasto > 0 ? (rec / gasto) : 0;
                 const lines = [
-                  `Gasto: ${fmt(ctx.parsed.x)}`,
-                  `Receita atribuída: ${fmt(ctx.parsed.y)}`,
-                  `ROAS: ${roasDay.toFixed(2)}x`,
+                  m ? `📅 ${fmtDt(m.d)}` : '',
+                  `Gasto: ${fmt(gasto)}`,
+                  `Receita atribuída: ${fmt(rec)}`,
+                  `ROAS: ${roas.toFixed(2)}x`,
                 ];
                 if (m) {
-                  lines.push(`Data: ${fmtDt(m.d)}`);
-                  lines.push(`Direta: ${fmt(m.rd)} · Indireta: ${fmt(m.ri)}`);
+                  lines.push(`  Direta: ${fmt(m.rd)} (${m.ud} un)`);
+                  lines.push(`  Indireta: ${fmt(m.ri)} (${m.ui} un)`);
+                  const lucroCls = (m.la||0) >= 0 ? '✅' : '⚠️';
+                  lines.push(`Lucro líquido: ${fmt(m.la)} ${lucroCls}`);
                 }
-                return lines;
+                return lines.filter(Boolean);
               }
+              if (dl.startsWith('Tendência')) return `Fit: ${fmt(ctx.parsed.y)} a ${fmt(ctx.parsed.x)}/dia`;
+              if (dl.startsWith('Ótimo')) return `Onde lucro marginal = R$ 1`;
               return `${dl}: ${fmt(ctx.parsed.y)}`;
             }
           }
