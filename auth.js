@@ -26,6 +26,7 @@
     lojas:      { titulo: 'Lojas',       descricao: 'Vendas das lojas físicas',  url: '/lojas.html',      icone: '🏬' },
     ecommerce:  { titulo: 'E-commerce',  descricao: 'Canais digitais',           url: '/ecommerce.html',  icone: '🛒' },
     diretoria:  { titulo: 'Diretoria',   descricao: 'Visão consolidada',         url: '/diretoria.html',  icone: '📊' },
+    'cockpit-fusion': { titulo: 'Cockpit Fusion', descricao: 'DRE consolidado + projeção × realizado + drawer Max', url: '/cockpit.html', icone: '🎯' },
     estoque:    { titulo: 'Estoque',     descricao: 'Posição multi-canal',       url: '/estoque.html',    icone: '📦' },
     compras:    { titulo: 'Compras',     descricao: 'Ordens e fornecedores',     url: '/compras.html',    icone: '🧾' },
     financeiro: { titulo: 'Financeiro',  descricao: 'Receitas e despesas',       url: '/financeiro.html', icone: '💰' },
