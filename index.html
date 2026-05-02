@@ -246,6 +246,8 @@ async function init() {
   role.dashes.forEach(key => {
     const meta = fusionAuth.DASHES[key];
     if (!meta) return;
+    // Cards restritos por email (ex: max-chat-admin só pro Leo)
+    if (meta.restritoPara && !meta.restritoPara.includes((role.email || '').toLowerCase())) return;
     const card = document.createElement('a');
     card.href = meta.url;
     if (meta.destaque) {

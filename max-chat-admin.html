@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Max Chat — Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg-body:#0a0a0b; --bg-card:#18181b; --bg-card-2:#27272a;
+  --border:#27272a; --text:#fff; --text-soft:#a1a1aa;
+  --accent:#3b82f6; --accent-hover:#2563eb;
+  --success:#10b981; --warn:#f59e0b; --danger:#ef4444;
+}
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Inter',sans-serif}
+body{background:var(--bg-body);color:var(--text);min-height:100vh}
+.topbar{
+  background:rgba(18,18,20,.95);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border);
+  padding:0 1.5rem;height:64px;
+  display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:10;
+}
+.topbar h1{font-size:18px}
+.topbar .right{display:flex;gap:1rem;align-items:center;color:var(--text-soft);font-size:14px}
+.topbar a, .topbar button{
+  background:transparent;border:1px solid var(--border);color:var(--text-soft);
+  padding:.4rem .8rem;border-radius:6px;font-size:13px;cursor:pointer;text-decoration:none;
+}
+.topbar a:hover, .topbar button:hover{background:var(--bg-card-2);color:var(--text)}
+.wrap{max-width:1400px;margin:0 auto;padding:1.5rem}
+.card{
+  background:var(--bg-card);border:1px solid var(--border);border-radius:8px;
+  padding:1rem 1.2rem;margin-bottom:1rem;
+}
+.card h2{font-size:15px;font-weight:600;margin-bottom:.5rem}
+.card .desc{font-size:12px;color:var(--text-soft);margin-bottom:.8rem}
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem}
+.kpi{background:var(--bg-card-2);border-radius:6px;padding:.8rem 1rem}
+.kpi .label{font-size:11px;color:var(--text-soft);text-transform:uppercase;letter-spacing:.5px}
+.kpi .valor{font-size:22px;font-weight:600;margin-top:.2rem}
+.kpi .sub{font-size:11px;color:var(--text-soft);margin-top:.2rem}
+table{width:100%;border-collapse:collapse;font-size:13px;margin-top:.5rem}
+th, td{padding:.5rem .6rem;text-align:left;border-bottom:1px solid var(--border);vertical-align:top}
+th{color:var(--text-soft);font-weight:500;font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+tr:hover td{background:var(--bg-card-2)}
+.tag{display:inline-block;padding:.1rem .4rem;border-radius:3px;font-size:11px;background:var(--bg-card-2)}
+.tag.bad{background:rgba(239,68,68,.15);color:var(--danger)}
+.tag.warn{background:rgba(245,158,11,.15);color:var(--warn)}
+.tag.ok{background:rgba(16,185,129,.15);color:var(--success)}
+.btn{
+  background:var(--accent);color:#fff;border:none;
+  padding:.5rem 1rem;border-radius:6px;font-size:13px;cursor:pointer;
+}
+.btn:hover{background:var(--accent-hover)}
+.btn.ghost{background:transparent;border:1px solid var(--border);color:var(--text-soft)}
+.btn.ghost:hover{border-color:var(--text);color:var(--text)}
+.btn.sm{padding:.25rem .6rem;font-size:11px}
+.btn.danger{background:var(--danger)}
+.actions-bar{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem}
+.empty{padding:1.5rem;text-align:center;color:var(--text-soft);font-size:13px}
+.loading{padding:2rem;text-align:center;color:var(--text-soft)}
+.toast{
+  position:fixed;bottom:1rem;right:1rem;padding:.7rem 1rem;border-radius:6px;
+  background:var(--bg-card);border:1px solid var(--border);font-size:13px;
+  box-shadow:0 4px 16px rgba(0,0,0,.4);z-index:100;
+}
+.toast.ok{border-color:var(--success)}
+.toast.err{border-color:var(--danger)}
+dialog{
+  background:var(--bg-card);border:1px solid var(--border);border-radius:8px;
+  color:var(--text);padding:1.2rem;max-width:600px;
+}
+dialog::backdrop{background:rgba(0,0,0,.7)}
+dialog h3{margin-bottom:.8rem}
+dialog label{display:block;margin-bottom:.4rem;font-size:12px;color:var(--text-soft)}
+dialog input, dialog select, dialog textarea{
+  width:100%;padding:.5rem;background:var(--bg-card-2);border:1px solid var(--border);
+  border-radius:4px;color:var(--text);font-family:inherit;font-size:13px;margin-bottom:.8rem;
+}
+dialog textarea{min-height:80px;resize:vertical}
+dialog .actions{display:flex;gap:.5rem;justify-content:flex-end;margin-top:.5rem}
+.preview-trunc{max-width:380px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:top}
+code.tipo{font-size:11px;background:var(--bg-card-2);padding:.1rem .35rem;border-radius:3px;color:var(--warn)}
+@media(max-width:768px){.kpi-grid{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <h1>🤖 Max Chat — Admin</h1>
+  <div class="right">
+    <span id="user-info"></span>
+    <a href="/index.html">← Portal</a>
+    <button id="btn-sair">Sair</button>
+  </div>
+</div>
+
+<div id="loading-view" class="loading">Carregando...</div>
+
+<div id="admin-view" class="wrap" style="display:none">
+
+  <div class="card">
+    <h2>Resumo do mês</h2>
+    <div class="kpi-grid" id="kpi-resumo">—</div>
+  </div>
+
+  <div class="card">
+    <h2>Ações rápidas</h2>
+    <div class="actions-bar">
+      <button class="btn" id="btn-repopular">🔄 Repopular snapshots agora</button>
+      <button class="btn ghost" id="btn-recarregar-config">⚙️ Recarregar config (categorias.yaml)</button>
+      <button class="btn ghost" id="btn-nova-sugestao">+ Nova sugestão</button>
+      <button class="btn ghost" id="btn-refresh">↻ Atualizar painel</button>
+    </div>
+    <div class="desc">Ações que você pode disparar daqui sem mexer em código:</div>
+    <ul style="font-size:12px;color:var(--text-soft);padding-left:1.2rem;line-height:1.6">
+      <li><strong>Repopular snapshots</strong>: rerun do cron diário on-demand. Útil se algum SQL mudou ou se snapshot ficou strange.</li>
+      <li><strong>Recarregar config</strong>: força o backend a re-ler <code>categorias.yaml</code> sem restart (após mexer no GitHub).</li>
+      <li><strong>Nova sugestão</strong>: registra uma idéia de melhoria (snapshot, palavra-chave, few-shot). Eu implemento via git push depois.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>👎 Respostas mal avaliadas (últimas 30)</h2>
+    <div class="desc">Onde o usuário marcou que a resposta foi ruim. Coluna "motivo" tem o texto livre que ele escreveu.</div>
+    <div id="downs-table">—</div>
+  </div>
+
+  <div class="card">
+    <h2>🔴 Falhas detectadas automaticamente</h2>
+    <div class="desc">Specialist desistiu, retornou "não encontrei", queries sem sentido. Detectado SEM precisar de feedback do usuário.</div>
+    <div id="falhas-table">—</div>
+  </div>
+
+  <div class="card">
+    <h2>💰 Perguntas frequentes sem snapshot (candidatas a otimizar)</h2>
+    <div class="desc">Aparecem 2+ vezes e estão rodando Haiku/Sonnet em vez de bater snapshot zero-cost. Top candidatas a virar snapshot novo.</div>
+    <div id="sem-snap-table">—</div>
+  </div>
+
+  <div class="card">
+    <h2>📊 Aprovação por categoria (mês)</h2>
+    <div id="aprov-table">—</div>
+  </div>
+
+  <div class="card">
+    <h2>📋 Sugestões registradas</h2>
+    <div class="desc">Suas sugestões pra melhorias futuras. Marque como "implementada" depois do git push.</div>
+    <div id="sugestoes-table">—</div>
+  </div>
+
+</div>
+
+<dialog id="dialog-sugestao">
+  <h3>Nova sugestão</h3>
+  <label>Tipo</label>
+  <select id="sug-tipo">
+    <option value="snapshot">Snapshot novo</option>
+    <option value="palavra_chave">Palavra-chave em categoria</option>
+    <option value="few_shot">Exemplo few-shot no specialist</option>
+    <option value="outro">Outro</option>
+  </select>
+  <label>Pergunta exemplo (que disparou a ideia)</label>
+  <input id="sug-pergunta" placeholder='ex: "Quanto a Marcolina vendeu hoje?"'>
+  <label>Proposta (SQL, palavra-chave, ou descrição)</label>
+  <textarea id="sug-proposta" placeholder="ex: SELECT loja_nome, sum(valor_bruto) FROM pedidos WHERE..."></textarea>
+  <label>Descrição/contexto (opcional)</label>
+  <textarea id="sug-desc" placeholder="Por que essa mudança importa? Frequência observada?"></textarea>
+  <label>Prioridade</label>
+  <select id="sug-prio">
+    <option value="baixa">Baixa</option>
+    <option value="media" selected>Média</option>
+    <option value="alta">Alta</option>
+  </select>
+  <div class="actions">
+    <button class="btn ghost" id="sug-cancelar">Cancelar</button>
+    <button class="btn" id="sug-salvar">Salvar sugestão</button>
+  </div>
+</dialog>
+
+<dialog id="dialog-tratar">
+  <h3>Marcar falha como tratada</h3>
+  <p style="font-size:12px;color:var(--text-soft);margin-bottom:.8rem" id="tratar-pergunta">—</p>
+  <label>O que você fez? (opcional, ajuda histórico)</label>
+  <input id="tratar-acao" placeholder='ex: "criou snapshot vendas_marcolina_hoje"'>
+  <label>Observação (opcional)</label>
+  <textarea id="tratar-obs"></textarea>
+  <div class="actions">
+    <button class="btn ghost" id="tratar-cancelar">Cancelar</button>
+    <button class="btn" id="tratar-confirmar">Marcar como tratada</button>
+  </div>
+</dialog>
+
+<div id="toast-host"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/auth.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const ALLOWED_EMAILS = ['leonardo@usefusion.com.br'];   // ← restrição: apenas Leo
+const MAX_CHAT_API = 'https://max-chat-2vs0.onrender.com';
+
+let CTX = null;
+
+function show(view) {
+  ['loading-view','admin-view'].forEach(v => $(v).style.display = (v === view ? 'block' : 'none'));
+}
+
+function toast(msg, kind='ok') {
+  const t = document.createElement('div');
+  t.className = `toast ${kind}`;
+  t.textContent = msg;
+  $('toast-host').appendChild(t);
+  setTimeout(() => t.remove(), 4000);
+}
+
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function fmtData(s) {
+  if (!s) return '';
+  return String(s).slice(0,16).replace('T',' ');
+}
+
+function trunc(s, n=80) {
+  s = s || '';
+  return s.length > n ? s.slice(0,n) + '…' : s;
+}
+
+async function init() {
+  show('loading-view');
+  const auth = await fusionAuth.requireAuth();
+  if (!auth) return;
+
+  const email = (auth.role.email || '').toLowerCase();
+  if (!ALLOWED_EMAILS.includes(email) && (auth.role.role || '').toLowerCase() !== 'admin') {
+    alert('Esta página é restrita.');
+    location.href = '/index.html';
+    return;
+  }
+
+  CTX = auth;
+  $('user-info').textContent = auth.role.nome || auth.role.email;
+  $('btn-sair').onclick = async () => { await fusionAuth.signOut(); location.href = '/index.html'; };
+  $('btn-repopular').onclick = repopularSnapshots;
+  $('btn-recarregar-config').onclick = recarregarConfig;
+  $('btn-nova-sugestao').onclick = abrirDialogSugestao;
+  $('btn-refresh').onclick = carregarTudo;
+
+  await carregarTudo();
+  show('admin-view');
+}
+
+async function apiGet(path) {
+  const r = await fetch(`${MAX_CHAT_API}${path}`, { headers: CTX.headers });
+  if (!r.ok) throw new Error(`HTTP ${r.status} em ${path}: ${(await r.text()).slice(0,200)}`);
+  return r.json();
+}
+
+async function apiPost(path, body) {
+  const r = await fetch(`${MAX_CHAT_API}${path}`, {
+    method: 'POST',
+    headers: { ...CTX.headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body || {}),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.erro || `HTTP ${r.status}`);
+  return j;
+}
+
+async function carregarTudo() {
+  try {
+    const [qual, sugs] = await Promise.all([
+      apiGet('/api/max-chat/admin/qualidade'),
+      apiGet('/api/max-chat/admin/sugestoes'),
+    ]);
+    renderResumo(qual.resumo || {});
+    renderDowns(qual.feedback_downs || []);
+    renderFalhas(qual.falhas || []);
+    renderSemSnap(qual.perguntas_caras_sem_snapshot || []);
+    renderAprov(qual.aprovacao_categoria || []);
+    renderSugestoes(sugs.sugestoes || []);
+  } catch (e) {
+    toast('Erro carregando: ' + e.message, 'err');
+    console.error(e);
+  }
+}
+
+function renderResumo(r) {
+  const turnos = +r.turnos_total || 0;
+  const fbT = +r.feedback_total || 0, fbU = +r.feedback_up || 0, fbD = +r.feedback_down || 0;
+  const aprov = fbT > 0 ? `${Math.round(100*fbU/fbT)}%` : '—';
+  const cob = turnos > 0 ? `${Math.round(100*fbT/turnos)}%` : '0%';
+  const falhas = +r.falhas_detectadas || 0;
+  const falhasPct = turnos > 0 ? `${(100*falhas/turnos).toFixed(1)}%` : '0%';
+  $('kpi-resumo').innerHTML = `
+    <div class="kpi"><div class="label">👍 / 👎</div><div class="valor">${fbU} / ${fbD}</div><div class="sub">aprovação ${aprov}</div></div>
+    <div class="kpi"><div class="label">Cobertura feedback</div><div class="valor">${cob}</div><div class="sub">${fbT} de ${turnos} turnos</div></div>
+    <div class="kpi"><div class="label">Falhas detectadas</div><div class="valor">${falhas}</div><div class="sub">${falhasPct} dos turnos</div></div>
+    <div class="kpi"><div class="label">Custo do mês</div><div class="valor">$${(+r.custo_usd_mes || 0).toFixed(4)}</div><div class="sub">${turnos} turnos</div></div>
+  `;
+}
+
+function renderDowns(list) {
+  if (!list.length) { $('downs-table').innerHTML = '<div class="empty">Nenhum 👎 ainda. 🎉</div>'; return; }
+  $('downs-table').innerHTML = `<table>
+    <thead><tr><th>Data</th><th>Usuário</th><th>Pergunta</th><th>Resposta</th><th>Motivo</th><th>Modelo</th><th>USD</th><th></th></tr></thead>
+    <tbody>${list.map(d => `<tr>
+      <td>${fmtData(d.criado_em)}</td>
+      <td>${escapeHtml(d.email||'')}</td>
+      <td>${escapeHtml(trunc(d.pergunta||'',70))}</td>
+      <td><span class="preview-trunc" title="${escapeHtml(d.resposta_preview||'')}">${escapeHtml(trunc(d.resposta_preview||'',60))}</span></td>
+      <td><span class="tag warn">${escapeHtml(d.motivo||'—')}</span></td>
+      <td>${d.modelo||''}</td>
+      <td>$${(+d.custo_usd||0).toFixed(4)}</td>
+      <td><button class="btn sm ghost" onclick="abrirDialogTratar('${d.mensagem_id}','${escapeHtml(trunc(d.pergunta||'',60)).replace(/'/g,'&#39;')}')">Tratar</button></td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+function renderFalhas(list) {
+  if (!list.length) { $('falhas-table').innerHTML = '<div class="empty">Nenhuma falha detectada nos últimos 30 dias. 🟢</div>'; return; }
+  $('falhas-table').innerHTML = `<table>
+    <thead><tr><th>Data</th><th>Tipo</th><th>Pergunta</th><th>Resposta</th><th>Modelo</th><th>USD</th><th></th></tr></thead>
+    <tbody>${list.map(f => `<tr>
+      <td>${fmtData(f.criado_em)}</td>
+      <td><code class="tipo">${f.tipo_falha||'—'}</code></td>
+      <td>${escapeHtml(trunc(f.pergunta||'',70))}</td>
+      <td><span class="preview-trunc" title="${escapeHtml(f.resposta_preview||'')}">${escapeHtml(trunc(f.resposta_preview||'',60))}</span></td>
+      <td>${f.modelo||''}</td>
+      <td>$${(+f.custo_usd||0).toFixed(4)}</td>
+      <td><button class="btn sm ghost" onclick="abrirDialogTratar('${f.mensagem_id}','${escapeHtml(trunc(f.pergunta||'',60)).replace(/'/g,'&#39;')}')">Tratar</button></td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+function renderSemSnap(list) {
+  if (!list.length) { $('sem-snap-table').innerHTML = '<div class="empty">Nenhuma pergunta frequente fora de snapshot. 🎉</div>'; return; }
+  $('sem-snap-table').innerHTML = `<table>
+    <thead><tr><th>Pergunta normalizada</th><th>Vezes</th><th>Users</th><th>Modelo dominante</th><th>USD médio</th><th>USD acum</th><th></th></tr></thead>
+    <tbody>${list.map(p => `<tr>
+      <td>${escapeHtml(trunc(p.pergunta_normalizada||'',90))}</td>
+      <td>${p.ocorrencias||0}</td>
+      <td>${p.usuarios_distintos||0}</td>
+      <td>${p.modelo_dominante||''}</td>
+      <td>$${(+p.custo_medio_resposta||0).toFixed(4)}</td>
+      <td>$${(+p.custo_total_acumulado||0).toFixed(4)}</td>
+      <td><button class="btn sm ghost" onclick="sugerirSnapshotPra('${escapeHtml(p.pergunta_normalizada||'').replace(/'/g,'&#39;')}')">Sugerir snapshot</button></td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+function renderAprov(list) {
+  const mes = new Date().toISOString().slice(0,7);
+  const m = list.filter(a => a.mes === mes);
+  if (!m.length) { $('aprov-table').innerHTML = '<div class="empty">Sem feedback ainda neste mês.</div>'; return; }
+  $('aprov-table').innerHTML = `<table>
+    <thead><tr><th>Categoria</th><th>👍</th><th>👎</th><th>Total</th><th>% aprov</th><th>USD acum</th></tr></thead>
+    <tbody>${m.map(a => {
+      const p = +a.pct_aprovacao || 0;
+      const cls = p>=80 ? 'ok' : p>=60 ? 'warn' : 'bad';
+      return `<tr>
+        <td>${escapeHtml(a.categoria||'')}</td>
+        <td>${a.ups||0}</td>
+        <td style="${a.downs>0?'color:var(--danger)':''}">${a.downs||0}</td>
+        <td>${a.total||0}</td>
+        <td><span class="tag ${cls}">${p}%</span></td>
+        <td>$${(+a.custo_usd_total||0).toFixed(4)}</td>
+      </tr>`;
+    }).join('')}</tbody></table>`;
+}
+
+function renderSugestoes(list) {
+  if (!list.length) { $('sugestoes-table').innerHTML = '<div class="empty">Nenhuma sugestão registrada ainda.</div>'; return; }
+  $('sugestoes-table').innerHTML = `<table>
+    <thead><tr><th>Data</th><th>Tipo</th><th>Prio</th><th>Pergunta exemplo</th><th>Proposta</th><th>Status</th><th></th></tr></thead>
+    <tbody>${list.map(s => {
+      const stCls = s.status==='implementada' ? 'ok' : s.status==='rejeitada' ? 'bad' : 'warn';
+      return `<tr>
+        <td>${fmtData(s.criado_em)}</td>
+        <td><code class="tipo">${s.tipo}</code></td>
+        <td>${s.prioridade}</td>
+        <td>${escapeHtml(trunc(s.pergunta_exemplo||'',60))}</td>
+        <td><span class="preview-trunc" title="${escapeHtml(s.proposta||'')}">${escapeHtml(trunc(s.proposta||'',80))}</span></td>
+        <td><span class="tag ${stCls}">${s.status}</span></td>
+        <td>${s.status==='pendente' || s.status==='aprovada' ?
+            `<button class="btn sm ghost" onclick="atualizarSug('${s.id}','implementada')">✓</button>
+             <button class="btn sm ghost" onclick="atualizarSug('${s.id}','rejeitada')">✗</button>` :
+            `<button class="btn sm ghost" onclick="atualizarSug('${s.id}','pendente')">↩ reabrir</button>`}</td>
+      </tr>`;
+    }).join('')}</tbody></table>`;
+}
+
+window.atualizarSug = async function(id, status) {
+  try {
+    await apiPost(`/api/max-chat/admin/sugestoes/${id}`, { status });
+    toast(`Sugestão marcada como ${status}.`);
+    await carregarTudo();
+  } catch (e) { toast('Falhou: ' + e.message, 'err'); }
+};
+
+window.sugerirSnapshotPra = function(pergunta) {
+  $('sug-tipo').value = 'snapshot';
+  $('sug-pergunta').value = pergunta;
+  $('sug-proposta').value = '';
+  $('sug-desc').value = `Pergunta apareceu em vw_max_chat_perguntas_caras_sem_snapshot. Desenhar SQL agregado + resposta_template.`;
+  $('sug-prio').value = 'media';
+  $('dialog-sugestao').showModal();
+};
+
+function abrirDialogSugestao() {
+  $('sug-tipo').value = 'snapshot';
+  $('sug-pergunta').value = '';
+  $('sug-proposta').value = '';
+  $('sug-desc').value = '';
+  $('sug-prio').value = 'media';
+  $('dialog-sugestao').showModal();
+}
+
+$('sug-cancelar').onclick = () => $('dialog-sugestao').close();
+$('sug-salvar').onclick = async () => {
+  try {
+    const body = {
+      tipo: $('sug-tipo').value,
+      pergunta_exemplo: $('sug-pergunta').value.trim(),
+      proposta: $('sug-proposta').value.trim(),
+      descricao: $('sug-desc').value.trim() || null,
+      prioridade: $('sug-prio').value,
+    };
+    if (!body.pergunta_exemplo || !body.proposta) {
+      toast('Pergunta e proposta são obrigatórias.', 'err'); return;
+    }
+    await apiPost('/api/max-chat/admin/sugestao', body);
+    $('dialog-sugestao').close();
+    toast('Sugestão registrada.');
+    await carregarTudo();
+  } catch (e) { toast('Falhou: ' + e.message, 'err'); }
+};
+
+let TRATAR_MSG_ID = null;
+window.abrirDialogTratar = function(mensagemId, perguntaEsc) {
+  TRATAR_MSG_ID = mensagemId;
+  $('tratar-pergunta').textContent = perguntaEsc.replace(/&#39;/g,"'");
+  $('tratar-acao').value = '';
+  $('tratar-obs').value = '';
+  $('dialog-tratar').showModal();
+};
+$('tratar-cancelar').onclick = () => $('dialog-tratar').close();
+$('tratar-confirmar').onclick = async () => {
+  try {
+    await apiPost('/api/max-chat/admin/falhas/marcar-tratada', {
+      mensagem_id: TRATAR_MSG_ID,
+      acao: $('tratar-acao').value.trim() || null,
+      observacao: $('tratar-obs').value.trim() || null,
+    });
+    $('dialog-tratar').close();
+    toast('Marcado como tratado.');
+    await carregarTudo();
+  } catch (e) { toast('Falhou: ' + e.message, 'err'); }
+};
+
+async function repopularSnapshots() {
+  if (!confirm('Repopular TODOS os 23 snapshots agora? Pode levar até 60s.')) return;
+  $('btn-repopular').disabled = true;
+  $('btn-repopular').textContent = 'Repopulando...';
+  try {
+    const r = await apiPost('/api/max-chat/admin/repopular-snapshots');
+    if (r.ok) toast('Snapshots repopulados. ✅');
+    else toast('Falhou: ' + (r.stderr_tail||'').slice(0,100), 'err');
+  } catch (e) { toast('Falhou: ' + e.message, 'err'); }
+  finally {
+    $('btn-repopular').disabled = false;
+    $('btn-repopular').textContent = '🔄 Repopular snapshots agora';
+  }
+}
+
+async function recarregarConfig() {
+  try {
+    await apiPost('/api/max-chat/admin/reload');
+    toast('Config recarregada (categorias.yaml).');
+  } catch (e) { toast('Falhou: ' + e.message, 'err'); }
+}
+
+init();
+</script>
+</body>
+</html>
