@@ -1810,7 +1810,10 @@ function renderVendedores(){
   if(ui) ui.textContent=(auth.role.nome||auth.role.email);
   var h=hojeSP();
   var urlPreset=loadFromURL();
-  if(!DE){DE=inicioMesSP();ATE=h;}
+  // Default = 30d, alinhado com `class="chip on"` no HTML do filtro de período.
+  // Antes era MTD (inicioMesSP) — em começo de mês mostrava janela curta de 1-2 dias
+  // que ocultava as lojas que não venderam ainda no novo mês.
+  if(!DE){DE=somaDias(h,-29);ATE=h;}
   document.getElementById('dt-de').value=DE;
   document.getElementById('dt-ate').value=ATE;
   if(urlPreset){
