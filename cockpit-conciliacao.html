@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Conciliação · Cockpit</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="auth.js"></script>
+<style>
+:root{
+  --bg:#09090b;--bg2:#18181b;--bg3:#27272a;--bdr:#2a2a2e;
+  --txt1:#fafafa;--txt2:#d4d4d8;--txt3:#a1a1aa;--txt4:#71717a;
+  --blue:#6366f1;--green:#22c55e;--red:#f43f5e;--amber:#eab308;
+  --purple:#a855f7;--cyan:#06b6d4;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt1);font:13px/1.45 -apple-system,BlinkMacSystemFont,sans-serif}
+button{font:inherit;cursor:pointer}
+a{color:inherit;text-decoration:none}
+
+.topbar{position:sticky;top:0;z-index:50;background:rgba(9,9,11,0.95);backdrop-filter:blur(8px);border-bottom:1px solid var(--bdr);padding:0.7rem 1.2rem;display:flex;align-items:center;justify-content:space-between;gap:1rem}
+.topbar h1{font-size:14px;font-weight:600}
+.topbar .sub{color:var(--txt3);font-weight:400;margin-left:6px}
+.tb-right{display:flex;align-items:center;gap:0.6rem;font-size:12px;color:var(--txt3)}
+.tb-right .perfil{padding:4px 10px;background:var(--bg2);border-radius:999px;border:1px solid var(--bdr)}
+.tb-right .out{color:var(--red);background:none;border:none;font-size:12px}
+
+.tabs{display:flex;border-bottom:1px solid var(--bdr);padding:0 1.2rem;gap:0;background:var(--bg)}
+.tab{padding:10px 18px;color:var(--txt3);cursor:pointer;border-bottom:2px solid transparent;font-size:12px;font-weight:500}
+.tab.on{color:var(--txt1);border-bottom-color:var(--blue)}
+.tab:hover{color:var(--txt1)}
+.tab .badge{background:var(--bg3);color:var(--txt2);padding:1px 8px;border-radius:999px;margin-left:6px;font-size:10px}
+
+.zona{padding:1rem 1.2rem;border-bottom:1px solid var(--bdr)}
+.zona-titulo{font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:0.7rem}
+
+table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px}
+thead th{position:sticky;top:0;background:var(--bg3);color:var(--txt2);font-weight:600;text-align:right;padding:6px 10px;border-bottom:1px solid var(--bdr);font-size:11px}
+thead th:first-child{text-align:left}
+tbody td{padding:5px 10px;border-bottom:1px solid var(--bg3);text-align:right}
+tbody td:first-child{text-align:left}
+tbody tr:hover{background:rgba(255,255,255,0.02)}
+
+.tb-wrap{max-height:75vh;overflow:auto;border:1px solid var(--bdr);border-radius:6px}
+.muted{color:var(--txt4)}
+.delta-up{color:var(--red)}    /* despesa subindo é ruim */
+.delta-down{color:var(--green)} /* despesa caindo é bom */
+.pos{color:var(--green)}.neg{color:var(--red)}
+
+.legend{display:flex;gap:1rem;font-size:11px;color:var(--txt3);margin-bottom:0.5rem;flex-wrap:wrap}
+.legend span{display:inline-flex;align-items:center;gap:4px}
+.legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
+
+.grupo-row{display:grid;grid-template-columns:auto 1fr auto auto auto;gap:0.6rem;padding:8px 10px;border-bottom:1px solid var(--bg3);align-items:center;font-size:12px}
+.grupo-row:hover{background:var(--bg2)}
+.grupo-row .qtd{background:var(--bg3);padding:2px 8px;border-radius:999px;font-size:10px;color:var(--txt2);min-width:30px;text-align:center}
+.grupo-row .desc{color:var(--txt2)}
+.grupo-row .desc small{color:var(--txt4);display:block;font-size:10px}
+.grupo-row .total{font-weight:600;font-variant-numeric:tabular-nums}
+.grupo-row select{background:var(--bg);color:var(--txt1);border:1px solid var(--bdr);padding:4px 8px;border-radius:4px;font:inherit;font-size:11px;min-width:200px}
+.grupo-row .salvar{background:var(--blue);color:#fff;border:none;padding:4px 12px;border-radius:4px;font-size:11px;font-weight:500}
+.grupo-row .salvar:disabled{opacity:0.4;cursor:not-allowed}
+.grupo-row.salvo{background:rgba(34,197,94,0.06)}
+
+.filtros{padding:0.6rem 1.2rem;background:var(--bg);display:flex;gap:0.5rem;align-items:center;font-size:11px;color:var(--txt3)}
+.filtros select,.filtros input{background:var(--bg2);color:var(--txt1);border:1px solid var(--bdr);padding:4px 8px;border-radius:4px;font:inherit;font-size:11px}
+.filtros .sep{flex:1}
+
+.loading-overlay{position:fixed;inset:0;background:rgba(9,9,11,0.85);z-index:200;display:flex;align-items:center;justify-content:center;color:var(--txt2);font-size:13px}
+
+.cell-bg-good{background:rgba(34,197,94,0.18)}
+.cell-bg-warn{background:rgba(234,179,8,0.18)}
+.cell-bg-bad{background:rgba(244,63,94,0.18)}
+</style>
+</head>
+<body>
+
+<div id="loading" class="loading-overlay">Autenticando…</div>
+
+<div class="topbar">
+  <h1>🔍 Conciliação <span class="sub">extratos × contas_pagar × planilha</span></h1>
+  <div class="tb-right">
+    <span class="perfil" id="perfil">—</span>
+    <a href="/cockpit.html">← Cockpit</a>
+    <a href="/index.html">Portal</a>
+    <button class="out" id="btn-sair">Sair</button>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab on" data-tab="conciliacao">📊 Conciliação <span class="badge" id="bdg-conc">—</span></div>
+  <div class="tab" data-tab="revisao">🔖 Revisão de dúvidas <span class="badge" id="bdg-rev">—</span></div>
+</div>
+
+<!-- ABA CONCILIAÇÃO -->
+<div id="tab-conciliacao">
+  <div class="zona">
+    <div class="zona-titulo">Despesas — DRE planilha (caixa) × contas_pagar (vencimento) × extratos (classif)</div>
+    <div class="legend">
+      <span><i style="background:rgba(34,197,94,0.5)"></i>drift &lt; 5%</span>
+      <span><i style="background:rgba(234,179,8,0.5)"></i>drift 5-15%</span>
+      <span><i style="background:rgba(244,63,94,0.5)"></i>drift &gt; 15%</span>
+    </div>
+    <div class="tb-wrap">
+      <table id="tb-desp"><thead><tr>
+        <th>Mês</th><th>DRE planilha</th><th>contas_pagar</th><th>Δ vs DRE</th><th>Extratos saídas</th><th>Δ vs DRE</th>
+      </tr></thead><tbody id="tb-desp-body"></tbody></table>
+    </div>
+  </div>
+
+  <div class="zona">
+    <div class="zona-titulo">Receitas — pedidos (competência) × entradas_caixa (planilha) × extratos (entradas)</div>
+    <div class="tb-wrap">
+      <table id="tb-rec"><thead><tr>
+        <th>Mês</th><th>Pedidos (compet.)</th><th>Planilha (caixa)</th><th>Δ vs compet.</th><th>Extratos RECEITA</th><th>Δ vs planilha</th>
+      </tr></thead><tbody id="tb-rec-body"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<!-- ABA REVISÃO -->
+<div id="tab-revisao" style="display:none">
+  <div class="filtros">
+    <span>Banco:</span>
+    <select id="filt-banco"><option value="">Todos</option></select>
+    <span>Direção:</span>
+    <select id="filt-direcao"><option value="">Todas</option><option value="entrada">Entrada</option><option value="saida">Saída</option></select>
+    <span>Ordenar:</span>
+    <select id="filt-ordem">
+      <option value="qtd">Maior grupo (qtd)</option>
+      <option value="abs">Maior valor abs</option>
+      <option value="recente">Mais recente</option>
+    </select>
+    <span>Min qtd:</span>
+    <input type="number" id="filt-min" value="2" min="1" style="width:60px">
+    <div class="sep"></div>
+    <span id="rev-stats" style="color:var(--txt2)">—</span>
+  </div>
+  <div class="zona" style="padding:0">
+    <div id="rev-grupos" style="max-height:80vh;overflow-y:auto"></div>
+  </div>
+</div>
+
+<script>
+const SB_URL = window.fusionAuth.SUPABASE_URL;
+const ANON = window.fusionAuth.SUPABASE_ANON_KEY;
+
+const STATE = {
+  ctx: null,
+  dre: [], cp: [], extratos: [], fc: [], pedidos: [], entradasCaixa: [],
+  regras: [],
+};
+
+const $ = id => document.getElementById(id);
+const fmt = n => 'R$ ' + Math.round(n||0).toLocaleString('pt-BR');
+const fmtK = n => { n=n||0; if(Math.abs(n)>=1e6) return 'R$ '+(n/1e6).toFixed(2)+'M'; if(Math.abs(n)>=1e3) return 'R$ '+(n/1e3).toFixed(0)+'k'; return 'R$ '+Math.round(n);};
+const fmtPct = (n,d=1) => (n==null||isNaN(n)?'—':((n>=0?'+':'')+n.toFixed(d)+'%'));
+const monthStr = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
+const mesLabel = s => { const d=new Date(s+'T00:00:00'); return d.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'}).replace('.','').replace(' de ',' '); };
+
+async function authH(){
+  const { data: { session } } = await window.fusionAuth.sb.auth.getSession();
+  if(!session){ window.location.href = '/index.html'; return {}; }
+  return { apikey: ANON, Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' };
+}
+
+async function pgGet(table, qs){
+  const r = await fetch(`${SB_URL}/rest/v1/${table}?${qs}`, { headers: await authH() });
+  if(!r.ok) throw new Error(`${table} ${r.status}`);
+  return r.json();
+}
+
+async function pgPatch(table, qs, body){
+  const r = await fetch(`${SB_URL}/rest/v1/${table}?${qs}`, { method:'PATCH', headers: await authH(), body: JSON.stringify(body) });
+  if(!r.ok) throw new Error(`${table} PATCH ${r.status}: ${await r.text()}`);
+  return r;
+}
+
+async function pgGetPaginated(table, qs){
+  let all=[], off=0, tam=1000;
+  while(true){
+    const r = await fetch(`${SB_URL}/rest/v1/${table}?${qs}&limit=${tam}&offset=${off}`, { headers: await authH() });
+    if(!r.ok) throw new Error(`${table} ${r.status}`);
+    const lote = await r.json();
+    all = all.concat(lote);
+    if(lote.length < tam) break;
+    off += tam;
+  }
+  return all;
+}
+
+async function init(){
+  STATE.ctx = await window.fusionAuth.requireAuth('cockpit-conciliacao');
+  if(!STATE.ctx) return;
+  $('perfil').textContent = STATE.ctx.role.nome || STATE.ctx.role.email;
+  $('btn-sair').onclick = () => window.fusionAuth.signOut();
+
+  document.querySelectorAll('.tab').forEach(t => {
+    t.onclick = () => mudarTab(t.dataset.tab);
+  });
+
+  await loadData();
+  $('loading').style.display = 'none';
+  renderConciliacao();
+  renderRevisao();
+}
+
+function mudarTab(tab){
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.tab===tab));
+  $('tab-conciliacao').style.display = tab==='conciliacao' ? 'block' : 'none';
+  $('tab-revisao').style.display = tab==='revisao' ? 'block' : 'none';
+}
+
+async function loadData(){
+  const [dre, cp, fc, ec, regras] = await Promise.all([
+    pgGet('dre_mensal', 'select=ano_mes,categoria,valor&limit=2000'),
+    pgGetPaginated('contas_pagar', 'select=valor,vencimento,situacao&situacao=eq.pago&vencimento=gte.2024-11-01&order=vencimento'),
+    pgGetPaginated('fluxo_caixa', 'select=id,data,banco,valor,direcao,categoria_macro,flag_transferencia_interna,flag_duvida,confidence,raw_id'),
+    pgGet('entradas_caixa', 'select=ano_mes,tipo,valor'),
+    pgGet('classif_regras', 'select=id,prioridade,categoria_macro,categoria_tipo,canal,observacao&ativo=eq.true&order=prioridade'),
+  ]);
+  STATE.dre = dre; STATE.cp = cp; STATE.fc = fc; STATE.entradasCaixa = ec; STATE.regras = regras;
+  // Pedidos agregado por mês — usar view ou fetch agrupado client
+  await loadPedidosAgregado();
+  // Para dúvidas, precisa join com extratos_bancarios_raw pra descrição
+  await loadDescricoesDuvidas();
+  $('bdg-rev').textContent = STATE.fc.filter(r => r.flag_duvida).length;
+}
+
+async function loadPedidosAgregado(){
+  const tab = ['pedidos','pedidos_historico'];
+  const result = {};
+  for(const t of tab){
+    const rows = await pgGetPaginated(t, "select=data_pedido,valor_bruto,status&data_pedido=gte.2024-11-01&status=not.in.(cancelado,devolvido)");
+    rows.forEach(p => {
+      if(!p.data_pedido) return;
+      const mes = p.data_pedido.slice(0,7) + '-01';
+      result[mes] = (result[mes] || 0) + Number(p.valor_bruto || 0);
+    });
+  }
+  STATE.pedidos = Object.entries(result).map(([ano_mes, valor]) => ({ano_mes, valor}));
+}
+
+async function loadDescricoesDuvidas(){
+  const ids = STATE.fc.filter(f => f.flag_duvida).map(f => f.raw_id);
+  if(ids.length === 0) return;
+  const chunks = [];
+  for(let i=0; i<ids.length; i+=300) chunks.push(ids.slice(i, i+300));
+  const descMap = {};
+  for(const ch of chunks){
+    const qs = 'select=id,descricao,banco,data_mov&id=in.(' + ch.join(',') + ')';
+    const rows = await pgGet('extratos_bancarios_raw', qs);
+    rows.forEach(r => descMap[r.id] = r);
+  }
+  STATE.fc.forEach(f => {
+    if(f.flag_duvida && descMap[f.raw_id]){
+      f._desc = descMap[f.raw_id].descricao;
+      f._desc_data = descMap[f.raw_id].data_mov;
+    }
+  });
+}
+
+// ── ABA CONCILIAÇÃO ──
+function renderConciliacao(){
+  // Despesas: por mês — DRE planilha (sum dre_mensal NOT NaoFusion), contas_pagar (sum por vencimento), extratos saídas (NOT transf, NOT duvida)
+  const meses = [...new Set([
+    ...STATE.dre.map(d => d.ano_mes),
+    ...STATE.cp.map(c => c.vencimento ? c.vencimento.slice(0,7)+'-01' : null).filter(Boolean),
+    ...STATE.fc.map(f => f.data ? f.data.slice(0,7)+'-01' : null).filter(Boolean),
+  ])].sort();
+
+  const dreTot = mes => STATE.dre.filter(d => d.ano_mes===mes && d.categoria!=='NaoFusion').reduce((s,d)=>s+Number(d.valor),0);
+  const cpTot = mes => STATE.cp.filter(c => c.vencimento && c.vencimento.slice(0,7)+'-01'===mes).reduce((s,c)=>s+Number(c.valor||0),0);
+  const extDesp = mes => -STATE.fc.filter(f => f.data && f.data.slice(0,7)+'-01'===mes && f.direcao==='saida' && !f.flag_transferencia_interna && !f.flag_duvida).reduce((s,f)=>s+Number(f.valor),0);
+
+  const cellCls = pct => pct==null||isNaN(pct) ? '' : (Math.abs(pct)<5 ? 'cell-bg-good' : (Math.abs(pct)<15 ? 'cell-bg-warn' : 'cell-bg-bad'));
+  const fmtDelta = (real, ref) => ref===0 ? '—' : `${fmtPct(real/ref*100-100)}`;
+
+  let h = '';
+  meses.filter(m => m >= '2025-01-01').forEach(mes => {
+    const dre = dreTot(mes), cp = cpTot(mes), ext = extDesp(mes);
+    const cpPct = dre>0 ? cp/dre*100-100 : null;
+    const extPct = dre>0 ? ext/dre*100-100 : null;
+    h += `<tr>
+      <td>${mesLabel(mes)}</td>
+      <td>${fmtK(dre)}</td>
+      <td class="${cellCls(cpPct)}">${fmtK(cp)}</td>
+      <td class="${cellCls(cpPct)}">${fmtDelta(cp, dre)}</td>
+      <td class="${cellCls(extPct)}">${fmtK(ext)}</td>
+      <td class="${cellCls(extPct)}">${fmtDelta(ext, dre)}</td>
+    </tr>`;
+  });
+  $('tb-desp-body').innerHTML = h;
+
+  // Receitas
+  const pedTot = mes => Number(STATE.pedidos.find(p => p.ano_mes===mes)?.valor || 0);
+  const ecTot = mes => Number(STATE.entradasCaixa.find(e => e.ano_mes===mes && e.tipo==='operacional')?.valor || 0);
+  const extRec = mes => STATE.fc.filter(f => f.data && f.data.slice(0,7)+'-01'===mes && f.direcao==='entrada' && f.categoria_macro==='RECEITA').reduce((s,f)=>s+Number(f.valor),0);
+
+  let hr = '';
+  meses.filter(m => m >= '2025-01-01').forEach(mes => {
+    const ped = pedTot(mes), ec = ecTot(mes), ext = extRec(mes);
+    const ecPct = ped>0 ? ec/ped*100-100 : null;
+    const extPct = ec>0 ? ext/ec*100-100 : null;
+    hr += `<tr>
+      <td>${mesLabel(mes)}</td>
+      <td>${fmtK(ped)}</td>
+      <td class="${cellCls(ecPct)}">${fmtK(ec)}</td>
+      <td class="${cellCls(ecPct)}">${fmtDelta(ec, ped)}</td>
+      <td class="${cellCls(extPct)}">${fmtK(ext)}</td>
+      <td class="${cellCls(extPct)}">${fmtDelta(ext, ec)}</td>
+    </tr>`;
+  });
+  $('tb-rec-body').innerHTML = hr;
+  $('bdg-conc').textContent = meses.filter(m => m >= '2025-01-01').length + ' meses';
+}
+
+// ── ABA REVISÃO ──
+function renderRevisao(){
+  // Popular filtro banco
+  const bancos = [...new Set(STATE.fc.filter(f => f.flag_duvida).map(f => f.banco))].sort();
+  $('filt-banco').innerHTML = '<option value="">Todos</option>' + bancos.map(b => `<option value="${b}">${b}</option>`).join('');
+
+  ['filt-banco','filt-direcao','filt-ordem','filt-min'].forEach(id => $(id).onchange = renderGrupos);
+  renderGrupos();
+}
+
+function normalizar(desc){
+  let s = (desc||'').replace(/\d{2}\/\d{2}(?:\/\d{2,4})?/g,'').replace(/\d/g,'').replace(/\s+/g,' ').trim();
+  return s;
+}
+
+function renderGrupos(){
+  const banco = $('filt-banco').value;
+  const direcao = $('filt-direcao').value;
+  const ordem = $('filt-ordem').value;
+  const minQtd = parseInt($('filt-min').value) || 1;
+
+  const duvidas = STATE.fc.filter(f => f.flag_duvida && f._desc &&
+    (!banco || f.banco===banco) && (!direcao || f.direcao===direcao));
+
+  // Agrupar por (banco, descricao_normalizada, direcao)
+  const grupos = {};
+  duvidas.forEach(f => {
+    const key = `${f.banco}||${normalizar(f._desc)}||${f.direcao}`;
+    if(!grupos[key]) grupos[key] = { key, banco: f.banco, direcao: f.direcao, exemplo: f._desc, transacoes: [], total: 0 };
+    grupos[key].transacoes.push(f);
+    grupos[key].total += Number(f.valor);
+  });
+  let arr = Object.values(grupos).filter(g => g.transacoes.length >= minQtd);
+  if(ordem === 'qtd') arr.sort((a,b) => b.transacoes.length - a.transacoes.length);
+  else if(ordem === 'abs') arr.sort((a,b) => Math.abs(b.total) - Math.abs(a.total));
+  else arr.sort((a,b) => (b.transacoes[0]._desc_data||'').localeCompare(a.transacoes[0]._desc_data||''));
+
+  const totalTrans = arr.reduce((s,g) => s+g.transacoes.length, 0);
+  $('rev-stats').textContent = `${arr.length} grupos · ${totalTrans} transações · ${fmtK(arr.reduce((s,g)=>s+g.total,0))}`;
+
+  // Opções do select (categorias)
+  const opts = [
+    '— escolher —',
+    'TRANSFERENCIA INTERNA',
+    'RECEITA / Cartão Cielo / Lojas KWID',
+    'RECEITA / Ecommerce / Mercado Livre',
+    'RECEITA / Ecommerce / Shopee',
+    'RECEITA / Ecommerce / TikTok Shop',
+    'RECEITA / Ecommerce / Site',
+    'RECEITA / Ecommerce / Shein',
+    'RECEITA / Atacado / Atacado/Cliente B2B',
+    'RECEITA FINANCEIRA / Aplicação financeira',
+    '1.0 CMV / 1.1 PRODUTOS ACABADOS',
+    '1.0 CMV / 1.2 COSTUREIROS',
+    '1.0 CMV / 1.3 TECIDOS',
+    '1.0 CMV / 1.4 INSUMOS',
+    '1.0 CMV / 1.5 EMBALAGENS',
+    '2.0 DESPESAS VARIÁVEIS / 2.1 FRETE',
+    '2.0 DESPESAS VARIÁVEIS / 2.3 MERCADO ADS',
+    '2.0 DESPESAS VARIÁVEIS / 2.5 IMPOSTOS',
+    '2.0 DESPESAS VARIÁVEIS / 2.6 DESPESA COMERCIAL',
+    '3.0 CUSTOS PESSOAL / 3.1 BENEFÍCIOS PESSOAL',
+    '3.0 CUSTOS PESSOAL / 3.2 DESPESAS RH',
+    '3.0 CUSTOS PESSOAL / 3.3 ENCARGOS SOCIAIS',
+    '3.0 CUSTOS PESSOAL / 3.4 SALÁRIOS',
+    '4.0 CUSTOS OCUPAÇÃO / 4.1 ALUGUÉIS',
+    '4.0 CUSTOS OCUPAÇÃO / 4.2 TELEFONIA',
+    '4.0 CUSTOS OCUPAÇÃO / 4.3 LUZ',
+    '4.0 CUSTOS OCUPAÇÃO / 4.4 ÁGUA',
+    '4.0 CUSTOS OCUPAÇÃO / 4.5 SEGURANÇA',
+    '4.0 CUSTOS OCUPAÇÃO / 4.6 SISTEMAS',
+    '4.0 CUSTOS OCUPAÇÃO / 4.8 MANUT. PREDIAL E VEÍCULOS',
+    '5.0 DESPESAS FINANCEIRAS / 6.1 TARIFAS BANCÁRIAS',
+    '5.0 DESPESAS FINANCEIRAS / 6.2 EMPRÉSTIMOS',
+    '5.0 DESPESAS FINANCEIRAS / 6.3 SEGUROS',
+    '5.0 DESPESAS FINANCEIRAS / 6.4 DESPESAS JUROS E IOF',
+    '5.0 SERVIÇOS TERCEIROS / 5.1 CONTABILIDADE E LEGAL',
+    '9.0 DESPESAS NÃO FUSION / RETIRADA SÓCIOS',
+  ];
+
+  let h = '';
+  arr.slice(0, 200).forEach((g, idx) => {
+    const ex = g.exemplo.length>80 ? g.exemplo.substring(0,80)+'…' : g.exemplo;
+    h += `<div class="grupo-row" data-idx="${idx}">
+      <span class="qtd">${g.transacoes.length}</span>
+      <div class="desc">${escapeHtml(ex)}<small>${g.banco} · ${g.direcao}</small></div>
+      <div class="total ${g.total>=0?'pos':'neg'}">${fmtK(g.total)}</div>
+      <select data-grupo="${idx}">${opts.map(o => `<option value="${o==='— escolher —'?'':o}">${o}</option>`).join('')}</select>
+      <button class="salvar" data-grupo="${idx}" disabled>Salvar</button>
+    </div>`;
+  });
+  $('rev-grupos').innerHTML = h;
+
+  // Wire eventos
+  document.querySelectorAll('select[data-grupo]').forEach(sel => {
+    sel.onchange = (e) => {
+      const idx = sel.dataset.grupo;
+      const btn = document.querySelector(`button.salvar[data-grupo="${idx}"]`);
+      btn.disabled = !sel.value;
+    };
+  });
+  document.querySelectorAll('button.salvar[data-grupo]').forEach(btn => {
+    btn.onclick = async () => {
+      const idx = parseInt(btn.dataset.grupo);
+      const sel = document.querySelector(`select[data-grupo="${idx}"]`);
+      const cat = sel.value;
+      if(!cat) return;
+      const grupo = arr[idx];
+      btn.disabled = true; btn.textContent = 'Salvando…';
+      try {
+        await aplicarClassificacao(grupo.transacoes, cat);
+        const row = btn.closest('.grupo-row');
+        row.classList.add('salvo');
+        btn.textContent = '✓ Salvo';
+        // Atualizar STATE local: marcar como não-dúvida
+        grupo.transacoes.forEach(t => { t.flag_duvida = false; });
+      } catch(e){
+        btn.textContent = 'Erro';
+        btn.disabled = false;
+        alert('Erro: ' + e.message);
+      }
+    };
+  });
+}
+
+function escapeHtml(s){ return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
+
+async function aplicarClassificacao(transacoes, cat){
+  // Parse cat
+  let macro=null, tipo=null, canal=null, transf=false;
+  if(cat === 'TRANSFERENCIA INTERNA'){
+    transf = true;
+  } else {
+    const parts = cat.split(' / ').map(p => p.trim());
+    macro = parts[0] || null;
+    tipo = parts[1] || null;
+    canal = parts[2] || null;
+  }
+  const ids = transacoes.map(t => t.id);
+  const body = {
+    categoria_macro: macro,
+    categoria_tipo: tipo,
+    canal: canal,
+    flag_transferencia_interna: transf,
+    flag_duvida: false,
+    motivo_duvida: null,
+    metodo_classif: 'manual',
+    confidence: 1.0,
+  };
+  // PATCH em chunks de 100
+  for(let i=0; i<ids.length; i+=100){
+    const ch = ids.slice(i, i+100);
+    await pgPatch('fluxo_caixa', `id=in.(${ch.join(',')})`, body);
+  }
+}
+
+init().catch(e => { console.error(e); $('loading').textContent = 'Erro: ' + e.message; });
+</script>
+</body>
+</html>
