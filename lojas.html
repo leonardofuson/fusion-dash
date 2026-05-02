@@ -282,6 +282,7 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
       <button class="chip" data-preset="7d" onclick="setPeriodo('7d',this)">7 dias</button>
       <button class="chip" data-preset="30d" onclick="setPeriodo('30d',this)">30 dias</button>
       <button class="chip on" data-preset="mtd" onclick="setPeriodo('mtd',this)">Este Mês</button>
+      <button class="chip" data-preset="m-1" onclick="setPeriodo('m-1',this)">Último Mês</button>
       <button class="chip" data-preset="ytd" onclick="setPeriodo('ytd',this)">Este Ano</button>
       <button class="chip" data-preset="12m" onclick="setPeriodo('12m',this)">12m</button>
     </div>
@@ -512,6 +513,11 @@ function setPeriodo(preset,el){
     case '7d': de=somaDias(h,-6); break;
     case '30d': de=somaDias(h,-29); break;
     case 'mtd': de=inicioMesSP(); break;
+    case 'm-1':
+      // Último mês fechado (M-1): dia 01 do mês anterior até o último dia desse mês
+      ate=somaDias(inicioMesSP(),-1);   // último dia do mês anterior
+      de=ate.slice(0,7)+'-01';           // dia 01 daquele mês
+      break;
     case 'ytd': de=inicioAno(); break;
     case '12m': de=somaDias(h,-364); break;
     default: de=somaDias(h,-29);
@@ -1810,10 +1816,7 @@ function renderVendedores(){
   if(ui) ui.textContent=(auth.role.nome||auth.role.email);
   var h=hojeSP();
   var urlPreset=loadFromURL();
-  // Default = 30d, alinhado com `class="chip on"` no HTML do filtro de período.
-  // Antes era MTD (inicioMesSP) — em começo de mês mostrava janela curta de 1-2 dias
-  // que ocultava as lojas que não venderam ainda no novo mês.
-  if(!DE){DE=somaDias(h,-29);ATE=h;}
+  if(!DE){DE=inicioMesSP();ATE=h;}
   document.getElementById('dt-de').value=DE;
   document.getElementById('dt-ate').value=ATE;
   if(urlPreset){
