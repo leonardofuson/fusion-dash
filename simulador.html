@@ -39,6 +39,12 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
 .seg-btn:hover{color:var(--txt2);background:rgba(255,255,255,.04);}
 .seg-btn.active{background:var(--cyan);color:#0a0a0b;}
 
+/* details como card (curva de retornos decrescentes) */
+details.card[open] > summary > span:first-child{transform:rotate(90deg);display:inline-block;}
+details.card > summary{outline:none;}
+details.card > summary::-webkit-details-marker{display:none;}
+details.card > summary:hover{background:rgba(255,255,255,.02);}
+
 .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:24px;}
 .kpi{background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;padding:18px;position:relative;overflow:hidden;}
 .kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--kpi-accent,var(--indigo));opacity:.7;}
@@ -296,25 +302,42 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
     </div>
     <div class="grid-curva">
       <div class="card">
-        <div class="card-header"><div class="card-title">Investimento × Receita atribuída ML <small>(90 dias · cada ponto é um dia)</small></div></div>
-        <div class="card-body"><canvas id="cv-curva" height="360"></canvas></div>
+        <div class="card-header" style="flex-wrap:wrap;gap:10px;">
+          <div class="card-title">Evolução temporal <small>(últimos 90d · receita ML × investimento)</small></div>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <div class="seg-ctrl" id="seg-tl-metric">
+              <button type="button" class="seg-btn active" data-tl="receita">Receita</button>
+              <button type="button" class="seg-btn" data-tl="roas">ROAS</button>
+              <button type="button" class="seg-btn" data-tl="lucro">Lucro atrib.</button>
+            </div>
+            <label style="display:flex;gap:6px;align-items:center;font-size:12px;color:var(--txt3);cursor:pointer;user-select:none;">
+              <input type="checkbox" id="tl-show-events" checked> 📍 Eventos
+            </label>
+          </div>
+        </div>
+        <div class="card-body"><canvas id="cv-timeline" height="380"></canvas></div>
       </div>
       <div class="card" style="position:sticky;top:80px;max-height:calc(100vh - 100px);overflow-y:auto;">
         <div class="card-header"><div class="card-title">Resumo</div></div>
         <div id="curva-resumo" class="card-body"></div>
       </div>
     </div>
-    <div class="card">
-      <div class="card-header">
-        <div class="card-title">Evolução temporal <small>(ROAS, receita atribuída e gasto por dia · mais antigo → mais recente)</small></div>
-        <div class="seg-ctrl">
-          <button type="button" class="seg-btn active" data-tl="roas">ROAS</button>
-          <button type="button" class="seg-btn" data-tl="receita">Receita</button>
-          <button type="button" class="seg-btn" data-tl="lucro">Lucro atrib.</button>
-        </div>
+
+    <details class="card" style="padding:0;">
+      <summary style="padding:14px 20px;cursor:pointer;font-size:14px;font-weight:600;color:var(--txt2);list-style:none;display:flex;align-items:center;gap:8px;">
+        <span style="font-size:11px;color:var(--txt4);">▸</span>
+        📐 Curva de retornos decrescentes (referência teórica do ponto ótimo)
+        <span style="font-size:11px;color:var(--txt4);font-weight:400;margin-left:auto;">Click pra expandir</span>
+      </summary>
+      <div class="card-body" style="border-top:1px solid var(--bdr);">
+        <p style="font-size:12px;color:var(--txt3);margin-bottom:12px;line-height:1.6;">
+          Cada ponto é um dia: gasto no eixo X, receita atribuída no Y. A linha tracejada é o fit log
+          (lei dos retornos decrescentes). O marcador amber mostra o ponto ótimo teórico — onde 1 R$ adicional
+          de ads gera só 1 R$ adicional de lucro líquido.
+        </p>
+        <canvas id="cv-curva" height="320"></canvas>
       </div>
-      <div class="card-body"><canvas id="cv-timeline" height="240"></canvas></div>
-    </div>
+    </details>
   </section>
 
   <!-- ───────────── Aba 3: Antes / Depois ───────────── -->
@@ -955,9 +978,16 @@ function renderCurva(){
     </details>
   `;
 
-  const ctx = document.getElementById('cv-curva').getContext('2d');
+  const cvElem = document.getElementById('cv-curva');
+  // Pula o render se o <details> está fechado (evita custo desnecessário)
+  if (!cvElem || !cvElem.offsetParent) {
+    // Renderiza só a timeline temporal (foco principal agora)
+    renderRoasTimeline(c);
+    return;
+  }
+
+  const ctx = cvElem.getContext('2d');
   const otimoForaGrafico = otimo > xMaxGrafico;
-  // Para o eixo Y (receita), o teto deve englobar pontos + curva
   const yMaxObs = Math.max(
     ...scatterHist.map(p => p.y),
     ...linhaFitReceita.map(p => p.y || 0),
@@ -1059,17 +1089,29 @@ function renderCurva(){
 // ═════════════════════════════════════════════════════════════
 // Aba 2 — Timeline temporal (ROAS / Receita / Lucro por dia)
 // ═════════════════════════════════════════════════════════════
-STATE.tlMetric = 'roas';
+STATE.tlMetric = 'receita';
+STATE.tlShowEvents = true;
+STATE.eventosPorSku = {};   // cache: sku → eventos[]
+
+async function carregarEventosDoSku(sku){
+  if (!sku) return [];
+  if (STATE.eventosPorSku[sku]) return STATE.eventosPorSku[sku];
+  const evs = await sbGet('produto_evento',
+    'select=id,data,fonte,tipo,valor_antes,valor_depois,observacao' +
+    '&sku_raw=eq.' + encodeURIComponent(sku) +
+    '&order=data.asc&limit=200');
+  STATE.eventosPorSku[sku] = evs || [];
+  return STATE.eventosPorSku[sku];
+}
 
 function setTimelineMetric(m){
   STATE.tlMetric = m;
   document.querySelectorAll('.seg-btn[data-tl]').forEach(b => b.classList.toggle('active', b.dataset.tl === m));
-  // Não chama renderCurva — só re-renderiza a timeline com a curva atual já carregada
   const c = STATE.curvaAtual;
   if (c) renderRoasTimeline(c);
 }
 
-// Bind dos botões da timeline (uma vez no load — sem inline onclick que dispara handler global)
+// Bind dos botões da timeline (delegado pra evitar conflitos)
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('.seg-btn[data-tl]');
   if (!btn) return;
@@ -1077,6 +1119,22 @@ document.addEventListener('click', (e) => {
   e.stopPropagation();
   setTimelineMetric(btn.dataset.tl);
 });
+
+// Toggle de eventos
+document.addEventListener('change', (e) => {
+  if (e.target?.id === 'tl-show-events') {
+    STATE.tlShowEvents = e.target.checked;
+    if (STATE.curvaAtual) renderRoasTimeline(STATE.curvaAtual);
+  }
+});
+
+// Lazy render do scatter quando o <details> da curva de retornos abre
+document.addEventListener('toggle', (e) => {
+  if (e.target?.tagName === 'DETAILS' && e.target.open && STATE.curvaAtual) {
+    // Re-renderiza chamando renderCurva (que agora detecta visibilidade)
+    renderCurva();
+  }
+}, true);
 
 function mediaMovel(arr, k){
   // Centrada onde possível, antes-only nas pontas. Preserva NaN se input é NaN.
@@ -1089,21 +1147,21 @@ function mediaMovel(arr, k){
   return out;
 }
 
-function renderRoasTimeline(c){
+async function renderRoasTimeline(c){
   if (STATE.charts.timeline) { STATE.charts.timeline.destroy(); STATE.charts.timeline = null; }
   if (!c || !c.historico || !c.historico.pontos || !c.historico.pontos.length) return;
 
-  const pontos = c.historico.pontos;  // já vem ordenado por data
+  const pontos = c.historico.pontos;
   const labels = pontos.map(p => fmtDt(p.d));
-  const metric = STATE.tlMetric || 'roas';
+  const datasISO = pontos.map(p => p.d);
+  const metric = STATE.tlMetric || 'receita';
 
-  let serieDiaria, label, color, fmtFn, sufixo = '';
+  let serieDiaria, label, color, fmtFn;
   if (metric === 'roas') {
     serieDiaria = pontos.map(p => p.g > 0 ? p.ra / p.g : null);
     label = 'ROAS diário';
     color = '#22d3ee';
     fmtFn = v => v == null ? '-' : v.toFixed(2) + 'x';
-    sufixo = 'x';
   } else if (metric === 'receita') {
     serieDiaria = pontos.map(p => p.ra || 0);
     label = 'Receita atribuída ML / dia';
@@ -1116,9 +1174,37 @@ function renderRoasTimeline(c){
     fmtFn = v => fmt(v);
   }
   const mm7 = mediaMovel(serieDiaria, 7);
-
-  // Para legibilidade: gasto sempre visível como barras secundárias (eixo Y2)
   const gastos = pontos.map(p => p.g || 0);
+
+  // Eventos do SKU — busca cacheada
+  let eventosNoRange = [];
+  if (STATE.tlShowEvents && c.sku_raw) {
+    const todos = await carregarEventosDoSku(c.sku_raw);
+    const dataIni = pontos[0]?.d, dataFim = pontos[pontos.length-1]?.d;
+    eventosNoRange = todos.filter(e => e.data >= dataIni && e.data <= dataFim);
+  }
+
+  // Mapa data → índice no eixo X (pra colocar evento no dia certo)
+  const idxPorData = {};
+  datasISO.forEach((d, i) => idxPorData[d] = i);
+  const TIPO_ICON = {
+    preco: '💰', descricao: '📝', imagem: '🖼️',
+    ativo: '🔁', ads_budget: '📈', campanha: '🎯', outro: '📌',
+  };
+  // Agrupa eventos por dia (caso múltiplos)
+  const eventosPorDia = {};
+  eventosNoRange.forEach(e => {
+    if (idxPorData[e.data] != null) {
+      eventosPorDia[e.data] = eventosPorDia[e.data] || [];
+      eventosPorDia[e.data].push(e);
+    }
+  });
+  // Pra plotar como scatter no eixo X (y=0): {x: indice, y: 0}
+  const eventosScatter = Object.keys(eventosPorDia).map(d => ({
+    x: idxPorData[d],
+    y: 0,
+    _eventos: eventosPorDia[d],
+  }));
 
   const ctx = document.getElementById('cv-timeline').getContext('2d');
   STATE.charts.timeline = new Chart(ctx, {
@@ -1127,13 +1213,13 @@ function renderRoasTimeline(c){
       datasets: [
         // 1) Gasto diário em barras suaves (contexto)
         {
-          type: 'bar', label: 'Gasto diário (R$)',
+          type: 'bar', label: 'Investimento (gasto)',
           data: gastos,
-          backgroundColor: 'rgba(99,102,241,.18)',
+          backgroundColor: 'rgba(99,102,241,.22)',
           borderColor: 'rgba(99,102,241,.4)',
-          borderWidth: 1,
+          borderWidth: 1, borderRadius: 2,
           yAxisID: 'yGasto',
-          order: 3,
+          order: 4,
         },
         // 2) Métrica diária (linha fina)
         {
@@ -1145,11 +1231,11 @@ function renderRoasTimeline(c){
           pointRadius: 0, pointHoverRadius: 4,
           spanGaps: true,
           yAxisID: 'yMetric',
-          order: 2,
+          order: 3,
         },
-        // 3) Média móvel 7 dias (linha grossa, destaque)
+        // 3) Média móvel 7 dias (destaque)
         {
-          type: 'line', label: label + ' — média móvel 7d',
+          type: 'line', label: 'Média móvel 7d',
           data: mm7,
           borderColor: color,
           backgroundColor: color + '20',
@@ -1157,8 +1243,19 @@ function renderRoasTimeline(c){
           pointRadius: 0, pointHoverRadius: 5,
           fill: true,
           yAxisID: 'yMetric',
-          order: 1,
+          order: 2,
         },
+        // 4) Marcadores de eventos do produto_evento (na linha de base do eixo Y métrica)
+        ...(eventosScatter.length ? [{
+          type: 'scatter', label: '📍 Eventos do produto',
+          data: eventosScatter,
+          backgroundColor: '#facc15',
+          borderColor: '#facc15',
+          pointStyle: 'rectRot',
+          pointRadius: 7, pointHoverRadius: 9,
+          yAxisID: 'yMetric',
+          order: 1,
+        }] : []),
       ]
     },
     options: {
@@ -1171,11 +1268,11 @@ function renderRoasTimeline(c){
           title: {display:true, text: label, color},
           ticks: {color: '#a1a1aa', callback: v => fmtFn(v)},
           grid: {color: 'rgba(255,255,255,.05)'},
-          beginAtZero: true,
+          beginAtZero: metric !== 'lucro',
         },
         yGasto: {
           position: 'right',
-          title: {display:true, text: 'Gasto (R$)', color: 'rgba(99,102,241,.7)'},
+          title: {display:true, text: 'Investimento (R$)', color: 'rgba(99,102,241,.8)'},
           ticks: {color: 'rgba(99,102,241,.7)', callback: v => 'R$ ' + fmtN(v)},
           grid: {drawOnChartArea: false},
           beginAtZero: true,
@@ -1189,7 +1286,17 @@ function renderRoasTimeline(c){
             label: ctx => {
               const v = ctx.parsed.y;
               const dl = ctx.dataset.label || '';
-              if (dl.startsWith('Gasto')) return `Gasto: ${fmt(v)}`;
+              if (dl.startsWith('Investimento')) return `Investimento: ${fmt(v)}`;
+              if (dl.startsWith('📍')) {
+                const evs = ctx.dataset.data[ctx.dataIndex]?._eventos || [];
+                return evs.map(e => {
+                  const ic = TIPO_ICON[e.tipo] || '📌';
+                  const det = e.fonte === 'manual' && e.observacao
+                    ? ` — ${e.observacao}`
+                    : (e.fonte || '').startsWith('auto') ? ' (auto)' : '';
+                  return `${ic} ${e.tipo}${det}`;
+                });
+              }
               return `${dl}: ${fmtFn(v)}`;
             }
           }
