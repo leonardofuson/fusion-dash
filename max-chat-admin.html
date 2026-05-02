@@ -107,16 +107,18 @@ code.tipo{font-size:11px;background:var(--bg-card-2);padding:.1rem .35rem;border
   <div class="card">
     <h2>Ações rápidas</h2>
     <div class="actions-bar">
-      <button class="btn" id="btn-repopular">🔄 Repopular snapshots agora</button>
+      <button class="btn" id="btn-disparar-cron">🚀 Disparar cron de sugestões agora</button>
+      <button class="btn ghost" id="btn-repopular">🔄 Repopular snapshots agora</button>
       <button class="btn ghost" id="btn-recarregar-config">⚙️ Recarregar config (categorias.yaml)</button>
       <button class="btn ghost" id="btn-nova-sugestao">+ Nova sugestão</button>
       <button class="btn ghost" id="btn-refresh">↻ Atualizar painel</button>
     </div>
     <div class="desc">Ações que você pode disparar daqui sem mexer em código:</div>
     <ul style="font-size:12px;color:var(--text-soft);padding-left:1.2rem;line-height:1.6">
+      <li><strong>Disparar cron agora</strong>: roda o cron de aplicação de sugestões aprovadas imediatamente, sem esperar segunda 10h BRT.</li>
       <li><strong>Repopular snapshots</strong>: rerun do cron diário on-demand. Útil se algum SQL mudou ou se snapshot ficou strange.</li>
       <li><strong>Recarregar config</strong>: força o backend a re-ler <code>categorias.yaml</code> sem restart (após mexer no GitHub).</li>
-      <li><strong>Nova sugestão</strong>: registra uma idéia de melhoria (snapshot, palavra-chave, few-shot). Eu implemento via git push depois.</li>
+      <li><strong>Nova sugestão</strong>: registra uma idéia de melhoria. Sugestões tipo <code>snapshot</code> com SQL pronto, depois de você <strong>aprovar</strong>, são aplicadas automaticamente pelo cron (segunda 10h BRT, ou clique em "Disparar cron agora"). Tipos <code>palavra_chave</code> / <code>few_shot</code> ficam pendentes pra implementação manual via git push.</li>
     </ul>
   </div>
 
@@ -244,6 +246,7 @@ async function init() {
   CTX = auth;
   $('user-info').textContent = auth.role.nome || auth.role.email;
   $('btn-sair').onclick = async () => { await fusionAuth.signOut(); location.href = '/index.html'; };
+  $('btn-disparar-cron').onclick = dispararCron;
   $('btn-repopular').onclick = repopularSnapshots;
   $('btn-recarregar-config').onclick = recarregarConfig;
   $('btn-nova-sugestao').onclick = abrirDialogSugestao;
@@ -372,20 +375,43 @@ function renderAprov(list) {
 function renderSugestoes(list) {
   if (!list.length) { $('sugestoes-table').innerHTML = '<div class="empty">Nenhuma sugestão registrada ainda.</div>'; return; }
   $('sugestoes-table').innerHTML = `<table>
-    <thead><tr><th>Data</th><th>Tipo</th><th>Prio</th><th>Pergunta exemplo</th><th>Proposta</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th>Data</th><th>Tipo</th><th>Prio</th><th>Pergunta exemplo</th><th>Proposta</th><th>Status</th><th>Ações</th></tr></thead>
     <tbody>${list.map(s => {
-      const stCls = s.status==='implementada' ? 'ok' : s.status==='rejeitada' ? 'bad' : 'warn';
+      const stCls = s.status==='implementada' ? 'ok' : s.status==='rejeitada' ? 'bad' : s.status==='aprovada' ? 'ok' : 'warn';
+      let acoes = '';
+      const ehSnap = s.tipo === 'snapshot';
+      if (s.status === 'pendente') {
+        // pendente: aprovar (pra entrar no cron) ou rejeitar
+        acoes = ehSnap
+          ? `<button class="btn sm" onclick="atualizarSug('${s.id}','aprovada')" title="aprova pra entrar no cron de aplicação">✓ aprovar</button>
+             <button class="btn sm ghost" onclick="atualizarSug('${s.id}','rejeitada')">✗ rejeitar</button>`
+          : `<button class="btn sm ghost" onclick="atualizarSug('${s.id}','implementada')" title="implementação manual via git push">✓ implementada</button>
+             <button class="btn sm ghost" onclick="atualizarSug('${s.id}','rejeitada')">✗ rejeitar</button>`;
+      } else if (s.status === 'aprovada') {
+        // aprovada: aguarda cron — admin pode desaprovar
+        acoes = `<span style="font-size:11px;color:var(--text-soft)">aguarda cron</span>
+                 <button class="btn sm ghost" onclick="atualizarSug('${s.id}','pendente')">↩ desaprovar</button>`;
+      } else {
+        // implementada / rejeitada: pode reabrir
+        acoes = `<button class="btn sm ghost" onclick="atualizarSug('${s.id}','pendente')">↩ reabrir</button>`;
+      }
+      let commitInfo = '';
+      if (s.implementada_commit) {
+        if (s.implementada_commit.startsWith('REJEITADA:')) {
+          commitInfo = `<br><span style="font-size:10px;color:var(--danger)">${escapeHtml(s.implementada_commit.slice(0, 80))}</span>`;
+        } else {
+          const shortSha = s.implementada_commit.slice(0, 7);
+          commitInfo = `<br><a href="https://github.com/leonardofuson/max-chat/commit/${s.implementada_commit}" target="_blank" style="font-size:10px;color:var(--success)">${shortSha}</a>`;
+        }
+      }
       return `<tr>
         <td>${fmtData(s.criado_em)}</td>
         <td><code class="tipo">${s.tipo}</code></td>
         <td>${s.prioridade}</td>
         <td>${escapeHtml(trunc(s.pergunta_exemplo||'',60))}</td>
         <td><span class="preview-trunc" title="${escapeHtml(s.proposta||'')}">${escapeHtml(trunc(s.proposta||'',80))}</span></td>
-        <td><span class="tag ${stCls}">${s.status}</span></td>
-        <td>${s.status==='pendente' || s.status==='aprovada' ?
-            `<button class="btn sm ghost" onclick="atualizarSug('${s.id}','implementada')">✓</button>
-             <button class="btn sm ghost" onclick="atualizarSug('${s.id}','rejeitada')">✗</button>` :
-            `<button class="btn sm ghost" onclick="atualizarSug('${s.id}','pendente')">↩ reabrir</button>`}</td>
+        <td><span class="tag ${stCls}">${s.status}</span>${commitInfo}</td>
+        <td>${acoes}</td>
       </tr>`;
     }).join('')}</tbody></table>`;
 }
@@ -457,6 +483,58 @@ $('tratar-confirmar').onclick = async () => {
     await carregarTudo();
   } catch (e) { toast('Falhou: ' + e.message, 'err'); }
 };
+
+async function dispararCron() {
+  // Conta quantas estão aprovadas
+  let r;
+  try { r = await apiGet('/api/max-chat/admin/sugestoes'); } catch (e) { toast('Falha listando: ' + e.message, 'err'); return; }
+  const aprov = (r.sugestoes || []).filter(s => s.status === 'aprovada' && s.tipo === 'snapshot');
+  if (!aprov.length) {
+    if (!confirm('Não há sugestões APROVADAS pendentes. Disparar mesmo assim (vai só logar "nada a fazer")?')) return;
+  } else {
+    if (!confirm(`Disparar cron com ${aprov.length} sugestão(ões) aprovada(s)?\nEle vai aplicar no GitHub e atualizar produção. ~30-60s.`)) return;
+  }
+
+  $('btn-disparar-cron').disabled = true;
+  $('btn-disparar-cron').textContent = 'Disparando...';
+  try {
+    const j = await apiPost('/api/max-chat/admin/disparar-cron-sugestoes');
+    if (!j.ok || !j.job_id) {
+      toast('Falha: ' + (j.erro || 'sem job_id'), 'err');
+      return;
+    }
+    toast(`Job ${j.job_id.slice(0,12)}... disparado.`);
+    $('btn-disparar-cron').textContent = `${j.job_id.slice(-6)} executando...`;
+
+    // Polling do status
+    const job_id = j.job_id;
+    let status = 'running';
+    for (let i = 0; i < 30; i++) {
+      await new Promise(r => setTimeout(r, 8000));
+      const s = await apiGet(`/api/max-chat/admin/cron-job/${job_id}`);
+      status = s.status;
+      $('btn-disparar-cron').textContent = `cron: ${status}`;
+      if (['succeeded','failed','canceled'].includes(status)) {
+        // Mostrar resumo dos logs em alert
+        const logs = (s.logs || '').split('\n').filter(l => l.includes('✅') || l.includes('❌') || l.includes('FIM') || l.includes('Traceback') || l.includes('Error')).slice(-15).join('\n');
+        if (status === 'succeeded') {
+          toast(`✅ Cron concluído. Veja logs:`, 'ok');
+          alert('CRON CONCLUÍDO\n\n' + (logs || 'Sem highlights — veja logs completos no Render dashboard.'));
+        } else {
+          toast(`🔴 Cron ${status}.`, 'err');
+          alert(`CRON ${status.toUpperCase()}\n\n` + (logs || 'sem logs'));
+        }
+        break;
+      }
+    }
+    await carregarTudo();
+  } catch (e) {
+    toast('Erro: ' + e.message, 'err');
+  } finally {
+    $('btn-disparar-cron').disabled = false;
+    $('btn-disparar-cron').textContent = '🚀 Disparar cron de sugestões agora';
+  }
+}
 
 async function repopularSnapshots() {
   if (!confirm('Repopular TODOS os 23 snapshots agora? Pode levar até 60s.')) return;
