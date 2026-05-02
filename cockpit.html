@@ -208,8 +208,23 @@ table.dre tbody td.spark canvas{height:18px!important;width:60px!important;verti
   <input type="month" id="mes-ref">
   <span class="chip" data-period="mtd">Mês corrente</span>
   <span class="chip" data-period="last">Último fechado</span>
+  <span style="border-left:1px solid var(--bdr);height:18px;margin:0 4px"></span>
+  <span class="label">Receita:</span>
+  <span class="chip on" data-rec-modo="competencia" id="chip-comp">Competência (pedidos)</span>
+  <span class="chip" data-rec-modo="caixa" id="chip-caixa">Caixa (entradas reais)</span>
   <div class="sep"></div>
   <button class="chip" id="btn-export" title="Exportar PNG">📸 PNG</button>
+</div>
+
+<!-- ZONA CAIXA — Saldo bancário + Runway + comparação -->
+<div class="zona" id="zona-caixa">
+  <div class="zona-titulo">Posição de caixa <span class="badge" id="caixa-mes">—</span></div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.6rem">
+    <div class="kpi9 perf"><div class="lbl">Saldo bancário consolidado</div><div class="val" id="kpi-saldo">—</div><div class="delta" id="kpi-saldo-delta">—</div></div>
+    <div class="kpi9 conf"><div class="lbl">Runway (meses)</div><div class="val" id="kpi-runway">—</div><div class="delta" id="kpi-runway-delta">saldo / despesa fixa mensal</div></div>
+    <div class="kpi9 oper"><div class="lbl">Receita caixa (mês)</div><div class="val" id="kpi-rec-caixa">—</div><div class="delta" id="kpi-rec-caixa-delta">entrada bancária real</div></div>
+    <div class="kpi9 perf"><div class="lbl">Receita competência (mês)</div><div class="val" id="kpi-rec-comp">—</div><div class="delta" id="kpi-rec-comp-delta">pedidos faturados</div></div>
+  </div>
 </div>
 
 <!-- ZONA 1 — Executive 9 -->
@@ -310,8 +325,11 @@ const STATE = {
   ctx: null,
   dre: [],
   proj: [],
+  entradasCaixa: [],    // tabela entradas_caixa
+  saldosBancarios: [],  // últimos saldos por conta de extratos_bancarios_raw
   mesRef: null,         // Date dia 1
   conversaId: null,     // do drawer max-chat
+  recModo: 'competencia', // 'competencia' | 'caixa'
 };
 
 // ── Cores DRE / canais ──
@@ -382,6 +400,14 @@ async function init(){
     };
   });
   $('btn-export').onclick = exportPNG;
+  // Toggle Receita: Competência / Caixa
+  document.querySelectorAll('.chip[data-rec-modo]').forEach(c => {
+    c.onclick = () => {
+      STATE.recModo = c.dataset.recModo;
+      document.querySelectorAll('.chip[data-rec-modo]').forEach(x => x.classList.toggle('on', x === c));
+      refresh();
+    };
+  });
 
   // Drawer
   setupDrawer();
@@ -392,12 +418,23 @@ async function init(){
 }
 
 async function loadData(){
-  const [dre, proj] = await Promise.all([
+  const [dre, proj, entradas, saldos] = await Promise.all([
     pgGet('dre_mensal', 'select=ano_mes,macro,tipo,categoria,valor&order=ano_mes,macro,tipo&limit=2000'),
     pgGet('projecao_faturamento', 'select=ano_mes,macro_canal,canal,tipo,valor,origem&versao=eq.1&order=ano_mes&limit=2000'),
+    pgGet('entradas_caixa', 'select=ano_mes,tipo,valor&order=ano_mes&limit=200'),
+    // Último saldo por conta — usar RPC ou fetch + agrupar client-side
+    pgGet('extratos_bancarios_raw', 'select=banco,conta_apelido,saldo,data_mov&saldo=not.is.null&order=data_mov.desc&limit=2000'),
   ]);
   STATE.dre = dre;
   STATE.proj = proj;
+  STATE.entradasCaixa = entradas;
+  // Pegar último saldo por (banco, conta_apelido)
+  const seen = {};
+  STATE.saldosBancarios = [];
+  for (const r of saldos) {
+    const k = r.banco + '|' + r.conta_apelido;
+    if (!seen[k]) { seen[k] = true; STATE.saldosBancarios.push(r); }
+  }
 }
 
 function refresh(){
@@ -405,6 +442,8 @@ function refresh(){
   $('exec9-mes').textContent = mesLabel(mesStr);
   $('pnl-mes').textContent = mesLabel(mesStr);
   $('mix-mes').textContent = mesLabel(mesStr);
+  $('caixa-mes').textContent = mesLabel(mesStr);
+  renderCaixa();
   renderExec9();
   renderWaterfall();
   renderDreTable();
@@ -414,6 +453,47 @@ function refresh(){
   renderDesvios();
   renderDonut();
   renderPareto();
+}
+
+// ── Modo receita: competência (pedidos) vs caixa (planilha) ──
+function receitaMesPorModo(mes){
+  if (STATE.recModo === 'caixa') {
+    return Number(STATE.entradasCaixa.find(e => e.ano_mes===mes && e.tipo==='operacional')?.valor || 0);
+  }
+  return receitaMes(mes); // competência (pedidos)
+}
+
+// ── Zona Caixa ──
+function renderCaixa(){
+  const mes = monthStr(STATE.mesRef);
+  // Saldo bancário consolidado
+  const saldoTotal = STATE.saldosBancarios.reduce((s,r)=>s+Number(r.saldo||0),0);
+  $('kpi-saldo').textContent = fmtK(saldoTotal);
+  $('kpi-saldo-delta').textContent = `${STATE.saldosBancarios.length} contas`;
+
+  // Despesa fixa mensal média (Pessoal + Ocupação) — proxy de runway
+  const ult6 = lastNMonths(6, mes);
+  const despFixaMedia = ult6.reduce((s,m) => s + totalDREByMacro(m,'3.0 CUSTOS PESSOAL') + totalDREByMacro(m,'4.0 CUSTOS OCUPAÇÃO'), 0) / 6;
+  const runway = despFixaMedia > 0 ? saldoTotal / despFixaMedia : 0;
+  $('kpi-runway').textContent = runway.toFixed(1);
+  let runwayCls = runway >= 6 ? 'up' : (runway >= 3 ? 'flat' : 'down');
+  $('kpi-runway-delta').className = 'delta ' + runwayCls;
+  $('kpi-runway-delta').textContent = `despesa fixa ${fmtK(despFixaMedia)}/mês`;
+
+  // Receita caixa vs competência
+  const recCaixa = Number(STATE.entradasCaixa.find(e => e.ano_mes===mes && e.tipo==='operacional')?.valor || 0);
+  const recComp = receitaMes(mes);
+  $('kpi-rec-caixa').textContent = fmtK(recCaixa);
+  $('kpi-rec-comp').textContent = fmtK(recComp);
+  if (recComp > 0 && recCaixa > 0) {
+    const diff = (recCaixa/recComp - 1)*100;
+    $('kpi-rec-caixa-delta').textContent = `${diff>=0?'+':''}${diff.toFixed(1)}% vs competência`;
+  }
+  // Aporte sócio (info extra)
+  const aporte = Number(STATE.entradasCaixa.find(e => e.ano_mes===mes && e.tipo==='aporte_socio')?.valor || 0);
+  if (aporte > 0) {
+    $('kpi-rec-caixa-delta').textContent += ` · aporte sócio ${fmtK(aporte)}`;
+  }
 }
 
 // ── Aggregations ──
@@ -439,8 +519,8 @@ function ytdAtingido(mes){
 function renderExec9(){
   const mes = monthStr(STATE.mesRef);
   const prev = mesPrev(mes);
-  const receita = receitaMes(mes);
-  const receitaPrev = receitaMes(prev);
+  const receita = receitaMesPorModo(mes);
+  const receitaPrev = receitaMesPorModo(prev);
   const proj = projetadoMes(mes);
   const dreMes = totalDRE(mes);
   const cmv = totalDREByCat(mes,'Custo');
