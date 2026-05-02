@@ -140,6 +140,55 @@ Fonte única: tabela `contas_pagar` (só Fio e Trama).
 - Depende de tabelas `canal_custos_faixa`, `simulacao_cenarios`, `produtos_snapshot`, `produto_evento`, `ads_curva_otima` e views `vw_taxa_devolucao_*`/`vw_frete_medio_*` (criadas em `sql/2026-05-01_*.sql`).
 - Crons que alimentam: `fusion-sync-snapshot` (08h BRT) e `fusion-sync-curva-ads` (09h BRT) — ver [../fusion-sync/CLAUDE.md](../fusion-sync/CLAUDE.md).
 
+## Dash Max Chat — Admin (`max-chat-admin.html`) — restrito a leonardo@usefusion.com.br
+
+Painel de qualidade do Max Chat com **ações executáveis** (write — não só leitura). Criado 02/05/2026.
+
+**Acesso restrito por email** — convenção nova:
+```js
+'max-chat-admin': { ..., restritoPara: ['leonardo@usefusion.com.br'] }
+```
+- `index.html` filtra cards por `meta.restritoPara` (não renderiza se email não bate)
+- `max-chat-admin.html` valida `ALLOWED_EMAILS` no init (redirect se outro user com role admin acessar URL direta)
+- Defesa em profundidade: 3 camadas (`user_roles.dashes` + `restritoPara` + `ALLOWED_EMAILS`)
+
+**Conteúdo do painel** (6 cards):
+1. KPIs do mês: 👍/👎, cobertura feedback, falhas, custo
+2. 👎 Respostas mal avaliadas (motivo escrito pelo user)
+3. 🔴 Falhas detectadas automaticamente (sem precisar 👎)
+4. 💰 Perguntas frequentes sem snapshot (candidatas a otimizar)
+5. 📊 Aprovação por categoria (% mês corrente)
+6. 📋 Sugestões registradas (com SHA clicável quando implementada)
+
+**Ações executáveis** (chamam endpoints `https://max-chat-2vs0.onrender.com/api/max-chat/admin/*`):
+- 🚀 **Disparar cron de sugestões agora** — POST `/admin/disparar-cron-sugestoes` triggera o cron `max-chat-apply-sugestoes` via Render API. Polling de status (até 4min). Alert com highlights dos logs ao final
+- 🔄 Repopular snapshots agora — força `snapshots.py` em produção
+- ⚙️ Recarregar config — POST `/admin/reload`, força backend re-ler `categorias.yaml`
+- + Nova sugestão — abre dialog (tipo, pergunta, proposta, prioridade)
+- Por linha de sugestão pendente: **✓ aprovar** (libera pro cron processar) / **✗ rejeitar**
+- Por linha de falha/down: **Tratar** (registra em `max_chat_falhas_tratadas`, esconde do painel)
+- Por linha de candidata sem snapshot: **Sugerir snapshot** (pré-preenche dialog com a pergunta)
+
+**Endpoints chamados** (todos `auth_required(admin_only=True)` no max-chat backend):
+- `GET  /admin/qualidade` — payload completo (resumo + downs + ups + falhas + sem_snap + aprovação)
+- `GET  /admin/sugestoes` — lista sugestões registradas
+- `POST /admin/sugestao` — cria nova
+- `POST /admin/sugestoes/<id>` — muda status (aprovada/implementada/rejeitada/pendente)
+- `POST /admin/falhas/marcar-tratada` — registra `max_chat_falhas_tratadas`
+- `POST /admin/disparar-cron-sugestoes` — triggera cron via Render API (precisa `RENDER_API_TOKEN` env no backend)
+- `GET  /admin/cron-job/<job_id>` — polling de status + logs
+- `POST /admin/repopular-snapshots` — subprocess `snapshots.py`
+
+**Workflow completo de melhoria contínua:**
+```
+You no painel → registra sugestão (pendente)
+          → revisa → ✓ aprovar (aprovada)
+          → ⏰ segunda 10h BRT (ou clica "Disparar agora")
+          → cron Render lê aprovadas + valida SQL + git push em main
+          → Render auto-deploya max-chat web
+          → painel mostra SHA clicável (implementada)
+```
+
 ## Smoke checks pós-deploy
 
 Rodar após qualquer push em fusion-dash. **A skill [`fusion-sanity-check`](../.claude/skills/fusion-sanity-check/SKILL.md) automatiza isso.**
