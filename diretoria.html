@@ -81,10 +81,12 @@ table.tb tr:hover td{background:rgba(255,255,255,0.02);}
 </head><body><header class="topbar"><img src="/logo-urso.png" alt="Fusion"><div class="topbar-div"></div><span class="topbar-label">Diretoria</span><div class="topbar-actions"><span id="user-info-tb"></span><a href="/index.html" class="btn-back">Menu</a><button class="btn-logout-tb" onclick="fusionAuth.signOut()">Sair</button></div></header><div class="main">
   <div class="filtros">
     <div class="periodo-chips">
-      <button class="chip" onclick="setPeriodo(0)">Hoje</button>
-      <button class="chip" onclick="setPeriodo(1)">Ontem</button>
+      <button class="chip" onclick="setPeriodoHoje()">Hoje</button>
+      <button class="chip" onclick="setPeriodoOntem()">Ontem</button>
       <button class="chip" onclick="setPeriodo(7)">7 dias</button>
-      <button class="chip ativo" onclick="setPeriodo(30)">30 dias</button>
+      <button class="chip" onclick="setPeriodo(30)">30 dias</button>
+      <button class="chip ativo" onclick="setPeriodoMTD()">Este Mês</button>
+      <button class="chip" onclick="setPeriodoUltMes()">Último Mês</button>
       <button class="chip" onclick="setPeriodo(365)">12 meses</button>
     </div>
     <div class="date-range">
@@ -169,6 +171,30 @@ function setPeriodoOntem(){
   const d=new Date(); d.setDate(d.getDate()-1);
   const ontem=d.toISOString().split('T')[0];
   DE=ontem; ATE=ontem;
+  document.getElementById('dt-de').value=DE;
+  document.getElementById('dt-ate').value=ATE;
+  carregar();
+}
+function setPeriodoMTD(){
+  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('ativo'));
+  if(typeof event!=='undefined'&&event.target) event.target.classList.add('ativo');
+  const hoje=new Date();
+  const inicioMes=new Date(hoje.getFullYear(),hoje.getMonth(),1);
+  DE=inicioMes.toISOString().split('T')[0];
+  ATE=hoje.toISOString().split('T')[0];
+  document.getElementById('dt-de').value=DE;
+  document.getElementById('dt-ate').value=ATE;
+  carregar();
+}
+function setPeriodoUltMes(){
+  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('ativo'));
+  if(typeof event!=='undefined'&&event.target) event.target.classList.add('ativo');
+  const hoje=new Date();
+  const inicioMesAtual=new Date(hoje.getFullYear(),hoje.getMonth(),1);
+  const ultimoDiaMesAnterior=new Date(inicioMesAtual.getTime()-86400000);
+  const inicioMesAnterior=new Date(ultimoDiaMesAnterior.getFullYear(),ultimoDiaMesAnterior.getMonth(),1);
+  DE=inicioMesAnterior.toISOString().split('T')[0];
+  ATE=ultimoDiaMesAnterior.toISOString().split('T')[0];
   document.getElementById('dt-de').value=DE;
   document.getElementById('dt-ate').value=ATE;
   carregar();
@@ -318,9 +344,10 @@ async function carregar(){
   document.getElementById('upd').textContent='Atualizado '+new Date().toLocaleTimeString('pt-BR');
 }
 
-const hoje=new Date(),ini=new Date();
-ini.setDate(ini.getDate()-30);
-DE=ini.toISOString().split('T')[0];
+// Default = MTD (Este Mês), alinhado com o chip pintado como ativo
+const hoje=new Date();
+const inicioMes=new Date(hoje.getFullYear(),hoje.getMonth(),1);
+DE=inicioMes.toISOString().split('T')[0];
 ATE=hoje.toISOString().split('T')[0];
 document.getElementById('dt-de').value=DE;
 document.getElementById('dt-ate').value=ATE;

@@ -82,6 +82,7 @@ Pra criar um novo dash (ex: `marketing`):
 - **Cores oficiais** em `LOJA_CORES` no `auth.js` — não inventar.
 - **Datas**: fuso `America/Sao_Paulo` em todo agrupamento.
 - **Período default = MTD (Este Mês)**: chip `mtd` com classe `on` no HTML, init JS com `DE=inicioMesSP();ATE=h;`. Decisão padrão da Fusion (29/04/2026) — diretoria pensa em mês corrente. Não usar 30d/7d como default.
+- **Chip "Último Mês" (preset `m-1`)**: M-1 fechado (dia 01 ao último dia do mês anterior). Posicionado entre "Este Mês" e "Este Ano". Implementação: `ate=somaDias(inicioMesSP(),-1); de=ate.slice(0,7)+'-01'`. Em `lojas.html`, `ecommerce.html` e `diretoria.html` (02/05/2026).
 - **Pedidos**: fetch paralelo de `pedidos` + `pedidos_historico` com `.concat()`. Sempre filtrar `status NOT IN ('cancelado', 'devolvido')` em receita.
 - **Mobile**: breakpoint principal 768px. Cards empilhados em mobile, lado-a-lado em desktop.
 - **Export PNG**: html2canvas. Aplicar em todo card de KPI relevante.

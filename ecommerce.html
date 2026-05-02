@@ -269,6 +269,7 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
       <button class="chip" data-preset="7d" onclick="setPeriodo('7d',this)">7d</button>
       <button class="chip" data-preset="30d" onclick="setPeriodo('30d',this)">30d</button>
       <button class="chip on" data-preset="mtd" onclick="setPeriodo('mtd',this)">MTD</button>
+      <button class="chip" data-preset="m-1" onclick="setPeriodo('m-1',this)">Último Mês</button>
       <button class="chip" data-preset="qtd" onclick="setPeriodo('qtd',this)">QTD</button>
       <button class="chip" data-preset="ytd" onclick="setPeriodo('ytd',this)">YTD</button>
       <button class="chip" data-preset="12m" onclick="setPeriodo('12m',this)">12m</button>
@@ -631,7 +632,7 @@ function periodoAnterior(de,ate){var d=daysBetween(de,ate);var novoAte=somaDias(
 
 function setPeriodo(preset,el){
   var h=hojeSP(),de,ate=h;
-  switch(preset){case'hoje':de=h;break;case'ontem':de=somaDias(h,-1);ate=de;break;case'7d':de=somaDias(h,-6);break;case'30d':de=somaDias(h,-29);break;case'mtd':de=inicioMesSP();break;case'qtd':de=inicioTrimestre();break;case'ytd':de=inicioAno();break;case'12m':de=somaDias(h,-364);break;default:de=somaDias(h,-29);}
+  switch(preset){case'hoje':de=h;break;case'ontem':de=somaDias(h,-1);ate=de;break;case'7d':de=somaDias(h,-6);break;case'30d':de=somaDias(h,-29);break;case'mtd':de=inicioMesSP();break;case'm-1':ate=somaDias(inicioMesSP(),-1);de=ate.slice(0,7)+'-01';break;case'qtd':de=inicioTrimestre();break;case'ytd':de=inicioAno();break;case'12m':de=somaDias(h,-364);break;default:de=somaDias(h,-29);}
   DE=de;ATE=ate;document.getElementById('dt-de').value=DE;document.getElementById('dt-ate').value=ATE;
   document.querySelectorAll('.chip[data-preset]').forEach(function(c){c.classList.remove('on');});if(el)el.classList.add('on');carregar();
 }
