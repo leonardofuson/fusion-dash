@@ -33,6 +33,12 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
 .tab-panel{display:none;}
 .tab-panel.active{display:block;}
 
+/* Segmented control (toggle de métrica dentro de gráficos) */
+.seg-ctrl{display:inline-flex;gap:2px;padding:3px;background:var(--bg);border:1px solid var(--bdr);border-radius:8px;}
+.seg-btn{padding:6px 12px;border:none;border-radius:6px;background:transparent;color:var(--txt3);font-family:'Inter',sans-serif;font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;white-space:nowrap;}
+.seg-btn:hover{color:var(--txt2);background:rgba(255,255,255,.04);}
+.seg-btn.active{background:var(--cyan);color:#0a0a0b;}
+
 .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:24px;}
 .kpi{background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;padding:18px;position:relative;overflow:hidden;}
 .kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--kpi-accent,var(--indigo));opacity:.7;}
@@ -51,6 +57,7 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
 
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
 .grid3{display:grid;grid-template-columns:2fr 1fr;gap:16px;}
+.grid-curva{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(280px,1fr);gap:16px;align-items:start;}
 
 .form-group{margin-bottom:16px;}
 .form-label{display:block;font-size:12px;font-weight:500;color:var(--txt2);margin-bottom:6px;}
@@ -125,6 +132,7 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
 .r2-mid{color:var(--amber);}
 .r2-bad{color:var(--red);}
 
+@media(max-width:1100px){.grid-curva{grid-template-columns:1fr;}}
 @media(max-width:900px){.grid2,.grid3{grid-template-columns:1fr;}}
 @media(max-width:768px){
   .topbar{height:56px;padding:0 1rem;}.topbar img{height:26px;}.topbar-label{font-size:12px;}
@@ -286,26 +294,26 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
         </div>
       </div>
     </div>
-    <div class="grid3">
+    <div class="grid-curva">
       <div class="card">
-        <div class="card-header"><div class="card-title">Investimento × Receita atribuída ML <small>(últimos 90 dias · cada ponto é um dia)</small></div></div>
-        <div class="card-body"><canvas id="cv-curva" height="340"></canvas></div>
+        <div class="card-header"><div class="card-title">Investimento × Receita atribuída ML <small>(90 dias · cada ponto é um dia)</small></div></div>
+        <div class="card-body"><canvas id="cv-curva" height="360"></canvas></div>
       </div>
-      <div class="card">
-        <div class="card-header"><div class="card-title">Histórico + referência teórica</div></div>
+      <div class="card" style="position:sticky;top:80px;max-height:calc(100vh - 100px);overflow-y:auto;">
+        <div class="card-header"><div class="card-title">Resumo</div></div>
         <div id="curva-resumo" class="card-body"></div>
       </div>
     </div>
     <div class="card">
       <div class="card-header">
         <div class="card-title">Evolução temporal <small>(ROAS, receita atribuída e gasto por dia · mais antigo → mais recente)</small></div>
-        <div style="display:flex;gap:6px;">
-          <button class="tab-btn active" data-tl="roas" onclick="setTimelineMetric('roas')">ROAS</button>
-          <button class="tab-btn" data-tl="receita" onclick="setTimelineMetric('receita')">Receita</button>
-          <button class="tab-btn" data-tl="lucro" onclick="setTimelineMetric('lucro')">Lucro atrib.</button>
+        <div class="seg-ctrl">
+          <button type="button" class="seg-btn active" data-tl="roas">ROAS</button>
+          <button type="button" class="seg-btn" data-tl="receita">Receita</button>
+          <button type="button" class="seg-btn" data-tl="lucro">Lucro atrib.</button>
         </div>
       </div>
-      <div class="card-body"><canvas id="cv-timeline" height="220"></canvas></div>
+      <div class="card-body"><canvas id="cv-timeline" height="240"></canvas></div>
     </div>
   </section>
 
@@ -790,6 +798,7 @@ function renderCurva(){
   }
 
   if (STATE.charts.curva) { STATE.charts.curva.destroy(); STATE.charts.curva = null; }
+  STATE.curvaAtual = c || null;
 
   if (!c) {
     const alvo = modo === 'canal' ? $('#curva-canal').value : $('#curva-sku').value || '(sem SKU)';
@@ -834,12 +843,15 @@ function renderCurva(){
   // Scatter = receita atribuída ML por dia
   const scatterHist = pontos.map(p => ({ x: p.g, y: p.ra, _meta: p }));
 
-  // Tendência: 1ª vs 2ª metade da janela — gasto, receita atribuída, lucro atribuído
+  // Tendência cronológica — pontos já vêm ordenados por data crescente do backend.
+  // Compara primeiro semestre da janela (mais antigo) com o segundo (mais recente).
   let tendencia = '';
   if (pontos.length >= 14) {
     const half = Math.floor(pontos.length / 2);
-    const ant = pontos.slice(0, half);
-    const dep = pontos.slice(half);
+    const ant = pontos.slice(0, half);             // mais antigo
+    const dep = pontos.slice(half);                 // mais recente
+    const dataIniAnt = ant[0]?.d, dataFimAnt = ant[ant.length-1]?.d;
+    const dataIniDep = dep[0]?.d, dataFimDep = dep[dep.length-1]?.d;
     const gAnt = ant.reduce((s,p)=>s+p.g,0)/ant.length;
     const gDep = dep.reduce((s,p)=>s+p.g,0)/dep.length;
     const rAnt = ant.reduce((s,p)=>s+(p.ra||0),0)/ant.length;
@@ -853,10 +865,13 @@ function renderCurva(){
     const col = v => v > 5 ? 'var(--green)' : v < -5 ? 'var(--red)' : 'var(--txt3)';
     tendencia = `
       <div style="background:var(--bg3);border-radius:8px;padding:12px 14px;margin-bottom:12px;font-size:12px;">
-        <div style="font-weight:600;margin-bottom:6px;color:var(--txt2);">Tendência — 1ª metade vs 2ª metade da janela</div>
-        <div>Gasto: ${fmt(gAnt)} → ${fmt(gDep)} ${arr(dG)} <strong>${dG>0?'+':''}${dG.toFixed(1)}%</strong></div>
-        <div style="margin-top:4px;color:${col(dR)};">Receita atribuída: ${fmt(rAnt)} → ${fmt(rDep)} ${arr(dR)} <strong>${dR>0?'+':''}${dR.toFixed(1)}%</strong></div>
-        <div style="margin-top:4px;color:${col(dL)};">Lucro atribuído: ${fmt(laAnt)} → ${fmt(laDep)} ${arr(dL)} <strong>${dL>0?'+':''}${dL.toFixed(1)}%</strong></div>
+        <div style="font-weight:600;margin-bottom:6px;color:var(--txt2);">Antes vs Agora <span style="color:var(--txt4);font-weight:400;">— ${ant.length}d cada</span></div>
+        <div style="font-size:10px;color:var(--txt4);margin-bottom:8px;">
+          Antes: ${fmtDt(dataIniAnt)} → ${fmtDt(dataFimAnt)} &nbsp;·&nbsp; Agora: ${fmtDt(dataIniDep)} → ${fmtDt(dataFimDep)}
+        </div>
+        <div>Gasto médio: ${fmt(gAnt)} → ${fmt(gDep)} ${arr(dG)} <strong>${dG>0?'+':''}${dG.toFixed(1)}%</strong></div>
+        <div style="margin-top:4px;color:${col(dR)};">Receita atrib.: ${fmt(rAnt)} → ${fmt(rDep)} ${arr(dR)} <strong>${dR>0?'+':''}${dR.toFixed(1)}%</strong></div>
+        <div style="margin-top:4px;color:${col(dL)};">Lucro atrib.: ${fmt(laAnt)} → ${fmt(laDep)} ${arr(dL)} <strong>${dL>0?'+':''}${dL.toFixed(1)}%</strong></div>
       </div>
     `;
   }
@@ -1048,10 +1063,20 @@ STATE.tlMetric = 'roas';
 
 function setTimelineMetric(m){
   STATE.tlMetric = m;
-  document.querySelectorAll('.tab-btn[data-tl]').forEach(b => b.classList.toggle('active', b.dataset.tl === m));
-  // Re-render usando a curva atual selecionada
-  renderCurva();
+  document.querySelectorAll('.seg-btn[data-tl]').forEach(b => b.classList.toggle('active', b.dataset.tl === m));
+  // Não chama renderCurva — só re-renderiza a timeline com a curva atual já carregada
+  const c = STATE.curvaAtual;
+  if (c) renderRoasTimeline(c);
 }
+
+// Bind dos botões da timeline (uma vez no load — sem inline onclick que dispara handler global)
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.seg-btn[data-tl]');
+  if (!btn) return;
+  e.preventDefault();
+  e.stopPropagation();
+  setTimelineMetric(btn.dataset.tl);
+});
 
 function mediaMovel(arr, k){
   // Centrada onde possível, antes-only nas pontas. Preserva NaN se input é NaN.
