@@ -349,6 +349,7 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
         <div style="padding:12px;">
           <div class="gantt-filters" style="margin-bottom:12px">
             <input type="text" id="flt-busca-pipeline" class="dinput" placeholder="Buscar produto, costureiro, NF, tecido, cor, OP..." style="min-width:280px" oninput="renderGantt();renderOPsLista()">
+            <select id="flt-categoria-gantt" class="dselect" onchange="renderGantt();renderOPsLista()"><option value="">Todas categorias</option></select>
             <select id="flt-produto-gantt" class="dselect" onchange="renderGantt();renderOPsLista()"><option value="">Todos produtos</option></select>
             <select id="flt-costureiro-gantt" class="dselect" onchange="renderGantt();renderOPsLista()"><option value="">Todos costureiros</option></select>
             <select id="flt-status-op" class="dselect" onchange="renderGantt();renderOPsLista()"><option value="">Todos status</option></select>
@@ -768,6 +769,7 @@ function limparFiltrosPipeline() {
   document.getElementById('flt-status-op').value='';
   var bp = document.getElementById('flt-busca-pipeline'); if (bp) bp.value='';
   var bo = document.getElementById('flt-busca-op'); if (bo) bo.value='';
+  var bc = document.getElementById('flt-categoria-gantt'); if (bc) bc.value='';
   STATE.kpiFilter = null;
   renderPipeline();
 }
@@ -1049,12 +1051,14 @@ function renderOPsLista() {
   var fSt = document.getElementById('flt-status-op').value;
   var fProd = document.getElementById('flt-produto-gantt').value;
   var fCost = document.getElementById('flt-costureiro-gantt').value;
+  var fCat = ((document.getElementById('flt-categoria-gantt') || {}).value || '');
   // Busca: prioriza input principal do Pipeline; cai pro antigo busca-op se existir
   var qPrincipal = ((document.getElementById('flt-busca-pipeline') || {}).value || '').trim().toLowerCase();
   var qLocal = ((document.getElementById('flt-busca-op') || {}).value || '').trim().toLowerCase();
   var q = qPrincipal || qLocal;
 
   if (fSt) ops = ops.filter(function(o) { return o.status === fSt; });
+  if (fCat) ops = ops.filter(function(o){ return categoriaProduto(o.sku_produto) === fCat; });
   if (fProd) ops = ops.filter(function(o) { return nomeProduto(o.sku_produto) === fProd || (o.produto||'').trim() === fProd || o.sku_produto === fProd; });
   if (fCost) ops = ops.filter(function(o) { return o.costureiro_id == fCost; });
   if (q) ops = ops.filter(function(o){ return buscaBlobOP(o).indexOf(q) >= 0; });
@@ -1179,8 +1183,10 @@ function renderGantt() {
   var fSt = document.getElementById('flt-status-op').value;
   var fProd = document.getElementById('flt-produto-gantt').value;
   var fCost = document.getElementById('flt-costureiro-gantt').value;
+  var fCat = ((document.getElementById('flt-categoria-gantt') || {}).value || '');
   var qBusca = ((document.getElementById('flt-busca-pipeline') || {}).value || '').trim().toLowerCase();
   if (fSt) ops = ops.filter(function(o) { return o.status === fSt; });
+  if (fCat) ops = ops.filter(function(o){ return categoriaProduto(o.sku_produto) === fCat; });
   if (fProd) ops = ops.filter(function(o) { return nomeProduto(o.sku_produto) === fProd || (o.produto||'').trim() === fProd || o.sku_produto === fProd; });
   if (fCost) ops = ops.filter(function(o) { return o.costureiro_id == fCost; });
   if (qBusca) ops = ops.filter(function(o){ return buscaBlobOP(o).indexOf(qBusca) >= 0; });
@@ -3958,6 +3964,15 @@ function populateFilters() {
   STATE.ops.forEach(function(o) { if (o.status) statuses[o.status] = 1; });
   var sel = document.getElementById('flt-status-op');
   sel.innerHTML = '<option value="">Todos status</option>' + Object.keys(statuses).sort().map(function(s) { return '<option value="' + s + '">' + s + '</option>'; }).join('');
+
+  // Categoria filter (Gantt) — lê produtos.categoria das OPs ativas
+  var cats = {};
+  STATE.ops.forEach(function(o){
+    var c = categoriaProduto(o.sku_produto);
+    if (c) cats[c] = 1;
+  });
+  var selCat = document.getElementById('flt-categoria-gantt');
+  if (selCat) selCat.innerHTML = '<option value="">Todas categorias</option>' + Object.keys(cats).sort().map(function(c){ return '<option value="' + c + '">' + c + '</option>'; }).join('');
 
   // Produto filter (Gantt) — agrupa pelo NOME DO PAI (nomeProduto), nunca pela variante longa
   var produtos = {};
