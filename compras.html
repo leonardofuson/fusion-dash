@@ -1594,12 +1594,18 @@ async function abrirRegistrarEntrega(opId) {
       '<div style="margin-top:6px">Já entregue: <strong>' + fmt(jaEntregues) + '</strong> / ' + fmt(pecas) + ' · <span style="color:var(--amber)">Pendente: ' + fmt(pendente) + '</span></div>' +
     '</div>' +
     histHtml +
-    '<div class="form-group"><label class="form-label">Data da entrega</label>' +
-      '<input type="date" class="form-input" id="f-ent-data" value="' + new Date().toISOString().slice(0,10) + '"></div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label class="form-label">Data da entrega</label>' +
+        '<input type="date" class="form-input" id="f-ent-data" value="' + new Date().toISOString().slice(0,10) + '"></div>' +
+      '<div class="form-group"><label class="form-label">NF Remessa <small style="color:var(--txt3);font-weight:400">(do costureiro p/ a Fusion)</small></label>' +
+        '<input type="text" class="form-input" id="f-ent-nf-remessa" placeholder="Ex: 12345"></div>' +
+    '</div>' +
     '<div class="form-group"><label class="form-label">Quantidade por tamanho</label>' +
       '<div class="grade-grid">' + gradeInputs + '</div>' +
       '<div class="grade-total"><span>Total entregue nesta baixa</span><strong id="ent-total">0</strong></div>' +
     '</div>' +
+    '<div class="form-group"><label class="form-label">Peças com defeito <small style="color:var(--txt3);font-weight:400">(opcional — devolvidas pra remanufatura)</small></label>' +
+      '<input type="number" min="0" class="form-input" id="f-ent-defeito" value="0" placeholder="0"></div>' +
     '<div class="form-group" style="background:rgba(99,102,241,0.06);padding:14px;border-radius:8px;border:1px solid rgba(99,102,241,0.25)">' +
       '<label class="form-label" style="color:var(--indigo);font-weight:700">Esta entrega é:</label>' +
       '<div style="display:flex;gap:14px;margin-top:6px">' +
@@ -2589,13 +2595,9 @@ function renderProdutos() {
   }).join('');
 }
 
-// Range de tamanhos default por categoria
+// Range de tamanhos default por categoria — alinhado com gradeOficialDaCategoria()
 function rangeTamanhosCategoria(cat) {
-  cat = (cat || '').toUpperCase();
-  if (cat === 'CALCA' || cat === 'CALÇA' || cat === 'BERMUDA') return ['36','38','40','42','44','46','48','50','52','54'];
-  if (cat === 'CAMISA') return ['2','3','4','5','6'];
-  if (cat === 'TERNO') return ['44','46','48','50','52','54','56','58','60','62','64'];
-  return [];
+  return gradeOficialDaCategoria(cat) || [];
 }
 
 function abrirNovoProduto() {
@@ -4396,13 +4398,28 @@ function costureiroIdPorNome(nome) {
   return c ? c.id : null;
 }
 
+// Grade oficial por categoria (definida pelo Leo em 04/05/2026 — ordem fixa, ignora variantes cadastradas).
+// Pra Calça/Bermuda: 38–52. Pra Camisa: P–G1 (letras na ordem). Pra Terno: 44–64.
+// Aplica em todos os forms: Nova OP, Editar OP, Registrar Entrega, Editar Entrega.
+function gradeOficialDaCategoria(cat) {
+  if (!cat) return null;
+  var c = String(cat).trim().toUpperCase();
+  if (c === 'CAMISA') return ['P','M','G','GG','G1'];
+  if (c === 'CALCA' || c === 'CALÇA' || c === 'BERMUDA') return ['38','40','42','44','46','48','50','52'];
+  if (c === 'TERNO') return ['44','46','48','50','52','54','56','58','60','62','64'];
+  return null;
+}
+
 function tamanhosDoSKU(skuPai) {
   if (!skuPai) return [];
+  // Prefere a grade oficial da categoria — não depende de variantes cadastradas
+  var oficial = gradeOficialDaCategoria(categoriaProduto(skuPai));
+  if (oficial) return oficial;
+  // Fallback: tamanhos das variantes cadastradas
   var set = {};
   (STATE.produtos || []).forEach(function(p) {
     if ((p.sku_pai || p.sku) === skuPai && p.tamanho) set[p.tamanho.trim()] = 1;
   });
-  // Sort numeric ascending
   return Object.keys(set).sort(function(a, b) {
     var na = parseInt(a), nb = parseInt(b);
     if (!isNaN(na) && !isNaN(nb)) return na - nb;
@@ -4564,8 +4581,8 @@ function buildOPForm() {
       '</div>' +
     '</div>' +
     '<div class="form-row">' +
-      '<div class="form-group"><label class="form-label">Data Recebimento do Tecido</label>' +
-        '<input class="form-input" id="f-data-envio" type="date"></div>' +
+      '<div class="form-group"><label class="form-label">Data de cadastro da OP</label>' +
+        '<input class="form-input" id="f-data-envio" type="date" value="' + new Date().toISOString().slice(0,10) + '"></div>' +
       '<div class="form-group"><label class="form-label">Data Estimada de Entrega <small style="color:var(--txt3);font-weight:400">(opcional)</small></label>' +
         '<input class="form-input" id="f-data-prevista" type="date"></div>' +
     '</div>' +
@@ -4606,7 +4623,7 @@ function buildOPCorRow(idx, firstRow) {
       '<input class="form-input" data-field="nf-tecido" type="text" readonly style="background:var(--bg3);color:var(--txt2)" placeholder="—"></div>' +
     '<div class="form-row">' +
       '<div class="form-group"><label class="form-label">Metragem a produzir</label>' +
-        '<input class="form-input" data-field="metragem" type="number" step="0.01" placeholder="ex: 150" oninput="recalcularPecasRow('+idx+')"></div>' +
+        '<input class="form-input" data-field="metragem" type="text" inputmode="decimal" placeholder="ex: 150" oninput="recalcularPecasRow('+idx+')"></div>' +
       '<div class="form-group"><label class="form-label">Consumo/peça <small style="color:var(--txt3);font-weight:400">(auto-preenchido — editável)</small></label>' +
         '<input class="form-input" data-field="consumo" type="number" step="0.001" placeholder="0.00" oninput="recalcularPecasRow('+idx+')"></div>' +
     '</div>' +
@@ -5253,7 +5270,7 @@ function buildEditOPForm(op) {
       '<div class="form-group"><label class="form-label">Peças Entregues</label>' +
         '<input class="form-input" type="number" id="f-edit-entregues" value="' + (op.qtde_pecas_entregues || 0) + '" oninput="updateDiffEntrega()"></div>' +
     '</div>' +
-    '<div class="form-row"><div class="form-group"><label class="form-label">Data Recebimento do Tecido</label><input class="form-input" type="date" id="f-edit-envio" value="' + (op.data_envio_tecido || '') + '"></div>' +
+    '<div class="form-row"><div class="form-group"><label class="form-label">Data de cadastro da OP</label><input class="form-input" type="date" id="f-edit-envio" value="' + (op.data_envio_tecido || '') + '"></div>' +
     '<div class="form-group"><label class="form-label">Data Estimada de Entrega <small style="color:var(--txt3);font-weight:400">(opcional)</small></label><input class="form-input" type="date" id="f-edit-prevista" value="' + (op.data_prevista_entrega || '') + '"></div></div>' +
     '<div class="form-row"><div class="form-group"><label class="form-label">Data de Entrega Real <small style="color:var(--txt3);font-weight:400">(obrigatório p/ Entregue)</small></label>' +
       '<input class="form-input" type="date" id="f-edit-data-entrega" value="' + (op.data_entrega_real || '') + '" oninput="updateDiffEntrega()"></div>' +
@@ -5675,11 +5692,16 @@ async function submitDrawer() {
         }
       }
 
+      var qtdDefeito = parseInt((document.getElementById('f-ent-defeito') || {}).value) || 0;
+      var nfRemessaEnt = ((document.getElementById('f-ent-nf-remessa') || {}).value || '').trim() || null;
+
       // 1) Insere registro da entrega (trigger DB atualiza qtde_pecas_entregues)
       await postSupabase('producao_entregas', {
         ordem_producao_id: op.id,
         data_entrega: data,
         quantidade: totalEntrega,
+        qtde_defeito: qtdDefeito,
+        nf_remessa: nfRemessaEnt,
         grade_entregue: Object.keys(grade).length ? grade : null,
         observacao: (document.getElementById('f-ent-obs').value || '').trim() || null,
       });
@@ -5694,6 +5716,7 @@ async function submitDrawer() {
             insumo_id: op.insumo_id, tipo_mov: 'consumo_op',
             quantidade: -metrosConsumidos, localizacao: costuNome,
             ordem_producao_id: op.id,
+            nf_remessa: nfRemessaEnt,
             observacao: 'Consumo entrega ' + (tipoEntrega==='total'?'TOTAL':'parcial') + ' OP #' + op.id + ' (' + totalEntrega + ' pç × ' + consumoPorPeca + ')',
           }]);
         } catch (e) { console.warn('Falha ao registrar consumo_op proporcional:', e); }
