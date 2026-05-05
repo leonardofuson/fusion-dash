@@ -1265,8 +1265,9 @@ function renderGantt() {
     return 99;
   }
   var gruposSorted = Object.entries(grupos).sort(function(a, b) {
-    var oa = _ordemCategoria(categoriaProduto(a[1].sku));
-    var ob = _ordemCategoria(categoriaProduto(b[1].sku));
+    // Tenta categoria pelo SKU, fallback pelo label (nome do produto na OP)
+    var oa = _ordemCategoria(categoriaProduto(a[1].sku) || categoriaProduto(a[1].label));
+    var ob = _ordemCategoria(categoriaProduto(b[1].sku) || categoriaProduto(b[1].label));
     if (oa !== ob) return oa - ob;
     return (a[1].label || '').localeCompare(b[1].label || '', 'pt-BR', { sensitivity: 'base' });
   });
@@ -3062,12 +3063,29 @@ function nomeProduto(skuPai) {
 }
 
 // Helper: categoria do produto pai (lê de produtos.categoria)
-function categoriaProduto(skuPai) {
-  if (!skuPai) return null;
-  var p = (STATE.produtos || []).find(function(x){
-    return (x.sku_pai === skuPai || x.sku === skuPai);
+// Aceita sku (canônico) OU nome do produto como entrada — fallback útil pra OPs com sku_produto NULL.
+function categoriaProduto(skuOuNome) {
+  if (!skuOuNome) return null;
+  var produtos = STATE.produtos || [];
+  // 1) Match por SKU (sku ou sku_pai)
+  var p = produtos.find(function(x){
+    return (x.sku_pai === skuOuNome || x.sku === skuOuNome);
   });
-  return p ? (p.categoria || null) : null;
+  if (p) return p.categoria || null;
+  // 2) Fallback por nome — pega o produto pai cujo nome casa exato (case-insensitive),
+  //    ou um pai cujo nome curto começa com o texto digitado (variantes legadas tipo "Calça Denim - 38")
+  var alvo = String(skuOuNome).trim().toLowerCase();
+  var raiz = produtos.find(function(x){
+    return x.tipo === 'pai' && (x.nome || '').trim().toLowerCase() === alvo;
+  });
+  if (raiz) return raiz.categoria || null;
+  // Fallback truncado — produto na OP pode ser "Calça Denim - 38 - PRETO"
+  var prefixoMatch = produtos.find(function(x){
+    if (!x.categoria) return false;
+    var n = (x.nome || '').trim().toLowerCase();
+    return n && (n === alvo || alvo.indexOf(n + ' -') === 0 || alvo.indexOf(n + '-') === 0);
+  });
+  return prefixoMatch ? prefixoMatch.categoria : null;
 }
 
 function renderPlanejamento() {
