@@ -1712,12 +1712,18 @@ function editarEntrega(entregaId, opId) {
       '<div>OP #' + op.id + ' · Costureiro: ' + costuName(op.costureiro_id) + '</div>' +
       '<div style="margin-top:6px">Entrega original: <strong>' + fmt(entrega.quantidade) + ' pç</strong> em ' + (entrega.data_entrega ? formatDate(entrega.data_entrega) : '?') + '</div>' +
     '</div>' +
-    '<div class="form-group"><label class="form-label">Data da entrega</label>' +
-      '<input type="date" class="form-input" id="f-ent-edit-data" value="' + (entrega.data_entrega || '') + '"></div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label class="form-label">Data da entrega</label>' +
+        '<input type="date" class="form-input" id="f-ent-edit-data" value="' + (entrega.data_entrega || '') + '"></div>' +
+      '<div class="form-group"><label class="form-label">NF Remessa <small style="color:var(--txt3);font-weight:400">(do costureiro p/ a Fusion)</small></label>' +
+        '<input type="text" class="form-input" id="f-ent-edit-nf-remessa" value="' + (entrega.nf_remessa || '').replace(/"/g,'&quot;') + '" placeholder="Ex: 12345"></div>' +
+    '</div>' +
     '<div class="form-group"><label class="form-label">Quantidade por tamanho</label>' +
       '<div class="grade-grid">' + gradeInputs + '</div>' +
       '<div class="grade-total"><span>Total nesta entrega</span><strong id="ent-total-edit">'+fmt(entrega.quantidade)+'</strong></div>' +
     '</div>' +
+    '<div class="form-group"><label class="form-label">Peças com defeito <small style="color:var(--txt3);font-weight:400">(opcional — devolvidas pra remanufatura)</small></label>' +
+      '<input type="number" min="0" class="form-input" id="f-ent-edit-defeito" value="' + (entrega.qtde_defeito || 0) + '" placeholder="0"></div>' +
     '<div class="form-group"><label class="form-label">Observação</label>' +
       '<textarea class="form-textarea" id="f-ent-edit-obs" placeholder="Opcional...">' + (entrega.observacao || '') + '</textarea></div>';
   document.getElementById('drawer-footer').style.display = 'flex';
@@ -4429,9 +4435,12 @@ function costureiroIdPorNome(nome) {
 function gradeOficialDaCategoria(cat) {
   if (!cat) return null;
   var c = String(cat).trim().toUpperCase();
-  if (c === 'CAMISA') return ['P','M','G','GG','G1'];
+  // Camisa / Camiseta: P → G1
+  if (c === 'CAMISA' || c === 'CAMISETA') return ['P','M','G','GG','G1'];
+  // Calça / Bermuda: 38 → 52
   if (c === 'CALCA' || c === 'CALÇA' || c === 'BERMUDA') return ['38','40','42','44','46','48','50','52'];
-  if (c === 'TERNO') return ['44','46','48','50','52','54','56','58','60','62','64'];
+  // Terno / Blazer: 44 → 64 (categoria no DB é "BLAZER & TERNO")
+  if (c === 'TERNO' || c === 'BLAZER & TERNO' || c === 'BLAZER') return ['44','46','48','50','52','54','56','58','60','62','64'];
   return null;
 }
 
@@ -5666,10 +5675,15 @@ async function submitDrawer() {
       var diff = qtdNova - qtdAntiga;
       var consumoPorPeca = parseFloat(op.consumo_por_peca) || 0;
 
+      var qtdDefEdit = parseInt((document.getElementById('f-ent-edit-defeito') || {}).value) || 0;
+      var nfRemEdit = ((document.getElementById('f-ent-edit-nf-remessa') || {}).value || '').trim() || null;
+
       // 1) PATCH a entrega existente
       await patchSupabase('producao_entregas', entregaOrig.id, {
         data_entrega: dataNova,
         quantidade: qtdNova,
+        qtde_defeito: qtdDefEdit,
+        nf_remessa: nfRemEdit,
         grade_entregue: Object.keys(gradeNova).length ? gradeNova : null,
         observacao: (document.getElementById('f-ent-edit-obs').value || '').trim() || null,
       });
