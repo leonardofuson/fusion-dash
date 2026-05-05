@@ -1255,13 +1255,20 @@ function renderGantt() {
     });
     grupos[k].label = best;
   });
-  // Ordenacao desc por data de recebimento das pecas. Grupos sem data vao pro fim.
+  // Ordenação: 1º por CATEGORIA (Calça → Camisa → Terno → outros) · 2º alfabético pelo nome do produto.
+  // (Decisão Leo 04/05/2026 — substituiu a ordenação anterior por data de prev de entrega.)
+  function _ordemCategoria(cat) {
+    var c = String(cat || '').toUpperCase();
+    if (c === 'CALCA' || c === 'CALÇA' || c === 'BERMUDA') return 1;
+    if (c === 'CAMISA') return 2;
+    if (c === 'TERNO') return 3;
+    return 99;
+  }
   var gruposSorted = Object.entries(grupos).sort(function(a, b) {
-    var aD = a[1].maxPrevEntrega, bD = b[1].maxPrevEntrega;
-    if (!aD && !bD) return b[1].totalPecas - a[1].totalPecas;
-    if (!aD) return 1;
-    if (!bD) return -1;
-    return bD.localeCompare(aD);
+    var oa = _ordemCategoria(categoriaProduto(a[1].sku));
+    var ob = _ordemCategoria(categoriaProduto(b[1].sku));
+    if (oa !== ob) return oa - ob;
+    return (a[1].label || '').localeCompare(b[1].label || '', 'pt-BR', { sensitivity: 'base' });
   });
 
   // ── Header semanas ──
