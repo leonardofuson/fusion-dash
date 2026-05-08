@@ -5563,6 +5563,17 @@ async function excluirOP(opId) {
   var label = (op.produto || op.sku_produto || 'OP #'+opId) + (op.cor ? ' — ' + op.cor : '') + ' (' + costuName(op.costureiro_id) + ')';
 
   try {
+    // 0) Pre-check: OP com entregas registradas NÃO pode ser excluída — FK em producao_entregas trava DELETE.
+    //    Bloquear ANTES de criar movs de retorno (evita estado inconsistente que causou bug da OP 1281 em 08/05/2026).
+    var rEnt = await fetch(SB_URL + '/rest/v1/producao_entregas?ordem_producao_id=eq.' + opId + '&select=id', {
+      headers: await getAuthHeaders()
+    });
+    var entregas = rEnt.ok ? await rEnt.json() : [];
+    if (entregas.length > 0) {
+      alert('Não é possível excluir esta OP: ela tem ' + entregas.length + ' entrega(s) registrada(s) (#' + entregas.map(function(e){return e.id;}).join(', #') + ').\n\nO que você pode fazer:\n  • Apagar as entregas pelo histórico do drawer (cada linha tem botão Excluir)\n  • Ou marcar o status da OP como Cancelado em vez de excluir\n\nApagar OPs com entregas registradas perderia o rastro do tecido consumido e do pagamento provisionado.');
+      return;
+    }
+
     // 1) Buscar TODAS as movs envio_costureiro da OP — vamos inverter cada uma pra retornar o tecido pro local de origem registrado.
     //    Se OP foi criada com tecido vindo do CD: movs eram (-X CD FUSION, +X costureiro). Inverso: (+X CD, -X costureiro) → tecido volta pro CD.
     //    Se tecido já estava no costureiro (pré-alocado), não havia movs envio_costureiro vinculadas → nada a retornar.
