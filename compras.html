@@ -5806,6 +5806,24 @@ async function submitDrawer() {
             observacao: 'Consumo entrega ' + (tipoEntrega==='total'?'TOTAL':'parcial') + ' OP #' + op.id + ' (' + totalEntrega + ' pç × ' + consumoPorPeca + ')',
           }]);
         } catch (e) { console.warn('Falha ao registrar consumo_op proporcional:', e); }
+
+        // Regra de descarte automático (entrega TOTAL): se sobrar resíduo < consumo/peça,
+        // o tecido residual é descartado automaticamente (não dá mais pra fazer nem 1 peça inteira).
+        if (tipoEntrega === 'total') {
+          var saldoAtualCostu = ((STATE.saldoLocalIdx || {})[op.insumo_id] || {})[costuNome] || 0;
+          var residuo = saldoAtualCostu - metrosConsumidos;
+          if (residuo > 0.001 && residuo < consumoPorPeca) {
+            try {
+              await postSupabase('movimentacao_insumos', [{
+                insumo_id: op.insumo_id, tipo_mov: 'consumo_op',
+                quantidade: -residuo, localizacao: costuNome,
+                ordem_producao_id: op.id,
+                nf_remessa: nfRemessaEnt,
+                observacao: 'Resíduo descartado (' + residuo.toFixed(2) + ' ' + (op.unidade||'M') + ' < consumo/peça ' + consumoPorPeca + ')',
+              }]);
+            } catch (e) { console.warn('Falha ao descartar resíduo:', e); }
+          }
+        }
       }
 
       // 3) Se Total: fecha a OP (status='Entregue', data_entrega_real=data)
@@ -5967,6 +5985,19 @@ async function submitDrawer() {
           localizacao: costureiroNomeAtual, ordem_producao_id: op.id,
           observacao: 'Consumo OP #' + op.id + ' (entrega ' + (dataEntregaReal||'?') + ')',
         });
+        // Regra de descarte automático: se sobra no costureiro < consumo/peça, descartar
+        var consumoPorPecaEdit = parseFloat(op.consumo_por_peca) || 0;
+        if (consumoPorPecaEdit > 0) {
+          var saldoCostuEdit = ((STATE.saldoLocalIdx || {})[op.insumo_id] || {})[costureiroNomeAtual] || 0;
+          var residuoEdit = saldoCostuEdit - metrosKg;
+          if (residuoEdit > 0.001 && residuoEdit < consumoPorPecaEdit) {
+            movsExtras.push({
+              insumo_id: op.insumo_id, tipo_mov: 'consumo_op', quantidade: -residuoEdit,
+              localizacao: costureiroNomeAtual, ordem_producao_id: op.id,
+              observacao: 'Resíduo descartado (' + residuoEdit.toFixed(2) + ' ' + (op.unidade||'M') + ' < consumo/peça ' + consumoPorPecaEdit + ')',
+            });
+          }
+        }
       } else if (statusAntigo === 'Em Produção' && novoStatus === 'Cancelado' && op.insumo_id && metrosKg > 0) {
         // Cancelamento: tecido volta pro local de origem (espelha as movs envio_costureiro da OP)
         try {
