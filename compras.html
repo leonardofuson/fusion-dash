@@ -2376,6 +2376,8 @@ function openDrawerEdit(opId) {
   setTimeout(updateDiffEntrega, 0);
   // Mostra/esconde seção de grade maior conforme costureiro selecionado
   setTimeout(function(){ ajustarSecaoGradeMaior('edit'); }, 0);
+  // Carrega bloco de resíduo descartado (se houver mov consumo_op c/ obs "Resíduo descartado")
+  setTimeout(function(){ carregarResiduoOP(opId, op.unidade); }, 0);
 }
 
 function injetarBtnImprimirOP(opId) {
@@ -5367,10 +5369,32 @@ function buildEditOPForm(op) {
           '<input class="form-input" type="text" id="f-edit-vt-m" readonly style="background:var(--bg3);color:var(--orange);font-weight:700" value="' + ((parseFloat(op.valor_costura_dentro_maior)||0) + (parseFloat(op.valor_costura_fora_maior)||0)).toFixed(2) + '"></div>' +
       '</div>' +
     '</div>' +
+    '<div id="op-edit-residuo-info" style="display:none;margin-top:12px;padding:10px 12px;background:rgba(251,146,60,0.08);border:1px solid rgba(251,146,60,0.3);border-radius:8px;font-size:12px;color:var(--orange)"></div>' +
     '<div style="margin-top:16px;padding:12px;background:var(--bg);border-radius:8px;font-size:12px;color:var(--txt3)">' +
       '<strong style="color:var(--txt2)">Resumo:</strong> ' + diasRodando(op) + ' dias rodando · ' +
       'Valor total: ' + fmtR(op.valor_total) + ' · Criado em: ' + (op.criado_em ? op.criado_em.slice(0, 10) : '—') +
     '</div>';
+}
+
+// Fetch async das movs 'Resíduo descartado' da OP. Renderiza no bloco laranja se houver.
+async function carregarResiduoOP(opId, unidade) {
+  try {
+    var url = SB_URL + '/rest/v1/movimentacao_insumos?ordem_producao_id=eq.' + opId
+      + '&tipo_mov=eq.consumo_op&observacao=ilike.Resíduo*&select=quantidade,observacao,criado_em,localizacao';
+    var r = await fetch(url, { headers: await getAuthHeaders() });
+    if (!r.ok) return;
+    var movs = await r.json();
+    var box = document.getElementById('op-edit-residuo-info');
+    if (!box) return;
+    if (!movs || !movs.length) { box.style.display = 'none'; return; }
+    var totalResiduo = movs.reduce(function(s, m){ return s + Math.abs(parseFloat(m.quantidade) || 0); }, 0);
+    var locs = {};
+    movs.forEach(function(m){ locs[m.localizacao || '?'] = (locs[m.localizacao||'?'] || 0) + Math.abs(parseFloat(m.quantidade) || 0); });
+    var locStr = Object.keys(locs).map(function(l){ return l + ': ' + locs[l].toFixed(2); }).join(' · ');
+    box.style.display = '';
+    box.innerHTML = '<strong>♻ Resíduo descartado:</strong> ' + totalResiduo.toFixed(2) + ' ' + (unidade||'M') +
+      ' <small style="color:var(--txt3)">(' + locStr + ')</small>';
+  } catch (e) { /* silently ignore */ }
 }
 
 // Mostra diff (peças e valor) entre projetado vs entregue quando user mexe nos campos
