@@ -84,13 +84,13 @@ Se costureiro **já tem saldo** do insumo (ex: pré-alocado via "Alocar tecido")
 
 ### Entrega parcial
 Drawer "Registrar entrega" tem radio **Parcial / Total**:
-- **Parcial**: INSERT em `producao_entregas` + mov `consumo_op` proporcional (`qty × consumo_por_peca`). OP fica `Em Produção`.
-- **Total**: mesmas ações + PATCH OP com `status='Entregue'`, `data_entrega_real`, `mes_ano_entrega`. Preview de diff (projetado vs total) antes de salvar.
+- **Parcial**: INSERT em `producao_entregas` + mov `consumo_op` proporcional (`qty × consumo_por_peca`). OP fica `Em Produção` (trigger atualiza `qtde_pecas_entregues` mas **não** mexe em status — desde fix de 11/05/2026).
+- **Total**: mesmas ações + PATCH OP com `status='Entregue'`, `data_entrega_real`, `mes_ano_entrega`. Preview de diff (projetado vs total) antes de salvar. CHECK constraint `chk_entregue_tem_data` no DB garante que `Entregue` sempre tem data.
 
 ### Editar / excluir entrega passada
 Cada item do histórico tem botões `Editar` e `Excluir`:
 - **Editar**: PATCH `producao_entregas` + mov de delta (`(qty_nova − qty_antiga) × consumo_por_peca`) — sinal flip pra ajustar saldo do costureiro.
-- **Excluir**: mov reversa (`+qty × consumo_por_peca`) + DELETE em `producao_entregas`. Trigger DB recalcula `qtde_pecas_entregues`.
+- **Excluir**: mov reversa (`+qty × consumo_por_peca`) + DELETE em `producao_entregas`. Trigger `trg_excluir_op_entrega` (11/05/2026) decrementa `qtde_pecas_entregues` simetricamente ao INSERT — preserva legado das 1130 OPs históricas com `qpe>0` sem rows em `producao_entregas`.
 
 ## Histórico de movimentações
 Drawer de Editar Insumo carrega últimos 200 movs daquele insumo via `movimentacao_insumos?insumo_id=eq.X&order=criado_em.desc`. Mostra Data / Tipo / OP / Local / Qtd / Observação. **Único lugar** pra auditar o event log — futuramente pode replicar no drawer de Editar OP.

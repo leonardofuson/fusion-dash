@@ -403,6 +403,25 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
       <div class="card-body" id="costureiro-bars"></div>
     </div>
     <div class="card">
+      <div class="card-header">
+        <span class="card-title">Eficiência de Encaixe</span>
+        <small style="color:var(--txt3)">tecido real consumido vs BOM (OPs Entregue)</small>
+      </div>
+      <div class="kpi-grid" id="kpis-eficiencia" style="padding:14px 14px 0"></div>
+      <div class="tb-wrap">
+        <table class="tb"><thead><tr>
+          <th>Costureiro</th>
+          <th class="r">OPs</th>
+          <th class="r">Pç entregues</th>
+          <th class="r">Tecido real</th>
+          <th class="r">Tecido BOM</th>
+          <th class="r">Eficiência</th>
+          <th class="r">M/pç real</th>
+          <th>Última</th>
+        </tr></thead><tbody id="tbody-eficiencia-costureiro"></tbody></table>
+      </div>
+    </div>
+    <div class="card">
       <div class="card-header"><span class="card-title">Top Fornecedores de Tecido</span><small style="color:var(--txt3)">por valor total comprado</small></div>
       <div class="tb-wrap">
         <table class="tb"><thead><tr>
@@ -693,7 +712,7 @@ async function buscarTudo(tab, filtro) {
 
 async function carregar() {
   try {
-    var [ops, compras, costureiros, precos, insumos, consumo, planejamento, fornecedores, produtos, coresValidas, custosSku, saldoLocal] = await Promise.all([
+    var [ops, compras, costureiros, precos, insumos, consumo, planejamento, fornecedores, produtos, coresValidas, custosSku, saldoLocal, eficiencia] = await Promise.all([
       buscarTudo('ordens_producao', 'select=*&order=criado_em.desc'),
       buscarTudo('ordens_compra', 'select=*&order=data_faturamento.desc'),
       buscarTudo('costureiros', 'select=*&order=nome'),
@@ -706,6 +725,7 @@ async function carregar() {
       buscarTudo('produto_cores_validas', 'select=sku_pai,cor,origem&ativo=eq.true&order=sku_pai,cor'),
       buscarTudo('custos_sku', 'select=*&order=sku_pai'),
       buscarTudo('vw_insumo_saldo_local', 'select=*'),
+      buscarTudo('vw_eficiencia_costureiro_global', 'select=*&order=eficiencia.asc'),
     ]);
     STATE.ops = ops;
     STATE.compras = compras;
@@ -719,6 +739,7 @@ async function carregar() {
     STATE.coresValidas = coresValidas;
     STATE.custosSku = custosSku || [];
     STATE.saldoLocal = saldoLocal || [];
+    STATE.eficienciaCostureiros = eficiencia || [];
     // Index saldo por (insumo_id, localizacao) — modelo event-sourced (Sprint 2)
     STATE.saldoLocalIdx = {};
     STATE.saldoLocal.forEach(function(r) {
@@ -1640,6 +1661,18 @@ async function abrirRegistrarEntrega(opId) {
         '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px"><input type="radio" name="ent-tipo" value="total" onchange="atualizarPreviewFechamento()"><span><strong>Total</strong> — última entrega, fecha a OP</span></label>' +
       '</div>' +
       '<div id="ent-preview-fechamento" style="margin-top:10px;display:none;font-size:12px"></div>' +
+      // Campo "Tecido consumido (M)" — aparece só na entrega TOTAL. Substitui a fórmula
+      // (qtde × consumo/peça) por valor real declarado pelo usuário. Evita saldo negativo
+      // quando costureiro encaixa melhor que o BOM e entrega + peças que o BOM previa.
+      '<div id="ent-consumo-real-sec" style="margin-top:10px;display:none;padding-top:10px;border-top:1px dashed rgba(99,102,241,0.3)">' +
+        '<label class="form-label" style="font-size:11px">Tecido realmente consumido na OP</label>' +
+        '<div style="display:flex;gap:12px;align-items:flex-end">' +
+          '<div style="flex:0 0 140px">' +
+            '<input type="text" inputmode="decimal" class="form-input" id="f-ent-consumo-real" oninput="atualizarPreviewFechamento()" placeholder="Ex: 478.00">' +
+          '</div>' +
+          '<div style="flex:1;font-size:11px;color:var(--txt3);line-height:1.5" id="ent-consumo-real-info"></div>' +
+        '</div>' +
+      '</div>' +
     '</div>' +
     '<div class="form-group"><label class="form-label">Observação</label>' +
       '<textarea class="form-textarea" id="f-ent-obs" placeholder="Opcional..."></textarea></div>';
@@ -1651,10 +1684,12 @@ function atualizarPreviewFechamento() {
   if (!op) return;
   var tipo = (document.querySelector('input[name="ent-tipo"]:checked') || {}).value || 'parcial';
   var preview = document.getElementById('ent-preview-fechamento');
+  var consumoSec = document.getElementById('ent-consumo-real-sec');
   if (!preview) return;
   if (tipo !== 'total') {
     preview.style.display = 'none';
     preview.innerHTML = '';
+    if (consumoSec) consumoSec.style.display = 'none';
     return;
   }
   // Soma jaEntregues + qtd desta entrega
@@ -1675,8 +1710,40 @@ function atualizarPreviewFechamento() {
       '<div><div style="color:var(--txt3);font-size:10px;text-transform:uppercase">Total entregue</div><strong style="color:var(--green)">' + fmt(totalEnt) + ' pç</strong></div>' +
       '<div><div style="color:var(--txt3);font-size:10px;text-transform:uppercase">' + lbl + '</div><strong style="color:'+corDiff+'">' + sinal + fmt(diff) + ' pç</strong></div>' +
     '</div>' +
-    '<div style="margin-top:8px;font-size:11px;color:var(--txt3)">Ao salvar, OP será fechada como Entregue (data hoje) e o saldo de tecido será baixado proporcionalmente.</div>' +
+    '<div style="margin-top:8px;font-size:11px;color:var(--txt3)">Ao salvar, OP será fechada como Entregue (data hoje) e o saldo de tecido será baixado pelo Consumo Real informado abaixo.</div>' +
   '</div>';
+
+  // Mostra seção "Tecido realmente consumido"
+  if (consumoSec) {
+    consumoSec.style.display = 'block';
+    var inp = document.getElementById('f-ent-consumo-real');
+    var info = document.getElementById('ent-consumo-real-info');
+    if (inp && !inp.value) {
+      // Default = quantidade_tecido_usada (tudo que recebeu)
+      var defaultVal = parseFloat(op.quantidade_tecido_usada) || parseFloat(op.metros_kg) || 0;
+      if (defaultVal > 0) inp.value = defaultVal.toFixed(2);
+    }
+    if (info) {
+      var real = parseFloat((inp && inp.value) || 0) || 0;
+      var consPc = parseFloat(op.consumo_por_peca) || 0;
+      var bom = consPc * totalEnt;  // tecido que o BOM previa pra esse total entregue
+      var deltaBom = real - bom;
+      var pctBom = bom > 0 ? (deltaBom / bom * 100) : 0;
+      var corDelta = Math.abs(pctBom) < 1 ? 'var(--txt3)' : (deltaBom < 0 ? 'var(--green)' : 'var(--orange)');
+      var unid = op.unidade || 'M';
+      info.innerHTML =
+        '<div>Default = tecido enviado ao costureiro (<strong>' + (op.quantidade_tecido_usada || '—') + ' ' + unid + '</strong>). Edite se sobrou tecido (devolvido) ou faltou.</div>' +
+        (bom > 0 ?
+          '<div style="margin-top:4px">BOM previa: <strong>' + bom.toFixed(2) + ' ' + unid + '</strong> (' + totalEnt + ' pç × ' + consPc + ') · ' +
+          '<span style="color:' + corDelta + ';font-weight:600">' +
+            (deltaBom >= 0 ? '+' : '') + deltaBom.toFixed(2) + ' ' + unid + ' (' +
+            (pctBom >= 0 ? '+' : '') + pctBom.toFixed(1) + '%)</span>' +
+            (deltaBom < -0.5 ? ' <span style="color:var(--green)">→ costureiro encaixou melhor</span>' : '') +
+            (deltaBom > 0.5 ? ' <span style="color:var(--orange)">→ costureiro usou + tecido</span>' : '') +
+          '</div>'
+        : '');
+    }
+  }
 }
 
 function atualizarEntregaTotal() {
@@ -2529,8 +2596,75 @@ function renderCostureiros() {
   }).join('');
   document.getElementById('costureiro-bars').innerHTML = barsHtml || '<div class="empty">Sem dados — clique em "+ Cadastrar" pra adicionar</div>';
 
+  renderEficienciaCostureiros();
   // Pagamentos previstos
   // (Tabela 'Previsão de Pagamentos' removida 26/04/2026 — substituída pela aba Pagamentos com régua D+15/D+30)
+}
+
+// Card "Eficiência de Encaixe" — consome view vw_eficiencia_costureiro_global
+// eficiência < 1 = costureiro gasta menos tecido/peça que o BOM previa
+function renderEficienciaCostureiros() {
+  var dados = STATE.eficienciaCostureiros || [];
+  var tbody = document.getElementById('tbody-eficiencia-costureiro');
+  var kpisEl = document.getElementById('kpis-eficiencia');
+  if (!tbody || !kpisEl) return;
+
+  if (!dados.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty">Sem OPs com consumo_real_total declarado ainda</td></tr>';
+    kpisEl.innerHTML = '';
+    return;
+  }
+
+  // Agregado global pra KPIs
+  var totRealGlobal = 0, totBomGlobal = 0, totPecasGlobal = 0, totOpsGlobal = 0;
+  dados.forEach(function(d) {
+    totRealGlobal += parseFloat(d.tecido_real_m) || 0;
+    totBomGlobal += parseFloat(d.tecido_bom_m) || 0;
+    totPecasGlobal += parseInt(d.pecas_entregues) || 0;
+    totOpsGlobal += parseInt(d.n_ops) || 0;
+  });
+  var eficGlobal = totBomGlobal > 0 ? (totRealGlobal / totBomGlobal) : 1;
+  var deltaGlobalPct = (eficGlobal - 1) * 100;
+  var deltaCor = Math.abs(deltaGlobalPct) < 1 ? 'var(--txt2)'
+                 : deltaGlobalPct < 0 ? 'var(--green)' : 'var(--orange)';
+  var nCosturAtivos = dados.length;
+  var melhor = dados.reduce(function(a,b){
+    return ((parseFloat(b.eficiencia)||999) < (parseFloat(a.eficiencia)||999)) ? b : a;
+  });
+
+  kpisEl.innerHTML = [
+    kpiHtml('Eficiência média', eficGlobal.toFixed(3),
+      (deltaGlobalPct >= 0 ? '+' : '') + deltaGlobalPct.toFixed(1) + '% vs BOM',
+      '--kpi-accent:' + deltaCor),
+    kpiHtml('Tecido real (total)', fmt(Math.round(totRealGlobal)) + ' M',
+      fmt(totPecasGlobal) + ' pç entregues', '--kpi-accent:var(--indigo)'),
+    kpiHtml('Tecido BOM (previsto)', fmt(Math.round(totBomGlobal)) + ' M',
+      'diff: ' + (totRealGlobal - totBomGlobal >= 0 ? '+' : '') + fmt(Math.round(totRealGlobal - totBomGlobal)) + ' M',
+      '--kpi-accent:var(--purple)'),
+    kpiHtml('Melhor encaixe', melhor.costureiro,
+      'efic ' + parseFloat(melhor.eficiencia).toFixed(3) + ' (' + melhor.n_ops + ' OPs)',
+      '--kpi-accent:var(--green)'),
+  ].join('');
+
+  // Tabela ranking — eficiência ascendente (melhores primeiro)
+  tbody.innerHTML = dados.map(function(d) {
+    var ef = parseFloat(d.eficiencia) || 0;
+    var pct = (ef - 1) * 100;
+    var efCor = Math.abs(pct) < 1 ? 'var(--txt2)' : (pct < 0 ? 'var(--green)' : 'var(--orange)');
+    var consPc = totPecasGlobal > 0 ? (parseFloat(d.tecido_real_m) / parseInt(d.pecas_entregues)).toFixed(3) : '—';
+    var ult = d.ultima_entrega ? d.ultima_entrega.slice(0,10) : '—';
+    return '<tr>' +
+      '<td>' + escHtml(d.costureiro) + '</td>' +
+      '<td class="r">' + d.n_ops + '</td>' +
+      '<td class="r">' + fmt(d.pecas_entregues) + '</td>' +
+      '<td class="r">' + fmt(parseFloat(d.tecido_real_m).toFixed(0)) + ' M</td>' +
+      '<td class="r">' + fmt(parseFloat(d.tecido_bom_m).toFixed(0)) + ' M</td>' +
+      '<td class="r" style="color:' + efCor + ';font-weight:700">' + ef.toFixed(3) +
+        ' <small style="font-weight:500">(' + (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%)</small></td>' +
+      '<td class="r">' + consPc + '</td>' +
+      '<td class="dim">' + ult + '</td>' +
+    '</tr>';
+  }).join('');
 }
 
 // ═══════════════ TAB: PRODUTOS (Gap 3 — cadastro centralizado) ═══════════════
@@ -5805,6 +5939,17 @@ async function submitDrawer() {
       var qtdDefeito = parseInt((document.getElementById('f-ent-defeito') || {}).value) || 0;
       var nfRemessaEnt = ((document.getElementById('f-ent-nf-remessa') || {}).value || '').trim() || null;
 
+      // Pra entrega TOTAL, pega consumo real declarado (input substitui fórmula).
+      // Pra parcial, segue calculando via qtde × consumo_por_peca (provisório).
+      var consumoRealInput = null;
+      if (tipoEntrega === 'total') {
+        consumoRealInput = parseFloat(((document.getElementById('f-ent-consumo-real') || {}).value || '').replace(',', '.'));
+        if (!consumoRealInput || consumoRealInput <= 0) {
+          // Default: tudo que foi enviado ao costureiro
+          consumoRealInput = parseFloat(op.quantidade_tecido_usada) || parseFloat(op.metros_kg) || 0;
+        }
+      }
+
       // 1) Insere registro da entrega (trigger DB atualiza qtde_pecas_entregues)
       await postSupabase('producao_entregas', {
         ordem_producao_id: op.id,
@@ -5816,24 +5961,34 @@ async function submitDrawer() {
         observacao: (document.getElementById('f-ent-obs').value || '').trim() || null,
       });
 
-      // 2) Gera consumo_op proporcional (qtd_entregue × consumo_por_peca)
+      // 2) Gera consumo_op
+      //    - TOTAL: usa consumo_real_total declarado (consumoRealInput)
+      //    - Parcial: fórmula qtde × consumo_por_peca (provisório — será reconciliado no fechamento)
       var consumoPorPeca = parseFloat(op.consumo_por_peca) || 0;
-      if (op.insumo_id && consumoPorPeca > 0 && totalEntrega > 0) {
-        var metrosConsumidos = totalEntrega * consumoPorPeca;
-        var costuNome = costuName(op.costureiro_id);
+      var costuNome = costuName(op.costureiro_id);
+      var metrosConsumidos;
+      if (tipoEntrega === 'total') {
+        metrosConsumidos = consumoRealInput;
+      } else {
+        metrosConsumidos = totalEntrega * consumoPorPeca;
+      }
+      if (op.insumo_id && metrosConsumidos > 0) {
         try {
+          var consumoObs = tipoEntrega === 'total'
+            ? 'Consumo TOTAL OP #' + op.id + ' (real=' + metrosConsumidos.toFixed(2) + (op.unidade||'M') + ', BOM=' + (totalEntrega * consumoPorPeca).toFixed(2) + ')'
+            : 'Consumo parcial OP #' + op.id + ' (' + totalEntrega + ' pç × ' + consumoPorPeca + ')';
           await postSupabase('movimentacao_insumos', [{
             insumo_id: op.insumo_id, tipo_mov: 'consumo_op',
             quantidade: -metrosConsumidos, localizacao: costuNome,
             ordem_producao_id: op.id,
             nf_remessa: nfRemessaEnt,
-            observacao: 'Consumo entrega ' + (tipoEntrega==='total'?'TOTAL':'parcial') + ' OP #' + op.id + ' (' + totalEntrega + ' pç × ' + consumoPorPeca + ')',
+            observacao: consumoObs,
           }]);
-        } catch (e) { console.warn('Falha ao registrar consumo_op proporcional:', e); }
+        } catch (e) { console.warn('Falha ao registrar consumo_op:', e); }
 
         // Regra de descarte automático (entrega TOTAL): se sobrar resíduo < consumo/peça,
         // o tecido residual é descartado automaticamente (não dá mais pra fazer nem 1 peça inteira).
-        if (tipoEntrega === 'total') {
+        if (tipoEntrega === 'total' && consumoPorPeca > 0) {
           var saldoAtualCostu = ((STATE.saldoLocalIdx || {})[op.insumo_id] || {})[costuNome] || 0;
           var residuo = saldoAtualCostu - metrosConsumidos;
           if (residuo > 0.001 && residuo < consumoPorPeca) {
@@ -5850,13 +6005,14 @@ async function submitDrawer() {
         }
       }
 
-      // 3) Se Total: fecha a OP (status='Entregue', data_entrega_real=data)
+      // 3) Se Total: fecha a OP (status='Entregue', data_entrega_real=data, consumo_real_total)
       if (tipoEntrega === 'total') {
         try {
           await patchSupabase('ordens_producao', op.id, {
             status: 'Entregue',
             data_entrega_real: data,
             mes_ano_entrega: data.slice(0,7),
+            consumo_real_total: consumoRealInput,
             atualizado_em: new Date().toISOString(),
           });
         } catch (e) { console.warn('Falha ao fechar OP como Entregue:', e); alert('Entrega registrada, mas falhou fechar OP: ' + e.message); }
@@ -6003,7 +6159,11 @@ async function submitDrawer() {
       var metrosKg = parseFloat(op.quantidade_tecido_usada) || parseFloat(op.metros_kg) || 0;
       var movsExtras = [];
       if (statusAntigo === 'Em Produção' && novoStatus === 'Entregue' && op.insumo_id && metrosKg > 0) {
-        // Consumo: tecido virou produto, sai do saldo total (-X no costureiro)
+        // Consumo: tecido virou produto, sai do saldo total (-X no costureiro).
+        // Usa quantidade_tecido_usada (tecido enviado) — evita saldo negativo quando
+        // costureiro entrega + peças que o BOM previa (encaixe melhor).
+        // consumo_real_total preenchido pra alimentar view de eficiência.
+        body.consumo_real_total = metrosKg;
         movsExtras.push({
           insumo_id: op.insumo_id, tipo_mov: 'consumo_op', quantidade: -metrosKg,
           localizacao: costureiroNomeAtual, ordem_producao_id: op.id,
