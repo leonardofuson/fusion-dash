@@ -27,6 +27,7 @@
     ecommerce:  { titulo: 'E-commerce',  descricao: 'Canais digitais',           url: '/ecommerce.html',  icone: '🛒' },
     diretoria:  { titulo: 'Diretoria',   descricao: 'Visão consolidada',         url: '/diretoria.html',  icone: '📊' },
     'cockpit-fusion': { titulo: 'Cockpit Fusion', descricao: 'DRE consolidado + projeção × realizado + drawer Max', url: '/cockpit.html', icone: '🎯' },
+    projetos:   { titulo: 'Projetos',    descricao: 'Gestão de projetos estratégicos (Facção PR + Fábrica PY)', url: '/projetos.html', icone: '🏗️' },
     'cockpit-conciliacao': { titulo: 'Conciliação', descricao: 'Extratos × contas_pagar × planilha entradas — revisão de dúvidas', url: '/cockpit-conciliacao.html', icone: '🔍' },
     estoque:    { titulo: 'Estoque',     descricao: 'Posição multi-canal',       url: '/estoque.html',    icone: '📦' },
     compras:    { titulo: 'Compras',     descricao: 'Ordens e fornecedores',     url: '/compras.html',    icone: '🧾' },

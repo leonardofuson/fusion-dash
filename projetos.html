@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fusion — Projetos Estratégicos</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --bg:#09090b;--bg2:#111113;--bg3:#1a1a1e;--bdr:#2a2a2e;--bdr-hover:#3f3f46;
+  --txt1:#fafafa;--txt2:#d4d4d8;--txt3:#a1a1aa;--txt4:#71717a;
+  --indigo:#6366f1;--green:#4ade80;--red:#f87171;--amber:#facc15;--orange:#fb923c;
+  --purple:#a78bfa;--cyan:#22d3ee;--pink:#ec4899;--rose:#fb7185;--violet:#8b5cf6;
+}
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Inter',sans-serif;}
+body{background:var(--bg);color:var(--txt1);min-height:100vh;}
+
+/* ── Topbar ── */
+.topbar{background:rgba(9,9,11,0.85);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--bdr);height:64px;display:flex;align-items:center;padding:0 1.5rem;gap:16px;position:sticky;top:0;z-index:100;}
+.topbar img{height:32px;}
+.topbar-div{width:1px;height:18px;background:var(--bdr);}
+.topbar-label{font-size:15px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--txt1);}
+.topbar-actions{display:flex;align-items:center;gap:14px;margin-left:auto;}
+#user-info-tb{font-size:13px;color:var(--txt2);}
+.btn-back,.btn-logout-tb{background:transparent;border:1px solid var(--bdr);color:var(--txt2);padding:7px 14px;border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit;text-decoration:none;display:inline-block;transition:all 0.15s;}
+.btn-back:hover{border-color:var(--indigo);color:var(--indigo);}
+.btn-logout-tb:hover{border-color:var(--red);color:var(--red);}
+
+/* ── Layout ── */
+.main{max-width:1440px;margin:0 auto;padding:1.5rem;}
+
+/* ── Project switcher (banner colorido) ── */
+.proj-banner{position:relative;border-radius:14px;padding:24px 28px;margin-bottom:20px;background:linear-gradient(135deg,var(--proj-cor,var(--indigo))22,var(--bg2));border:1px solid var(--bdr);overflow:hidden;}
+.proj-banner::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--proj-cor,var(--indigo));}
+.proj-banner-row{display:flex;align-items:center;gap:18px;flex-wrap:wrap;}
+.proj-icone{width:54px;height:54px;border-radius:12px;background:var(--proj-cor,var(--indigo))22;border:1px solid var(--proj-cor,var(--indigo))44;display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0;}
+.proj-info{flex:1;min-width:200px;}
+.proj-nome{font-size:20px;font-weight:700;color:var(--txt1);display:flex;align-items:center;gap:10px;}
+.proj-desc{font-size:13px;color:var(--txt3);margin-top:4px;line-height:1.4;max-width:680px;}
+.proj-meta{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:12px;color:var(--txt2);}
+.proj-meta strong{color:var(--txt1);font-weight:600;}
+.proj-switcher{position:relative;display:flex;align-items:center;gap:10px;}
+.proj-switch-btn{background:var(--bg2);border:1px solid var(--bdr);color:var(--txt1);padding:9px 14px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all 0.15s;display:flex;align-items:center;gap:8px;}
+.proj-switch-btn:hover{border-color:var(--indigo);}
+.proj-switch-list{position:absolute;top:calc(100% + 6px);right:0;background:var(--bg2);border:1px solid var(--bdr);border-radius:10px;min-width:280px;padding:6px;z-index:50;box-shadow:0 10px 40px rgba(0,0,0,0.4);display:none;}
+.proj-switch-list.open{display:block;}
+.proj-switch-item{padding:10px 12px;border-radius:8px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:10px;color:var(--txt2);}
+.proj-switch-item:hover{background:var(--bg3);color:var(--txt1);}
+.proj-switch-item.active{background:var(--indigo)22;color:var(--txt1);}
+.proj-switch-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+
+/* ── Tab Navigation ── */
+.tab-nav{display:flex;gap:4px;padding:4px;background:var(--bg2);border:1px solid var(--bdr);border-radius:10px;width:fit-content;margin-bottom:20px;overflow-x:auto;max-width:100%;}
+.tab-btn{padding:8px 16px;border:none;border-radius:8px;background:transparent;color:var(--txt3);font-family:inherit;font-size:13px;font-weight:500;cursor:pointer;transition:all 0.15s;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;}
+.tab-btn:hover{color:var(--txt2);background:rgba(255,255,255,0.04);}
+.tab-btn.active{background:var(--indigo);color:#fff;}
+.tab-btn .badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:rgba(255,255,255,0.1);font-size:10px;font-weight:600;color:var(--txt2);}
+.tab-btn.active .badge{background:rgba(255,255,255,0.2);color:#fff;}
+.tab-panel{display:none;}
+.tab-panel.active{display:block;}
+.subtab-nav{display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid var(--bdr);padding-bottom:0;}
+.subtab-btn{padding:8px 14px;border:none;background:transparent;color:var(--txt3);font-family:inherit;font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;}
+.subtab-btn.active{color:var(--indigo);border-bottom-color:var(--indigo);}
+
+/* ── KPIs ── */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:24px;}
+.kpi{background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;padding:18px;position:relative;overflow:hidden;}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--kpi-accent,var(--indigo));opacity:0.6;}
+.kpi-lbl{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--txt3);margin-bottom:8px;}
+.kpi-val{font-size:1.5rem;font-weight:800;color:var(--txt1);line-height:1;font-variant-numeric:tabular-nums;}
+.kpi-sub{font-size:12px;color:var(--txt3);margin-top:6px;}
+
+/* ── Cards ── */
+.card{background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;margin-bottom:16px;}
+.card-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--bdr);}
+.card-title{font-size:14px;font-weight:600;color:var(--txt1);}
+.card-title small{font-size:12px;font-weight:400;color:var(--txt3);margin-left:8px;}
+.card-body{padding:18px;}
+.grid2{display:grid;grid-template-columns:2fr 1fr;gap:16px;}
+
+/* ── Pills ── */
+.pill{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:9999px;font-size:11px;font-weight:600;white-space:nowrap;}
+.pill::before{content:'';width:6px;height:6px;border-radius:50%;}
+.pill-ok{background:rgba(74,222,128,0.12);color:var(--green);}.pill-ok::before{background:var(--green);}
+.pill-warning{background:rgba(250,204,21,0.12);color:var(--amber);}.pill-warning::before{background:var(--amber);}
+.pill-danger{background:rgba(248,113,113,0.12);color:var(--red);}.pill-danger::before{background:var(--red);}
+.pill-info{background:rgba(99,102,241,0.12);color:var(--indigo);}.pill-info::before{background:var(--indigo);}
+.pill-neutral{background:rgba(161,161,170,0.12);color:var(--txt2);}.pill-neutral::before{background:var(--txt2);}
+.pill-purple{background:rgba(167,139,250,0.12);color:var(--purple);}.pill-purple::before{background:var(--purple);}
+.pill-orange{background:rgba(251,146,60,0.12);color:var(--orange);}.pill-orange::before{background:var(--orange);}
+
+/* ── Kanban ── */
+.kanban{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:8px;}
+.kb-col{background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;min-height:300px;display:flex;flex-direction:column;}
+.kb-col.drop-target{border-color:var(--indigo);background:rgba(99,102,241,0.04);}
+.kb-col-head{padding:12px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--bdr);}
+.kb-col-title{font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.06em;display:flex;align-items:center;gap:6px;}
+.kb-col-title::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--col-dot,var(--txt4));}
+.kb-col-count{font-size:11px;color:var(--txt4);font-weight:600;background:var(--bg3);padding:2px 8px;border-radius:9px;}
+.kb-col-body{padding:10px;flex:1;display:flex;flex-direction:column;gap:8px;overflow-y:auto;max-height:calc(100vh - 320px);}
+.kb-card{background:var(--bg3);border:1px solid var(--bdr);border-radius:9px;padding:11px 12px;cursor:grab;transition:transform 0.12s,border-color 0.12s;}
+.kb-card:hover{border-color:var(--bdr-hover);transform:translateY(-1px);}
+.kb-card.dragging{opacity:0.5;cursor:grabbing;}
+.kb-card-titulo{font-size:13px;font-weight:600;color:var(--txt1);line-height:1.35;margin-bottom:6px;}
+.kb-card-meta{display:flex;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--txt3);align-items:center;}
+.kb-card-resp{display:inline-flex;align-items:center;gap:5px;background:var(--bg2);border:1px solid var(--bdr);padding:1px 7px;border-radius:9px;}
+.kb-card-resp::before{content:'';width:14px;height:14px;border-radius:50%;background:var(--indigo)33;}
+.kb-card-prazo.atrasada{color:var(--red);font-weight:600;}
+.kb-card-prazo.proxima{color:var(--amber);font-weight:600;}
+
+/* ── Timeline (Marcos) ── */
+.timeline{position:relative;padding-left:32px;}
+.timeline::before{content:'';position:absolute;left:10px;top:0;bottom:0;width:2px;background:var(--bdr);}
+.tl-item{position:relative;padding-bottom:24px;}
+.tl-item::before{content:'';position:absolute;left:-26px;top:6px;width:14px;height:14px;border-radius:50%;background:var(--bg2);border:3px solid var(--tl-cor,var(--txt4));}
+.tl-item.done::before{background:var(--green);border-color:var(--green);}
+.tl-item.now::before{background:var(--amber);border-color:var(--amber);box-shadow:0 0 0 4px rgba(250,204,21,0.2);}
+.tl-item.late::before{background:var(--red);border-color:var(--red);}
+.tl-titulo{font-size:14px;font-weight:600;color:var(--txt1);display:flex;align-items:center;gap:10px;cursor:pointer;}
+.tl-titulo:hover{color:var(--indigo);}
+.tl-data{font-size:12px;color:var(--txt3);margin-top:2px;}
+.tl-desc{font-size:13px;color:var(--txt2);margin-top:6px;line-height:1.45;}
+
+/* ── Table ── */
+table.tb{width:100%;border-collapse:separate;border-spacing:0;font-size:13px;}
+table.tb thead th{background:var(--bg2);color:var(--txt3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;padding:11px 14px;text-align:left;position:sticky;top:64px;z-index:5;box-shadow:inset 0 -1px 0 var(--bdr);}
+table.tb td{padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.04);color:var(--txt1);}
+table.tb tr:hover td{background:rgba(99,102,241,0.03);cursor:pointer;}
+
+/* ── Filters / Chips ── */
+.filtros{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center;}
+.chip{padding:6px 13px;border-radius:20px;font-size:12px;font-weight:600;border:1px solid var(--bdr);background:transparent;color:var(--txt2);cursor:pointer;transition:all 0.15s;}
+.chip:hover{border-color:var(--indigo);color:var(--indigo);}
+.chip.on{background:var(--indigo);border-color:var(--indigo);color:#fff;}
+.dinput,.dselect{background:var(--bg);border:1px solid var(--bdr);border-radius:8px;padding:7px 12px;font-size:12px;color:var(--txt1);font-family:inherit;outline:none;}
+.dinput:focus,.dselect:focus{border-color:var(--indigo);}
+.btnf{background:var(--indigo);border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:600;color:#fff;cursor:pointer;transition:all 0.15s;font-family:inherit;}
+.btnf:hover{box-shadow:0 0 12px rgba(99,102,241,0.3);}
+.btnf.ghost{background:transparent;border:1px solid var(--bdr);color:var(--txt2);}
+.btnf.ghost:hover{border-color:var(--txt2);color:var(--txt1);}
+.btnf.danger{background:var(--red);}
+.btnf.success{background:var(--green);color:#000;}
+
+/* ── Drawer ── */
+.drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);z-index:999;opacity:0;pointer-events:none;transition:opacity 0.2s;}
+.drawer-overlay.open{opacity:1;pointer-events:auto;}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(580px,95vw);background:var(--bg2);border-left:1px solid var(--bdr);z-index:1000;transform:translateX(100%);transition:transform 0.25s cubic-bezier(0.4,0,0.2,1);display:flex;flex-direction:column;}
+.drawer-overlay.open .drawer{transform:translateX(0);}
+.drawer-header{display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid var(--bdr);}
+.drawer-header h2{font-size:16px;font-weight:600;color:var(--txt1);}
+.drawer-close{width:32px;height:32px;border-radius:6px;border:1px solid var(--bdr);background:transparent;color:var(--txt3);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;}
+.drawer-close:hover{background:var(--bg3);color:var(--txt1);}
+.drawer-body{flex:1;overflow-y:auto;padding:22px 24px;}
+.drawer-footer{padding:14px 24px;border-top:1px solid var(--bdr);display:flex;gap:10px;justify-content:flex-end;}
+
+/* ── Form ── */
+.form-group{margin-bottom:16px;}
+.form-label{display:block;font-size:12px;font-weight:600;color:var(--txt2);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.04em;}
+.form-input,.form-select,.form-textarea{width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--bdr);border-radius:8px;color:var(--txt1);font-family:inherit;font-size:14px;}
+.form-input:focus,.form-select:focus,.form-textarea:focus{outline:none;border-color:var(--indigo);box-shadow:0 0 0 3px rgba(99,102,241,0.12);}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.form-textarea{min-height:90px;resize:vertical;}
+
+/* ── Feed de atividades ── */
+.feed{display:flex;flex-direction:column;gap:10px;max-height:520px;overflow-y:auto;}
+.feed-item{display:flex;gap:12px;padding:10px 12px;background:var(--bg3);border-radius:9px;font-size:13px;}
+.feed-icon{width:32px;height:32px;border-radius:50%;background:var(--bg2);border:1px solid var(--bdr);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;}
+.feed-body{flex:1;min-width:0;}
+.feed-desc{color:var(--txt1);line-height:1.4;}
+.feed-meta{font-size:11px;color:var(--txt4);margin-top:3px;}
+
+/* ── Utilities ── */
+.empty{text-align:center;color:var(--txt3);padding:32px;font-size:13px;}
+.spin{width:24px;height:24px;border:2px solid var(--bdr);border-top-color:var(--indigo);border-radius:50%;animation:spin 0.7s linear infinite;margin:24px auto;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.hidden{display:none!important;}
+.flex{display:flex;align-items:center;gap:8px;}
+.between{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.row-actions{display:flex;gap:8px;justify-content:flex-end;}
+.icon-btn{width:30px;height:30px;border-radius:7px;border:1px solid var(--bdr);background:transparent;color:var(--txt3);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:13px;}
+.icon-btn:hover{border-color:var(--indigo);color:var(--indigo);}
+.icon-btn.danger:hover{border-color:var(--red);color:var(--red);}
+
+/* ── Responsive ── */
+@media(max-width:1100px){.kanban{grid-template-columns:repeat(2,1fr);}.grid2{grid-template-columns:1fr;}}
+@media(max-width:768px){
+  .topbar{height:56px;padding:0 1rem;}.topbar img{height:26px;}.topbar-label{font-size:12px;}
+  .btn-back,.btn-logout-tb{padding:5px 10px;font-size:11px;}#user-info-tb{display:none;}
+  .main{padding:1rem;}
+  .proj-banner{padding:18px;}.proj-nome{font-size:17px;}
+  .kanban{grid-template-columns:1fr;}
+  .drawer{width:100vw;}
+  .form-row{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <img src="/logo-marca.png" alt="Fusion" onerror="this.style.display='none'">
+  <span class="topbar-div"></span>
+  <span class="topbar-label">Projetos</span>
+  <div class="topbar-actions">
+    <span id="user-info-tb"></span>
+    <a class="btn-back" href="/index.html">← Dashes</a>
+    <button class="btn-logout-tb" onclick="window.fusionAuth.signOut()">Sair</button>
+  </div>
+</header>
+
+<main class="main">
+
+  <!-- Project banner -->
+  <div class="proj-banner" id="proj-banner" style="--proj-cor:var(--indigo);">
+    <div class="proj-banner-row">
+      <div class="proj-icone" id="proj-icone">🏗️</div>
+      <div class="proj-info">
+        <div class="proj-nome" id="proj-nome">Carregando…</div>
+        <div class="proj-desc" id="proj-desc"></div>
+        <div class="proj-meta" id="proj-meta"></div>
+      </div>
+      <div class="proj-switcher">
+        <button class="proj-switch-btn" id="proj-switch-btn" onclick="toggleProjSwitch()">
+          Trocar projeto <span style="font-size:10px;">▾</span>
+        </button>
+        <div class="proj-switch-list" id="proj-switch-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab nav -->
+  <nav class="tab-nav" id="tab-nav">
+    <button class="tab-btn active" data-tab="visao">📊 Visão</button>
+    <button class="tab-btn" data-tab="tarefas">✓ Tarefas <span class="badge" id="badge-tarefas">0</span></button>
+    <button class="tab-btn" data-tab="pessoas">👥 Pessoas <span class="badge" id="badge-pessoas">0</span></button>
+    <button class="tab-btn" data-tab="marcos">🚩 Marcos <span class="badge" id="badge-marcos">0</span></button>
+  </nav>
+
+  <!-- TAB: Visão -->
+  <section class="tab-panel active" id="tab-visao">
+    <div class="kpi-grid" id="kpis-visao"></div>
+    <div class="grid2">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Próximas tarefas <small id="vis-tarefas-sub"></small></span></div>
+        <div class="card-body" id="vis-tarefas-body"><div class="empty">—</div></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">Atividade recente</span></div>
+        <div class="card-body"><div class="feed" id="vis-feed"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TAB: Tarefas -->
+  <section class="tab-panel" id="tab-tarefas">
+    <div class="subtab-nav">
+      <button class="subtab-btn active" data-subtab="kanban">Quadro</button>
+      <button class="subtab-btn" data-subtab="lista">Lista</button>
+      <button class="subtab-btn" data-subtab="minhas">Minhas</button>
+    </div>
+    <div class="filtros">
+      <input type="text" class="dinput" id="filtro-tarefa-q" placeholder="Buscar…" oninput="renderTarefas()" style="min-width:220px;">
+      <select class="dselect" id="filtro-tarefa-resp" onchange="renderTarefas()">
+        <option value="">Responsável: todos</option>
+      </select>
+      <select class="dselect" id="filtro-tarefa-prio" onchange="renderTarefas()">
+        <option value="">Prioridade: todas</option>
+        <option value="urgente">🔴 Urgente</option>
+        <option value="alta">🟠 Alta</option>
+        <option value="media">🟡 Média</option>
+        <option value="baixa">⚪ Baixa</option>
+      </select>
+      <button class="btnf" onclick="openDrawer('tarefa')">+ Nova tarefa</button>
+    </div>
+    <div id="sub-kanban" class="subtab-content">
+      <div class="kanban" id="kanban">
+        <div class="kb-col" data-status="aberta" style="--col-dot:var(--txt3);">
+          <div class="kb-col-head"><span class="kb-col-title">Aberta</span><span class="kb-col-count" id="cnt-aberta">0</span></div>
+          <div class="kb-col-body" id="kb-aberta"></div>
+        </div>
+        <div class="kb-col" data-status="em_andamento" style="--col-dot:var(--indigo);">
+          <div class="kb-col-head"><span class="kb-col-title">Em andamento</span><span class="kb-col-count" id="cnt-em_andamento">0</span></div>
+          <div class="kb-col-body" id="kb-em_andamento"></div>
+        </div>
+        <div class="kb-col" data-status="bloqueada" style="--col-dot:var(--red);">
+          <div class="kb-col-head"><span class="kb-col-title">Bloqueada</span><span class="kb-col-count" id="cnt-bloqueada">0</span></div>
+          <div class="kb-col-body" id="kb-bloqueada"></div>
+        </div>
+        <div class="kb-col" data-status="concluida" style="--col-dot:var(--green);">
+          <div class="kb-col-head"><span class="kb-col-title">Concluída</span><span class="kb-col-count" id="cnt-concluida">0</span></div>
+          <div class="kb-col-body" id="kb-concluida"></div>
+        </div>
+      </div>
+    </div>
+    <div id="sub-lista" class="subtab-content hidden">
+      <div class="card"><div class="card-body" style="padding:0;">
+        <table class="tb"><thead><tr>
+          <th>Tarefa</th><th>Status</th><th>Resp.</th><th>Prazo</th><th>Marco</th><th></th>
+        </tr></thead><tbody id="tb-tarefas-lista"></tbody></table>
+      </div></div>
+    </div>
+    <div id="sub-minhas" class="subtab-content hidden">
+      <div class="card"><div class="card-body" style="padding:0;">
+        <table class="tb"><thead><tr>
+          <th>Tarefa</th><th>Projeto</th><th>Status</th><th>Prazo</th><th></th>
+        </tr></thead><tbody id="tb-minhas"></tbody></table>
+      </div></div>
+    </div>
+  </section>
+
+  <!-- TAB: Pessoas -->
+  <section class="tab-panel" id="tab-pessoas">
+    <div class="filtros">
+      <input type="text" class="dinput" id="filtro-pess-q" placeholder="Buscar nome/email/empresa…" oninput="renderPessoas()" style="min-width:240px;">
+      <select class="dselect" id="filtro-pess-tipo" onchange="renderPessoas()">
+        <option value="">Tipo: todos</option>
+        <option value="interno">Interno</option>
+        <option value="externo_advogado">Advogado</option>
+        <option value="externo_contador">Contador</option>
+        <option value="externo_consultor">Consultor</option>
+        <option value="externo_fornecedor">Fornecedor</option>
+        <option value="externo_governo">Governo</option>
+        <option value="externo_outro">Outro</option>
+      </select>
+      <select class="dselect" id="filtro-pess-pais" onchange="renderPessoas()">
+        <option value="">País: todos</option>
+        <option value="Brasil">Brasil</option>
+        <option value="Paraguay">Paraguay</option>
+      </select>
+      <button class="btnf" onclick="openDrawer('pessoa')">+ Nova pessoa</button>
+    </div>
+    <div class="card"><div class="card-body" style="padding:0;">
+      <table class="tb"><thead><tr>
+        <th>Nome</th><th>Empresa</th><th>Cargo</th><th>Email</th><th>País</th><th>Tipo</th><th>Papel no projeto</th><th></th>
+      </tr></thead><tbody id="tb-pessoas"></tbody></table>
+    </div></div>
+  </section>
+
+  <!-- TAB: Marcos -->
+  <section class="tab-panel" id="tab-marcos">
+    <div class="filtros">
+      <button class="btnf" onclick="openDrawer('marco')">+ Novo marco</button>
+    </div>
+    <div class="card"><div class="card-body"><div class="timeline" id="timeline-marcos"></div></div></div>
+  </section>
+
+</main>
+
+<!-- DRAWER -->
+<div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()">
+  <aside class="drawer" onclick="event.stopPropagation()">
+    <header class="drawer-header">
+      <h2 id="drawer-title">—</h2>
+      <button class="drawer-close" onclick="closeDrawer()">×</button>
+    </header>
+    <div class="drawer-body" id="drawer-body"></div>
+    <footer class="drawer-footer" id="drawer-footer"></footer>
+  </aside>
+</div>
+
+<script src="/auth.js"></script>
+<script>
+// ============================================================
+// projetos.html — Sistema de gestão de projetos estratégicos
+// Sprint 1: Visão / Tarefas (Kanban+Lista+Minhas) / Pessoas / Marcos
+// ============================================================
+
+const SB_URL = 'https://spulbhnmkomvgohzhfvj.supabase.co';
+
+// STATE global — fonte da verdade do client
+const STATE = {
+  user: null,                  // {email, nome} de user_roles
+  pessoaMe: null,              // linha de pessoas vinculada ao auth.uid()
+  projetos: [],
+  projetoAtual: null,          // id
+  pessoas: [],                 // todas as pessoas
+  projetoPessoas: [],          // vínculos pessoa↔projeto (todos os projetos, cliente filtra)
+  tarefas: [],                 // do projeto atual
+  marcos: [],
+  atividades: [],
+  minhasTarefas: [],
+  drawerKind: null,            // 'tarefa' | 'pessoa' | 'marco' | 'projeto_pessoa'
+  drawerItem: null,            // item sendo editado (NULL = novo)
+  subTabTarefas: 'kanban',
+};
+
+// ============================================================
+// Auth + fetch helpers
+// ============================================================
+async function getAuthHeaders() {
+  const sess = await window.fusionAuth.getSession();
+  return {
+    apikey: window.fusionAuth.SUPABASE_ANON_KEY,
+    Authorization: 'Bearer ' + sess.access_token,
+    'Content-Type': 'application/json',
+    Prefer: 'return=representation',
+  };
+}
+
+async function sbGet(path) {
+  const r = await fetch(SB_URL + '/rest/v1/' + path, { headers: await getAuthHeaders() });
+  if (!r.ok) throw new Error('GET ' + path + ': ' + r.status + ' ' + await r.text());
+  return r.json();
+}
+
+async function sbPost(path, body) {
+  const r = await fetch(SB_URL + '/rest/v1/' + path, {
+    method: 'POST', headers: await getAuthHeaders(), body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error('POST ' + path + ': ' + r.status + ' ' + await r.text());
+  return r.json();
+}
+
+async function sbPatch(path, body) {
+  const r = await fetch(SB_URL + '/rest/v1/' + path, {
+    method: 'PATCH', headers: await getAuthHeaders(), body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error('PATCH ' + path + ': ' + r.status + ' ' + await r.text());
+  return r.json();
+}
+
+async function sbDelete(path) {
+  const r = await fetch(SB_URL + '/rest/v1/' + path, {
+    method: 'DELETE', headers: await getAuthHeaders(),
+  });
+  if (!r.ok) throw new Error('DELETE ' + path + ': ' + r.status + ' ' + await r.text());
+  return true;
+}
+
+// ============================================================
+// Util — datas, escape, etc.
+// ============================================================
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const today = () => new Date().toISOString().slice(0,10);
+const fmtData = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString('pt-BR') : '—';
+const fmtDataHora = (iso) => iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle:'short', timeStyle:'short' }) : '—';
+function diasAte(d) {
+  if (!d) return null;
+  const ms = new Date(d + 'T00:00:00') - new Date(today() + 'T00:00:00');
+  return Math.round(ms / 86400000);
+}
+function relativo(iso) {
+  if (!iso) return '';
+  const m = Math.round((Date.now() - new Date(iso)) / 60000);
+  if (m < 1) return 'agora';
+  if (m < 60) return m + ' min atrás';
+  if (m < 1440) return Math.floor(m/60) + 'h atrás';
+  return Math.floor(m/1440) + 'd atrás';
+}
+function statusPillTarefa(s) {
+  const map = {
+    aberta: ['pill-neutral','Aberta'],
+    em_andamento: ['pill-info','Em andamento'],
+    bloqueada: ['pill-danger','Bloqueada'],
+    concluida: ['pill-ok','Concluída'],
+    cancelada: ['pill-neutral','Cancelada'],
+  };
+  const [cls,lbl] = map[s] || ['pill-neutral', s||'—'];
+  return '<span class="pill ' + cls + '">' + lbl + '</span>';
+}
+function statusPillMarco(s) {
+  const map = {
+    pendente: ['pill-neutral','Pendente'],
+    em_andamento: ['pill-warning','Em andamento'],
+    concluido: ['pill-ok','Concluído'],
+    atrasado: ['pill-danger','Atrasado'],
+  };
+  const [cls,lbl] = map[s] || ['pill-neutral', s||'—'];
+  return '<span class="pill ' + cls + '">' + lbl + '</span>';
+}
+function tipoLabel(t) {
+  const map = {
+    interno: 'Interno',
+    externo_advogado: 'Advogado',
+    externo_contador: 'Contador',
+    externo_consultor: 'Consultor',
+    externo_fornecedor: 'Fornecedor',
+    externo_governo: 'Governo',
+    externo_outro: 'Outro',
+  };
+  return map[t] || t || '—';
+}
+function papelLabel(p) {
+  const map = {
+    sponsor: 'Sponsor',
+    lead: 'Lead',
+    responsavel_tecnico: 'Resp. técnico',
+    consultor_legal: 'Consultor legal',
+    contador: 'Contador',
+    observador: 'Observador',
+  };
+  return map[p] || p || '—';
+}
+function corVar(token) {
+  // mapeia 'amber'/'indigo'/etc pra var(--amber)/var(--indigo)
+  const valid = ['indigo','green','red','amber','orange','purple','cyan','pink','rose','violet'];
+  return 'var(--' + (valid.includes(token) ? token : 'indigo') + ')';
+}
+
+// ============================================================
+// Boot
+// ============================================================
+async function init() {
+  const auth = await window.fusionAuth.requireAuth('projetos');
+  if (!auth) return;
+  STATE.user = auth.role;
+  $('user-info-tb').textContent = auth.role.nome || auth.role.email;
+
+  await carregarTudoBase();
+  if (!STATE.projetos.length) {
+    $('proj-nome').textContent = 'Nenhum projeto cadastrado';
+    $('proj-desc').textContent = 'Rode o seed SQL ou crie via Supabase.';
+    return;
+  }
+
+  // Lê projeto da URL ou localStorage; senão pega o primeiro
+  const url = new URL(window.location.href);
+  const pid = url.searchParams.get('p') || localStorage.getItem('proj_atual') || STATE.projetos[0].id;
+  await switchProjeto(pid, /*pushUrl=*/false);
+
+  // Identifica pessoa do usuário logado
+  const r = await sbGet('pessoas?user_id=eq.' + auth.session.user.id + '&select=*&limit=1');
+  STATE.pessoaMe = r[0] || null;
+
+  wireUp();
+}
+
+async function carregarTudoBase() {
+  const [projetos, pessoas, projPess] = await Promise.all([
+    sbGet('projetos?select=*&order=criado_em.desc'),
+    sbGet('pessoas?ativo=eq.true&select=*&order=nome.asc'),
+    sbGet('projeto_pessoas?select=*'),
+  ]);
+  STATE.projetos = projetos;
+  STATE.pessoas = pessoas;
+  STATE.projetoPessoas = projPess;
+  renderProjSwitchList();
+}
+
+async function carregarProjetoAtual() {
+  const pid = STATE.projetoAtual;
+  if (!pid) return;
+  const [tarefas, marcos, atividades, minhas] = await Promise.all([
+    sbGet('projeto_tarefas?projeto_id=eq.' + pid + '&select=*&order=criado_em.desc&limit=500'),
+    sbGet('projeto_marcos?projeto_id=eq.' + pid + '&select=*&order=data_alvo.asc.nullslast'),
+    sbGet('projeto_atividades?projeto_id=eq.' + pid + '&select=*&order=criado_em.desc&limit=30'),
+    STATE.pessoaMe ? sbGet('vw_minhas_tarefas?select=*&order=data_vencimento.asc.nullslast') : Promise.resolve([]),
+  ]);
+  STATE.tarefas = tarefas;
+  STATE.marcos = marcos;
+  STATE.atividades = atividades;
+  STATE.minhasTarefas = minhas;
+  populateFiltroResponsavel();
+  renderAll();
+}
+
+async function switchProjeto(id, pushUrl = true) {
+  STATE.projetoAtual = id;
+  localStorage.setItem('proj_atual', id);
+  if (pushUrl) {
+    const u = new URL(window.location.href); u.searchParams.set('p', id);
+    window.history.replaceState({}, '', u);
+  }
+  renderProjBanner();
+  renderProjSwitchList();
+  await carregarProjetoAtual();
+}
+
+// ============================================================
+// Project banner / switcher
+// ============================================================
+function projetoAtual() { return STATE.projetos.find(p => p.id === STATE.projetoAtual); }
+
+function renderProjBanner() {
+  const p = projetoAtual();
+  if (!p) return;
+  const banner = $('proj-banner');
+  banner.style.setProperty('--proj-cor', corVar(p.cor));
+  $('proj-icone').textContent = p.icone || '📁';
+  $('proj-nome').innerHTML = esc(p.nome) + ' ' + statusPillProjeto(p.status);
+  $('proj-desc').textContent = p.descricao || '';
+
+  const d = diasAte(p.data_alvo);
+  const dRest = d === null ? '—' : (d < 0 ? Math.abs(d) + ' dias de atraso' : d + ' dias restantes');
+  $('proj-meta').innerHTML = [
+    p.pais ? '🌎 <strong>' + esc(p.pais) + '</strong>' : '',
+    p.prioridade ? '⚡ <strong>' + esc(p.prioridade) + '</strong>' : '',
+    p.data_alvo ? '🎯 <strong>' + fmtData(p.data_alvo) + '</strong> · ' + dRest : '',
+  ].filter(Boolean).join(' &nbsp;·&nbsp; ');
+}
+function statusPillProjeto(s) {
+  const map = {
+    planejamento: ['pill-info','Planejamento'],
+    execucao: ['pill-warning','Em execução'],
+    pausado: ['pill-neutral','Pausado'],
+    concluido: ['pill-ok','Concluído'],
+    cancelado: ['pill-neutral','Cancelado'],
+  };
+  const [cls,lbl] = map[s] || ['pill-neutral', s||'—'];
+  return '<span class="pill ' + cls + '" style="vertical-align:middle;">' + lbl + '</span>';
+}
+
+function renderProjSwitchList() {
+  const list = $('proj-switch-list');
+  list.innerHTML = STATE.projetos.map(p => {
+    const active = p.id === STATE.projetoAtual;
+    return '<div class="proj-switch-item ' + (active ? 'active' : '') + '" onclick="switchProjeto(\'' + p.id + '\'); toggleProjSwitch();">' +
+      '<span class="proj-switch-dot" style="background:' + corVar(p.cor) + ';"></span>' +
+      '<span style="font-size:16px;">' + esc(p.icone || '📁') + '</span>' +
+      '<span>' + esc(p.nome) + '</span></div>';
+  }).join('');
+}
+function toggleProjSwitch() {
+  $('proj-switch-list').classList.toggle('open');
+}
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.proj-switcher')) $('proj-switch-list').classList.remove('open');
+});
+
+// ============================================================
+// Tab wiring
+// ============================================================
+function wireUp() {
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  });
+  document.querySelectorAll('.subtab-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchSubTab(btn.dataset.subtab));
+  });
+}
+function switchTab(k) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === k));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + k));
+}
+function switchSubTab(k) {
+  STATE.subTabTarefas = k;
+  document.querySelectorAll('.subtab-btn').forEach(b => b.classList.toggle('active', b.dataset.subtab === k));
+  ['kanban','lista','minhas'].forEach(s => $('sub-' + s).classList.toggle('hidden', s !== k));
+  renderTarefas();
+}
+
+// ============================================================
+// Render: Visão
+// ============================================================
+function renderAll() {
+  renderVisao();
+  renderTarefas();
+  renderPessoas();
+  renderMarcos();
+  $('badge-tarefas').textContent = STATE.tarefas.length;
+  $('badge-pessoas').textContent = membrosDoProjetoAtual().length;
+  $('badge-marcos').textContent = STATE.marcos.length;
+}
+
+function renderVisao() {
+  const ts = STATE.tarefas;
+  const total = ts.length;
+  const concluidas = ts.filter(t => t.status === 'concluida').length;
+  const emAndamento = ts.filter(t => t.status === 'em_andamento').length;
+  const bloqueadas = ts.filter(t => t.status === 'bloqueada').length;
+  const hoje = today();
+  const atrasadas = ts.filter(t => t.status !== 'concluida' && t.status !== 'cancelada' && t.data_vencimento && t.data_vencimento < hoje).length;
+  const pct = total ? Math.round(100 * concluidas / total) : 0;
+  const proxMarco = STATE.marcos.find(m => m.status !== 'concluido');
+
+  $('kpis-visao').innerHTML = [
+    kpiHTML('Conclusão', pct + '%', concluidas + '/' + total + ' tarefas', 'var(--green)'),
+    kpiHTML('Em andamento', emAndamento, 'tarefas ativas', 'var(--indigo)'),
+    kpiHTML('Atrasadas', atrasadas, 'venceram', 'var(--red)'),
+    kpiHTML('Bloqueadas', bloqueadas, 'aguardam desbloqueio', 'var(--amber)'),
+    kpiHTML('Próximo marco', proxMarco ? proxMarco.titulo : '—', proxMarco ? fmtData(proxMarco.data_alvo) : 'sem marcos pendentes', 'var(--purple)'),
+  ].join('');
+
+  // Próximas tarefas (próximas a vencer, não concluídas)
+  const prox = ts
+    .filter(t => t.status !== 'concluida' && t.status !== 'cancelada' && t.data_vencimento)
+    .sort((a,b) => a.data_vencimento.localeCompare(b.data_vencimento))
+    .slice(0, 8);
+  $('vis-tarefas-sub').textContent = prox.length ? '(' + prox.length + ')' : '';
+  $('vis-tarefas-body').innerHTML = prox.length
+    ? '<table class="tb"><tbody>' + prox.map(t => {
+        const dias = diasAte(t.data_vencimento);
+        const cls = dias < 0 ? 'atrasada' : dias <= 3 ? 'proxima' : '';
+        const lbl = dias < 0 ? Math.abs(dias) + 'd atraso' : (dias === 0 ? 'hoje' : 'em ' + dias + 'd');
+        const pe = STATE.pessoas.find(p => p.id === t.atribuida_a);
+        return '<tr onclick="openDrawer(\'tarefa\', \'' + t.id + '\')"><td>' +
+          esc(t.titulo) + '</td><td>' + statusPillTarefa(t.status) +
+          '</td><td>' + esc(pe ? pe.nome : '—') +
+          '</td><td><span class="' + (cls ? 'kb-card-prazo ' + cls : '') + '">' + fmtData(t.data_vencimento) + ' · ' + lbl + '</span></td></tr>';
+      }).join('') + '</tbody></table>'
+    : '<div class="empty">Nenhuma tarefa com prazo definido.</div>';
+
+  // Feed
+  $('vis-feed').innerHTML = STATE.atividades.length
+    ? STATE.atividades.slice(0, 15).map(a => {
+        const icone = a.tipo.includes('concluida') ? '✅' : a.tipo.includes('criada') ? '➕' : a.tipo.includes('atribuida') ? '👤' : a.tipo.includes('status') ? '🔄' : '•';
+        return '<div class="feed-item"><div class="feed-icon">' + icone + '</div><div class="feed-body"><div class="feed-desc">' +
+          esc(a.descricao) + '</div><div class="feed-meta">' + relativo(a.criado_em) + '</div></div></div>';
+      }).join('')
+    : '<div class="empty">Sem atividade recente.</div>';
+}
+function kpiHTML(lbl, val, sub, accent) {
+  return '<div class="kpi" style="--kpi-accent:' + accent + ';">' +
+    '<div class="kpi-lbl">' + esc(lbl) + '</div>' +
+    '<div class="kpi-val">' + esc(val) + '</div>' +
+    '<div class="kpi-sub">' + esc(sub) + '</div></div>';
+}
+
+// ============================================================
+// Render: Tarefas (Kanban + Lista + Minhas)
+// ============================================================
+function tarefasFiltradas() {
+  const q = ($('filtro-tarefa-q').value || '').toLowerCase().trim();
+  const resp = $('filtro-tarefa-resp').value;
+  const prio = $('filtro-tarefa-prio').value;
+  return STATE.tarefas.filter(t => {
+    if (q && !((t.titulo || '').toLowerCase().includes(q) || (t.descricao || '').toLowerCase().includes(q))) return false;
+    if (resp && t.atribuida_a !== resp) return false;
+    if (prio && t.prioridade !== prio) return false;
+    return true;
+  });
+}
+function populateFiltroResponsavel() {
+  const sel = $('filtro-tarefa-resp');
+  const cur = sel.value;
+  const membros = membrosDoProjetoAtual();
+  sel.innerHTML = '<option value="">Responsável: todos</option>' +
+    membros.map(p => '<option value="' + p.id + '">' + esc(p.nome) + '</option>').join('');
+  sel.value = cur;
+}
+function membrosDoProjetoAtual() {
+  const vincs = STATE.projetoPessoas.filter(pp => pp.projeto_id === STATE.projetoAtual);
+  return vincs.map(v => STATE.pessoas.find(p => p.id === v.pessoa_id)).filter(Boolean);
+}
+
+function renderTarefas() {
+  const sub = STATE.subTabTarefas;
+  const ts = tarefasFiltradas();
+  if (sub === 'kanban') renderKanban(ts);
+  else if (sub === 'lista') renderListaTarefas(ts);
+  else if (sub === 'minhas') renderMinhas();
+}
+
+function renderKanban(ts) {
+  ['aberta','em_andamento','bloqueada','concluida'].forEach(s => {
+    const filt = ts.filter(t => t.status === s);
+    $('cnt-' + s).textContent = filt.length;
+    $('kb-' + s).innerHTML = filt.map(t => kbCardHTML(t)).join('') || '<div class="empty" style="padding:18px;font-size:12px;">—</div>';
+  });
+  // Drag & drop
+  document.querySelectorAll('.kb-card').forEach(card => {
+    card.addEventListener('dragstart', (e) => { card.classList.add('dragging'); e.dataTransfer.setData('text/plain', card.dataset.id); });
+    card.addEventListener('dragend', () => card.classList.remove('dragging'));
+  });
+  document.querySelectorAll('.kb-col').forEach(col => {
+    col.addEventListener('dragover', (e) => { e.preventDefault(); col.classList.add('drop-target'); });
+    col.addEventListener('dragleave', () => col.classList.remove('drop-target'));
+    col.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      col.classList.remove('drop-target');
+      const id = e.dataTransfer.getData('text/plain');
+      const novoStatus = col.dataset.status;
+      const t = STATE.tarefas.find(x => x.id === id);
+      if (t && t.status !== novoStatus) await moverTarefa(t, novoStatus);
+    });
+  });
+}
+function kbCardHTML(t) {
+  const pe = STATE.pessoas.find(p => p.id === t.atribuida_a);
+  const dias = diasAte(t.data_vencimento);
+  let prazo = '';
+  if (t.data_vencimento) {
+    const cls = (t.status !== 'concluida' && dias !== null && dias < 0) ? 'atrasada' :
+                (t.status !== 'concluida' && dias !== null && dias <= 3) ? 'proxima' : '';
+    prazo = '<span class="kb-card-prazo ' + cls + '">📅 ' + fmtData(t.data_vencimento) + '</span>';
+  }
+  const prioMark = {urgente:'🔴',alta:'🟠',media:'🟡',baixa:'⚪'}[t.prioridade] || '';
+  return '<div class="kb-card" draggable="true" data-id="' + t.id + '" onclick="openDrawer(\'tarefa\', \'' + t.id + '\')">' +
+    '<div class="kb-card-titulo">' + (prioMark ? prioMark + ' ' : '') + esc(t.titulo) + '</div>' +
+    '<div class="kb-card-meta">' +
+      (pe ? '<span class="kb-card-resp">' + esc(pe.nome.split(' ')[0]) + '</span>' : '') +
+      prazo +
+    '</div></div>';
+}
+function renderListaTarefas(ts) {
+  $('tb-tarefas-lista').innerHTML = ts.length ? ts.map(t => {
+    const pe = STATE.pessoas.find(p => p.id === t.atribuida_a);
+    const m = STATE.marcos.find(mm => mm.id === t.marco_id);
+    return '<tr onclick="openDrawer(\'tarefa\', \'' + t.id + '\')">' +
+      '<td><strong>' + esc(t.titulo) + '</strong></td>' +
+      '<td>' + statusPillTarefa(t.status) + '</td>' +
+      '<td>' + esc(pe ? pe.nome : '—') + '</td>' +
+      '<td>' + (t.data_vencimento ? fmtData(t.data_vencimento) : '—') + '</td>' +
+      '<td>' + esc(m ? m.titulo : '—') + '</td>' +
+      '<td class="row-actions"><button class="icon-btn danger" onclick="event.stopPropagation(); excluirTarefa(\'' + t.id + '\')">🗑</button></td>' +
+      '</tr>';
+  }).join('') : '<tr><td colspan="6" class="empty">Nenhuma tarefa.</td></tr>';
+}
+function renderMinhas() {
+  const ts = STATE.minhasTarefas;
+  $('tb-minhas').innerHTML = ts.length ? ts.map(t => {
+    return '<tr onclick="openDrawer(\'tarefa\', \'' + t.id + '\')">' +
+      '<td><strong>' + esc(t.titulo) + '</strong></td>' +
+      '<td><span class="pill pill-info">' + esc(t.projeto_nome) + '</span></td>' +
+      '<td>' + statusPillTarefa(t.status) + '</td>' +
+      '<td>' + (t.data_vencimento ? fmtData(t.data_vencimento) : '—') + '</td>' +
+      '<td></td></tr>';
+  }).join('') : '<tr><td colspan="5" class="empty">Você não tem tarefas atribuídas.</td></tr>';
+}
+
+async function moverTarefa(t, novoStatus) {
+  const patch = { status: novoStatus };
+  if (novoStatus === 'concluida') patch.data_conclusao = today();
+  try {
+    const [updated] = await sbPatch('projeto_tarefas?id=eq.' + t.id, patch);
+    Object.assign(t, updated);
+    await carregarProjetoAtual();
+  } catch (e) { alert('Erro: ' + e.message); }
+}
+async function excluirTarefa(id) {
+  if (!confirm('Excluir esta tarefa?')) return;
+  try {
+    await sbDelete('projeto_tarefas?id=eq.' + id);
+    await carregarProjetoAtual();
+  } catch (e) { alert('Erro: ' + e.message); }
+}
+
+// ============================================================
+// Render: Pessoas
+// ============================================================
+function renderPessoas() {
+  const q = ($('filtro-pess-q').value || '').toLowerCase().trim();
+  const tipo = $('filtro-pess-tipo').value;
+  const pais = $('filtro-pess-pais').value;
+  const vincs = STATE.projetoPessoas.filter(pp => pp.projeto_id === STATE.projetoAtual);
+  const idsDoProj = new Set(vincs.map(v => v.pessoa_id));
+  const pessoasDoProj = STATE.pessoas.filter(p => idsDoProj.has(p.id));
+  const filt = pessoasDoProj.filter(p => {
+    if (q && !((p.nome||'').toLowerCase().includes(q) || (p.email||'').toLowerCase().includes(q) || (p.empresa||'').toLowerCase().includes(q))) return false;
+    if (tipo && p.tipo !== tipo) return false;
+    if (pais && p.pais !== pais) return false;
+    return true;
+  });
+
+  $('tb-pessoas').innerHTML = filt.length ? filt.map(p => {
+    const v = vincs.find(vv => vv.pessoa_id === p.id);
+    return '<tr onclick="openDrawer(\'pessoa\', \'' + p.id + '\')">' +
+      '<td><strong>' + esc(p.nome) + '</strong></td>' +
+      '<td>' + esc(p.empresa || '—') + '</td>' +
+      '<td>' + esc(p.cargo || '—') + '</td>' +
+      '<td>' + esc(p.email || '—') + '</td>' +
+      '<td>' + esc(p.pais || '—') + '</td>' +
+      '<td>' + esc(tipoLabel(p.tipo)) + '</td>' +
+      '<td>' + esc(papelLabel(v ? v.papel : null)) + '</td>' +
+      '<td class="row-actions"><button class="icon-btn danger" onclick="event.stopPropagation(); desvincularPessoa(\'' + p.id + '\')" title="Remover do projeto">⊘</button></td>' +
+      '</tr>';
+  }).join('') : '<tr><td colspan="8" class="empty">Nenhuma pessoa vinculada. Clique em + Nova pessoa.</td></tr>';
+}
+
+async function desvincularPessoa(pid) {
+  if (!confirm('Remover esta pessoa deste projeto? (não apaga o cadastro)')) return;
+  try {
+    await sbDelete('projeto_pessoas?projeto_id=eq.' + STATE.projetoAtual + '&pessoa_id=eq.' + pid);
+    await carregarTudoBase();
+    renderAll();
+  } catch (e) { alert('Erro: ' + e.message); }
+}
+
+// ============================================================
+// Render: Marcos
+// ============================================================
+function renderMarcos() {
+  const ms = STATE.marcos;
+  const hoje = today();
+  $('timeline-marcos').innerHTML = ms.length ? ms.map(m => {
+    let cls = '';
+    if (m.status === 'concluido') cls = 'done';
+    else if (m.data_alvo && m.data_alvo < hoje) cls = 'late';
+    else if (m.status === 'em_andamento') cls = 'now';
+    return '<div class="tl-item ' + cls + '" onclick="openDrawer(\'marco\', \'' + m.id + '\')">' +
+      '<div class="tl-titulo">' + esc(m.titulo) + ' ' + statusPillMarco(m.status) + '</div>' +
+      '<div class="tl-data">' + (m.data_alvo ? '🎯 ' + fmtData(m.data_alvo) : 'sem data alvo') +
+        (m.data_real ? ' &nbsp;·&nbsp; ✅ ' + fmtData(m.data_real) : '') + '</div>' +
+      (m.descricao ? '<div class="tl-desc">' + esc(m.descricao) + '</div>' : '') +
+      '</div>';
+  }).join('') : '<div class="empty">Nenhum marco cadastrado.</div>';
+}
+
+// ============================================================
+// Drawer — criação / edição
+// ============================================================
+function openDrawer(kind, itemId) {
+  STATE.drawerKind = kind;
+  STATE.drawerItem = null;
+  if (itemId) {
+    if (kind === 'tarefa') STATE.drawerItem = STATE.tarefas.find(t => t.id === itemId);
+    if (kind === 'pessoa') STATE.drawerItem = STATE.pessoas.find(p => p.id === itemId);
+    if (kind === 'marco') STATE.drawerItem = STATE.marcos.find(m => m.id === itemId);
+  }
+  $('drawer-title').textContent = (STATE.drawerItem ? 'Editar' : 'Novo') + ' ' + ({tarefa:'tarefa',pessoa:'pessoa',marco:'marco'}[kind] || kind);
+  $('drawer-body').innerHTML = drawerBodyHTML(kind, STATE.drawerItem);
+  $('drawer-footer').innerHTML = drawerFooterHTML(kind, STATE.drawerItem);
+  $('drawer-overlay').classList.add('open');
+}
+function closeDrawer() {
+  $('drawer-overlay').classList.remove('open');
+  STATE.drawerKind = null; STATE.drawerItem = null;
+}
+
+function drawerBodyHTML(kind, item) {
+  if (kind === 'tarefa') return drawerTarefa(item);
+  if (kind === 'pessoa') return drawerPessoa(item);
+  if (kind === 'marco') return drawerMarco(item);
+  return '';
+}
+function drawerFooterHTML(kind, item) {
+  const buttons = [];
+  if (item) buttons.push('<button class="btnf danger" onclick="excluirDrawer()">Excluir</button>');
+  buttons.push('<button class="btnf ghost" onclick="closeDrawer()">Cancelar</button>');
+  buttons.push('<button class="btnf" onclick="submitDrawer()">Salvar</button>');
+  return buttons.join('');
+}
+
+function drawerTarefa(t) {
+  const membros = membrosDoProjetoAtual();
+  const respOpts = '<option value="">— sem responsável —</option>' +
+    membros.map(p => '<option value="' + p.id + '"' + (t && t.atribuida_a === p.id ? ' selected' : '') + '>' + esc(p.nome) + '</option>').join('');
+  const marcoOpts = '<option value="">— sem marco —</option>' +
+    STATE.marcos.map(m => '<option value="' + m.id + '"' + (t && t.marco_id === m.id ? ' selected' : '') + '>' + esc(m.titulo) + '</option>').join('');
+  const statusOpts = ['aberta','em_andamento','bloqueada','concluida','cancelada']
+    .map(s => '<option value="' + s + '"' + ((t && t.status === s) || (!t && s === 'aberta') ? ' selected' : '') + '>' + s.replace('_',' ') + '</option>').join('');
+  const prioOpts = ['','urgente','alta','media','baixa']
+    .map(s => '<option value="' + s + '"' + ((t && t.prioridade === s) ? ' selected' : '') + '>' + (s || '—') + '</option>').join('');
+  return '' +
+    '<div class="form-group"><label class="form-label">Título</label><input class="form-input" id="f-titulo" value="' + esc(t ? t.titulo : '') + '"></div>' +
+    '<div class="form-group"><label class="form-label">Descrição</label><textarea class="form-textarea" id="f-descricao">' + esc(t ? t.descricao || '' : '') + '</textarea></div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label class="form-label">Status</label><select class="form-select" id="f-status">' + statusOpts + '</select></div>' +
+      '<div class="form-group"><label class="form-label">Prioridade</label><select class="form-select" id="f-prioridade">' + prioOpts + '</select></div>' +
+    '</div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label class="form-label">Responsável</label><select class="form-select" id="f-resp">' + respOpts + '</select></div>' +
+      '<div class="form-group"><label class="form-label">Marco</label><select class="form-select" id="f-marco">' + marcoOpts + '</select></div>' +
+    '</div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label class="form-label">Data início</label><input type="date" class="form-input" id="f-dinicio" value="' + esc(t ? t.data_inicio || '' : '') + '"></div>' +
+      '<div class="form-group"><label class="form-label">Vencimento</label><input type="date" class="form-input" id="f-dvenc" value="' + esc(t ? t.data_vencimento || '' : '') + '"></div>' +
+    '</div>';
+}
+
+function drawerPessoa(p) {
+  const vinculo = p ? STATE.projetoPessoas.find(pp => pp.pessoa_id === p.id && pp.projeto_id === STATE.projetoAtual) : null;
+  const tipoOpts = ['interno','externo_advogado','externo_contador','externo_consultor','externo_fornecedor','externo_governo','externo_outro']
+    .map(t => '<option value="' + t + '"' + ((p && p.tipo === t) || (!p && t === 'externo_consultor') ? ' selected' : '') + '>' + tipoLabel(t) + '</option>').join('');
+  const papelOpts = ['','sponsor','lead','responsavel_tecnico','consultor_legal','contador','observador']
+    .map(t => '<option value="' + t + '"' + (vinculo && vinculo.papel === t ? ' selected' : '') + '>' + (t ? papelLabel(t) : '—') + '</option>').join('');
+  return '' +
+    '<div class="form-group"><label class="form-label">Nome</label><input class="form-input" id="f-nome" value="' + esc(p ? p.nome : '') + '"></div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label class="form-label">Email</label><input class="form-input" id="f-email" value="' + esc(p ? p.email || '' : '') + '"></div>' +
+      '<div class="form-group"><label class="form-label">Telefone</label><input class="form-input" id="f-telefone" value="' + esc(p ? p.telefone || '' : '') + '"></div>' +
+    '</div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label class="form-label">Empresa</label><input class="form-input" id="f-empresa" value="' + esc(p ? p.empresa || '' : '') + '"></div>' +
+      '<div class="form-group"><label class="form-label">Cargo</label><input class="form-input" id="f-cargo" value="' + esc(p ? p.cargo || '' : '') + '"></div>' +
+    '</div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label class="form-label">País</label><input class="form-input" id="f-pais" value="' + esc(p ? p.pais || '' : 'Brasil') + '"></div>' +
+      '<div class="form-group"><label class="form-label">Tipo</label><select class="form-select" id="f-tipo">' + tipoOpts + '</select></div>' +
+    '</div>' +
+    '<div class="form-group"><label class="form-label">Papel neste projeto</label><select class="form-select" id="f-papel">' + papelOpts + '</select></div>' +
+    '<div class="form-group"><label class="form-label">Responsabilidade</label><input class="form-input" id="f-responsabilidade" value="' + esc(vinculo ? vinculo.responsabilidade || '' : '') + '" placeholder="ex: aprova contratos > R$ 200k"></div>' +
+    '<div class="form-group"><label class="form-label">Observação</label><textarea class="form-textarea" id="f-observacao">' + esc(p ? p.observacao || '' : '') + '</textarea></div>';
+}
+
+function drawerMarco(m) {
+  const statusOpts = ['pendente','em_andamento','concluido','atrasado']
+    .map(s => '<option value="' + s + '"' + ((m && m.status === s) || (!m && s === 'pendente') ? ' selected' : '') + '>' + s.replace('_',' ') + '</option>').join('');
+  return '' +
+    '<div class="form-group"><label class="form-label">Título</label><input class="form-input" id="f-titulo" value="' + esc(m ? m.titulo : '') + '"></div>' +
+    '<div class="form-group"><label class="form-label">Descrição</label><textarea class="form-textarea" id="f-descricao">' + esc(m ? m.descricao || '' : '') + '</textarea></div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label class="form-label">Data alvo</label><input type="date" class="form-input" id="f-dalvo" value="' + esc(m ? m.data_alvo || '' : '') + '"></div>' +
+      '<div class="form-group"><label class="form-label">Data real</label><input type="date" class="form-input" id="f-dreal" value="' + esc(m ? m.data_real || '' : '') + '"></div>' +
+    '</div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label class="form-label">Status</label><select class="form-select" id="f-status">' + statusOpts + '</select></div>' +
+      '<div class="form-group"><label class="form-label">Ordem</label><input type="number" class="form-input" id="f-ordem" value="' + esc(m ? m.ordem || '' : '') + '"></div>' +
+    '</div>';
+}
+
+async function submitDrawer() {
+  const k = STATE.drawerKind;
+  try {
+    if (k === 'tarefa') await submitTarefa();
+    else if (k === 'pessoa') await submitPessoa();
+    else if (k === 'marco') await submitMarco();
+    closeDrawer();
+    await carregarTudoBase();
+    await carregarProjetoAtual();
+  } catch (e) { alert('Erro: ' + e.message); }
+}
+
+async function submitTarefa() {
+  const payload = {
+    projeto_id: STATE.projetoAtual,
+    titulo: $('f-titulo').value.trim(),
+    descricao: $('f-descricao').value.trim() || null,
+    status: $('f-status').value,
+    prioridade: $('f-prioridade').value || null,
+    atribuida_a: $('f-resp').value || null,
+    marco_id: $('f-marco').value || null,
+    data_inicio: $('f-dinicio').value || null,
+    data_vencimento: $('f-dvenc').value || null,
+  };
+  if (!payload.titulo) { alert('Título é obrigatório.'); throw new Error('titulo'); }
+  if (payload.status === 'concluida') payload.data_conclusao = today();
+  if (STATE.drawerItem) await sbPatch('projeto_tarefas?id=eq.' + STATE.drawerItem.id, payload);
+  else await sbPost('projeto_tarefas', payload);
+}
+
+async function submitPessoa() {
+  const pPayload = {
+    nome: $('f-nome').value.trim(),
+    email: $('f-email').value.trim() || null,
+    telefone: $('f-telefone').value.trim() || null,
+    empresa: $('f-empresa').value.trim() || null,
+    cargo: $('f-cargo').value.trim() || null,
+    pais: $('f-pais').value.trim() || null,
+    tipo: $('f-tipo').value,
+    observacao: $('f-observacao').value.trim() || null,
+  };
+  if (!pPayload.nome) { alert('Nome é obrigatório.'); throw new Error('nome'); }
+
+  let pessoaId;
+  if (STATE.drawerItem) {
+    await sbPatch('pessoas?id=eq.' + STATE.drawerItem.id, pPayload);
+    pessoaId = STATE.drawerItem.id;
+  } else {
+    const [novo] = await sbPost('pessoas', pPayload);
+    pessoaId = novo.id;
+  }
+
+  // Vincular ao projeto atual
+  const papel = $('f-papel').value || null;
+  const resp = $('f-responsabilidade').value.trim() || null;
+  const vincExistente = STATE.projetoPessoas.find(pp => pp.pessoa_id === pessoaId && pp.projeto_id === STATE.projetoAtual);
+  if (vincExistente) {
+    await sbPatch('projeto_pessoas?id=eq.' + vincExistente.id, { papel, responsabilidade: resp });
+  } else {
+    await sbPost('projeto_pessoas', { projeto_id: STATE.projetoAtual, pessoa_id: pessoaId, papel, responsabilidade: resp });
+  }
+}
+
+async function submitMarco() {
+  const payload = {
+    projeto_id: STATE.projetoAtual,
+    titulo: $('f-titulo').value.trim(),
+    descricao: $('f-descricao').value.trim() || null,
+    data_alvo: $('f-dalvo').value || null,
+    data_real: $('f-dreal').value || null,
+    status: $('f-status').value,
+    ordem: $('f-ordem').value ? parseInt($('f-ordem').value) : null,
+  };
+  if (!payload.titulo) { alert('Título é obrigatório.'); throw new Error('titulo'); }
+  if (STATE.drawerItem) await sbPatch('projeto_marcos?id=eq.' + STATE.drawerItem.id, payload);
+  else await sbPost('projeto_marcos', payload);
+}
+
+async function excluirDrawer() {
+  const k = STATE.drawerKind;
+  const item = STATE.drawerItem;
+  if (!item) return;
+  if (!confirm('Excluir definitivamente?')) return;
+  const path = k === 'tarefa' ? 'projeto_tarefas' : k === 'pessoa' ? 'pessoas' : k === 'marco' ? 'projeto_marcos' : null;
+  if (!path) return;
+  try {
+    await sbDelete(path + '?id=eq.' + item.id);
+    closeDrawer();
+    await carregarTudoBase();
+    await carregarProjetoAtual();
+  } catch (e) { alert('Erro: ' + e.message); }
+}
+
+// ============================================================
+init().catch(e => { console.error(e); alert('Erro ao carregar: ' + e.message); });
+</script>
+</body>
+</html>

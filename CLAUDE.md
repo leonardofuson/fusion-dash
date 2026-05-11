@@ -141,6 +141,23 @@ Fonte única: tabela `contas_pagar` (só Fio e Trama).
 - Depende de tabelas `canal_custos_faixa`, `simulacao_cenarios`, `produtos_snapshot`, `produto_evento`, `ads_curva_otima` e views `vw_taxa_devolucao_*`/`vw_frete_medio_*` (criadas em `sql/2026-05-01_*.sql`).
 - Crons que alimentam: `fusion-sync-snapshot` (08h BRT) e `fusion-sync-curva-ads` (09h BRT) — ver [../fusion-sync/CLAUDE.md](../fusion-sync/CLAUDE.md).
 
+## Dash Projetos (`projetos.html`) — gestão de projetos estratégicos (iniciado 11/05/2026)
+
+Sistema de PM completo pra Aquisição Facção Paraná + Fábrica Paraguay (v1 escopo "só interno Fusion"). Schema em `sql/2026-05-11_projetos_v1.sql` (12 tabelas + 4 triggers + 2 views) + seed em `sql/2026-05-11_projetos_seed.sql`.
+
+**Tabelas**: `pessoas`, `projetos`, `projeto_pessoas`, `projeto_marcos`, `projeto_tarefas`, `projeto_decisoes`, `projeto_riscos`, `projeto_paginas`, `projeto_comentarios`, `projeto_anexos`, `projeto_atividades` (log append-only por triggers), `projeto_notificacoes`. Views: `vw_projeto_resumo`, `vw_minhas_tarefas`.
+
+**Conceitos-chave**:
+- Externos (advogados/contadores Paraguay) entram só em `pessoas` sem `user_id` — sem login, info trafega via diretoria
+- Banner colorido do projeto + seletor (dropdown) no topo; estado salvo em `localStorage` (`proj_atual`) e refletido na URL (`?p=<uuid>`)
+- Kanban drag-and-drop nativo (HTML5 dragstart/drop) — sem libs. Move status via PATCH em `projeto_tarefas`
+- `vw_minhas_tarefas` filtra automaticamente por `auth.uid()` via join em `pessoas.user_id` — usar pra aba "Minhas"
+- Triggers SQL: toda mudança em tarefa/decisão/risco/marco vira linha em `projeto_atividades`. Atribuição de tarefa → INSERT em `projeto_notificacoes` (só se a pessoa tem user_id)
+- Drawer universal: 3 templates (tarefa/pessoa/marco) — IDs `f-titulo`/`f-status`/`f-descricao` reutilizados (drawer renderiza só 1 por vez)
+- Sprint 1 entregou Visão/Tarefas/Pessoas/Marcos. Sprint 2: Decisões + Riscos + Comentários + Notificações. Sprint 3: Wiki + Anexos (Supabase Storage)
+
+**Roadmap completo** em `~/.claude/plans/robust-chasing-parnas.md`.
+
 ## Dash Max Chat — Admin (`max-chat-admin.html`) — restrito a leonardo@usefusion.com.br
 
 Painel de qualidade do Max Chat com **ações executáveis** (write — não só leitura). Criado 02/05/2026.
@@ -198,7 +215,7 @@ Rodar após qualquer push em fusion-dash. **A skill [`fusion-sanity-check`](../.
 BASE="https://fusion-dash.onrender.com"
 
 # 1. Cada dash retorna 200 + HTML não-trivial (>20KB)
-for d in compras lojas ecommerce diretoria estoque financeiro index; do
+for d in compras lojas ecommerce diretoria estoque financeiro projetos index; do
   size=$(curl -s -o /dev/null -w "%{size_download}" "$BASE/$d.html")
   echo "$d.html: ${size}B" && [ "$size" -gt 20000 ] || echo "  ⚠️ tamanho suspeito"
 done
@@ -229,6 +246,16 @@ echo "$HTML" | grep -q 'id="tab-cenarios"' && echo "✅ simulador aba cenarios" 
 echo "$HTML" | grep -q 'canal_custos_faixa' && echo "✅ simulador lê canal_custos_faixa" || echo "🔴 canal_custos_faixa ausente"
 echo "$HTML" | grep -q 'ads_curva_otima' && echo "✅ simulador lê ads_curva_otima" || echo "🔴 ads_curva_otima ausente"
 echo "$HTML" | grep -qE "'</script>'" && echo "🔴 simulador </script> literal" || echo "✅ simulador sem </script> literal"
+
+# 6. projetos.html — invariantes Sprint 1
+HTML=$(curl -s "$BASE/projetos.html")
+echo "$HTML" | grep -q 'id="tab-visao"' && echo "✅ projetos aba visao" || echo "🔴 aba visao ausente"
+echo "$HTML" | grep -q 'id="tab-tarefas"' && echo "✅ projetos aba tarefas" || echo "🔴 aba tarefas ausente"
+echo "$HTML" | grep -q 'id="tab-pessoas"' && echo "✅ projetos aba pessoas" || echo "🔴 aba pessoas ausente"
+echo "$HTML" | grep -q 'id="tab-marcos"' && echo "✅ projetos aba marcos" || echo "🔴 aba marcos ausente"
+echo "$HTML" | grep -q "fusionAuth.requireAuth('projetos')" && echo "✅ projetos auth gate" || echo "🔴 auth gate ausente"
+echo "$HTML" | grep -q 'vw_minhas_tarefas' && echo "✅ projetos lê vw_minhas_tarefas" || echo "🔴 view minhas tarefas ausente"
+echo "$HTML" | grep -qE "'</script>'" && echo "🔴 projetos </script> literal" || echo "✅ projetos sem </script> literal"
 ```
 
 **Invariantes cross-arquivo críticos**:
