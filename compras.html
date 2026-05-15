@@ -1213,8 +1213,16 @@ function renderGantt() {
   if (fCost) ops = ops.filter(function(o) { return o.costureiro_id == fCost; });
   if (qBusca) ops = ops.filter(function(o){ return buscaBlobOP(o).indexOf(qBusca) >= 0; });
 
-  // Excluir concluídas/entregues do gantt
-  var ativas = ops.filter(function(o) { return o.status !== 'Entregue'; });
+  // Excluir do gantt: status Entregue/Cancelado/Devolvido OU OP cuja qtde entregue (via producao_entregas)
+  // já cobre o projetado. Como cada OP é mono-cor, isso faz a cor "sumir" do subgrupo assim que
+  // todas as entregas parciais somam >= projetado, sem depender do user mudar status manualmente.
+  // Tolera overshoot (60 entregues / 50 projetados → some); under-delivery fica até fechar status.
+  var ativas = ops.filter(function(o) {
+    if (o.status === 'Entregue' || o.status === 'Cancelado' || o.status === 'Devolvido Fornecedor') return false;
+    var ent = o.qtde_pecas_entregues || 0;
+    var proj = o.qtde_pecas || 0;
+    return proj > 0 ? ent < proj : true;
+  });
 
   // Aplicar filtro de KPI (se ativo)
   if (STATE.kpiFilter === 'atrasadas') {
