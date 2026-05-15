@@ -682,7 +682,8 @@ var STATE = {
   coresValidas: [],  // produto_cores_validas: fonte da verdade (sku_pai -> cor) ligando producao/compras/estoque ao cadastro
   custosSku: [],     // custos_sku: snapshot materializado de CMV por SKU pai (populado por recalcular_custos_sku)
   tab: 'pipeline', drawerType: null,
-  ganttExpanded: {}  // { sku_pai: true/false } - grupos expandidos
+  ganttExpanded: {},  // { sku_pai: true/false } - grupos expandidos
+  custosExpandido: {}  // { sku_pai: true/false } - memória de cálculo expandida na aba Custos
 };
 
 // ═══════════════ INIT ═══════════════
@@ -3982,13 +3983,21 @@ function renderCustos() {
     var nome = c.produto_nome || c.sku_pai;
     var base = (c.base_compras || 0) + ' compra' + (c.base_compras === 1 ? '' : 's') +
                ' · ' + (c.base_ops || 0) + ' OP' + (c.base_ops === 1 ? '' : 's');
-    return '<tr>' +
-      '<td style="white-space:nowrap"><strong>' + nome + '</strong></td>' +
-      '<td class="r" style="white-space:nowrap">' + (tec > 0 ? fmtR(tec) : '<span style="color:var(--txt4)">—</span>') + '</td>' +
-      '<td class="r" style="white-space:nowrap">' + (cost > 0 ? fmtR(cost) : '<span style="color:var(--txt4)">—</span>') + '</td>' +
-      '<td class="r" style="font-weight:700;color:var(--indigo);white-space:nowrap">' + fmtR(total) + '</td>' +
-      '<td class="r" style="color:var(--txt3);font-size:11px;white-space:nowrap">' + base + '</td>' +
-    '</tr>';
+    var keyEsc = (c.sku_pai || '').replace(/'/g, "\\'");
+    var expandido = STATE.custosExpandido[c.sku_pai] === true;
+    var chev = '<span style="color:var(--txt3);margin-right:6px;display:inline-block;width:10px">' + (expandido ? '▼' : '▶') + '</span>';
+    var linhaMaster =
+      '<tr style="cursor:pointer" onclick="toggleMemoriaCusto(\'' + keyEsc + '\')">' +
+        '<td style="white-space:nowrap">' + chev + '<strong>' + nome + '</strong></td>' +
+        '<td class="r" style="white-space:nowrap">' + (tec > 0 ? fmtR(tec) : '<span style="color:var(--txt4)">—</span>') + '</td>' +
+        '<td class="r" style="white-space:nowrap">' + (cost > 0 ? fmtR(cost) : '<span style="color:var(--txt4)">—</span>') + '</td>' +
+        '<td class="r" style="font-weight:700;color:var(--indigo);white-space:nowrap">' + fmtR(total) + '</td>' +
+        '<td class="r" style="color:var(--txt3);font-size:11px;white-space:nowrap">' + base + '</td>' +
+      '</tr>';
+    var linhaMemoria = expandido
+      ? '<tr><td colspan="5" style="background:var(--bg2);padding:12px 16px;font-size:11px;color:var(--txt2);border-top:1px dashed var(--bg3)">' + memoriaCalculoCusto(c) + '</td></tr>'
+      : '';
+    return linhaMaster + linhaMemoria;
   }).join('');
 
   document.getElementById('cmv-table').innerHTML =
@@ -4028,6 +4037,96 @@ function renderCustos() {
 
   // ========== GRÁFICO: CUSTO TECIDO — EVOLUÇÃO ==========
   renderChartCustos();
+}
+
+// Toggle expandir/colapsar memória de cálculo de um SKU na tabela de Custos.
+function toggleMemoriaCusto(sku) {
+  STATE.custosExpandido[sku] = !STATE.custosExpandido[sku];
+  renderCustos();
+}
+
+// Memória de cálculo: replica fórmula da RPC recalcular_custos_sku client-side
+// pra mostrar as 2 OPs Entregues mais recentes do SKU e como cada parcela
+// (tecido / costura) foi calculada. Linha de transparência da fonte.
+function memoriaCalculoCusto(c) {
+  var sku = c.sku_pai;
+  var comprasMap = {};
+  (STATE.compras || []).forEach(function(x){ comprasMap[x.id] = x; });
+
+  // Mesmos filtros da RPC v5: Entregue, sku_produto, data_envio_tecido, valor_peca∈(0,100]
+  var elegiveis = (STATE.ops || []).filter(function(o) {
+    var vp = parseFloat(o.valor_peca);
+    return o.status === 'Entregue' && o.sku_produto === sku && o.data_envio_tecido
+      && vp > 0 && vp <= 100;
+  }).sort(function(a, b) {
+    return (b.data_envio_tecido || '').localeCompare(a.data_envio_tecido || '');
+  });
+
+  var ops2 = elegiveis.slice(0, 2);
+  if (!ops2.length) {
+    return '<em style="color:var(--txt4)">Sem OPs Entregues elegíveis pra este SKU (precisa: status=Entregue, valor_peca entre R$0 e R$100, data_envio_tecido preenchida).</em>';
+  }
+
+  function fmtData(d) {
+    if (!d) return '—';
+    var p = String(d).slice(0,10).split('-');
+    return p.length === 3 ? p[2]+'/'+p[1] : d;
+  }
+
+  var linhasTecido = ops2.map(function(o) {
+    var oc = o.ordem_compra_id ? comprasMap[o.ordem_compra_id] : null;
+    var prefix = 'OP #'+o.id+' · '+fmtData(o.data_envio_tecido);
+    if (!oc) {
+      return '<li style="color:var(--txt4)">'+prefix+' — sem compra vinculada <span style="color:var(--txt4)">(tecido não conta na média)</span></li>';
+    }
+    var vm = parseFloat(oc.valor_metro_kg) || 0;
+    var cons = parseFloat(o.consumo_por_peca) || parseFloat(oc.consumo_por_peca) || 0;
+    var tecidoNome = (oc.tecido || '?') + (oc.cor ? ' '+oc.cor : '');
+    if (!(vm > 0) || !(cons > 0)) {
+      return '<li style="color:var(--txt4)">'+prefix+' · '+tecidoNome+' — valor_metro_kg='+fmtR(vm)+' / consumo='+cons.toFixed(2)+'m <span style="color:var(--txt4)">(tecido não conta)</span></li>';
+    }
+    var custo = vm * cons;
+    return '<li>'+prefix+' · '+tecidoNome+' — '+cons.toFixed(2)+'m × '+fmtR(vm)+'/m = <strong>'+fmtR(custo)+'</strong></li>';
+  }).join('');
+
+  var linhasCostura = ops2.map(function(o) {
+    var dentro = parseFloat(o.valor_costura_dentro) || 0;
+    var fora = parseFloat(o.valor_costura_fora) || 0;
+    var vp = parseFloat(o.valor_peca) || 0;
+    var custName = costuName(o.costureiro_id);
+    var detalhe = (dentro > 0 || fora > 0)
+      ? fmtR(dentro)+' (dentro) + '+fmtR(fora)+' (fora) = <strong>'+fmtR(vp)+'/pç</strong>'
+      : '<strong>'+fmtR(vp)+'/pç</strong>';
+    return '<li>OP #'+o.id+' · '+fmtData(o.data_envio_tecido)+' · '+custName+' — '+detalhe+'</li>';
+  }).join('');
+
+  var tec = parseFloat(c.custo_tecido_peca) || 0;
+  var cost = parseFloat(c.custo_costureiro_peca) || 0;
+  var total = parseFloat(c.cmv_total_peca) || 0;
+  var atual = c.atualizado_em
+    ? new Date(c.atualizado_em).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })
+    : '—';
+
+  var nOps = ops2.length;
+  var headerStyle = 'font-weight:700;color:var(--txt2);text-transform:uppercase;font-size:10px;letter-spacing:0.5px;margin-bottom:4px';
+  var ulStyle = 'margin:0 0 4px 0;padding-left:18px;line-height:1.7';
+
+  return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">' +
+      '<div>' +
+        '<div style="'+headerStyle+'">Tecido (média de '+nOps+' OP'+(nOps===1?'':'s')+')</div>' +
+        '<ul style="'+ulStyle+'">'+linhasTecido+'</ul>' +
+        '<div style="color:var(--txt3)">Média: <strong>'+fmtR(tec)+'/pç</strong></div>' +
+      '</div>' +
+      '<div>' +
+        '<div style="'+headerStyle+'">Costura (média de '+nOps+' OP'+(nOps===1?'':'s')+')</div>' +
+        '<ul style="'+ulStyle+'">'+linhasCostura+'</ul>' +
+        '<div style="color:var(--txt3)">Média: <strong>'+fmtR(cost)+'/pç</strong></div>' +
+      '</div>' +
+    '</div>' +
+    '<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--bg3);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">' +
+      '<div>CMV = '+fmtR(tec)+' + '+fmtR(cost)+' = <strong style="color:var(--indigo)">'+fmtR(total)+'/pç</strong></div>' +
+      '<div style="color:var(--txt4);font-size:10px">snapshot · '+atual+'</div>' +
+    '</div>';
 }
 
 function renderChartCustos() {
