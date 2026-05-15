@@ -1687,8 +1687,25 @@ function atualizarPreviewFechamento() {
   var consumoSec = document.getElementById('ent-consumo-real-sec');
   if (!preview) return;
   if (tipo !== 'total') {
-    preview.style.display = 'none';
-    preview.innerHTML = '';
+    // Detecta overdelivery em Parcial: alerta amarelo convidando a marcar Total.
+    // Motivo: radio default é Parcial — sem aviso, usuário fecha "Parcial" achando que fechou a OP.
+    var jaEntP = op.qtde_pecas_entregues || 0;
+    var qtdAgoraP = 0;
+    document.querySelectorAll('.grade-input-ent').forEach(function(inp) { qtdAgoraP += parseInt(inp.value) || 0; });
+    var totalEntP = jaEntP + qtdAgoraP;
+    var projP = op.qtde_pecas || 0;
+    if (qtdAgoraP > 0 && projP > 0 && totalEntP >= projP) {
+      var sobraP = totalEntP - projP;
+      var sobraTxt = sobraP > 0 ? ' — sobra ' + fmt(sobraP) + ' pç' : ' (bate exato)';
+      preview.style.display = 'block';
+      preview.innerHTML = '<div style="padding:10px;border:1px solid rgba(245,158,11,0.5);border-left:3px solid var(--amber);border-radius:6px;background:rgba(245,158,11,0.08);font-size:12px">' +
+        '<strong style="color:var(--amber)">⚠ Total entregue ≥ projetado' + sobraTxt + '</strong><br>' +
+        '<span style="color:var(--txt2)">Esta entrega como <strong>Parcial</strong> não fecha a OP. Se for a última entrega, marque <strong>Total</strong> acima.</span>' +
+        '</div>';
+    } else {
+      preview.style.display = 'none';
+      preview.innerHTML = '';
+    }
     if (consumoSec) consumoSec.style.display = 'none';
     return;
   }
