@@ -103,6 +103,16 @@ Fonte: `pedidos` + `pedidos_historico` (origem_conta=kwid). Atacado/flecha exclu
 - Cross-filtering bidirecional: click vendedor ↔ click SKU.
 - Categorias excluídas: TECIDO, TROCA.
 
+## Dash Lojas Lynx (`lojas-lynx.html`) — espelho POC migração Microvix (21/05/2026)
+
+Cópia de `lojas.html` lendo `pedidos_linx_staging` + `itens_linx_staging` (em vez de `pedidos` + `itens_pedido`). Serve pra bater vendas físicas das lojas KWID contra o que foi registrado no Linx Microvix durante o rollout.
+
+- **Fonte**: `pedidos_linx_staging` + `itens_linx_staging` (populadas por `fusion-sync/fusion_sync_lojas_linx_poc.py`)
+- `fetchPedidos` simplificado — só staging, sem `pedidos_historico` (Microvix Fusion só tem dados desde 30/03/2026)
+- Acesso restrito a `leonardo@usefusion.com.br` (`restritoPara` no `auth.js` + `user_roles.dashes`)
+- **Temporário** — vive enquanto a migração Tiny→Linx é POC. Detalhes em memória `project_linx_microvix_poc`.
+- ⚠️ Dados Linx ≠ Tiny: são fontes complementares (numero_pedido independente), não duplicação. Cobertura parcial: Vautier 0, Polo Plaza ~30%.
+
 ## Dash Financeiro (`financeiro.html`)
 
 Fonte única: tabela `contas_pagar` (só Fio e Trama).
