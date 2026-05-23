@@ -404,6 +404,13 @@ function avatarHtml(nome,corFallback,rank){
 }
 var IGNORAR_LOJA=['Atacado WhatsApp'];
 
+// Lojas KWID que ainda não migraram pro PDV Microvix — renderiza card placeholder
+// com aviso pra usuário saber que o zero é falta de migração, não falta de vendas.
+// Limpar entry quando Linx liberar a migração (webchamado aberto 20/05/2026).
+var LOJAS_AGUARDANDO_MIGRACAO={
+  'Vautier':'Aguardando migração do PDV Microvix (webchamado Linx). Vendas dessa loja só aparecem no dash KWID via Tiny.'
+};
+
 function getLoja(loja_nome,origem){
   if(origem==='flecha') return 'Atacado WhatsApp';
   return (loja_nome||'').trim()||'Outras Receitas Lojas';
@@ -1335,7 +1342,22 @@ function renderLojaCards(){
       '<div class="cc-spark-wrap"><canvas id="'+cid+'"></canvas></div>'+
     '</div>';
   }).join('');
-  document.getElementById('loja-cards').innerHTML=html||'<div style="padding:30px;text-align:center;color:var(--txt3);">Sem dados no período.</div>';
+
+  // Append cards placeholder de lojas com migração PDV Microvix pendente
+  // (renderiza mesmo sem dados, com aviso explicando por que está zerada)
+  var avisoHtml=Object.keys(LOJAS_AGUARDANDO_MIGRACAO).filter(function(n){return !cur[n];}).map(function(n){
+    var cor=getCor(n);
+    var msg=LOJAS_AGUARDANDO_MIGRACAO[n];
+    return '<div class="canal-card" style="--canal-cor:'+cor+';opacity:0.75;">'+
+      '<div class="cc-head"><span class="cc-dot"></span><span class="cc-name">'+lojaDisplay(n)+'</span></div>'+
+      '<div class="cc-receita" style="color:var(--txt3);">—</div>'+
+      '<div style="font-size:11px;font-weight:600;color:var(--amber);background:rgba(245,158,11,0.1);padding:8px 10px;border-radius:6px;margin-top:10px;line-height:1.4;">'+
+        '⚠️ '+msg+
+      '</div>'+
+    '</div>';
+  }).join('');
+
+  document.getElementById('loja-cards').innerHTML=(html+avisoHtml)||'<div style="padding:30px;text-align:center;color:var(--txt3);">Sem dados no período.</div>';
 
   // Destroy old sparklines
   CHARTS.lojaSparklines.forEach(function(c){if(c) c.destroy();});
