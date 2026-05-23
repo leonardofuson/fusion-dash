@@ -644,7 +644,10 @@ async function carregar() {
       }
     });
 
-    const pais = Object.values(pBySku).filter(p => Object.keys(p.cores).length > 0);
+    // Tecidos são insumo, não produto finalizado — separados pra aparecer só na aba Insumos
+    const isTecido = (p) => /^TECIDO/i.test(p.categoria || '');
+    const pais     = Object.values(pBySku).filter(p => Object.keys(p.cores).length > 0 && !isTecido(p));
+    const tecidos  = Object.values(pBySku).filter(p => Object.keys(p.cores).length > 0 &&  isTecido(p));
 
     // Velocidade de venda Shopify 30d agregada por SKU pai
     const vendaShopify30d = {};
@@ -668,7 +671,7 @@ async function carregar() {
     selCat.innerHTML = '<option value="">Todas</option>';
     cats.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; selCat.appendChild(o); });
 
-    DADOS = { pais, vendaShopify30d };
+    DADOS = { pais, tecidos, vendaShopify30d };
     document.getElementById('upd').textContent = 'Atualizado ' + new Date().toLocaleTimeString('pt-BR');
     render();
   } catch (e) {
@@ -1161,7 +1164,7 @@ function renderProdsChart(filtrados, locF) {
     backBtn.style.display = 'none';
   }
 
-  // Build product data — exclui categoria TECIDO (insumo, não produto finalizado)
+  // Tecidos já filtrados em carregar() — só rankeia produtos finalizados aqui
   const prodData = filtrados.map(p => ({
     nome: p.nome.length > 28 ? p.nome.slice(0, 26) + '…' : p.nome,
     fullNome: p.nome,
@@ -1170,7 +1173,7 @@ function renderProdsChart(filtrados, locF) {
     cat: p.categoria,
     color: corCat(p.categoria),
     health: healthColor(p, locF || undefined),
-  })).filter(d => d.qty > 0 && !/^TECIDO/i.test(d.cat || '')).sort((a, b) => b.qty - a.qty);
+  })).filter(d => d.qty > 0).sort((a, b) => b.qty - a.qty);
 
   const top = prodData.slice(0, 15);
   const labels = top.map(d => d.nome);
