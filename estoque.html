@@ -1161,7 +1161,7 @@ function renderProdsChart(filtrados, locF) {
     backBtn.style.display = 'none';
   }
 
-  // Build product data
+  // Build product data — exclui categoria TECIDO (insumo, não produto finalizado)
   const prodData = filtrados.map(p => ({
     nome: p.nome.length > 28 ? p.nome.slice(0, 26) + '…' : p.nome,
     fullNome: p.nome,
@@ -1170,7 +1170,7 @@ function renderProdsChart(filtrados, locF) {
     cat: p.categoria,
     color: corCat(p.categoria),
     health: healthColor(p, locF || undefined),
-  })).filter(d => d.qty > 0).sort((a, b) => b.qty - a.qty);
+  })).filter(d => d.qty > 0 && !/^TECIDO/i.test(d.cat || '')).sort((a, b) => b.qty - a.qty);
 
   const top = prodData.slice(0, 15);
   const labels = top.map(d => d.nome);
