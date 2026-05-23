@@ -166,11 +166,6 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;-webkit-text-size-a
 .prod-body{display:none;border-top:1px solid var(--bdr);}
 .prod-body.open{display:block;}
 
-/* ── CHANNEL PILLS ── */
-.ch-pills{display:flex;gap:6px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--bdr);}
-.ch-pill{display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;background:rgba(255,255,255,0.04);border:1px solid var(--bdr);}
-.ch-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
-
 /* ── MATRIX TABLE ── */
 .mwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
 table.mtz{width:100%;border-collapse:collapse;font-size:12px;}
@@ -208,18 +203,38 @@ table.mtz tr.row-broken:hover td{background:rgba(234,179,8,0.10);}
 table.mtz tr.row-broken:hover td.tdc{background:rgba(234,179,8,0.12);}
 .prod.prod-quebrada{border-color:var(--amber);}
 
-/* ── CHANNEL DETAIL TOGGLE ── */
-.ch-toggle{display:flex;align-items:center;gap:8px;padding:11px 16px;cursor:pointer;background:rgba(255,255,255,0.02);border-top:1px solid var(--bdr);-webkit-tap-highlight-color:transparent;}
-.ch-toggle:hover{background:rgba(255,255,255,0.04);}
-.ch-toggle-arrow{font-size:9px;color:#71717a;transition:transform 0.2s;}
-.ch-toggle-arrow.open{transform:rotate(90deg);color:var(--green);}
-.ch-toggle-txt{font-size:11px;font-weight:600;color:var(--txt2);}
-.ch-body{display:none;}
-.ch-body.open{display:block;}
-.ch-bloco{border-top:1px solid var(--bdr);}
-.ch-head{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:rgba(255,255,255,0.02);border-bottom:1px solid var(--bdr);}
-.tag-ch{display:inline-flex;align-items:center;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;letter-spacing:0.03em;}
-.ch-units{font-size:12px;font-weight:700;color:var(--txt2);background:rgba(255,255,255,0.05);padding:3px 10px;border-radius:6px;border:1px solid var(--bdr);}
+/* ── TOTAL CARD (resumo do produto expandido) ── */
+.total-card{margin:14px 16px 12px;padding:14px 16px;background:linear-gradient(135deg,rgba(99,102,241,0.10),rgba(99,102,241,0.04));border:1px solid rgba(99,102,241,0.25);border-left:3px solid var(--blue);border-radius:10px;}
+.total-head{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
+.total-label{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.10em;color:var(--blue);}
+.total-val{font-size:1.5rem;font-weight:800;color:var(--txt1);line-height:1;font-variant-numeric:tabular-nums;}
+.total-val-sub{font-size:11px;color:var(--txt3);font-weight:600;font-variant-numeric:tabular-nums;}
+.total-cores{display:flex;gap:6px;flex-wrap:wrap;}
+.total-cor-chip{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:7px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);font-size:11px;font-weight:600;color:var(--txt2);font-variant-numeric:tabular-nums;white-space:nowrap;}
+.total-cor-chip strong{color:var(--txt1);font-weight:800;margin-left:3px;}
+
+/* ── CHANNEL ACCORDION (cada canal abre sua matriz) ── */
+.ch-list{padding:0 16px 14px;display:flex;flex-direction:column;gap:6px;}
+.ch-item{background:rgba(255,255,255,0.02);border:1px solid var(--bdr);border-left:3px solid var(--ch-cor);border-radius:8px;overflow:hidden;transition:border-color 0.15s,background 0.15s;}
+.ch-item:hover{background:rgba(255,255,255,0.035);}
+.ch-item-head{display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;}
+.ch-item-arrow{font-size:9px;color:#71717a;transition:transform 0.2s;width:10px;flex-shrink:0;}
+.ch-item-arrow.open{transform:rotate(90deg);color:var(--ch-cor);}
+.ch-item-dot{width:9px;height:9px;border-radius:50%;background:var(--ch-cor);box-shadow:0 0 6px var(--ch-cor);flex-shrink:0;}
+.ch-item-name{font-size:12px;font-weight:700;color:var(--txt1);flex:1;letter-spacing:0.01em;}
+.ch-item-val{font-size:13px;font-weight:800;color:var(--ch-cor);font-variant-numeric:tabular-nums;}
+.ch-item-pct{font-size:10px;font-weight:700;color:var(--txt3);font-variant-numeric:tabular-nums;background:rgba(255,255,255,0.04);padding:2px 7px;border-radius:4px;min-width:42px;text-align:center;}
+.ch-item-body{display:none;padding:0 12px 12px;border-top:1px solid var(--bdr);}
+.ch-item-body.open{display:block;}
+.ch-item-body .mwrap{margin-top:10px;}
+
+@media(max-width:480px){
+  .total-card{margin:12px 12px 10px;padding:12px;}
+  .total-val{font-size:1.3rem;}
+  .ch-list{padding:0 12px 12px;}
+  .ch-item-head{padding:8px 10px;}
+  .ch-item-pct{display:none;}
+}
 
 /* ── LOADING & EMPTY ── */
 .loading{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;gap:12px;color:var(--txt2);}
@@ -259,8 +274,6 @@ table.mtz tr.row-broken:hover td.tdc{background:rgba(234,179,8,0.12);}
   .prod-name{font-size:12px;}
   .prod-sku{display:none;}
   .prod-locs{display:none;}
-  .ch-pills{padding:10px 14px;}
-  .ch-toggle,.ch-head{padding:10px 14px;}
   table.mtz th,table.mtz td{padding:7px 8px;font-size:11px;}
   table.mtz th.thc{min-width:100px;}
 }
@@ -451,7 +464,7 @@ const CAT_CORES = {
 // ═══════════════════════════════════════════
 let AUTH_HEADERS = null;
 let DADOS = null;
-let EXP = {}, CH_EXP = {};
+let EXP = {}, CH_ITEM_EXP = {};
 let expAll = false;
 let activeLoc = '';
 let CHARTS = { canal: null, cat: null, prods: null };
@@ -1267,65 +1280,37 @@ function renderProd(pai, locF, modoQuebrada, nivel) {
   const cors = Object.keys(pai.cores).sort();
   const activeLocs = locF ? LOCS.filter(l => l.key === locF) : LOCS;
 
-  // Consolidated matrix
-  const tTam = {}, tCor = {};
+  // Totais por cor (pro Total card)
+  const tCor = {};
   cors.forEach(c => {
     tCor[c] = 0;
     tams.forEach(t => {
-      const v = activeLocs.reduce((s, l) => s + ((pai.cores[c][t] || {})[l.key] || 0), 0);
-      tTam[t] = (tTam[t] || 0) + v;
-      tCor[c] += v;
+      tCor[c] += activeLocs.reduce((s, l) => s + ((pai.cores[c][t] || {})[l.key] || 0), 0);
     });
   });
 
   const thTams = tams.map(t => `<th>${t}</th>`).join('');
 
-  const linhas = cors.map(c => {
+  // Chips de cor pro Total card (com size run badge)
+  const totCorChips = cors.map(c => {
     const run = sizeRunInfo(pai.cores[c], locF || undefined);
-    const isCorQuebrada = c !== '(Modelo único)' && run.total > 1 && run.comEstoque > 0 && run.comEstoque < run.total;
     let runBadge = '';
     if (c !== '(Modelo único)' && run.total > 1) {
-      if (run.comEstoque === 0) runBadge = `<span class="run run-empty">0/${run.total}</span>`;
-      else if (run.comEstoque < run.total) runBadge = `<span class="run run-broken">${run.comEstoque}/${run.total}</span>`;
-      else runBadge = `<span class="run run-ok">✓</span>`;
+      if (run.comEstoque === 0)             runBadge = ` <span class="run run-empty">0/${run.total}</span>`;
+      else if (run.comEstoque < run.total)  runBadge = ` <span class="run run-broken">${run.comEstoque}/${run.total}</span>`;
+      else                                  runBadge = ` <span class="run run-ok">✓</span>`;
     }
-
-    // Grade completeness bar
-    let gradeBar = '';
-    if (c !== '(Modelo único)' && run.total > 1) {
-      const pct = Math.round(run.comEstoque / run.total * 100);
-      const barColor = pct === 100 ? 'var(--green)' : pct >= 70 ? 'var(--amber)' : 'var(--red)';
-      gradeBar = `<span class="grade-bar"><span class="grade-track"><span class="grade-fill" style="width:${pct}%;background:${barColor}"></span></span></span>`;
-    }
-
-    const cells = tams.map(t => {
-      const v = activeLocs.reduce((s, l) => s + ((pai.cores[c][t] || {})[l.key] || 0), 0);
-      return `<td class="${hcls(v)}">${v === 0 ? '—' : fmt(v)}</td>`;
-    }).join('');
-
-    const rowClass = isCorQuebrada ? ' row-broken' : '';
-
-    return `<tr class="${rowClass}">
-      <td class="tdc"><span class="cor-dot" style="background:${corV(c)}"></span>${c}${runBadge}${gradeBar}</td>
-      ${cells}
-      <td class="tot">${tCor[c] > 0 ? fmt(tCor[c]) : '—'}</td>
-    </tr>`;
+    return `<span class="total-cor-chip">
+      <span class="cor-dot" style="background:${corV(c)}"></span>${c}<strong>${fmt(tCor[c] || 0)}</strong>${runBadge}
+    </span>`;
   }).join('');
 
-  const totCols = tams.map(t => `<td class="tot">${fmt(tTam[t] || 0)}</td>`).join('');
-
-  // Channel pills
-  const chPills = LOCS.map(l => {
+  // Accordion por canal — cada canal abre sua matriz cor × tam
+  const chItems = LOCS.filter(l => bl[l.key] > 0 && (!locF || l.key === locF)).map(l => {
+    const lid = `${id}-${l.key}`;
     const v = bl[l.key];
-    if (!v) return '';
-    return `<div class="ch-pill"><span class="ch-dot" style="background:${l.cor}"></span>${l.label}<strong>${fmt(v)}</strong></div>`;
-  }).filter(Boolean).join('');
-
-  // Per-channel detail matrices
-  const chDetail = LOCS.map(l => {
-    const v = bl[l.key];
-    if (!v) return '';
-    const rgb = hexRgb(l.cor);
+    const pct = tot > 0 ? (v / tot * 100) : 0;
+    const isItemOpen = !!CH_ITEM_EXP[lid] || (locF === l.key);
     const lins = cors.map(c => {
       const cells = tams.map(t => {
         const q = (pai.cores[c][t] || {})[l.key] || 0;
@@ -1334,20 +1319,24 @@ function renderProd(pai, locF, modoQuebrada, nivel) {
       const rt = tams.reduce((s, t) => s + ((pai.cores[c][t] || {})[l.key] || 0), 0);
       return `<tr><td class="tdc"><span class="cor-dot" style="background:${corV(c)}"></span>${c}</td>${cells}<td class="tot">${rt > 0 ? fmt(rt) : '—'}</td></tr>`;
     }).join('');
-    return `<div class="ch-bloco">
-      <div class="ch-head">
-        <span class="tag-ch" style="background:rgba(${rgb},0.15);color:${l.cor};border:1px solid rgba(${rgb},0.3)">
-          <span style="width:7px;height:7px;border-radius:50%;background:${l.cor};display:inline-block;margin-right:6px"></span>
-          ${l.label}
-        </span>
-        <span class="ch-units">${fmt(v)} un</span>
+    return `<div class="ch-item" style="--ch-cor:${l.cor}">
+      <div class="ch-item-head" onclick="toggleCanalItem('${lid}')">
+        <span class="ch-item-arrow${isItemOpen ? ' open' : ''}" id="carrow-${lid}">▶</span>
+        <span class="ch-item-dot"></span>
+        <span class="ch-item-name">${l.label}</span>
+        <span class="ch-item-val">${fmt(v)} un</span>
+        <span class="ch-item-pct">${fmtP(pct)}</span>
       </div>
-      <div class="mwrap"><table class="mtz">
-        <thead><tr><th class="thc">Cor</th>${thTams}<th>Total</th></tr></thead>
-        <tbody>${lins}</tbody>
-      </table></div>
+      <div class="ch-item-body${isItemOpen ? ' open' : ''}" id="cibody-${lid}">
+        <div class="mwrap"><table class="mtz">
+          <thead><tr><th class="thc">Cor</th>${thTams}<th>Total</th></tr></thead>
+          <tbody>${lins}</tbody>
+        </table></div>
+      </div>
     </div>`;
-  }).filter(Boolean).join('');
+  }).join('');
+
+  const totLabel = locF ? `TOTAL — ${LOCS.find(l => l.key === locF)?.label || ''}` : 'TOTAL';
 
   // Badge de cobertura Shopify — só no modo filtro shopify_low
   let cobBadge = '';
@@ -1376,19 +1365,15 @@ function renderProd(pai, locF, modoQuebrada, nivel) {
       <span class="prod-arrow${isOpen ? ' open' : ''}" id="arrow-${id}">▶</span>
     </div>
     <div class="prod-body${isOpen ? ' open' : ''}" id="body-${id}">
-      ${chPills ? `<div class="ch-pills">${chPills}</div>` : ''}
-      <div class="mwrap"><table class="mtz">
-        <thead><tr><th class="thc">Cor</th>${thTams}<th>Total</th></tr></thead>
-        <tbody>${linhas}</tbody>
-        <tfoot><tr><td class="tdc">Total</td>${totCols}<td class="tot">${fmt(tot)}</td></tr></tfoot>
-      </table></div>
-      ${chDetail && !locF ? `
-        <div class="ch-toggle" onclick="toggleCanal('${id}')">
-          <span class="ch-toggle-arrow${CH_EXP[id] ? ' open' : ''}" id="carrow-${id}">▶</span>
-          <span class="ch-toggle-txt">Detalhar por canal</span>
+      <div class="total-card">
+        <div class="total-head">
+          <span class="total-label">📊 ${totLabel}</span>
+          <span class="total-val">${fmt(tot)}</span>
+          <span class="total-val-sub">un · ${fmtR(val)}</span>
         </div>
-        <div class="ch-body${CH_EXP[id] ? ' open' : ''}" id="cbody-${id}">${chDetail}</div>
-      ` : ''}
+        ${totCorChips ? `<div class="total-cores">${totCorChips}</div>` : ''}
+      </div>
+      ${chItems ? `<div class="ch-list">${chItems}</div>` : ''}
     </div>
   </div>`;
 }
@@ -1451,10 +1436,10 @@ function toggleProd(id) {
   document.getElementById('arrow-' + id)?.classList.toggle('open', EXP[id]);
 }
 
-function toggleCanal(id) {
-  CH_EXP[id] = !CH_EXP[id];
-  document.getElementById('cbody-' + id)?.classList.toggle('open', CH_EXP[id]);
-  document.getElementById('carrow-' + id)?.classList.toggle('open', CH_EXP[id]);
+function toggleCanalItem(lid) {
+  CH_ITEM_EXP[lid] = !CH_ITEM_EXP[lid];
+  document.getElementById('cibody-' + lid)?.classList.toggle('open', CH_ITEM_EXP[lid]);
+  document.getElementById('carrow-' + lid)?.classList.toggle('open', CH_ITEM_EXP[lid]);
 }
 
 function setNivel(nivel, el) {
