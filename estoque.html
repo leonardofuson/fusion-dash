@@ -1160,7 +1160,7 @@ function renderProdsChart(filtrados, locF) {
     titleEl.textContent = `Produtos — ${cat}`;
     backBtn.style.display = '';
   } else {
-    titleEl.textContent = 'Top 15 Produtos por Estoque';
+    titleEl.textContent = 'Top 10 Produtos por Estoque';
     backBtn.style.display = 'none';
   }
 
@@ -1175,7 +1175,7 @@ function renderProdsChart(filtrados, locF) {
     health: healthColor(p, locF || undefined),
   })).filter(d => d.qty > 0).sort((a, b) => b.qty - a.qty);
 
-  const top = prodData.slice(0, 15);
+  const top = prodData.slice(0, 10);
   const labels = top.map(d => d.nome);
   const data = top.map(d => d.qty);
   const colors = top.map(d => d.color);
