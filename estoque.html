@@ -781,9 +781,36 @@ function fmtDias(d) {
 }
 
 // ── Botão "Atualizar Estoque" — dispara cron fusion-estoque (modo fab-própria) ──
-const MAX_CHAT_BACKEND = 'https://max-chat-2vs0.onrender.com';
+// Usa RPC Supabase (pg_net + functions disparar_fusion_estoque / consultar_job_estoque
+// / get_net_response). Padrão async: chama dispara → recebe req_id → poll get_net_response
+// até ready → parse body. Mesma auth de todos os outros dashes (sem dependência do max-chat).
 const FABPROP_DURACAO_S = 480;   // ~8min: KWID 5min + ML 2min + Shopify 5s + Shopee 1min
 let _progInt = null;
+
+async function _rpc(fn, args) {
+  const r = await fetch(`${SB_URL}/rest/v1/rpc/${fn}`, {
+    method: 'POST',
+    headers: { ...AUTH_HEADERS, 'Content-Type': 'application/json' },
+    body: JSON.stringify(args || {}),
+  });
+  if (!r.ok) {
+    let msg = `HTTP ${r.status}`;
+    try { const j = await r.json(); msg = j.message || j.error || msg; } catch (_) {}
+    throw new Error(`${fn}: ${msg}`);
+  }
+  return r.json();
+}
+
+// Polling: chama get_net_response até ready (status preenchido). Timeout configurável.
+async function _awaitNetResponse(reqId, timeoutMs = 12000) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const resp = await _rpc('get_net_response', { p_req_id: reqId });
+    if (resp && resp.ready && resp.status != null) return resp;
+    await new Promise(r => setTimeout(r, 400));
+  }
+  throw new Error(`Timeout aguardando resposta Render API (req_id ${reqId})`);
+}
 
 function progressStart(estimadoS) {
   const wrap = document.getElementById('estoque-progress');
@@ -825,57 +852,40 @@ async function atualizarEstoqueKwid() {
   btn.classList.add('spinning');
   txt.textContent = 'Disparando…';
 
-  let token;
-  try { const sess = await fusionAuth.getSession(); token = sess && sess.access_token; } catch (e) {}
-  if (!token) {
-    alert('Sessão expirou — faça login de novo.');
-    btn.disabled = false; btn.classList.remove('spinning'); txt.textContent = 'Atualizar Estoque';
-    return;
-  }
-
   try {
-    const resp = await fetch(`${MAX_CHAT_BACKEND}/api/max-chat/admin/disparar-cron-estoque`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify({ modo: 'fabprop' }),
-    });
-    let j;
-    try { j = await resp.json(); } catch (_) { j = {}; }
-    if (!resp.ok || !j.ok || !j.job_id) {
-      throw new Error(j.erro || ('HTTP ' + resp.status + ' — ' + (await resp.text().catch(()=>''))));
+    // 1) Dispara o cron via RPC, recebe request_id do pg_net
+    const reqId = await _rpc('disparar_fusion_estoque', { p_modo: 'fabprop' });
+    // 2) Aguarda resposta da Render API
+    const resp = await _awaitNetResponse(reqId);
+    if (resp.status !== 201 || !resp.body || !resp.body.id) {
+      throw new Error(`Render API HTTP ${resp.status}: ${(resp.body && JSON.stringify(resp.body)) || resp.error || ''}`);
     }
-
+    const jobId = resp.body.id;
     txt.textContent = 'Executando…';
     progressStart(FABPROP_DURACAO_S);
 
-    const jobId = j.job_id;
+    // 3) Polling do job — chama consultar (retorna req_id) e get_net_response em loop
     let last = 'pending';
-    let logs = '';
-    // Polling a cada 10s, máx 90 iters = 15min (cobre ~8min real + folga)
     for (let i = 0; i < 90; i++) {
       await new Promise(r => setTimeout(r, 10000));
-      const sResp = await fetch(
-        `${MAX_CHAT_BACKEND}/api/max-chat/admin/cron-job-estoque/${jobId}`,
-        { headers: { Authorization: 'Bearer ' + token } }
-      );
-      const s = await sResp.json().catch(() => ({}));
-      last = s.status || 'desconhecido';
-      logs = s.logs || logs;
+      try {
+        const consReq = await _rpc('consultar_job_estoque', { p_job_id: jobId });
+        const consResp = await _awaitNetResponse(consReq);
+        last = (consResp.body && consResp.body.status) || 'desconhecido';
+      } catch (e) {
+        console.warn('polling iter erro:', e);
+        continue;
+      }
       if (['succeeded', 'failed', 'canceled'].includes(last)) break;
     }
 
-    const highlights = (logs || '')
-      .split('\n')
-      .filter(l => /\[[1-5]\/5\]|SKUs|atualizados|Concluído|Erro|ERROR|threshold|fab_set|skip/.test(l))
-      .slice(-15).join('\n');
-
     if (last === 'succeeded') {
       progressFinish(true);
-      alert(`✅ Estoque atualizado!\n\n${highlights || '(veja logs no Render dashboard)'}`);
+      alert('✅ Estoque atualizado!');
       if (typeof carregar === 'function') carregar();
     } else if (last === 'failed' || last === 'canceled') {
       progressFinish(false, `🔴 ${last}`);
-      alert(`🔴 Cron ${last}\n\n${highlights || '(veja logs no Render dashboard)'}`);
+      alert(`🔴 Cron ${last} — veja logs no Render dashboard.`);
     } else {
       progressFinish(false, '⏱ Timeout local');
       alert(`⏱ Job ainda rodando após 15min — acompanhe no Render dashboard (status: ${last}).`);
