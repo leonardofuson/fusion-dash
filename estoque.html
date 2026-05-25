@@ -368,13 +368,13 @@ table.mtz tr.row-broken:hover td.tdc{background:rgba(234,179,8,0.12);}
       </select>
     </div>
     <div class="chips" id="chips-nivel">
-      <button class="chip on" data-nivel="todos" onclick="setNivel('todos',this)">Todos</button>
+      <button class="chip" data-nivel="todos" onclick="setNivel('todos',this)">Todos</button>
       <button class="chip" data-nivel="com" onclick="setNivel('com',this)">Com Estoque</button>
       <button class="chip" data-nivel="sem" onclick="setNivel('sem',this)">Sem Estoque</button>
     </div>
-    <button class="btn-fab btn-fab-blue" id="btn-fabprop" onclick="toggleFab('fabprop')">
+    <button class="btn-fab btn-fab-blue on" id="btn-fabprop" onclick="toggleFab('fabprop')">
       <svg class="btn-fab-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 20V8l4-4h4l2 2h8v14z"/><path d="M6 12v4"/><path d="M10 12v4"/><path d="M14 12v4"/><path d="M18 12v4"/></svg>
-      <span class="btn-fab-txt">Fabricação Própria<small id="fab-count">13 produtos</small></span>
+      <span class="btn-fab-txt">Fabricação Própria<small id="fab-count">…</small></span>
     </button>
     <button class="btn-fab btn-fab-amber" id="btn-quebrada" onclick="toggleFab('quebrada')">
       <span class="btn-fab-icon" style="font-size:16px">⚠</span>
@@ -575,6 +575,8 @@ async function carregar() {
     // Popula SKU_FINALIZADOS a partir de produtos.fabricacao_propria (live, não-hardcoded)
     SKU_FINALIZADOS = new Set();
     prods.forEach(p => { if (p.fabricacao_propria === true && p.sku_pai) SKU_FINALIZADOS.add(p.sku_pai); });
+    const fabCountEl = document.getElementById('fab-count');
+    if (fabCountEl) fabCountEl.textContent = SKU_FINALIZADOS.size + ' produtos';
 
     // Mapa SKU (variante ou pai) → SKU pai upper — usado pra atribuir vendas ao pai
     const skuToParent = {};
