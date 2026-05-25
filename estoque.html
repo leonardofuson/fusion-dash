@@ -26,6 +26,10 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;-webkit-text-size-a
 .btn-back,.btn-logout-tb{background:transparent;border:1px solid var(--bdr);color:var(--txt2);padding:7px 14px;border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit;text-decoration:none;display:inline-block;transition:all 0.15s;}
 .btn-back:hover{border-color:var(--blue);color:var(--blue);}
 .btn-logout-tb:hover{border-color:var(--red);color:var(--red);}
+.btn-atualizar-estoque{background:rgba(34,197,94,0.10);border:1px solid rgba(34,197,94,0.30);color:var(--green);padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px;transition:all 0.15s;}
+.btn-atualizar-estoque:hover:not(:disabled){background:rgba(34,197,94,0.20);border-color:var(--green);box-shadow:0 0 12px rgba(34,197,94,0.25);}
+.btn-atualizar-estoque:disabled{opacity:0.7;cursor:not-allowed;}
+.btn-atualizar-estoque.spinning #ae-icon{animation:spin 1.2s linear infinite;display:inline-block;}
 
 /* ── TABS ── */
 .tabs{display:flex;gap:4px;padding:0 1.5rem;background:var(--bg);border-bottom:1px solid var(--bdr);}
@@ -311,6 +315,10 @@ table.mtz tr.row-broken:hover td.tdc{background:rgba(234,179,8,0.12);}
   <div class="topbar-actions">
     <span id="upd"></span>
     <span id="user-info-tb"></span>
+    <button id="btn-atualizar-estoque" class="btn-atualizar-estoque" onclick="atualizarEstoqueKwid()" title="Dispara o cron fusion-estoque (Tiny KWID + ML Full + Shopify + Shopee). Leva ~20min.">
+      <span id="ae-icon">🔄</span>
+      <span id="ae-text">Atualizar Estoque</span>
+    </button>
     <a href="/index.html" class="btn-back">Menu</a>
     <button class="btn-logout-tb" onclick="fusionAuth.signOut()">Sair</button>
   </div>
@@ -751,6 +759,86 @@ function fmtDias(d) {
   if (d === null || d === undefined) return '—';
   if (d === Infinity) return '∞';
   return d < 10 ? d.toFixed(1) : Math.round(d).toString();
+}
+
+// ── Botão "Atualizar Estoque" — dispara cron fusion-estoque via max-chat backend ──
+const MAX_CHAT_BACKEND = 'https://max-chat-2vs0.onrender.com';
+
+async function atualizarEstoqueKwid() {
+  if (!confirm(
+    'Disparar atualização do estoque agora?\n\n' +
+    '• Tiny KWID (CD Bom Retiro) — ~17min\n' +
+    '• ML Full Fio e Confecções — ~2min\n' +
+    '• Shopify (Site Próprio) — ~5s\n' +
+    '• Shopee Fio — ~1min\n\n' +
+    'Total ~20min. Pode acompanhar o status neste botão.'
+  )) return;
+
+  const btn = document.getElementById('btn-atualizar-estoque');
+  const txt = document.getElementById('ae-text');
+  btn.disabled = true;
+  btn.classList.add('spinning');
+  txt.textContent = 'Disparando...';
+
+  let token;
+  try {
+    const sess = await fusionAuth.getSession();
+    token = sess && sess.access_token;
+  } catch (e) {}
+  if (!token) {
+    alert('Sessão expirou — faça login de novo.');
+    btn.disabled = false; btn.classList.remove('spinning'); txt.textContent = 'Atualizar Estoque';
+    return;
+  }
+
+  try {
+    const resp = await fetch(`${MAX_CHAT_BACKEND}/api/max-chat/admin/disparar-cron-estoque`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    });
+    const j = await resp.json();
+    if (!resp.ok || !j.ok || !j.job_id) {
+      throw new Error(j.erro || ('HTTP ' + resp.status));
+    }
+
+    txt.textContent = 'Executando...';
+    const jobId = j.job_id;
+
+    let last = 'pending';
+    let logs = '';
+    for (let i = 0; i < 50; i++) {
+      await new Promise(r => setTimeout(r, 30000));
+      const s = await fetch(
+        `${MAX_CHAT_BACKEND}/api/max-chat/admin/cron-job-estoque/${jobId}`,
+        { headers: { Authorization: 'Bearer ' + token } }
+      ).then(r => r.json());
+      last = s.status || 'desconhecido';
+      logs = s.logs || logs;
+      txt.textContent = `cron: ${last}`;
+      if (['succeeded', 'failed', 'canceled'].includes(last)) break;
+    }
+
+    const highlights = (logs || '')
+      .split('\n')
+      .filter(l => /\[[1-5]\/5\]|SKUs salvos|Concluído|Erro|ERROR|Mantendo estoque anterior|threshold|✅|🔴/.test(l))
+      .slice(-15).join('\n');
+
+    if (last === 'succeeded') {
+      alert(`✅ Estoque atualizado!\n\nHighlights:\n${highlights || '(veja Render dashboard pros logs completos)'}`);
+      // Recarrega o dash com os dados novos
+      if (typeof carregar === 'function') carregar();
+    } else if (last === 'failed' || last === 'canceled') {
+      alert(`🔴 Cron ${last}\n\n${highlights || '(veja Render dashboard pros logs completos)'}`);
+    } else {
+      alert(`⏱ Job ainda rodando após 25min — acompanhe no Render dashboard (status: ${last}).`);
+    }
+  } catch (e) {
+    alert('Erro disparando o cron: ' + (e.message || e));
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove('spinning');
+    txt.textContent = 'Atualizar Estoque';
+  }
 }
 
 // ═══════════════════════════════════════════
