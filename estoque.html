@@ -30,6 +30,17 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;-webkit-text-size-a
 .btn-atualizar-estoque:hover:not(:disabled){background:rgba(34,197,94,0.20);border-color:var(--green);box-shadow:0 0 12px rgba(34,197,94,0.25);}
 .btn-atualizar-estoque:disabled{opacity:0.7;cursor:not-allowed;}
 .btn-atualizar-estoque.spinning #ae-icon{animation:spin 1.2s linear infinite;display:inline-block;}
+/* ── Progress bar do trigger de atualização ── */
+#estoque-progress{position:sticky;top:64px;background:var(--bg2);border-bottom:1px solid var(--bdr);padding:10px 1.5rem;z-index:99;display:none;align-items:center;gap:14px;}
+#estoque-progress.on{display:flex;}
+#ep-bar-wrap{flex:1;height:8px;background:var(--bg3);border-radius:4px;overflow:hidden;}
+#ep-bar{height:100%;width:0%;background:linear-gradient(90deg,var(--green),var(--cyan));border-radius:4px;transition:width 0.5s ease-out;box-shadow:0 0 8px rgba(34,197,94,0.4);}
+#ep-bar.fail{background:var(--red);box-shadow:0 0 8px rgba(244,63,94,0.4);}
+#ep-text{font-size:12px;font-weight:700;color:var(--txt1);white-space:nowrap;font-variant-numeric:tabular-nums;}
+@media(max-width:768px){
+  #estoque-progress{top:56px;padding:8px 1rem;gap:10px;}
+  #ep-text{font-size:11px;}
+}
 
 /* ── TABS ── */
 .tabs{display:flex;gap:4px;padding:0 1.5rem;background:var(--bg);border-bottom:1px solid var(--bdr);}
@@ -323,6 +334,12 @@ table.mtz tr.row-broken:hover td.tdc{background:rgba(234,179,8,0.12);}
     <button class="btn-logout-tb" onclick="fusionAuth.signOut()">Sair</button>
   </div>
 </header>
+
+<div id="estoque-progress">
+  <span id="ep-icon">⚡</span>
+  <div id="ep-bar-wrap"><div id="ep-bar"></div></div>
+  <span id="ep-text">Iniciando…</span>
+</div>
 
 <div class="tabs">
   <div class="tab on" onclick="setTab('finalizados',this)">Produtos Finalizados</div>
@@ -761,30 +778,61 @@ function fmtDias(d) {
   return d < 10 ? d.toFixed(1) : Math.round(d).toString();
 }
 
-// ── Botão "Atualizar Estoque" — dispara cron fusion-estoque via max-chat backend ──
+// ── Botão "Atualizar Estoque" — dispara cron fusion-estoque (modo fab-própria) ──
 const MAX_CHAT_BACKEND = 'https://max-chat-2vs0.onrender.com';
+const FABPROP_DURACAO_S = 60;   // estimativa pra barra de progresso
+let _progInt = null;
+
+function progressStart(estimadoS) {
+  const wrap = document.getElementById('estoque-progress');
+  const bar  = document.getElementById('ep-bar');
+  const txt  = document.getElementById('ep-text');
+  bar.classList.remove('fail');
+  bar.style.width = '0%';
+  wrap.classList.add('on');
+  const start = Date.now();
+  const tick = () => {
+    const elapsed = (Date.now() - start) / 1000;
+    const pct = Math.min(95, (elapsed / estimadoS) * 95);
+    bar.style.width = pct.toFixed(1) + '%';
+    const rest = Math.max(0, Math.round(estimadoS - elapsed));
+    txt.textContent = `Atualizando KWID (fabricação própria) · ~${rest}s restantes`;
+  };
+  tick();
+  _progInt = setInterval(tick, 500);
+}
+
+function progressFinish(success, msg) {
+  if (_progInt) { clearInterval(_progInt); _progInt = null; }
+  const bar = document.getElementById('ep-bar');
+  const txt = document.getElementById('ep-text');
+  bar.style.width = '100%';
+  if (!success) bar.classList.add('fail');
+  txt.textContent = msg || (success ? '✅ Atualização concluída' : '🔴 Falhou');
+  setTimeout(() => {
+    document.getElementById('estoque-progress').classList.remove('on');
+    bar.style.width = '0%';
+    bar.classList.remove('fail');
+  }, 4000);
+}
 
 async function atualizarEstoqueKwid() {
   if (!confirm(
-    'Disparar atualização do estoque agora?\n\n' +
-    '• Tiny KWID (CD Bom Retiro) — ~17min\n' +
-    '• ML Full Fio e Confecções — ~2min\n' +
-    '• Shopify (Site Próprio) — ~5s\n' +
-    '• Shopee Fio — ~1min\n\n' +
-    'Total ~20min. Pode acompanhar o status neste botão.'
+    'Atualizar estoque KWID dos produtos de fabricação própria agora?\n\n' +
+    'Atualiza apenas os SKUs marcados como fabricação própria no\n' +
+    'depósito CD Bom Retiro. Outros canais (ML/Shopify/Shopee) são\n' +
+    'atualizados pelo cron diário (04h BRT).\n\n' +
+    'Estimativa: ~30-60s.'
   )) return;
 
   const btn = document.getElementById('btn-atualizar-estoque');
   const txt = document.getElementById('ae-text');
   btn.disabled = true;
   btn.classList.add('spinning');
-  txt.textContent = 'Disparando...';
+  txt.textContent = 'Disparando…';
 
   let token;
-  try {
-    const sess = await fusionAuth.getSession();
-    token = sess && sess.access_token;
-  } catch (e) {}
+  try { const sess = await fusionAuth.getSession(); token = sess && sess.access_token; } catch (e) {}
   if (!token) {
     alert('Sessão expirou — faça login de novo.');
     btn.disabled = false; btn.classList.remove('spinning'); txt.textContent = 'Atualizar Estoque';
@@ -795,44 +843,47 @@ async function atualizarEstoqueKwid() {
     const resp = await fetch(`${MAX_CHAT_BACKEND}/api/max-chat/admin/disparar-cron-estoque`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ modo: 'fabprop' }),
     });
     const j = await resp.json();
-    if (!resp.ok || !j.ok || !j.job_id) {
-      throw new Error(j.erro || ('HTTP ' + resp.status));
-    }
+    if (!resp.ok || !j.ok || !j.job_id) throw new Error(j.erro || ('HTTP ' + resp.status));
 
-    txt.textContent = 'Executando...';
+    txt.textContent = 'Executando…';
+    progressStart(FABPROP_DURACAO_S);
+
     const jobId = j.job_id;
-
     let last = 'pending';
     let logs = '';
-    for (let i = 0; i < 50; i++) {
-      await new Promise(r => setTimeout(r, 30000));
+    // Polling a cada 5s, máx 36 iters = 180s
+    for (let i = 0; i < 36; i++) {
+      await new Promise(r => setTimeout(r, 5000));
       const s = await fetch(
         `${MAX_CHAT_BACKEND}/api/max-chat/admin/cron-job-estoque/${jobId}`,
         { headers: { Authorization: 'Bearer ' + token } }
       ).then(r => r.json());
       last = s.status || 'desconhecido';
       logs = s.logs || logs;
-      txt.textContent = `cron: ${last}`;
       if (['succeeded', 'failed', 'canceled'].includes(last)) break;
     }
 
     const highlights = (logs || '')
       .split('\n')
-      .filter(l => /\[[1-5]\/5\]|SKUs salvos|Concluído|Erro|ERROR|Mantendo estoque anterior|threshold|✅|🔴/.test(l))
-      .slice(-15).join('\n');
+      .filter(l => /SKUs|atualizados|Concluído|Erro|ERROR|threshold|fab_set|skip/.test(l))
+      .slice(-12).join('\n');
 
     if (last === 'succeeded') {
-      alert(`✅ Estoque atualizado!\n\nHighlights:\n${highlights || '(veja Render dashboard pros logs completos)'}`);
-      // Recarrega o dash com os dados novos
+      progressFinish(true);
+      alert(`✅ Estoque atualizado!\n\n${highlights || '(veja logs no Render dashboard)'}`);
       if (typeof carregar === 'function') carregar();
     } else if (last === 'failed' || last === 'canceled') {
-      alert(`🔴 Cron ${last}\n\n${highlights || '(veja Render dashboard pros logs completos)'}`);
+      progressFinish(false, `🔴 ${last}`);
+      alert(`🔴 Cron ${last}\n\n${highlights || '(veja logs no Render dashboard)'}`);
     } else {
-      alert(`⏱ Job ainda rodando após 25min — acompanhe no Render dashboard (status: ${last}).`);
+      progressFinish(false, '⏱ Timeout local');
+      alert(`⏱ Job ainda rodando após 3min — acompanhe no Render dashboard (status: ${last}).`);
     }
   } catch (e) {
+    progressFinish(false, 'Erro');
     alert('Erro disparando o cron: ' + (e.message || e));
   } finally {
     btn.disabled = false;
