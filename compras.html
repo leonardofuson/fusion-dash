@@ -772,13 +772,15 @@ function renderAll() {
 }
 
 // Chip "SEM DATA DE ENTREGA" — atalho pro KPI "Sem Data de Entrega" (kpiFilter='sem_data')
-// Critério: OPs ativas sem data_prevista_entrega (= "Data Prevista de Entrega" no form da OP).
+// Critério: OPs ativas SEM data_envio_tecido E SEM data_prevista_entrega
+// (= OPs realmente soltas no calendário — sem início e sem fim definidos).
+// Se qualquer uma das duas estiver preenchida, a OP é posicionável no Gantt e sai do filtro.
 function toggleSemDataChip() {
   toggleFilterKpi('sem_data');
 }
 function updateSemDataChipCount() {
   var count = (STATE.ops || []).filter(function(o) {
-    return o.status !== 'Entregue' && !o.data_prevista_entrega;
+    return o.status !== 'Entregue' && !o.data_envio_tecido && !o.data_prevista_entrega;
   }).length;
   var el = document.getElementById('chip-sem-data');
   if (!el) return;
@@ -996,7 +998,7 @@ function renderPipeline() {
   var totalPecas = ativas.reduce(function(s, o) { return s + (o.qtde_pecas || 0); }, 0);
   var totalEntregues = ativas.reduce(function(s, o) { return s + (o.qtde_pecas_entregues || 0); }, 0);
   var aReceber = totalPecas - totalEntregues;
-  var semData = ativas.filter(function(o) { return !o.data_prevista_entrega; }).length;
+  var semData = ativas.filter(function(o) { return !o.data_envio_tecido && !o.data_prevista_entrega; }).length;
 
   document.getElementById('badge-pipeline').textContent = ativas.length;
   var atrasadasCount = ativas.filter(function(o){return diasRodando(o)>40;}).length;
@@ -1089,7 +1091,7 @@ function renderOPsLista() {
   if (STATE.kpiFilter === 'atrasadas') {
     ops = ops.filter(function(o) { return diasRodando(o) > 40; });
   } else if (STATE.kpiFilter === 'sem_data') {
-    ops = ops.filter(function(o) { return !o.data_prevista_entrega; });
+    ops = ops.filter(function(o) { return !o.data_envio_tecido && !o.data_prevista_entrega; });
   }
 
   // Ordenacao desc por data de recebimento das pecas (data_prevista_entrega),
@@ -1228,7 +1230,7 @@ function renderGantt() {
   if (STATE.kpiFilter === 'atrasadas') {
     ativas = ativas.filter(function(o) { return diasRodando(o) > 40; });
   } else if (STATE.kpiFilter === 'sem_data') {
-    ativas = ativas.filter(function(o) { return !o.data_prevista_entrega; });
+    ativas = ativas.filter(function(o) { return !o.data_envio_tecido && !o.data_prevista_entrega; });
   }
 
   var filtroLabel = STATE.kpiFilter === 'atrasadas' ? ' (filtro: atrasadas >40d)' :
@@ -4541,7 +4543,7 @@ function renderReguaPagamentos() {
   var totalDentro30 = todos.filter(function(p){ return p.tipo==='dentro' && dataNoIntervalo(p, hoje, corte30); }).reduce(function(s,p){return s+p.valor_total;},0);
   var totalFora30 = todos.filter(function(p){ return p.tipo==='fora' && dataNoIntervalo(p, hoje, corte30); }).reduce(function(s,p){return s+p.valor_total;},0);
   var totalGeral = filtered.reduce(function(s,p){return s+p.valor_total;},0);
-  var opsSemData = (STATE.ops || []).filter(function(o){ return ['Cancelado','Devolvido Fornecedor','Entregue'].indexOf(o.status)<0 && !o.data_prevista_entrega && !o.data_entrega_real; }).length;
+  var opsSemData = (STATE.ops || []).filter(function(o){ return ['Cancelado','Devolvido Fornecedor','Entregue'].indexOf(o.status)<0 && !o.data_envio_tecido && !o.data_prevista_entrega && !o.data_entrega_real; }).length;
   var opsSemCusto = (STATE.ops || []).filter(function(o){ return ['Cancelado','Devolvido Fornecedor'].indexOf(o.status)<0 && !o.valor_costura_dentro && !o.valor_costura_fora && !o.valor_unitario; }).length;
 
   document.getElementById('kpis-regua-pagamentos').innerHTML = [
