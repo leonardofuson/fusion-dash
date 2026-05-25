@@ -972,8 +972,12 @@ function renderHighlights(){
   });
   var topVends=Object.values(porVend).sort(function(a,b){return b.fat-a.fat;}).slice(0,5);
 
-  // Top 5 produtos (SKU pai)
-  var topProds=STATE.skuGroups.slice(0,5);
+  // Top 5 produtos (SKU pai) — respeita filtro de loja/vendedor
+  var topGrupos=STATE.skuGroups;
+  if(temFiltroAtivo()){
+    topGrupos=gruparSkusFromItens(itensFiltrados().itens);
+  }
+  var topProds=topGrupos.slice(0,5);
 
   var html='';
 
@@ -1429,7 +1433,7 @@ var paretoLabelsPlugin={
 
 function renderPareto(){
   var grupos=STATE.skuGroups;
-  if(STATE.vendSel){
+  if(temFiltroAtivo()){
     var f=itensFiltrados();
     grupos=gruparSkusFromItens(f.itens);
   }
@@ -1492,12 +1496,26 @@ function toggleCat(c){
   if(STATE.skuSel) renderSkuDetail();
 }
 
+// Helper: algum filtro ativo (loja ou vendedor)?
+// STATE.lojasSel começa com todas TRUE; filtro de loja vira ativo quando nem todas estão TRUE.
+function temFiltroAtivo(){
+  if(STATE.vendSel) return true;
+  var keys=Object.keys(STATE.lojasSel||{});
+  if(keys.length===0) return false;
+  return !keys.every(function(k){return STATE.lojasSel[k];});
+}
+
 function itensFiltrados(){
   var pedToVend={};
   STATE.pedidos.forEach(function(p){if(!p._canc) pedToVend[p.id]=p._vend;});
   var itens=STATE.itens;
   if(STATE.vendSel){
     itens=itens.filter(function(it){return pedToVend[it.pedido_id]===STATE.vendSel;});
+  }
+  // Filtro de loja: STATE.itens é construído antes do filtro UI, então aplica aqui.
+  // Mesmo pattern de aplicarFiltrosPedidos (linha 566).
+  if(STATE.lojasSel && Object.keys(STATE.lojasSel).length>0){
+    itens=itens.filter(function(it){return STATE.lojasSel[it._loja];});
   }
   return {itens:itens,pedToVend:pedToVend};
 }
@@ -1524,7 +1542,7 @@ function gruparSkusFromItens(itens){
 function renderSkuList(){
   var q=(document.getElementById('sku-search').value||'').toLowerCase();
   var f=itensFiltrados();
-  var grupos=STATE.vendSel?gruparSkusFromItens(f.itens):STATE.skuGroups;
+  var grupos=temFiltroAtivo()?gruparSkusFromItens(f.itens):STATE.skuGroups;
 
   // totLoja: receita total por loja no escopo atual (todos os SKUs filtrados)
   var totLoja={};
@@ -1640,9 +1658,9 @@ function clearSelections(){
 }
 
 function renderSkuDetail(){
-  // Se vendSel ativo, reagrupa a partir dos itens filtrados (senão usa STATE.skuGroups)
+  // Se há filtro ativo (vendedor ou loja), reagrupa a partir dos itens filtrados
   var grupos=STATE.skuGroups;
-  if(STATE.vendSel){
+  if(temFiltroAtivo()){
     var f=itensFiltrados();
     grupos=gruparSkusFromItens(f.itens);
   }
