@@ -522,7 +522,11 @@ function shouldDedup(p){
   if(p.origem_conta==='confeccoes'&&(raw.indexOf('shopify')>=0||raw.indexOf('online store')>=0)) return true;
   return false;
 }
-var CANAL_CUSTO={'ML Fio':0.22,'ML Confecções':0.22,'Shopee':0.22,'Shein':0.20,'TikTok Shop':0.24,'Site Próprio':0.12,'Outros':0.20};
+// Comissões estimadas — fallback usado quando pedidos.fee_canal está vazio.
+// Shopee Fio (desde 25/05): captura fee_canal real via /v2/payment/get_escrow_detail (commission + service).
+// Quando fee_canal > 0 no pedido, dash usa o real; senão cai no hardcoded.
+// Valor Shopee subiu de 0.22 → 0.25 pra refletir commission 18% + service 7% observados.
+var CANAL_CUSTO={'ML Fio':0.22,'ML Confecções':0.22,'Shopee':0.25,'Shein':0.20,'TikTok Shop':0.24,'Site Próprio':0.12,'Outros':0.20};
 function custoPct(n){return CANAL_CUSTO[n]!==undefined?CANAL_CUSTO[n]:0.20;}
 
 // ── Helpers ──
@@ -562,15 +566,18 @@ async function buscarTudo(tab,filtro){
 }
 var SEL_PED='id,data_pedido,valor_bruto,canal_nome_raw,origem_conta,status,frete,frete_ml_seller,desconto,valor_liquido,uf,cidade,fee_canal,metodo_pagamento,parcelas';
 var SEL_HIST='id,id_tiny_origem,data_pedido,valor_bruto,canal_nome_raw,origem_conta,status,uf';
-// Receita inclui frete cobrado SOMENTE pra ML/TikTok via API direta (valor_bruto desses
-// usa total_amount SEM frete). Shopee/Shein/Site/Tiny já incluem frete em valor_bruto.
-// Histórico não tem coluna frete (vira 0 no parseFloat). Bug fix 11/05/2026 — antes
-// receita ML+TikTok ficava ~R$ 78k/mês menor que PBI por isso.
+// Receita inclui frete cliente APENAS pra ML (vb ML = total_amount = só itens, frete fora).
+// Demais canais: vb JÁ INCLUI frete cliente (validado empiricamente 25/05):
+//   - TikTok:   vb = itens + frete (payment.total_amount)
+//   - Shopify:  vb = itens - desc + frete (total_price)
+//   - Shopee:   vb = total_amount (cliente paga = itens + frete - desc)
+//   - Tiny:     vb = total_pedido (já com frete e desc aplicados)
+// Antes 25/05: incluía TikTok aqui também → contava frete 2x (~R$ 40k/mês inflado).
 function valorReceita(p){
   var v=parseFloat(p.valor_bruto||0);
   var c=p.canal_nome_raw||'';
-  var incFrete=(p.origem_conta==='tiktok_shop')
-    ||((p.origem_conta==='fio_e_trama'||p.origem_conta==='confeccoes')&&c.indexOf('Mercado Livre')===0);
+  var incFrete=(p.origem_conta==='fio_e_trama'||p.origem_conta==='confeccoes')
+                && c.indexOf('Mercado Livre')===0;
   if(incFrete) v+=parseFloat(p.frete||0);
   return v;
 }
