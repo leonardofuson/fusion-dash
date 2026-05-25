@@ -780,7 +780,7 @@ function fmtDias(d) {
 
 // ── Botão "Atualizar Estoque" — dispara cron fusion-estoque (modo fab-própria) ──
 const MAX_CHAT_BACKEND = 'https://max-chat-2vs0.onrender.com';
-const FABPROP_DURACAO_S = 60;   // estimativa pra barra de progresso
+const FABPROP_DURACAO_S = 480;   // ~8min: KWID 5min + ML 2min + Shopify 5s + Shopee 1min
 let _progInt = null;
 
 function progressStart(estimadoS) {
@@ -817,14 +817,6 @@ function progressFinish(success, msg) {
 }
 
 async function atualizarEstoqueKwid() {
-  if (!confirm(
-    'Atualizar estoque KWID dos produtos de fabricação própria agora?\n\n' +
-    'Atualiza apenas os SKUs marcados como fabricação própria no\n' +
-    'depósito CD Bom Retiro. Outros canais (ML/Shopify/Shopee) são\n' +
-    'atualizados pelo cron diário (04h BRT).\n\n' +
-    'Estimativa: ~30-60s.'
-  )) return;
-
   const btn = document.getElementById('btn-atualizar-estoque');
   const txt = document.getElementById('ae-text');
   btn.disabled = true;
@@ -845,8 +837,11 @@ async function atualizarEstoqueKwid() {
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
       body: JSON.stringify({ modo: 'fabprop' }),
     });
-    const j = await resp.json();
-    if (!resp.ok || !j.ok || !j.job_id) throw new Error(j.erro || ('HTTP ' + resp.status));
+    let j;
+    try { j = await resp.json(); } catch (_) { j = {}; }
+    if (!resp.ok || !j.ok || !j.job_id) {
+      throw new Error(j.erro || ('HTTP ' + resp.status + ' — ' + (await resp.text().catch(()=>''))));
+    }
 
     txt.textContent = 'Executando…';
     progressStart(FABPROP_DURACAO_S);
@@ -854,13 +849,14 @@ async function atualizarEstoqueKwid() {
     const jobId = j.job_id;
     let last = 'pending';
     let logs = '';
-    // Polling a cada 5s, máx 36 iters = 180s
-    for (let i = 0; i < 36; i++) {
-      await new Promise(r => setTimeout(r, 5000));
-      const s = await fetch(
+    // Polling a cada 10s, máx 90 iters = 15min (cobre ~8min real + folga)
+    for (let i = 0; i < 90; i++) {
+      await new Promise(r => setTimeout(r, 10000));
+      const sResp = await fetch(
         `${MAX_CHAT_BACKEND}/api/max-chat/admin/cron-job-estoque/${jobId}`,
         { headers: { Authorization: 'Bearer ' + token } }
-      ).then(r => r.json());
+      );
+      const s = await sResp.json().catch(() => ({}));
       last = s.status || 'desconhecido';
       logs = s.logs || logs;
       if (['succeeded', 'failed', 'canceled'].includes(last)) break;
@@ -868,8 +864,8 @@ async function atualizarEstoqueKwid() {
 
     const highlights = (logs || '')
       .split('\n')
-      .filter(l => /SKUs|atualizados|Concluído|Erro|ERROR|threshold|fab_set|skip/.test(l))
-      .slice(-12).join('\n');
+      .filter(l => /\[[1-5]\/5\]|SKUs|atualizados|Concluído|Erro|ERROR|threshold|fab_set|skip/.test(l))
+      .slice(-15).join('\n');
 
     if (last === 'succeeded') {
       progressFinish(true);
@@ -880,11 +876,12 @@ async function atualizarEstoqueKwid() {
       alert(`🔴 Cron ${last}\n\n${highlights || '(veja logs no Render dashboard)'}`);
     } else {
       progressFinish(false, '⏱ Timeout local');
-      alert(`⏱ Job ainda rodando após 3min — acompanhe no Render dashboard (status: ${last}).`);
+      alert(`⏱ Job ainda rodando após 15min — acompanhe no Render dashboard (status: ${last}).`);
     }
   } catch (e) {
     progressFinish(false, 'Erro');
-    alert('Erro disparando o cron: ' + (e.message || e));
+    console.error('atualizarEstoqueKwid:', e);
+    alert('Erro: ' + (e.message || e));
   } finally {
     btn.disabled = false;
     btn.classList.remove('spinning');
