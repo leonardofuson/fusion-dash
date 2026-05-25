@@ -354,7 +354,7 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
             <select id="flt-produto-gantt" class="dselect" onchange="renderGantt();renderOPsLista()"><option value="">Todos produtos</option></select>
             <select id="flt-costureiro-gantt" class="dselect" onchange="renderGantt();renderOPsLista()"><option value="">Todos costureiros</option></select>
             <select id="flt-status-op" class="dselect" onchange="renderGantt();renderOPsLista()"><option value="">Todos status</option></select>
-            <button class="chip alert" id="chip-sem-data" onclick="toggleSemDataChip()">SEM DATA DE ENVIO</button>
+            <button class="chip alert" id="chip-sem-data" onclick="toggleSemDataChip()">SEM DATA DE ENTREGA</button>
             <button class="btnf ghost" onclick="limparFiltrosPipeline()">Limpar</button>
             <span style="margin-left:auto;display:flex;gap:4px;">
               <button class="btnf ghost" onclick="expandTodosGantt()" style="font-size:11px;padding:6px 10px;">Expandir tudo</button>
@@ -771,19 +771,18 @@ function renderAll() {
   updateSemDataChipCount();
 }
 
-// Chip "SEM DATA DE ENVIO" — atalho pro filtro existente kpiFilter='sem_data' (Sprint 4)
-// Reusa toggleFilterKpi do KPI card pra manter sincronia entre os dois controles
+// Chip "SEM DATA DE ENTREGA" — atalho pro KPI "Sem Data de Entrega" (kpiFilter='sem_data')
+// Critério: OPs ativas sem data_prevista_entrega (= "Data Prevista de Entrega" no form da OP).
 function toggleSemDataChip() {
   toggleFilterKpi('sem_data');
 }
 function updateSemDataChipCount() {
-  // Conta OPs ativas sem data_prevista_entrega E sem data_pagamento (mesma regra do KPI)
   var count = (STATE.ops || []).filter(function(o) {
-    return o.status !== 'Entregue' && !o.data_prevista_entrega && !o.data_pagamento;
+    return o.status !== 'Entregue' && !o.data_prevista_entrega;
   }).length;
   var el = document.getElementById('chip-sem-data');
   if (!el) return;
-  el.innerHTML = 'SEM DATA DE ENVIO <span style="opacity:0.6;font-weight:500">'+count+'</span>';
+  el.innerHTML = 'SEM DATA DE ENTREGA <span style="opacity:0.6;font-weight:500">'+count+'</span>';
   if (STATE.kpiFilter === 'sem_data') el.classList.add('on'); else el.classList.remove('on');
 }
 function limparFiltrosPipeline() {
@@ -997,7 +996,7 @@ function renderPipeline() {
   var totalPecas = ativas.reduce(function(s, o) { return s + (o.qtde_pecas || 0); }, 0);
   var totalEntregues = ativas.reduce(function(s, o) { return s + (o.qtde_pecas_entregues || 0); }, 0);
   var aReceber = totalPecas - totalEntregues;
-  var semData = ativas.filter(function(o) { return !o.data_prevista_entrega && !o.data_pagamento; }).length;
+  var semData = ativas.filter(function(o) { return !o.data_prevista_entrega; }).length;
 
   document.getElementById('badge-pipeline').textContent = ativas.length;
   var atrasadasCount = ativas.filter(function(o){return diasRodando(o)>40;}).length;
@@ -1006,7 +1005,7 @@ function renderPipeline() {
     kpiHtml('Peças a Receber', fmt(Math.round(aReceber)), 'pendentes dos costureiros', '--kpi-accent:var(--purple)'),
     kpiHtml('Já Entregues', fmt(Math.round(totalEntregues)), Math.round(totalPecas ? totalEntregues/totalPecas*100 : 0) + '% do total', '--kpi-accent:var(--green)'),
     kpiClickable('atrasadas', 'Ordens >40 dias', atrasadasCount, 'clique para filtrar', '--kpi-accent:var(--red)'),
-    kpiClickable('sem_data', 'Sem Data Prevista', semData, semData > 0 ? 'clique para filtrar' : 'todas com data', '--kpi-accent:' + (semData > 0 ? 'var(--orange)' : 'var(--green)')),
+    kpiClickable('sem_data', 'Sem Data de Entrega', semData, semData > 0 ? 'clique para filtrar' : 'todas com data', '--kpi-accent:' + (semData > 0 ? 'var(--orange)' : 'var(--green)')),
   ];
   document.getElementById('kpis-pipeline').innerHTML = kpis.join('');
 
@@ -1090,7 +1089,7 @@ function renderOPsLista() {
   if (STATE.kpiFilter === 'atrasadas') {
     ops = ops.filter(function(o) { return diasRodando(o) > 40; });
   } else if (STATE.kpiFilter === 'sem_data') {
-    ops = ops.filter(function(o) { return !o.data_prevista_entrega && !o.data_pagamento; });
+    ops = ops.filter(function(o) { return !o.data_prevista_entrega; });
   }
 
   // Ordenacao desc por data de recebimento das pecas (data_prevista_entrega),
@@ -1229,11 +1228,11 @@ function renderGantt() {
   if (STATE.kpiFilter === 'atrasadas') {
     ativas = ativas.filter(function(o) { return diasRodando(o) > 40; });
   } else if (STATE.kpiFilter === 'sem_data') {
-    ativas = ativas.filter(function(o) { return !o.data_prevista_entrega && !o.data_pagamento; });
+    ativas = ativas.filter(function(o) { return !o.data_prevista_entrega; });
   }
 
   var filtroLabel = STATE.kpiFilter === 'atrasadas' ? ' (filtro: atrasadas >40d)' :
-                    STATE.kpiFilter === 'sem_data' ? ' (filtro: sem data prevista)' : '';
+                    STATE.kpiFilter === 'sem_data' ? ' (filtro: sem data de entrega)' : '';
   document.getElementById('op-count').textContent = ' — ' + ativas.length + ' ordens ativas' + filtroLabel;
 
   if (!ativas.length) {
