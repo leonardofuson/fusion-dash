@@ -165,6 +165,28 @@ table.tb tr:hover td{background:rgba(99,102,241,0.03);cursor:pointer;}
 .chk{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--txt1);cursor:pointer;}
 .chk input{width:16px;height:16px;accent-color:var(--indigo);cursor:pointer;}
 .sub-cell{font-size:12px;color:var(--txt3);margin-top:3px;max-width:420px;white-space:normal;line-height:1.35;}
+/* ── Comentários no drawer ── */
+.coment-sec{margin-top:18px;border-top:1px solid var(--bdr);padding-top:14px;}
+.coment-titulo{font-size:13px;font-weight:600;color:var(--txt1);margin-bottom:10px;}
+.coment-item{padding:8px 0;border-bottom:1px solid var(--bdr);}
+.coment-item:last-of-type{border-bottom:none;}
+.coment-meta{font-size:11px;color:var(--txt3);margin-bottom:3px;}
+.coment-corpo{font-size:13px;color:var(--txt1);white-space:pre-wrap;line-height:1.4;}
+.coment-add{margin-top:10px;}
+/* ── Sino de notificações ── */
+.notif-wrap{position:relative;display:inline-block;}
+.notif-btn{position:relative;background:none;border:none;font-size:18px;cursor:pointer;padding:2px 4px;line-height:1;}
+.notif-badge{position:absolute;top:-4px;right:-4px;background:var(--red);color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 4px;}
+.notif-panel{position:absolute;top:32px;right:0;width:320px;max-height:420px;overflow-y:auto;background:var(--bg2);border:1px solid var(--bdr);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,0.32);display:none;z-index:200;}
+.notif-panel.open{display:block;}
+.notif-head{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--bdr);font-size:12px;font-weight:600;color:var(--txt2);position:sticky;top:0;background:var(--bg2);}
+.notif-marcar{background:none;border:none;color:var(--indigo);font-size:11px;cursor:pointer;}
+.notif-item{padding:10px 12px;border-bottom:1px solid var(--bdr);cursor:pointer;}
+.notif-item:hover{background:var(--bg3);}
+.notif-item.unread{background:rgba(99,102,241,0.08);}
+.notif-item-tit{font-size:12px;font-weight:600;color:var(--txt1);}
+.notif-item-msg{font-size:12px;color:var(--txt2);margin-top:2px;}
+.notif-item-meta{font-size:10px;color:var(--txt3);margin-top:3px;}
 
 /* ── Feed de atividades ── */
 .feed{display:flex;flex-direction:column;gap:10px;max-height:520px;overflow-y:auto;}
@@ -207,6 +229,13 @@ table.tb tr:hover td{background:rgba(99,102,241,0.03);cursor:pointer;}
   <span class="topbar-label">Projetos</span>
   <div class="topbar-actions">
     <span id="user-info-tb"></span>
+    <div class="notif-wrap">
+      <button class="notif-btn" id="notif-btn" onclick="toggleNotif()" title="Notificações">🔔<span class="notif-badge hidden" id="notif-badge">0</span></button>
+      <div class="notif-panel" id="notif-panel">
+        <div class="notif-head"><span>Notificações</span><button class="notif-marcar" id="notif-marcar" onclick="marcarTodasLidas()">Marcar todas como lidas</button></div>
+        <div id="notif-lista"></div>
+      </div>
+    </div>
     <a class="btn-back" href="/index.html">← Dashes</a>
     <button class="btn-logout-tb" onclick="window.fusionAuth.signOut()">Sair</button>
   </div>
@@ -411,6 +440,8 @@ const STATE = {
   riscos: [],
   atividades: [],
   minhasTarefas: [],
+  notificacoes: [],
+  authUid: null,
   drawerKind: null,            // 'tarefa' | 'pessoa' | 'marco' | 'decisao' | 'risco' | 'projeto_pessoa'
   drawerItem: null,            // item sendo editado (NULL = novo)
   subTabTarefas: 'kanban',
@@ -552,8 +583,11 @@ async function init() {
   await switchProjeto(pid, /*pushUrl=*/false);
 
   // Identifica pessoa do usuário logado
+  STATE.authUid = auth.session.user.id;
   const r = await sbGet('pessoas?user_id=eq.' + auth.session.user.id + '&select=*&limit=1');
   STATE.pessoaMe = r[0] || null;
+
+  await carregarNotificacoes();
 
   wireUp();
 }
@@ -999,6 +1033,65 @@ async function excluirRisco(id) {
 }
 
 // ============================================================
+// Notificações (sino no header)
+// ============================================================
+async function carregarNotificacoes() {
+  if (!STATE.authUid) return;
+  try {
+    STATE.notificacoes = await sbGet('projeto_notificacoes?destinatario_id=eq.' + STATE.authUid + '&select=*&order=criado_em.desc&limit=40');
+  } catch (e) { STATE.notificacoes = []; }
+  renderNotificacoes();
+}
+function renderNotificacoes() {
+  const ns = STATE.notificacoes;
+  const naoLidas = ns.filter(n => !n.lida).length;
+  const badge = $('notif-badge');
+  if (naoLidas > 0) { badge.textContent = naoLidas; badge.classList.remove('hidden'); }
+  else badge.classList.add('hidden');
+  $('notif-marcar').style.display = naoLidas > 0 ? '' : 'none';
+  $('notif-lista').innerHTML = ns.length ? ns.map(n =>
+    '<div class="notif-item' + (n.lida ? '' : ' unread') + '" onclick="abrirNotif(\'' + n.id + '\')">' +
+      '<div class="notif-item-tit">' + esc(n.titulo || '') + '</div>' +
+      '<div class="notif-item-msg">' + esc(n.mensagem || '') + '</div>' +
+      '<div class="notif-item-meta">' + relativo(n.criado_em) + '</div>' +
+    '</div>'
+  ).join('') : '<div class="empty" style="padding:16px;font-size:12px;">Sem notificações.</div>';
+}
+function toggleNotif() {
+  $('notif-panel').classList.toggle('open');
+}
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.notif-wrap')) $('notif-panel').classList.remove('open');
+});
+async function abrirNotif(id) {
+  const n = STATE.notificacoes.find(x => x.id === id);
+  if (!n) return;
+  if (!n.lida) {
+    try { await sbPatch('projeto_notificacoes?id=eq.' + id, { lida: true }); n.lida = true; renderNotificacoes(); }
+    catch (e) {}
+  }
+  $('notif-panel').classList.remove('open');
+  // Navega: troca projeto se necessário e abre a entidade
+  if (n.projeto_id && n.projeto_id !== STATE.projetoAtual) await switchProjeto(n.projeto_id);
+  const kindMap = { tarefa:'tarefa', marco:'marco', decisao:'decisao', risco:'risco' };
+  const kind = kindMap[n.entidade_tipo];
+  if (kind && n.entidade_id) {
+    const tab = { tarefa:'tarefas', marco:'marcos', decisao:'decisoes', risco:'riscos' }[kind];
+    if (tab) switchTab(tab);
+    openDrawer(kind, n.entidade_id);
+  }
+}
+async function marcarTodasLidas() {
+  const naoLidas = STATE.notificacoes.filter(n => !n.lida);
+  if (!naoLidas.length) return;
+  try {
+    await sbPatch('projeto_notificacoes?destinatario_id=eq.' + STATE.authUid + '&lida=eq.false', { lida: true });
+    naoLidas.forEach(n => n.lida = true);
+    renderNotificacoes();
+  } catch (e) { alert('Erro: ' + e.message); }
+}
+
+// ============================================================
 // Drawer — criação / edição
 // ============================================================
 function openDrawer(kind, itemId) {
@@ -1015,6 +1108,9 @@ function openDrawer(kind, itemId) {
   $('drawer-body').innerHTML = drawerBodyHTML(kind, STATE.drawerItem);
   $('drawer-footer').innerHTML = drawerFooterHTML(kind, STATE.drawerItem);
   $('drawer-overlay').classList.add('open');
+  if (STATE.drawerItem && ['tarefa','marco','decisao','risco'].includes(kind)) {
+    carregarComentarios(kind, STATE.drawerItem.id);
+  }
 }
 function closeDrawer() {
   $('drawer-overlay').classList.remove('open');
@@ -1022,12 +1118,53 @@ function closeDrawer() {
 }
 
 function drawerBodyHTML(kind, item) {
-  if (kind === 'tarefa') return drawerTarefa(item);
-  if (kind === 'pessoa') return drawerPessoa(item);
-  if (kind === 'marco') return drawerMarco(item);
-  if (kind === 'decisao') return drawerDecisao(item);
-  if (kind === 'risco') return drawerRisco(item);
-  return '';
+  let html = '';
+  if (kind === 'tarefa') html = drawerTarefa(item);
+  else if (kind === 'pessoa') html = drawerPessoa(item);
+  else if (kind === 'marco') html = drawerMarco(item);
+  else if (kind === 'decisao') html = drawerDecisao(item);
+  else if (kind === 'risco') html = drawerRisco(item);
+  if (item && ['tarefa','marco','decisao','risco'].includes(kind)) html += seccaoComentariosHTML();
+  return html;
+}
+function seccaoComentariosHTML() {
+  const podeComentar = !!STATE.pessoaMe;
+  return '<div class="coment-sec">' +
+    '<div class="coment-titulo">💬 Comentários</div>' +
+    '<div id="coment-lista"><div class="empty" style="padding:10px;font-size:12px;">Carregando…</div></div>' +
+    (podeComentar
+      ? '<div class="coment-add"><textarea id="coment-novo" class="form-textarea" style="min-height:60px;" placeholder="Escreva um comentário…"></textarea>' +
+        '<button class="btnf" style="margin-top:6px;" onclick="enviarComentario()">Comentar</button></div>'
+      : '<div class="empty" style="padding:8px;font-size:12px;">Seu usuário não está vinculado a uma pessoa — não é possível comentar.</div>') +
+    '</div>';
+}
+async function carregarComentarios(tipo, id) {
+  try {
+    const cs = await sbGet('projeto_comentarios?entidade_tipo=eq.' + tipo + '&entidade_id=eq.' + id + '&select=*&order=criado_em.asc');
+    const el = $('coment-lista');
+    if (!el) return;
+    el.innerHTML = cs.length ? cs.map(c =>
+      '<div class="coment-item"><div class="coment-meta"><strong>' + esc(pessoaNome(c.autor_id)) + '</strong> · ' + relativo(c.criado_em) + '</div>' +
+      '<div class="coment-corpo">' + esc(c.conteudo) + '</div></div>'
+    ).join('') : '<div class="empty" style="padding:10px;font-size:12px;">Sem comentários ainda.</div>';
+  } catch (e) { /* drawer pode ter fechado */ }
+}
+async function enviarComentario() {
+  const ta = $('coment-novo');
+  const txt = (ta.value || '').trim();
+  if (!txt) return;
+  if (!STATE.pessoaMe || !STATE.drawerItem) return;
+  try {
+    await sbPost('projeto_comentarios', {
+      projeto_id: STATE.projetoAtual,
+      entidade_tipo: STATE.drawerKind,
+      entidade_id: STATE.drawerItem.id,
+      autor_id: STATE.pessoaMe.id,
+      conteudo: txt,
+    });
+    ta.value = '';
+    await carregarComentarios(STATE.drawerKind, STATE.drawerItem.id);
+  } catch (e) { alert('Erro: ' + e.message); }
 }
 function drawerFooterHTML(kind, item) {
   const buttons = [];
