@@ -1859,16 +1859,31 @@ function editarEntrega(entregaId, opId) {
   document.getElementById('drawer-footer').style.display = 'flex';
 }
 
-// Preview do saldo no header do edit-insumo: saldo = total - destinado
+// Sincroniza Total ↔ Saldo Livre no header do edit-insumo.
+// Editar o Total recalcula o Saldo Livre (= Total − Em Produção).
 function atualizarSaldoEditInsumo() {
   var totalEl = document.getElementById('f-ei-total');
   var destEl = document.getElementById('f-ei-destinado');
-  var saldoEl = document.getElementById('f-ei-saldo-calc');
+  var saldoEl = document.getElementById('f-ei-saldo');
   if (!totalEl || !destEl || !saldoEl) return;
   var t = parseFloat(totalEl.value) || 0;
   var d = parseFloat(destEl.value) || 0;
-  var s = t - d;
-  saldoEl.textContent = fmt(s);
+  var s = Math.round((t - d) * 100) / 100;
+  saldoEl.value = s;
+  saldoEl.style.color = s < 0 ? 'var(--red)' : 'var(--green)';
+}
+
+// Editar o Saldo Livre direto recalcula o Total (= Saldo + Em Produção).
+// No save, a diferença vira um movimento de ajuste no event log; o total comprado
+// original permanece preservado no histórico de movimentações.
+function atualizarTotalPorSaldoEditInsumo() {
+  var totalEl = document.getElementById('f-ei-total');
+  var destEl = document.getElementById('f-ei-destinado');
+  var saldoEl = document.getElementById('f-ei-saldo');
+  if (!totalEl || !destEl || !saldoEl) return;
+  var s = parseFloat(saldoEl.value) || 0;
+  var d = parseFloat(destEl.value) || 0;
+  totalEl.value = Math.round((s + d) * 100) / 100;
   saldoEl.style.color = s < 0 ? 'var(--red)' : 'var(--green)';
 }
 
@@ -2340,9 +2355,11 @@ function buildEditInsumoForm(i) {
         '<input type="number" step="0.01" id="f-ei-total" value="' + totalComprado + '" data-original="' + totalComprado + '" style="width:120px;padding:4px 8px;background:var(--bg3);border:1px solid var(--bdr);border-radius:4px;color:var(--txt1);font-weight:700;font-size:13px" oninput="atualizarSaldoEditInsumo()">' +
         '<span>' + (i.unidade||'') + '</span>' +
         '<span style="color:var(--amber);margin-left:auto" title="Tecido em OPs ativas">Em Produção: ' + fmt(emProducao) + '</span>' +
-        '<span style="color:var(--green)">Saldo Livre: <span id="f-ei-saldo-calc">' + fmt(saldoLivreInicial) + '</span></span>' +
+        '<span style="color:var(--green);display:inline-flex;align-items:center;gap:4px">Saldo Livre: ' +
+          '<input type="number" step="0.01" id="f-ei-saldo" value="' + (Math.round(saldoLivreInicial*100)/100) + '" style="width:110px;padding:4px 8px;background:var(--bg3);border:1px solid var(--bdr);border-radius:4px;color:var(--green);font-weight:700;font-size:13px" oninput="atualizarTotalPorSaldoEditInsumo()">' +
+          '<span>' + (i.unidade||'') + '</span></span>' +
       '</div>' +
-      '<div style="margin-top:8px;font-size:10px;color:var(--txt3)">Editar Total Comprado gera ajuste no event log. Em Produção vem das OPs ativas (Em Produção / Devolvido Fornecedor); Saldo = Total − Em Produção.</div>' +
+      '<div style="margin-top:8px;font-size:10px;color:var(--txt3)">Edite o Total comprado <strong>ou</strong> o Saldo Livre — a diferença vira um movimento de ajuste no event log (o total comprado original fica preservado no histórico). Em Produção vem das OPs ativas (Em Produção / Devolvido Fornecedor); Saldo Livre = Total − Em Produção.</div>' +
       '<div style="margin-top:6px;font-size:11px">Saldo por local: ' + breakdownHtml + '</div>' +
     '</div>' +
     '<input type="hidden" id="f-ei-destinado" value="' + emProducao + '">' +
@@ -2465,6 +2482,8 @@ function openDrawerEdit(opId) {
   injetarBtnRegistrarEntrega(opId);
   // Botão "Desmembrar OP" no footer (só pra OPs ativas sem entregas registradas)
   injetarBtnDesmembrarOP(opId);
+  // Botão "Voltar pro Pipeline" no footer (só pra OPs Entregue/Cancelado — reabre)
+  injetarBtnReabrirOP(opId);
   overlay.classList.add('open');
   // Atualiza diff visual inicial (em caso de status já = Entregue)
   setTimeout(updateDiffEntrega, 0);
@@ -2536,6 +2555,36 @@ function injetarBtnDesmembrarOP(opId) {
   var ref = ent || ger;
   if (ref && ref.nextSibling) footer.insertBefore(btn, ref.nextSibling);
   else footer.insertBefore(btn, footer.firstChild);
+}
+
+function injetarBtnReabrirOP(opId) {
+  var footer = document.getElementById('drawer-footer');
+  if (!footer) return;
+  var existing = document.getElementById('drawer-btn-reabrir');
+  if (existing) existing.remove();
+  var op = STATE.ops.find(function(o){return o.id === opId;});
+  if (!op) return;
+  // Só pra OPs fechadas (Entregue / Cancelado) — reabre pro Pipeline
+  if (op.status !== 'Entregue' && op.status !== 'Cancelado') return;
+  var btn = document.createElement('button');
+  btn.id = 'drawer-btn-reabrir';
+  btn.className = 'btnf';
+  btn.style.background = 'var(--amber)';
+  btn.style.color = '#000';
+  btn.style.fontWeight = '700';
+  btn.textContent = '↩ Voltar pro Pipeline';
+  btn.title = 'Reabre a OP como Em Produção e devolve o tecido do fechamento ao costureiro';
+  btn.onclick = function(){
+    var msg = 'Reabrir a OP #' + opId + ' e voltar pro Pipeline?\n\n' +
+      (op.status === 'Entregue'
+        ? 'O tecido do fechamento volta pro saldo do costureiro. Entregas parciais já registradas são preservadas.'
+        : 'O tecido cancelado volta a ficar alocado ao costureiro.');
+    if (!confirm(msg)) return;
+    var sel = document.getElementById('f-edit-status');
+    if (sel) sel.value = 'Em Produção';
+    submitDrawer();
+  };
+  footer.insertBefore(btn, footer.firstChild);
 }
 
 // ═══════════════ TAB: COSTUREIROS ═══════════════
@@ -3827,7 +3876,7 @@ function renderHistorico() {
     var totalLote = valorNF + custoCostTotal;
     var totalPorPeca = entregues > 0 ? (totalLote / entregues) : 0;
 
-    return '<tr>' +
+    return '<tr style="cursor:pointer" onclick="openDrawerEdit('+c.id+')" title="Editar OP #'+c.id+'">' +
       '<td class="dim" style="white-space:nowrap">' + (c.data_faturamento ? formatDate(c.data_faturamento) + '/' + c.data_faturamento.slice(2,4) : '—') + '</td>' +
       '<td class="dim" style="font-size:11px;white-space:nowrap">' + (c.nota || '—') + '</td>' +
       '<td style="font-size:12px">' + ((c.fornecedor||'').trim() || '—') + '</td>' +
@@ -5060,9 +5109,9 @@ function buildOPCorRow(idx, firstRow) {
       '<div data-field="tecido-info" style="font-size:11px;color:var(--txt3);margin-top:4px;"></div>' +
     '</div>' +
     '<div class="form-row">' +
-      '<div class="form-group"><label class="form-label">Cor / NF <small style="color:var(--txt3);font-weight:400">(só NFs com saldo)</small></label>' +
+      '<div class="form-group"><label class="form-label">Cor / NF <small style="color:var(--txt3);font-weight:400">(só NFs com saldo livre)</small></label>' +
         '<select class="form-select" data-field="cor" onchange="atualizarSaldoRow('+idx+')"><option value="">Selecione um tecido primeiro</option></select></div>' +
-      '<div class="form-group"><label class="form-label">Metragem disponível desta NF</label>' +
+      '<div class="form-group"><label class="form-label">Metragem livre desta NF</label>' +
         '<input class="form-input" data-field="saldo" type="text" readonly style="background:var(--bg3);color:var(--green);font-weight:700"></div>' +
     '</div>' +
     '<div class="form-group"><label class="form-label">NF do tecido <small style="color:var(--txt3);font-weight:400">(auto — vinculada à opção escolhida)</small></label>' +
@@ -5150,6 +5199,14 @@ function onProdutoOPChange() {
   });
 }
 
+// Metros/kg de uma NF de tecido atualmente comprometidos em OPs ativas (Em Produção / Devolvido Fornecedor).
+// Saldo Livre da NF = quantidade_atual − isto. Espelha o cálculo da aba Insumos.
+function tecidoEmProducaoDoInsumo(insumoId) {
+  return (STATE.ops || []).filter(function(o) {
+    return o.insumo_id === insumoId && o.quantidade_tecido_usada && o.status !== 'Entregue' && o.status !== 'Cancelado';
+  }).reduce(function(s, o) { return s + (o.quantidade_tecido_usada || 0); }, 0);
+}
+
 function atualizarCoresTecidoRow(idx) {
   var row = document.getElementById('op-cor-row-'+idx);
   if (!row) return;
@@ -5162,12 +5219,13 @@ function atualizarCoresTecidoRow(idx) {
     atualizarSaldoRow(idx);
     return;
   }
-  // Só insumos do tecido com saldo > 0 (NFs ainda em estoque).
-  // Nota: filtro por sku já foi feito no datalist via tecidosPermitidosParaSku — aqui aceitamos
-  // todas as variantes (NFs/cores) do tecido escolhido, independente de skus_pai.
+  // Só NFs com SALDO LIVRE > 0 (Total − tecido já alocado em OPs ativas) — evita superalocar
+  // a mesma NF em duas OPs. Filtro por sku já foi feito no datalist via tecidosPermitidosParaSku;
+  // aqui aceitamos todas as variantes (NFs/cores) do tecido escolhido, independente de skus_pai.
   var disponiveis = (STATE.insumos || []).filter(function(i) {
-    return i.tipo === 'tecido' && (i.nome||'').trim() === nomeTecido &&
-      (i.quantidade_atual || 0) > 0;
+    if (i.tipo !== 'tecido' || (i.nome||'').trim() !== nomeTecido) return false;
+    var livre = (i.quantidade_atual || 0) - tecidoEmProducaoDoInsumo(i.id);
+    return livre > 0.001;
   });
   // Agrupar por cor pra montar <optgroup> mas cada NF é uma <option> separada
   var porCor = {};
@@ -5193,15 +5251,15 @@ function atualizarCoresTecidoRow(idx) {
         var lista = porCor[c];
         var opts = lista.map(function(v) {
           var nf = v.numero_nf ? String(v.numero_nf).trim() : '(sem NF)';
-          var saldo = v.quantidade_atual || 0;
+          var livre = Math.round(((v.quantidade_atual || 0) - tecidoEmProducaoDoInsumo(v.id)) * 100) / 100;
           var unidade = v.unidade || '';
           var dataFat = fmtData(v.data_faturamento || '');
-          var label = 'NF ' + nf + ' — saldo ' + fmt(saldo) + ' ' + unidade + (dataFat ? ' (' + dataFat + ')' : '');
-          return '<option value="'+v.id+'" data-saldo="'+saldo+'" data-unidade="'+unidade+'" data-cor="'+c.replace(/"/g,'&quot;')+'" data-nf="'+(nf||'').replace(/"/g,'&quot;')+'">'+label+'</option>';
+          var label = 'NF ' + nf + ' — livre ' + fmt(livre) + ' ' + unidade + (dataFat ? ' (' + dataFat + ')' : '');
+          return '<option value="'+v.id+'" data-saldo="'+livre+'" data-unidade="'+unidade+'" data-cor="'+c.replace(/"/g,'&quot;')+'" data-nf="'+(nf||'').replace(/"/g,'&quot;')+'">'+label+'</option>';
         }).join('');
         return '<optgroup label="'+c.replace(/"/g,'&quot;')+'">'+opts+'</optgroup>';
       }).join('')
-    : '<option value="">Nenhuma NF disponível em estoque</option>';
+    : '<option value="">Nenhuma NF com saldo livre (tudo alocado em OPs ativas)</option>';
 
   var info = row.querySelector('[data-field="tecido-info"]');
   var cons = ultimoConsumoDoSku(sku);
@@ -6441,6 +6499,47 @@ async function submitDrawer() {
           }
           // Se enviosOP.length === 0 → tecido já estava no costureiro (pré-alocado), não há nada a estornar
         } catch (e) { console.warn('Falha ao buscar movs originais da OP pra cancelamento:', e); }
+      } else if (statusAntigo === 'Entregue' && novoStatus === 'Em Produção' && op.insumo_id) {
+        // Reabertura: OP fechada volta pro Pipeline. Preserva progresso parcial.
+        body.data_entrega_real = null;
+        try {
+          // Path A (tem entregas registradas) → preserva tudo, só vira status e limpa data final.
+          // Path B (fechamento direto, sem producao_entregas) → estorna o consumo_op do fechamento.
+          var rEntReab = await fetch(SB_URL + '/rest/v1/producao_entregas?ordem_producao_id=eq.' + op.id + '&select=id', {
+            headers: await getAuthHeaders()
+          });
+          var entReab = rEntReab.ok ? await rEntReab.json() : [];
+          if (!entReab.length) {
+            body.consumo_real_total = null;
+            var rCons = await fetch(SB_URL + '/rest/v1/movimentacao_insumos?ordem_producao_id=eq.' + op.id + '&tipo_mov=eq.consumo_op&select=insumo_id,quantidade,localizacao', {
+              headers: await getAuthHeaders()
+            });
+            var consMovs = rCons.ok ? await rCons.json() : [];
+            consMovs.forEach(function(m) {
+              movsExtras.push({
+                insumo_id: m.insumo_id, tipo_mov: 'consumo_op', quantidade: -Number(m.quantidade),
+                localizacao: m.localizacao, ordem_producao_id: op.id,
+                observacao: 'Reabertura OP #' + op.id + ' (estorno do fechamento)',
+              });
+            });
+          }
+        } catch (e) { console.warn('Falha ao estornar consumo na reabertura:', e); }
+      } else if (statusAntigo === 'Cancelado' && novoStatus === 'Em Produção' && op.insumo_id) {
+        // Reabertura de OP cancelada: tecido volta a ficar alocado ao costureiro (inverte o retorno_cd do cancelamento).
+        body.data_entrega_real = null;
+        try {
+          var rRet = await fetch(SB_URL + '/rest/v1/movimentacao_insumos?ordem_producao_id=eq.' + op.id + '&tipo_mov=eq.retorno_cd&select=insumo_id,quantidade,localizacao', {
+            headers: await getAuthHeaders()
+          });
+          var retMovs = rRet.ok ? await rRet.json() : [];
+          retMovs.forEach(function(m) {
+            movsExtras.push({
+              insumo_id: m.insumo_id, tipo_mov: 'envio_costureiro', quantidade: -Number(m.quantidade),
+              localizacao: m.localizacao, ordem_producao_id: op.id,
+              observacao: 'Reabertura OP #' + op.id + ' (re-alocação após cancelamento)',
+            });
+          });
+        } catch (e) { console.warn('Falha ao re-alocar tecido na reabertura:', e); }
       }
       await patchSupabase('ordens_producao', op.id, body);
       if (movsExtras.length) {
