@@ -165,7 +165,8 @@ Sistema de PM completo pra Aquisição Facção Paraná + Fábrica SAS (ex-"Fáb
 - `vw_minhas_tarefas` filtra automaticamente por `auth.uid()` via join em `pessoas.user_id` — usar pra aba "Minhas"
 - Triggers SQL: toda mudança em tarefa/decisão/risco/marco vira linha em `projeto_atividades`. Atribuição de tarefa → INSERT em `projeto_notificacoes` (só se a pessoa tem user_id)
 - Drawer universal: 3 templates (tarefa/pessoa/marco) — IDs `f-titulo`/`f-status`/`f-descricao` reutilizados (drawer renderiza só 1 por vez)
-- Sprint 1 entregou Visão/Tarefas/Pessoas/Marcos. Sprint 2: Decisões + Riscos + Comentários + Notificações. Sprint 3: Wiki + Anexos (Supabase Storage)
+- Sprint 1 entregou Visão/Tarefas/Pessoas/Marcos. **Sprint 2 parcial (28/05/2026): abas Decisões + Riscos entregues** (lista + drawer + pills de status/nível, reusam drawer universal e triggers de log). Resta do Sprint 2: Comentários universais + Notificações (bell). Sprint 3: Wiki + Anexos (Supabase Storage)
+- **6 abas hoje**: visao/tarefas/pessoas/marcos/decisoes/riscos. `projeto_decisoes` (titulo/contexto/alternativas/decisao/justificativa/responsavel_id/participantes[]/data_decisao/impacto/status) e `projeto_riscos` (titulo/descricao/probabilidade/impacto/mitigacao/responsavel_id/status). Drawer universal agora cobre 5 kinds: tarefa/pessoa/marco/decisao/risco (switch em `drawerBodyHTML`/`submitDrawer`/`excluirDrawer`)
 
 **Roadmap completo** em `~/.claude/plans/robust-chasing-parnas.md`.
 
