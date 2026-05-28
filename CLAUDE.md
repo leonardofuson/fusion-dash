@@ -153,7 +153,7 @@ Fonte única: tabela `contas_pagar` (só Fio e Trama).
 
 ## Dash Projetos (`projetos.html`) — gestão de projetos estratégicos (iniciado 11/05/2026)
 
-Sistema de PM completo pra Aquisição Facção Paraná + Fábrica Paraguay (v1 escopo "só interno Fusion"). Schema em `sql/2026-05-11_projetos_v1.sql` (12 tabelas + 4 triggers + 2 views) + seed em `sql/2026-05-11_projetos_seed.sql`.
+Sistema de PM completo pra Aquisição Facção Paraná + Fábrica SAS (ex-"Fábrica Paraguay", retipada 26/05/2026 — Santo Antônio do Sudoeste/PR; v1 escopo "só interno Fusion"). Schema em `sql/2026-05-11_projetos_v1.sql` (12 tabelas + 4 triggers + 2 views) + seed em `sql/2026-05-11_projetos_seed.sql`.
 
 **Tabelas**: `pessoas`, `projetos`, `projeto_pessoas`, `projeto_marcos`, `projeto_tarefas`, `projeto_decisoes`, `projeto_riscos`, `projeto_paginas`, `projeto_comentarios`, `projeto_anexos`, `projeto_atividades` (log append-only por triggers), `projeto_notificacoes`. Views: `vw_projeto_resumo`, `vw_minhas_tarefas`.
 
@@ -161,6 +161,7 @@ Sistema de PM completo pra Aquisição Facção Paraná + Fábrica Paraguay (v1 
 - Externos (advogados/contadores Paraguay) entram só em `pessoas` sem `user_id` — sem login, info trafega via diretoria
 - Banner colorido do projeto + seletor (dropdown) no topo; estado salvo em `localStorage` (`proj_atual`) e refletido na URL (`?p=<uuid>`)
 - Kanban drag-and-drop nativo (HTML5 dragstart/drop) — sem libs. Move status via PATCH em `projeto_tarefas`
+- **Tarefas têm múltiplos responsáveis** (28/05/2026): `projeto_tarefas.atribuidos_a uuid[]` (substituiu `atribuida_a` single). Drawer = checkboxes (`#f-resp .chk-list`); filtro responsável usa `.includes()`; `vw_minhas_tarefas` faz `JOIN pessoas ON id = ANY(atribuidos_a)`; trigger de notificação itera só os ids novos. Filtro PostgREST: `atribuidos_a=cs.{<uuid>}`. DDL em `sql/2026-05-28_tarefas_multi_responsavel.sql`
 - `vw_minhas_tarefas` filtra automaticamente por `auth.uid()` via join em `pessoas.user_id` — usar pra aba "Minhas"
 - Triggers SQL: toda mudança em tarefa/decisão/risco/marco vira linha em `projeto_atividades`. Atribuição de tarefa → INSERT em `projeto_notificacoes` (só se a pessoa tem user_id)
 - Drawer universal: 3 templates (tarefa/pessoa/marco) — IDs `f-titulo`/`f-status`/`f-descricao` reutilizados (drawer renderiza só 1 por vez)
