@@ -161,6 +161,9 @@ table.tb tr:hover td{background:rgba(99,102,241,0.03);cursor:pointer;}
 .form-input:focus,.form-select:focus,.form-textarea:focus{outline:none;border-color:var(--indigo);box-shadow:0 0 0 3px rgba(99,102,241,0.12);}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
 .form-textarea{min-height:90px;resize:vertical;}
+.chk-list{display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto;padding:8px 10px;background:var(--bg);border:1px solid var(--bdr);border-radius:8px;}
+.chk{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--txt1);cursor:pointer;}
+.chk input{width:16px;height:16px;accent-color:var(--indigo);cursor:pointer;}
 
 /* ── Feed de atividades ── */
 .feed{display:flex;flex-direction:column;gap:10px;max-height:520px;overflow-y:auto;}
@@ -683,10 +686,9 @@ function renderVisao() {
         const dias = diasAte(t.data_vencimento);
         const cls = dias < 0 ? 'atrasada' : dias <= 3 ? 'proxima' : '';
         const lbl = dias < 0 ? Math.abs(dias) + 'd atraso' : (dias === 0 ? 'hoje' : 'em ' + dias + 'd');
-        const pe = STATE.pessoas.find(p => p.id === t.atribuida_a);
         return '<tr onclick="openDrawer(\'tarefa\', \'' + t.id + '\')"><td>' +
           esc(t.titulo) + '</td><td>' + statusPillTarefa(t.status) +
-          '</td><td>' + esc(pe ? pe.nome : '—') +
+          '</td><td>' + esc(respNomesCompletos(t)) +
           '</td><td><span class="' + (cls ? 'kb-card-prazo ' + cls : '') + '">' + fmtData(t.data_vencimento) + ' · ' + lbl + '</span></td></tr>';
       }).join('') + '</tbody></table>'
     : '<div class="empty">Nenhuma tarefa com prazo definido.</div>';
@@ -716,7 +718,7 @@ function tarefasFiltradas() {
   const prio = $('filtro-tarefa-prio').value;
   return STATE.tarefas.filter(t => {
     if (q && !((t.titulo || '').toLowerCase().includes(q) || (t.descricao || '').toLowerCase().includes(q))) return false;
-    if (resp && t.atribuida_a !== resp) return false;
+    if (resp && !(t.atribuidos_a || []).includes(resp)) return false;
     if (prio && t.prioridade !== prio) return false;
     return true;
   });
@@ -732,6 +734,19 @@ function populateFiltroResponsavel() {
 function membrosDoProjetoAtual() {
   const vincs = STATE.projetoPessoas.filter(pp => pp.projeto_id === STATE.projetoAtual);
   return vincs.map(v => STATE.pessoas.find(p => p.id === v.pessoa_id)).filter(Boolean);
+}
+function responsaveisDe(t) {
+  return (t.atribuidos_a || []).map(id => STATE.pessoas.find(p => p.id === id)).filter(Boolean);
+}
+function respNomesCompletos(t) {
+  const ps = responsaveisDe(t);
+  return ps.length ? ps.map(p => p.nome).join(', ') : '—';
+}
+function respNomesCurtos(t, max = 2) {
+  const nomes = responsaveisDe(t).map(p => p.nome.split(' ')[0]);
+  if (!nomes.length) return '';
+  if (nomes.length <= max) return nomes.join(', ');
+  return nomes.slice(0, max).join(', ') + ' +' + (nomes.length - max);
 }
 
 function renderTarefas() {
@@ -767,7 +782,7 @@ function renderKanban(ts) {
   });
 }
 function kbCardHTML(t) {
-  const pe = STATE.pessoas.find(p => p.id === t.atribuida_a);
+  const respCurto = respNomesCurtos(t);
   const dias = diasAte(t.data_vencimento);
   let prazo = '';
   if (t.data_vencimento) {
@@ -779,18 +794,17 @@ function kbCardHTML(t) {
   return '<div class="kb-card" draggable="true" data-id="' + t.id + '" onclick="openDrawer(\'tarefa\', \'' + t.id + '\')">' +
     '<div class="kb-card-titulo">' + (prioMark ? prioMark + ' ' : '') + esc(t.titulo) + '</div>' +
     '<div class="kb-card-meta">' +
-      (pe ? '<span class="kb-card-resp">' + esc(pe.nome.split(' ')[0]) + '</span>' : '') +
+      (respCurto ? '<span class="kb-card-resp">' + esc(respCurto) + '</span>' : '') +
       prazo +
     '</div></div>';
 }
 function renderListaTarefas(ts) {
   $('tb-tarefas-lista').innerHTML = ts.length ? ts.map(t => {
-    const pe = STATE.pessoas.find(p => p.id === t.atribuida_a);
     const m = STATE.marcos.find(mm => mm.id === t.marco_id);
     return '<tr onclick="openDrawer(\'tarefa\', \'' + t.id + '\')">' +
       '<td><strong>' + esc(t.titulo) + '</strong></td>' +
       '<td>' + statusPillTarefa(t.status) + '</td>' +
-      '<td>' + esc(pe ? pe.nome : '—') + '</td>' +
+      '<td>' + esc(respNomesCompletos(t)) + '</td>' +
       '<td>' + (t.data_vencimento ? fmtData(t.data_vencimento) : '—') + '</td>' +
       '<td>' + esc(m ? m.titulo : '—') + '</td>' +
       '<td class="row-actions"><button class="icon-btn danger" onclick="event.stopPropagation(); excluirTarefa(\'' + t.id + '\')">🗑</button></td>' +
@@ -924,8 +938,10 @@ function drawerFooterHTML(kind, item) {
 
 function drawerTarefa(t) {
   const membros = membrosDoProjetoAtual();
-  const respOpts = '<option value="">— sem responsável —</option>' +
-    membros.map(p => '<option value="' + p.id + '"' + (t && t.atribuida_a === p.id ? ' selected' : '') + '>' + esc(p.nome) + '</option>').join('');
+  const sel = (t && t.atribuidos_a) ? t.atribuidos_a : [];
+  const respChecks = membros.length
+    ? membros.map(p => '<label class="chk"><input type="checkbox" value="' + p.id + '"' + (sel.includes(p.id) ? ' checked' : '') + '> ' + esc(p.nome) + '</label>').join('')
+    : '<div class="empty" style="padding:8px;font-size:12px;">Nenhum membro no projeto. Adicione pessoas na aba Pessoas.</div>';
   const marcoOpts = '<option value="">— sem marco —</option>' +
     STATE.marcos.map(m => '<option value="' + m.id + '"' + (t && t.marco_id === m.id ? ' selected' : '') + '>' + esc(m.titulo) + '</option>').join('');
   const statusOpts = ['aberta','em_andamento','bloqueada','concluida','cancelada']
@@ -939,10 +955,8 @@ function drawerTarefa(t) {
       '<div class="form-group"><label class="form-label">Status</label><select class="form-select" id="f-status">' + statusOpts + '</select></div>' +
       '<div class="form-group"><label class="form-label">Prioridade</label><select class="form-select" id="f-prioridade">' + prioOpts + '</select></div>' +
     '</div>' +
-    '<div class="form-row">' +
-      '<div class="form-group"><label class="form-label">Responsável</label><select class="form-select" id="f-resp">' + respOpts + '</select></div>' +
-      '<div class="form-group"><label class="form-label">Marco</label><select class="form-select" id="f-marco">' + marcoOpts + '</select></div>' +
-    '</div>' +
+    '<div class="form-group"><label class="form-label">Responsáveis</label><div class="chk-list" id="f-resp">' + respChecks + '</div></div>' +
+    '<div class="form-group"><label class="form-label">Marco</label><select class="form-select" id="f-marco">' + marcoOpts + '</select></div>' +
     '<div class="form-row">' +
       '<div class="form-group"><label class="form-label">Data início</label><input type="date" class="form-input" id="f-dinicio" value="' + esc(t ? t.data_inicio || '' : '') + '"></div>' +
       '<div class="form-group"><label class="form-label">Vencimento</label><input type="date" class="form-input" id="f-dvenc" value="' + esc(t ? t.data_vencimento || '' : '') + '"></div>' +
@@ -1009,7 +1023,7 @@ async function submitTarefa() {
     descricao: $('f-descricao').value.trim() || null,
     status: $('f-status').value,
     prioridade: $('f-prioridade').value || null,
-    atribuida_a: $('f-resp').value || null,
+    atribuidos_a: Array.from(document.querySelectorAll('#f-resp input[type=checkbox]:checked')).map(c => c.value),
     marco_id: $('f-marco').value || null,
     data_inicio: $('f-dinicio').value || null,
     data_vencimento: $('f-dvenc').value || null,
