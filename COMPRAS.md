@@ -1,131 +1,175 @@
-# COMPRAS — Dash de Input (sistema OC/OP)
+# COMPRAS — sistema de input OC/OP + MRP
 
-> Único dash que **escreve** no banco — registra Ordens de Compra (tecido/aviamento) e Ordens de Produção. Padrões totalmente diferentes dos dashes de leitura. Convenções compartilhadas (Chart.js, JWT, mobile) em [CLAUDE.md](CLAUDE.md). Lógica de MRP/cobertura/sugestões em [../fusion-sync/MRP.md](../fusion-sync/MRP.md).
+> Documento canônico do domínio **Compras/Produção**. Segue o padrão [../DASH_DOC_TEMPLATE.md](../DASH_DOC_TEMPLATE.md).
+> **Único dash que ESCREVE no banco** (OC de tecido/aviamento + OP de produção). Schema em [../SCHEMA.md](../SCHEMA.md).
+> Lógica preditiva (MRP, cobertura, custo) em [../fusion-sync/MRP.md](../fusion-sync/MRP.md). Convenções de UI (Chart.js, JWT, mobile) em [CLAUDE.md](CLAUDE.md).
 
-## Estrutura
+## Metadata
 
-Arquivo: [`compras.html`](compras.html) (~6000 linhas, maior arquivo do projeto). 8 abas:
-
-| Aba | Função |
+| Campo | Valor |
 |---|---|
-| Pipeline | Gantt + Lista por costureiro — OPs ativas. **Busca global** filtra produto/costureiro/NF/tecido/cor/OP simultaneamente nas duas. Chip "SEM DATA DE ENVIO" + filtros produto/costureiro/status |
-| Pagamentos | Régua D+15 (com NF) / D+30 (sem NF) baseada em `data_entrega_real` ou `data_prevista_entrega`. Suporta `valor_costura_*_maior` (faixa de tamanho — 02/05) |
-| Insumos | Compras de tecido **agrupadas por TECIDO** (consolida múltiplas NFs do mesmo tecido). Header mostra contagem de NFs; expand mostra lotes (cor × NF). Botão "⇄ Transferir tudo" no header move TODAS as NFs do tecido em lote. Cores Editar/Transferir/Excluir por linha |
-| Histórico | Listagem cronológica de OCs/OPs com filtros e drag-to-scroll |
-| Planejamento | Sugestões do MRP. Filtros: busca + categoria + prioridade. Cards mostram **só nome do produto** (sem SKU pai), com **grade sugerida POR COR** (top 5 cores). Botão "Ver detalhe" abre drawer com **3 heatmaps cor × tamanho** (Estoque / Vendas 90d / Cobertura em dias). CTAs "Abrir OP" / "Comprar tecido" pré-preenchem drawer |
-| Custos | RPC `recalcular_custos_sku()` — botão "Recalcular" força refresh manual |
-| Costureiros e Fornecedores | Performance + cadastro/edit. Click numa linha de costureiro abre drawer em modo edit. Atalho na Nova OP: digitando nome inexistente, link "+ Cadastrar agora" |
-| **Produtos** (novo, 30/04) | Cadastro centralizado. Lista todos os produtos pai. Drawer cadastrar/editar (nome, SKU pai manual, categoria, range de tamanhos auto-preenchido, cores texto livre, flag "fabricação própria"). Save cria 1 pai + N variantes (cor × tamanho). Edit permite toggle ativo nas variantes (não delete — preserva FK) e adicionar cores novas |
+| **Domínio** | Compras (OC tecido) + Produção (OP costureiros) + MRP |
+| **Status** | Produção (refactor Phase 2/3 concluído abr/mai 2026) |
+| **Owner** | Leo |
+| **Última atualização** | 2026-05-28 |
+| **Repos envolvidos** | `fusion-dash` (`compras.html`, input) + `fusion-sync` (`fusion_sync_producao.py`, MRP + custo) |
+| **Service Render (MRP)** | `fusion-sync-producao` (cron `0 9 * * *` = 06h BRT) |
+| **Dash URL** | `bi.usefusion.com.br/compras.html` (gate `dashes[]='compras'`) |
+| **Arquivos que rodam** | `compras.html` (~6000 linhas — input do usuário) + `fusion_sync_producao.py` (MRP/custo, cron diário) |
 
-## ⚠️ JWT autoRefresh — padrão obrigatório
+---
 
-`compras.html` é o **caso canônico** do problema 401 PGRST303 — sessões longas com múltiplos POSTs (form drawer aberto por minutos). Padrão em [compras.html:567-580](compras.html#L567):
+## 1. Visão geral — por quê
 
-```js
-async function getAuthHeaders() {
-  // Sempre lê o token atual da sessão do SDK (autoRefreshToken gerencia em memória)
-  const session = await fusionAuth.getSession();
-  return { 'Authorization': 'Bearer ' + session.access_token, ... };
-}
+O dash Compras é onde o time **registra** ordens de compra de tecido e ordens de produção (envio pra costureiro), e onde o **MRP** sugere o que produzir. Diferente de todos os outros dashes (que só leem), este **escreve** no banco e é o coração do fluxo de produção: tecido entra → vira OP no costureiro → volta como produto → alimenta o custo (CMV) que o ecommerce consome.
 
-// USO em todo POST:
-const r = await fetch(url, {
-  method: 'POST',
-  headers: Object.assign({'Content-Type':'application/json'}, await getAuthHeaders()),
-  body: JSON.stringify(...)
-});
+## 2. Quadro resumo — de onde vêm os dados
+
+| Origem | Como entra | Destino | Frequência |
+|---|---|---|---|
+| **Input manual** (usuário no dash) | Forms/drawer em `compras.html` (Nova OP, Nova OC, entregas, cadastros) | `ordens_producao`, `producao_entregas`, `movimentacao_insumos`, `estoque_insumos`, `costureiros` | sob demanda |
+| **MRP (sugestões)** | `fusion_sync_producao.py` calcula cobertura/ponto de reposição | `planejamento_producao` (lido pela aba Planejamento) | cron diário 06h BRT |
+| **Custo (CMV)** | RPC `recalcular_custos_sku()` (cron passo 8 + botão) | `custos_sku` → `produtos.custo_total` | cron diário + manual |
+
+## 3. Lineage
+
+```
+Usuário (dash) ──► compras.html ──► ordens_producao / producao_entregas ──┐
+                                    movimentacao_insumos / estoque_insumos │
+                                    costureiros                            │
+                                                                           ├─► recalcular_custos_sku()
+fusion_sync_producao.py (cron 06h):                                        │   (WAC v6) ──► custos_sku
+  vendas 90d (vw_pedidos_completo) + estoque + em_producao                 │        └─► produtos.custo_total
+  ──► planejamento_producao (sugestões) ──► aba Planejamento               │              └─► dash ecommerce
+                                                                           │
+movimentacao_insumos (event log) ──► trigger fn_atualizar_estoque_insumo ──┘──► estoque_insumos.quantidade_atual
+                                  └─► vw_insumo_saldo_local (saldo por localização)
 ```
 
-**Nunca** capturar `AUTH_HEADERS` estaticamente. Aplicar esse padrão em qualquer dash novo que tenha forms/POSTs.
+## 4. ⭐ Conceitos centrais (semântica)
 
-## Padrões de UI específicos
-
-- **Drawer lateral** (`#drawer`) é o padrão de edição/cadastro — não modal, não inline. Configurar `drawer-footer` com `handler=null` esconde o botão Excluir.
-- **Cores de produto** mapeadas em objeto fixo no topo do bloco Pipeline (linha ~681) — referência visual no Gantt.
-- **Sincronização de scroll** (Gantt e Histórico): scrollbar fantasma sticky no topo + drag-to-scroll no body. Função `sincronizarScrollbars` reusada em ambas abas.
-
-## Tabelas que escreve
-
-| Tabela | Operações |
+### Status de OP (`ordens_producao.status`) — 4 valores válidos
+| Status | Significado |
 |---|---|
-| `ordens_producao` | INSERT (Planejamento ou Nova OP), UPDATE (edição/transição de status), DELETE (com inversão de movs) |
-| `producao_entregas` | INSERT (entrega parcial/total), UPDATE (corrigir entrega passada), DELETE (cancelar entrega) |
-| `movimentacao_insumos` | INSERT (todos os fluxos abaixo geram event log), DELETE (só ao excluir insumo) |
-| `estoque_insumos` | INSERT (nova compra), PATCH (edição metadados — saldo NÃO é editado direto) |
-| `costureiros` | INSERT/UPDATE |
+| `Em Produção` | Tecido na facção (inclui entregas parciais — trigger NÃO muda mais pra `parcial` desde 11/05) |
+| `Entregue` | Produto no CD (`data_entrega_real` + `qtde_pecas_entregues`). **CHECK `chk_entregue_tem_data`** garante no DB |
+| `Devolvido Fornecedor` | Peças com defeito devolvidas pra remanufatura |
+| `Cancelado` | Anulação definitiva |
+> Valores legados `Produzindo`/`cancelada`/`parcial`/`concluida` **não existem mais** (renomeados 26/04 + 11/05). `No CD`/`Costureiro - Estocado` são **localizações**, não status.
 
-Schema das tabelas em [../SCHEMA.md](../SCHEMA.md). Vocabulário de status em [../fusion-sync/MRP.md](../fusion-sync/MRP.md).
-
-## Fluxos críticos (movimentação de tecido)
-
-**Princípio**: `estoque_insumos.quantidade_atual` é mantido por trigger em `movimentacao_insumos`. **NUNCA fazer PATCH direto** em `quantidade_atual` — sempre via mov, pra preservar audit trail.
-
-### Tipos de mov ([compras.html](compras.html))
+### Movimentação de tecido — event-sourced (desde 26/04)
+`estoque_insumos.quantidade_atual` é mantido por **trigger** em `movimentacao_insumos`. **NUNCA fazer PATCH direto** em `quantidade_atual` — sempre via mov (preserva audit trail). 6 tipos canônicos de `tipo_mov`:
 
 | `tipo_mov` | Quando | Sinal | Localização |
 |---|---|---|---|
-| `compra` | Cadastro de novo insumo (gerada automaticamente desde 28/04 — antes só PATCH em quantidade_atual) | + | campo "Local de estoque" do form (default CD FUSION; pode ser direto pra costureiro) |
+| `compra` | Cadastro de insumo / OC (auto desde 28/04) | + | "Local de estoque" do form (default CD FUSION) |
 | `saldo_inicial` | Backfill / migração | + | local atual |
-| `envio_costureiro` | Criar OP (par -origem/+destino) ou Transferir (CD↔costureiro / costureiro↔costureiro) | par neg/pos | conforme |
-| `consumo_op` | Entrega parcial ou total registrada | − | costureiro (proporcional `qty × consumo_por_peca`). Usa `COALESCE(quantidade_tecido_usada, metros_kg)` desde 29/04 |
-| `retorno_cd` | Cancelamento ou exclusão de OP — espelha as `envio_costureiro` originais. Também usado em Transferir → CD | par invertido | volta pro local de origem real |
-| `ajuste_compra` | Editar "Total Comprado" no drawer de Insumo | ± delta | localização default |
+| `envio_costureiro` | Criar OP ou Transferir (par -origem/+destino) | par ± | conforme |
+| `consumo_op` | Entrega parcial/total (`qty × consumo_por_peca`; usa `COALESCE(quantidade_tecido_usada, metros_kg)`) | − | costureiro |
+| `retorno_cd` | Cancelar/excluir OP (espelha `envio_costureiro`) ou Transferir→CD | par invertido | origem real |
+| `ajuste_compra` | Editar "Total Comprado" no drawer Insumo | ± delta | default |
 
-**Coluna `nf_remessa`** (28/04): NF Fusion Remessa emitida quando tecido sai do CD pra costureiro. Persiste no par de movs (Transferir + Nova OP). Obrigatória nesse fluxo, opcional nos demais. Aparece no histórico do drawer de Editar Insumo em destaque indigo.
+- **`nf_remessa`** (28/04): NF Fusion Remessa quando tecido sai do CD pro costureiro. Persiste no par de movs; obrigatória nesse fluxo.
+- **View `vw_insumo_saldo_local`**: `SUM(quantidade) GROUP BY insumo_id, localizacao`.
 
-### Criação de OP (smart origin)
-Se costureiro **já tem saldo** do insumo (ex: pré-alocado via "Alocar tecido"), nenhuma `envio_costureiro` é gerada — só pra qty que **falta vir do CD**. Isso garante que o retorno na exclusão coloca o tecido onde realmente estava.
+## 5. Rotina de atualização
 
-### Exclusão de OP / cancelamento
-1. Busca movs `envio_costureiro` com `ordem_producao_id=<X>`
-2. Inverte cada uma (sinal oposto, mesma `localizacao`) — gera mov `retorno_cd`
-3. Para exclusão: PATCH movs históricas → `ordem_producao_id=NULL` (preserva auditoria, libera FK)
-4. DELETE OP
+| Gatilho | Quando | O que faz |
+|---|---|---|
+| **Input no dash** | sob demanda | INSERT/UPDATE/DELETE nas tabelas (forms drawer) |
+| **`fusion-sync-producao`** (cron) | diário **06h BRT** (`0 9 * * *`) | recalcula MRP → `planejamento_producao`; passo 8 roda `recalcular_custos_sku()` |
+| **Botão "Recalcular"** (aba Custos) | sob demanda | força `recalcular_custos_sku()` |
 
-### Entrega parcial
-Drawer "Registrar entrega" tem radio **Parcial / Total**:
-- **Parcial**: INSERT em `producao_entregas` + mov `consumo_op` proporcional (`qty × consumo_por_peca`). OP fica `Em Produção` (trigger atualiza `qtde_pecas_entregues` mas **não** mexe em status — desde fix de 11/05/2026).
-- **Total**: mesmas ações + PATCH OP com `status='Entregue'`, `data_entrega_real`, `mes_ano_entrega`. Preview de diff (projetado vs total) antes de salvar. CHECK constraint `chk_entregue_tem_data` no DB garante que `Entregue` sempre tem data.
+**Parâmetros MRP** (em `fusion_sync_producao.py`): lead produção 45d · lead tecido 5d · estoque mínimo 60d de venda · vendas referência 90d. Fórmula completa em [../fusion-sync/MRP.md](../fusion-sync/MRP.md).
 
-### Editar / excluir entrega passada
-Cada item do histórico tem botões `Editar` e `Excluir`:
-- **Editar**: PATCH `producao_entregas` + mov de delta (`(qty_nova − qty_antiga) × consumo_por_peca`) — sinal flip pra ajustar saldo do costureiro.
-- **Excluir**: mov reversa (`+qty × consumo_por_peca`) + DELETE em `producao_entregas`. Trigger `trg_excluir_op_entrega` (11/05/2026) decrementa `qtde_pecas_entregues` simetricamente ao INSERT — preserva legado das 1130 OPs históricas com `qpe>0` sem rows em `producao_entregas`.
+## 6. Schema — tabelas que ESCREVE
 
-## Histórico de movimentações
-Drawer de Editar Insumo carrega últimos 200 movs daquele insumo via `movimentacao_insumos?insumo_id=eq.X&order=criado_em.desc`. Mostra Data / Tipo / OP / Local / Qtd / Observação. **Único lugar** pra auditar o event log — futuramente pode replicar no drawer de Editar OP.
+| Tabela | Operações |
+|---|---|
+| `ordens_producao` | INSERT (Planejamento/Nova OP), UPDATE (status/edição), DELETE (com inversão de movs) |
+| `producao_entregas` | INSERT (entrega parcial/total), UPDATE (corrigir), DELETE (cancelar) |
+| `movimentacao_insumos` | INSERT (todos os fluxos), DELETE (só ao excluir insumo) |
+| `estoque_insumos` | INSERT (nova compra), PATCH (metadados — saldo NÃO direto) |
+| `costureiros` | INSERT/UPDATE |
 
-## Cache local de preço por costureiro/SKU
+**Lê:** `planejamento_producao` (MRP), `custos_sku` (CMV), `produtos`. Schema em [../SCHEMA.md](../SCHEMA.md).
 
-Aba Histórico mantém cache do **último `valor_peca` conhecido por costureiro + SKU pai** (lookup via `sku_produto` e via produto textual) — usado pra autopreencher drawer de nova OP. Linha ~1848.
+## 7. Consumo / UI — `compras.html` (8 abas)
 
-## Recalcular custos (botão Custos)
+| Aba | Função |
+|---|---|
+| Pipeline | Gantt + lista por costureiro (OPs ativas). Busca global filtra produto/costureiro/NF/tecido/cor/OP. Chip "SEM DATA DE ENVIO" |
+| Pagamentos | Régua D+15 (com NF) / D+30 (sem NF) por `data_entrega_real`/`data_prevista`. Suporta `valor_costura_*_maior` (faixa de tamanho) |
+| Insumos | Compras de tecido **agrupadas por TECIDO** (consolida NFs). "⇄ Transferir tudo" move todas as NFs do tecido |
+| Histórico | OCs/OPs cronológico + filtros + drag-to-scroll |
+| Planejamento | Sugestões MRP. Cards por **nome** (sem SKU pai) + grade **por cor** (top 5). "Ver detalhe" → 3 heatmaps cor×tam (Estoque/Vendas90d/Cobertura) |
+| Custos | RPC `recalcular_custos_sku()` + memória de cálculo retrátil por SKU |
+| Costureiros e Fornecedores | Performance + cadastro. "+ Cadastrar agora" inline na Nova OP |
+| Produtos (30/04) | Cadastro centralizado pai+variantes; flag "fabricação própria" |
 
-Chama RPC `recalcular_custos_sku()` no Supabase. Após sucesso, recarrega aba. Custo flui pra `custos_sku` → `produtos.custo_total` → outros dashes (ecommerce consome via `produtos.custo_total`).
+**⚠️ JWT autoRefresh (padrão obrigatório):** `compras.html` é o caso canônico do 401 PGRST303 (sessões longas com POSTs). Usar `async getAuthHeaders()` que lê `session.access_token` fresh antes de cada request — **nunca** capturar `AUTH_HEADERS` estaticamente. Aplicar em qualquer dash com forms/POSTs.
 
-## Custos de costura — faixa menor / maior (29-30/04/2026)
+**UI:** drawer lateral (`#drawer`) é o padrão de edição (não modal). `drawer-footer handler=null` esconde Excluir. Scroll sincronizado (scrollbar fantasma + drag) no Gantt e Histórico.
 
-Costureiros podem cobrar valores diferentes pra grade pequena vs grande (ex: Clederson 38-50 menor / 52+ maior; Sta Rita 44-58 menor / 60-66 maior). Implementação:
+## 8. Fluxos críticos (referência rápida — detalhe em [../fusion-sync/MRP.md](../fusion-sync/MRP.md))
 
-- **`costureiros.tamanho_corte_menor_max int`** (nullable). Define até onde vai a faixa "menor"; >X cai na "maior". NULL = sem distinção.
-- **`ordens_producao.valor_costura_dentro_maior` + `valor_costura_fora_maior`** (numeric, nullable). Os legados `valor_costura_dentro/fora` viram a faixa "menor".
-- **Forms Nova OP / Editar OP**: revelam seção "Custo grade maior" automaticamente quando o costureiro selecionado tem corte definido. Campos: dentro / fora / total readonly auto-calculado.
-- **Auto-fill**: ao mudar costureiro+produto, busca a última OP do mesmo (costureiro_id, sku_produto) e pré-preenche os 4 valores de custo. Só preenche se input estiver vazio (não sobrescreve digitação).
-- **`valor_total` da OP**: calculado via `distribuirGradePorCorte()` × valor de cada faixa: `qtd_grade_menor × custo_menor + qtd_grade_maior × custo_maior`.
+- **Criar OP (smart origin):** se costureiro já tem saldo do insumo, só gera `envio_costureiro` pra qty que falta vir do CD.
+- **Exclusão/cancelamento de OP:** busca `envio_costureiro` da OP → inverte (`retorno_cd`) → PATCH movs `ordem_producao_id=NULL` (preserva auditoria) → DELETE OP.
+- **Entrega Parcial vs Total** (radio): Parcial = INSERT entrega + `consumo_op` proporcional, OP fica `Em Produção`. Total = + PATCH `status='Entregue'` + data (CHECK garante data).
+- **Editar/excluir entrega:** mov de delta / mov reversa; trigger `trg_excluir_op_entrega` decrementa `qtde_pecas_entregues` simétrico.
+- **Custos faixa menor/maior:** `costureiros.tamanho_corte_menor_max` + `ordens_producao.valor_costura_*_maior`. `valor_total` = grade_menor×custo_menor + grade_maior×custo_maior.
 
-## SKU pai escondido da UI (29-30/04/2026)
+## 9. Runbook operacional
 
-Decisão: usuários enxergam só o **nome do produto**, nunca o código SKU pai. Refactor em todas as abas:
-- Helpers `nomeProduto(skuPai)` e `categoriaProduto(skuPai)` em compras.html
-- `nomeProduto`: prefere o registro raiz (`sku === sku_pai`); pra SKUs sem raiz, trunca o nome no primeiro " - " (ex: "CALÇA DE MALHA - 44 - VERDE" → "Calça de Malha")
-- Datalist Nova OP, Edit OP select, Pipeline lista, CMV/Custos, cards Planejamento — todos exibem só nome
-- `extrairSkuProduto()` continua resolvendo (1) "Nome (SKU)" legado, (2) nome → sku_pai via lookup, (3) SKU direto
+**Verificar MRP rodou:** `sync_log` fonte `snapshot_produtos`/produção; aba Planejamento com `data_calculo` recente.
+**Recalcular custo:** botão "Recalcular" (aba Custos) ou aguardar cron.
 
-## Whitelist `SKU_FINALIZADOS` — dinâmica via flag (30/04/2026)
+| Sintoma | Causa provável | Fix |
+|---|---|---|
+| Sugestão MRP sumida / velocidade baixa | filtro `ativo=true` cortando variantes (vendas KWID somem ~8%) | split filtro: vendas conta tudo, grade só ativos (fix 02/05) |
+| `quantidade_atual` não bate com saldo | PATCH direto em vez de mov, ou trigger off | sempre via `movimentacao_insumos`; `vw_insumo_saldo_local` é a verdade |
+| OP `Entregue` sem data | violaria CHECK `chk_entregue_tem_data` | sempre setar `data_entrega_real` ao marcar Entregue |
+| Status antigo (`Produzindo`) aparece | regressão de naming | grep cross-repo; só 4 status válidos |
+| Custo absurdo (alfaiataria) | cap WAC R$300 + faixa maior fora do CMV | limitação conhecida v6 |
+| Conciliação OP×planilha não bate | tolerância/typo/cor sinônima/costureiro sem rastro | ver regras de conciliação abaixo |
 
-Antes hardcoded em 3 arquivos. Agora:
-- Coluna `produtos.fabricacao_propria boolean default false`. Backfill marcou os 21 SKUs canônicos.
-- `compras.html`: `isFabricacaoPropria(sku)` lê de `STATE.produtos`. Shim `SKU_FINALIZADOS.indexOf()` mantém compat.
-- `estoque.html`: computa `Set` live no fetch.
-- `fusion_sync_producao.py`: `load_skus_finalizados()` no `main()`.
-- **Aba Produtos** com checkbox "Fabricação própria" controla a flag — cadastrar/editar atualiza a whitelist em todo o ecossistema no próximo ciclo.
+**Conciliação OP × `COMPRAS.xlsx`** (fonte: aba CONTROLE COMPRAS): cruzar por costureiro+cor+qtde+data. Tolerância qtde **±30%**; year typo **+365d** (delta -300 a -400); cores sinônimas (AZUL MARINHO≡MARINHO etc); costureiros sem rastro (CONSACRE/ZANUZEN/SIMONE parcial) não conciliam. SIMONE >180d: manter (alfaiataria). Detalhe em [../fusion-sync/MRP.md](../fusion-sync/MRP.md).
+
+## 10. Invariantes & smoke checks (no `compras.html`)
+
+- `'Em Produção'` presente; `'Produzindo'`/`'cancelada'` ausentes.
+- `vw_insumo_saldo_local` carregada; `renderReguaPagamentos` presente.
+- IDs HTML únicos (`tbody-pagamentos`, `tbody-regua-pagamentos` — não duplicar).
+- Sem `'</script>'` literal em string JS (usar `'<scr'+'ipt>'`).
+- `jspdf` carregado. Sanity drift `estoque_insumos` vs view = 0.
+- Validação completa: skill **`fusion-sanity-check`** (bloco fusion-dash + fusion-sync).
+
+## 11. Variáveis de ambiente
+
+Service `fusion-sync-producao`: `SUPABASE_URL` + `SUPABASE_KEY` (service_role). Dash usa anon JWT (auth.js). Sem credenciais externas (compras é input + cálculo interno).
+
+## 12. Decisões & armadilhas
+
+- **Event-sourcing de tecido** — saldo vive em `movimentacao_insumos`; nunca PATCH `quantidade_atual` direto.
+- **4 status canônicos** — triggers não usam mais valores legados (fix 11/05).
+- **SKU pai escondido da UI** — usuário vê só nome do produto; helpers `nomeProduto()`/`categoriaProduto()`.
+- **`fabricacao_propria` é flag, não hardcode** — coluna `produtos.fabricacao_propria` é fonte única (antes hardcoded em 3 arquivos: compras.html, estoque.html, fusion_sync_producao.py). Cadastrar produto com a flag entra no MRP no próximo cron.
+- **`sb_get` cap 1000 rows** — nunca `limit > 1000` (loop quebra prematuro).
+- **WAC v6** (15/05) — custo médio ponderado 90d + IQR trimming + cap R$300; substitui média simples das 2 últimas OPs.
+- **Custo dual dentro/fora + faixa menor/maior** — costureiro cobra diferente por tamanho.
+
+## 13. Histórico de incidentes & memória
+
+- `project_modulo_compras` — MRP inicial
+- `project_compras_phase2` / `project_compras_phase3` — refactor OC/OP (4 status, custo dual, event log, entregas parciais)
+- `project_compras_sessao_02_05` — Local de estoque, aba Produtos, split filtro, heatmaps
+- `project_compras_fix_triggers_11_05` — fix triggers/constraint
+- `feedback_mrp_armadilhas` / `feedback_mrp_decisoes_persistentes` — staleness, cadência 1x/dia, SJPREMIUM fora de linha
+- `feedback_conciliacao_op_planilha` — regras de conciliação
+
+## 14. Changelog
+
+- **2026-05-15** — Custo WAC v6 (média ponderada 90d + IQR + cap R$300) — `sql/2026-05-15_custos_v6_wac.sql`.
+- **2026-05-11** — fix 3 bugs triggers/constraint (status canônicos, AFTER DELETE entregas, `chk_entregue_tem_data`).
+- **2026-05-02** — aba Produtos centralizada, `fabricacao_propria` flag, split filtro MRP, heatmaps cor×tam.
+- **2026-04-26/27** — Phase 2/3: 4 status, custo dual, `movimentacao_insumos` event-sourced, entregas parciais, régua D+15/D+30.
