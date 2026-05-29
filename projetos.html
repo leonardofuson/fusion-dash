@@ -6,6 +6,8 @@
 <title>Fusion — Projetos Estratégicos</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
 <style>
 :root{
   --bg:#09090b;--bg2:#111113;--bg3:#1a1a1e;--bdr:#2a2a2e;--bdr-hover:#3f3f46;
@@ -187,6 +189,27 @@ table.tb tr:hover td{background:rgba(99,102,241,0.03);cursor:pointer;}
 .notif-item-tit{font-size:12px;font-weight:600;color:var(--txt1);}
 .notif-item-msg{font-size:12px;color:var(--txt2);margin-top:2px;}
 .notif-item-meta{font-size:10px;color:var(--txt3);margin-top:3px;}
+/* ── Wiki ── */
+.wiki-layout{display:grid;grid-template-columns:240px 1fr;gap:16px;align-items:start;}
+.wiki-sidebar{position:sticky;top:12px;}
+.wiki-item{padding:8px 10px;border-radius:7px;font-size:13px;color:var(--txt2);cursor:pointer;margin-bottom:2px;border:1px solid transparent;}
+.wiki-item:hover{background:var(--bg3);color:var(--txt1);}
+.wiki-item.active{background:rgba(99,102,241,0.12);color:var(--txt1);border-color:var(--indigo);font-weight:600;}
+.wiki-main{min-height:300px;}
+.wiki-head{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.wiki-titulo{font-size:20px;font-weight:700;color:var(--txt1);margin:0;}
+.wiki-acoes{display:flex;gap:8px;flex-shrink:0;}
+.wiki-meta{font-size:11px;color:var(--txt3);margin:4px 0 14px;}
+.wiki-conteudo.markdown{font-size:14px;color:var(--txt1);line-height:1.6;}
+.markdown h1,.markdown h2,.markdown h3{color:var(--txt1);margin:18px 0 8px;line-height:1.3;}
+.markdown h1{font-size:22px;} .markdown h2{font-size:18px;} .markdown h3{font-size:15px;}
+.markdown p{margin:8px 0;} .markdown ul,.markdown ol{margin:8px 0;padding-left:22px;}
+.markdown li{margin:3px 0;} .markdown a{color:var(--indigo);}
+.markdown code{background:var(--bg3);padding:1px 5px;border-radius:4px;font-size:13px;}
+.markdown pre{background:var(--bg3);padding:12px;border-radius:8px;overflow-x:auto;}
+.markdown blockquote{border-left:3px solid var(--bdr);margin:10px 0;padding:2px 14px;color:var(--txt2);}
+.markdown table{border-collapse:collapse;margin:10px 0;} .markdown th,.markdown td{border:1px solid var(--bdr);padding:5px 9px;font-size:13px;}
+@media (max-width:768px){.wiki-layout{grid-template-columns:1fr;}.wiki-sidebar{position:static;}}
 
 /* ── Feed de atividades ── */
 .feed{display:flex;flex-direction:column;gap:10px;max-height:520px;overflow-y:auto;}
@@ -269,6 +292,7 @@ table.tb tr:hover td{background:rgba(99,102,241,0.03);cursor:pointer;}
     <button class="tab-btn" data-tab="marcos">🚩 Marcos <span class="badge" id="badge-marcos">0</span></button>
     <button class="tab-btn" data-tab="decisoes">📋 Decisões <span class="badge" id="badge-decisoes">0</span></button>
     <button class="tab-btn" data-tab="riscos">⚠️ Riscos <span class="badge" id="badge-riscos">0</span></button>
+    <button class="tab-btn" data-tab="wiki">📖 Wiki <span class="badge" id="badge-wiki">0</span></button>
   </nav>
 
   <!-- TAB: Visão -->
@@ -403,6 +427,17 @@ table.tb tr:hover td{background:rgba(99,102,241,0.03);cursor:pointer;}
     </div></div>
   </section>
 
+  <!-- TAB: Wiki -->
+  <section class="tab-panel" id="tab-wiki">
+    <div class="wiki-layout">
+      <aside class="wiki-sidebar">
+        <button class="btnf" style="width:100%;margin-bottom:10px;" onclick="novaPagina()">+ Nova página</button>
+        <div id="wiki-lista"></div>
+      </aside>
+      <div class="wiki-main card"><div class="card-body" id="wiki-main"></div></div>
+    </div>
+  </section>
+
 </main>
 
 <!-- DRAWER -->
@@ -441,6 +476,9 @@ const STATE = {
   atividades: [],
   minhasTarefas: [],
   notificacoes: [],
+  paginas: [],
+  paginaAtual: null,           // id da página wiki selecionada
+  wikiEditando: false,
   authUid: null,
   drawerKind: null,            // 'tarefa' | 'pessoa' | 'marco' | 'decisao' | 'risco' | 'projeto_pessoa'
   drawerItem: null,            // item sendo editado (NULL = novo)
@@ -607,13 +645,14 @@ async function carregarTudoBase() {
 async function carregarProjetoAtual() {
   const pid = STATE.projetoAtual;
   if (!pid) return;
-  const [tarefas, marcos, decisoes, riscos, atividades, minhas] = await Promise.all([
+  const [tarefas, marcos, decisoes, riscos, atividades, minhas, paginas] = await Promise.all([
     sbGet('projeto_tarefas?projeto_id=eq.' + pid + '&select=*&order=criado_em.desc&limit=500'),
     sbGet('projeto_marcos?projeto_id=eq.' + pid + '&select=*&order=data_alvo.asc.nullslast'),
     sbGet('projeto_decisoes?projeto_id=eq.' + pid + '&select=*&order=data_decisao.desc.nullslast'),
     sbGet('projeto_riscos?projeto_id=eq.' + pid + '&select=*&order=criado_em.desc'),
     sbGet('projeto_atividades?projeto_id=eq.' + pid + '&select=*&order=criado_em.desc&limit=30'),
     STATE.pessoaMe ? sbGet('vw_minhas_tarefas?select=*&order=data_vencimento.asc.nullslast') : Promise.resolve([]),
+    sbGet('projeto_paginas?projeto_id=eq.' + pid + '&select=*&order=ordem.asc.nullslast,criado_em.asc'),
   ]);
   STATE.tarefas = tarefas;
   STATE.marcos = marcos;
@@ -621,6 +660,9 @@ async function carregarProjetoAtual() {
   STATE.riscos = riscos;
   STATE.atividades = atividades;
   STATE.minhasTarefas = minhas;
+  STATE.paginas = paginas;
+  STATE.wikiEditando = false;
+  if (!STATE.paginas.find(p => p.id === STATE.paginaAtual)) STATE.paginaAtual = STATE.paginas[0] ? STATE.paginas[0].id : null;
   populateFiltroResponsavel();
   renderAll();
 }
@@ -720,11 +762,13 @@ function renderAll() {
   renderMarcos();
   renderDecisoes();
   renderRiscos();
+  renderWiki();
   $('badge-tarefas').textContent = STATE.tarefas.length;
   $('badge-pessoas').textContent = membrosDoProjetoAtual().length;
   $('badge-marcos').textContent = STATE.marcos.length;
   $('badge-decisoes').textContent = STATE.decisoes.length;
   $('badge-riscos').textContent = STATE.riscos.length;
+  $('badge-wiki').textContent = STATE.paginas.length;
 }
 
 function renderVisao() {
@@ -1088,6 +1132,84 @@ async function marcarTodasLidas() {
     await sbPatch('projeto_notificacoes?destinatario_id=eq.' + STATE.authUid + '&lida=eq.false', { lida: true });
     naoLidas.forEach(n => n.lida = true);
     renderNotificacoes();
+  } catch (e) { alert('Erro: ' + e.message); }
+}
+
+// ============================================================
+// Wiki (projeto_paginas)
+// ============================================================
+function mdToHtml(txt) {
+  try { return DOMPurify.sanitize(marked.parse(txt || '')); }
+  catch (e) { return esc(txt || ''); }
+}
+function slugify(s) {
+  return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'pagina';
+}
+function renderWiki() {
+  const ps = STATE.paginas;
+  // Sidebar
+  $('wiki-lista').innerHTML = ps.length ? ps.map(p =>
+    '<div class="wiki-item' + (p.id === STATE.paginaAtual ? ' active' : '') + '" onclick="selecionarPagina(\'' + p.id + '\')">' + esc(p.titulo || '(sem título)') + '</div>'
+  ).join('') : '<div class="empty" style="padding:10px;font-size:12px;">Nenhuma página ainda.</div>';
+  // Main
+  const main = $('wiki-main');
+  if (STATE.wikiEditando) { renderWikiEditor(); return; }
+  const pag = ps.find(p => p.id === STATE.paginaAtual);
+  if (!pag) {
+    main.innerHTML = '<div class="empty" style="padding:30px;">Selecione uma página ou crie a primeira com <strong>+ Nova página</strong>.</div>';
+    return;
+  }
+  main.innerHTML =
+    '<div class="wiki-head"><h2 class="wiki-titulo">' + esc(pag.titulo || '(sem título)') + '</h2>' +
+      '<div class="wiki-acoes"><button class="btnf ghost" onclick="editarPagina()">Editar</button>' +
+      '<button class="btnf danger" onclick="excluirPagina()">Excluir</button></div></div>' +
+    '<div class="wiki-meta">Atualizado ' + relativo(pag.atualizado_em || pag.criado_em) + '</div>' +
+    '<div class="wiki-conteudo markdown">' + (pag.conteudo ? mdToHtml(pag.conteudo) : '<div class="empty">Página vazia. Clique em Editar.</div>') + '</div>';
+}
+function renderWikiEditor() {
+  const pag = STATE.paginas.find(p => p.id === STATE.paginaAtual);
+  const novo = !pag;
+  $('wiki-main').innerHTML =
+    '<div class="form-group"><label class="form-label">Título</label><input class="form-input" id="wiki-titulo" value="' + esc(pag ? pag.titulo || '' : '') + '" placeholder="Título da página"></div>' +
+    '<div class="form-group"><label class="form-label">Conteúdo (Markdown)</label><textarea class="form-textarea" id="wiki-conteudo" style="min-height:340px;font-family:ui-monospace,Menlo,monospace;font-size:13px;" placeholder="# Título&#10;&#10;Escreva em **markdown**…">' + esc(pag ? pag.conteudo || '' : '') + '</textarea></div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;">' +
+      '<button class="btnf ghost" onclick="cancelarEdicaoWiki()">Cancelar</button>' +
+      '<button class="btnf" onclick="salvarPagina()">Salvar</button>' +
+    '</div>';
+}
+function selecionarPagina(id) { STATE.paginaAtual = id; STATE.wikiEditando = false; renderWiki(); }
+function novaPagina() { STATE.paginaAtual = null; STATE.wikiEditando = true; switchTab('wiki'); renderWiki(); }
+function editarPagina() { STATE.wikiEditando = true; renderWiki(); }
+function cancelarEdicaoWiki() { STATE.wikiEditando = false; renderWiki(); }
+async function salvarPagina() {
+  const titulo = $('wiki-titulo').value.trim();
+  const conteudo = $('wiki-conteudo').value;
+  if (!titulo) { alert('Título é obrigatório.'); return; }
+  try {
+    if (STATE.paginaAtual) {
+      await sbPatch('projeto_paginas?id=eq.' + STATE.paginaAtual, {
+        titulo, conteudo, slug: slugify(titulo), atualizado_por: STATE.pessoaMe ? STATE.pessoaMe.id : null, atualizado_em: new Date().toISOString(),
+      });
+    } else {
+      const novo = await sbPost('projeto_paginas', {
+        projeto_id: STATE.projetoAtual, titulo, conteudo, slug: slugify(titulo),
+        ordem: STATE.paginas.length, criado_por: STATE.pessoaMe ? STATE.pessoaMe.id : null, atualizado_por: STATE.pessoaMe ? STATE.pessoaMe.id : null,
+      });
+      if (Array.isArray(novo) && novo[0]) STATE.paginaAtual = novo[0].id;
+    }
+    STATE.wikiEditando = false;
+    await carregarProjetoAtual();
+    switchTab('wiki');
+  } catch (e) { alert('Erro: ' + e.message); }
+}
+async function excluirPagina() {
+  if (!STATE.paginaAtual || !confirm('Excluir esta página da wiki?')) return;
+  try {
+    await sbDelete('projeto_paginas?id=eq.' + STATE.paginaAtual);
+    STATE.paginaAtual = null; STATE.wikiEditando = false;
+    await carregarProjetoAtual();
+    switchTab('wiki');
   } catch (e) { alert('Erro: ' + e.message); }
 }
 
