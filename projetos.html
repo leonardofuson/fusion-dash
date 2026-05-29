@@ -293,6 +293,7 @@ table.tb tr:hover td{background:rgba(99,102,241,0.03);cursor:pointer;}
     <button class="tab-btn" data-tab="decisoes">📋 Decisões <span class="badge" id="badge-decisoes">0</span></button>
     <button class="tab-btn" data-tab="riscos">⚠️ Riscos <span class="badge" id="badge-riscos">0</span></button>
     <button class="tab-btn" data-tab="wiki">📖 Wiki <span class="badge" id="badge-wiki">0</span></button>
+    <button class="tab-btn" data-tab="anexos">📎 Anexos <span class="badge" id="badge-anexos">0</span></button>
   </nav>
 
   <!-- TAB: Visão -->
@@ -438,6 +439,20 @@ table.tb tr:hover td{background:rgba(99,102,241,0.03);cursor:pointer;}
     </div>
   </section>
 
+  <!-- TAB: Anexos -->
+  <section class="tab-panel" id="tab-anexos">
+    <div class="filtros">
+      <input type="file" id="anexo-file" style="display:none;" onchange="uploadAnexo(this)">
+      <button class="btnf" id="anexo-btn" onclick="document.getElementById('anexo-file').click()">📎 Enviar arquivo</button>
+      <span id="anexo-status" style="font-size:12px;color:var(--txt3);"></span>
+    </div>
+    <div class="card"><div class="card-body" style="padding:0;">
+      <table class="tb"><thead><tr>
+        <th>Arquivo</th><th>Tipo</th><th>Tamanho</th><th>Enviado por</th><th>Quando</th><th></th>
+      </tr></thead><tbody id="tb-anexos"></tbody></table>
+    </div></div>
+  </section>
+
 </main>
 
 <!-- DRAWER -->
@@ -479,6 +494,7 @@ const STATE = {
   paginas: [],
   paginaAtual: null,           // id da página wiki selecionada
   wikiEditando: false,
+  anexos: [],
   authUid: null,
   drawerKind: null,            // 'tarefa' | 'pessoa' | 'marco' | 'decisao' | 'risco' | 'projeto_pessoa'
   drawerItem: null,            // item sendo editado (NULL = novo)
@@ -645,7 +661,7 @@ async function carregarTudoBase() {
 async function carregarProjetoAtual() {
   const pid = STATE.projetoAtual;
   if (!pid) return;
-  const [tarefas, marcos, decisoes, riscos, atividades, minhas, paginas] = await Promise.all([
+  const [tarefas, marcos, decisoes, riscos, atividades, minhas, paginas, anexos] = await Promise.all([
     sbGet('projeto_tarefas?projeto_id=eq.' + pid + '&select=*&order=criado_em.desc&limit=500'),
     sbGet('projeto_marcos?projeto_id=eq.' + pid + '&select=*&order=data_alvo.asc.nullslast'),
     sbGet('projeto_decisoes?projeto_id=eq.' + pid + '&select=*&order=data_decisao.desc.nullslast'),
@@ -653,6 +669,7 @@ async function carregarProjetoAtual() {
     sbGet('projeto_atividades?projeto_id=eq.' + pid + '&select=*&order=criado_em.desc&limit=30'),
     STATE.pessoaMe ? sbGet('vw_minhas_tarefas?select=*&order=data_vencimento.asc.nullslast') : Promise.resolve([]),
     sbGet('projeto_paginas?projeto_id=eq.' + pid + '&select=*&order=ordem.asc.nullslast,criado_em.asc'),
+    sbGet('projeto_anexos?projeto_id=eq.' + pid + '&select=*&order=criado_em.desc'),
   ]);
   STATE.tarefas = tarefas;
   STATE.marcos = marcos;
@@ -661,6 +678,7 @@ async function carregarProjetoAtual() {
   STATE.atividades = atividades;
   STATE.minhasTarefas = minhas;
   STATE.paginas = paginas;
+  STATE.anexos = anexos;
   STATE.wikiEditando = false;
   if (!STATE.paginas.find(p => p.id === STATE.paginaAtual)) STATE.paginaAtual = STATE.paginas[0] ? STATE.paginas[0].id : null;
   populateFiltroResponsavel();
@@ -763,12 +781,14 @@ function renderAll() {
   renderDecisoes();
   renderRiscos();
   renderWiki();
+  renderAnexos();
   $('badge-tarefas').textContent = STATE.tarefas.length;
   $('badge-pessoas').textContent = membrosDoProjetoAtual().length;
   $('badge-marcos').textContent = STATE.marcos.length;
   $('badge-decisoes').textContent = STATE.decisoes.length;
   $('badge-riscos').textContent = STATE.riscos.length;
   $('badge-wiki').textContent = STATE.paginas.length;
+  $('badge-anexos').textContent = STATE.anexos.length;
 }
 
 function renderVisao() {
@@ -1210,6 +1230,100 @@ async function excluirPagina() {
     STATE.paginaAtual = null; STATE.wikiEditando = false;
     await carregarProjetoAtual();
     switchTab('wiki');
+  } catch (e) { alert('Erro: ' + e.message); }
+}
+
+// ============================================================
+// Anexos (projeto_anexos + Supabase Storage bucket projetos-anexos)
+// ============================================================
+const ANEXOS_BUCKET = 'projetos-anexos';
+function fmtBytes(n) {
+  if (!n && n !== 0) return '—';
+  if (n < 1024) return n + ' B';
+  if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
+  return (n / 1048576).toFixed(1) + ' MB';
+}
+function iconeArquivo(mime, nome) {
+  const m = (mime || '').toLowerCase(), n = (nome || '').toLowerCase();
+  if (m.includes('pdf') || n.endsWith('.pdf')) return '📕';
+  if (m.includes('image')) return '🖼️';
+  if (m.includes('sheet') || /\.(xlsx?|csv)$/.test(n)) return '📊';
+  if (m.includes('word') || /\.docx?$/.test(n)) return '📘';
+  if (m.includes('zip') || /\.(zip|rar|7z)$/.test(n)) return '🗜️';
+  return '📄';
+}
+function renderAnexos() {
+  const as = STATE.anexos;
+  $('tb-anexos').innerHTML = as.length ? as.map(a =>
+    '<tr>' +
+      '<td><span style="cursor:pointer;" onclick="baixarAnexo(\'' + a.id + '\')">' + iconeArquivo(a.mime_type, a.nome_arquivo) + ' <strong>' + esc(a.nome_arquivo) + '</strong></span></td>' +
+      '<td>' + esc((a.mime_type || '').split('/').pop() || '—') + '</td>' +
+      '<td>' + fmtBytes(a.tamanho_bytes) + '</td>' +
+      '<td>' + esc(pessoaNomeByUid(a.upload_por)) + '</td>' +
+      '<td>' + relativo(a.criado_em) + '</td>' +
+      '<td class="row-actions"><button class="icon-btn" onclick="baixarAnexo(\'' + a.id + '\')" title="Baixar">⬇</button>' +
+        '<button class="icon-btn danger" onclick="excluirAnexo(\'' + a.id + '\')" title="Excluir">🗑</button></td>' +
+    '</tr>'
+  ).join('') : '<tr><td colspan="6" class="empty">Nenhum anexo. Clique em 📎 Enviar arquivo.</td></tr>';
+}
+function pessoaNomeByUid(uid) {
+  const p = STATE.pessoas.find(x => x.user_id === uid);
+  return p ? p.nome : '—';
+}
+async function uploadAnexo(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  if (file.size > 52428800) { alert('Arquivo excede 50MB.'); input.value = ''; return; }
+  const st = $('anexo-status'); const btn = $('anexo-btn');
+  btn.disabled = true; st.textContent = 'Enviando ' + file.name + '…';
+  try {
+    const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const path = STATE.projetoAtual + '/' + Date.now() + '-' + safe;
+    const sess = await window.fusionAuth.getSession();
+    const up = await fetch(SB_URL + '/storage/v1/object/' + ANEXOS_BUCKET + '/' + path, {
+      method: 'POST',
+      headers: { apikey: window.fusionAuth.SUPABASE_ANON_KEY, Authorization: 'Bearer ' + sess.access_token, 'Content-Type': file.type || 'application/octet-stream' },
+      body: file,
+    });
+    if (!up.ok) throw new Error('Upload: ' + up.status + ' ' + await up.text());
+    await sbPost('projeto_anexos', {
+      projeto_id: STATE.projetoAtual, entidade_tipo: 'projeto', entidade_id: STATE.projetoAtual,
+      nome_arquivo: file.name, storage_path: path, mime_type: file.type || null,
+      tamanho_bytes: file.size, upload_por: STATE.authUid,
+    });
+    st.textContent = '';
+    await carregarProjetoAtual();
+    switchTab('anexos');
+  } catch (e) { alert('Erro: ' + e.message); st.textContent = ''; }
+  finally { btn.disabled = false; input.value = ''; }
+}
+async function baixarAnexo(id) {
+  const a = STATE.anexos.find(x => x.id === id);
+  if (!a) return;
+  try {
+    const sess = await window.fusionAuth.getSession();
+    const r = await fetch(SB_URL + '/storage/v1/object/sign/' + ANEXOS_BUCKET + '/' + a.storage_path, {
+      method: 'POST',
+      headers: { apikey: window.fusionAuth.SUPABASE_ANON_KEY, Authorization: 'Bearer ' + sess.access_token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ expiresIn: 120 }),
+    });
+    if (!r.ok) throw new Error('Sign: ' + r.status + ' ' + await r.text());
+    const { signedURL } = await r.json();
+    window.open(SB_URL + '/storage/v1' + signedURL, '_blank');
+  } catch (e) { alert('Erro: ' + e.message); }
+}
+async function excluirAnexo(id) {
+  const a = STATE.anexos.find(x => x.id === id);
+  if (!a || !confirm('Excluir o anexo "' + a.nome_arquivo + '"?')) return;
+  try {
+    const sess = await window.fusionAuth.getSession();
+    await fetch(SB_URL + '/storage/v1/object/' + ANEXOS_BUCKET + '/' + a.storage_path, {
+      method: 'DELETE',
+      headers: { apikey: window.fusionAuth.SUPABASE_ANON_KEY, Authorization: 'Bearer ' + sess.access_token },
+    });
+    await sbDelete('projeto_anexos?id=eq.' + id);
+    await carregarProjetoAtual();
+    switchTab('anexos');
   } catch (e) { alert('Erro: ' + e.message); }
 }
 
