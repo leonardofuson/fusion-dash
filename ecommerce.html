@@ -522,12 +522,17 @@ function shouldDedup(p){
   if(p.origem_conta==='confeccoes'&&(raw.indexOf('shopify')>=0||raw.indexOf('online store')>=0)) return true;
   return false;
 }
-// Comissões estimadas — fallback usado quando pedidos.fee_canal está vazio.
-// Shopee Fio (desde 25/05): captura fee_canal real via /v2/payment/get_escrow_detail (commission + service).
-// Quando fee_canal > 0 no pedido, dash usa o real; senão cai no hardcoded.
-// Valor Shopee subiu de 0.22 → 0.25 pra refletir commission 18% + service 7% observados.
-var CANAL_CUSTO={'ML Fio':0.22,'ML Confecções':0.22,'Shopee':0.25,'Shein':0.20,'TikTok Shop':0.24,'Site Próprio':0.12,'Outros':0.20};
-function custoPct(n){return CANAL_CUSTO[n]!==undefined?CANAL_CUSTO[n]:0.20;}
+// Comissões: dash usa pedidos.fee_canal REAL (Fase 1-6 do épico P&L 29-31/05/2026).
+// Captura por canal:
+//   ML: order_items[].sale_fee   Shopee: escrow (commission+service+txn)
+//   TikTok: Finance API statement_transactions.fee_amount
+//   Site Próprio: Pagar.me payables (fee+anticipation_fee+fraud_coverage)
+// Histórico (pedidos_historico, jan/24-mar/26): backfillado com taxas REAIS médias
+// observadas em abr+mai (UPDATE em massa via psycopg2). Todos pedidos tem fee.
+// CANAL_CUSTO mantido só como safety-net pra pedidos novos onde captura ainda
+// não maturou (vai pra NULL no banco até o cron de re-captura preencher).
+var CANAL_CUSTO={'ML Fio':0.1043,'ML Confecções':0.0890,'Shopee':0.2967,'Shein':0.16,'TikTok Shop':0.1941,'Site Próprio':0.0727,'Outros':0.0};
+function custoPct(n){return CANAL_CUSTO[n]!==undefined?CANAL_CUSTO[n]:0.0;}
 
 // ── Helpers ──
 function fmt(n){return 'R$ '+Math.round(n||0).toLocaleString('pt-BR');}
@@ -564,8 +569,9 @@ async function buscarTudo(tab,filtro){
   }
   return todos;
 }
-var SEL_PED='id,data_pedido,valor_bruto,canal_nome_raw,origem_conta,status,frete,frete_ml_seller,desconto,valor_liquido,uf,cidade,fee_canal,metodo_pagamento,parcelas';
-var SEL_HIST='id,id_tiny_origem,data_pedido,valor_bruto,canal_nome_raw,origem_conta,status,uf';
+var SEL_PED='id,data_pedido,valor_bruto,canal_nome_raw,origem_conta,status,frete,frete_ml_seller,desconto,valor_liquido,uf,cidade,fee_canal,valor_devolucao,metodo_pagamento,parcelas';
+// pedidos_historico (Fase 6 P&L, 31/05/2026): agora tem fee_canal/frete/frete_ml_seller/valor_devolucao/valor_liquido backfillados com taxas reais.
+var SEL_HIST='id,id_tiny_origem,data_pedido,valor_bruto,canal_nome_raw,origem_conta,status,uf,fee_canal,frete,frete_ml_seller,valor_devolucao,desconto,valor_liquido';
 // Receita inclui frete cliente APENAS pra ML (vb ML = total_amount = só itens, frete fora).
 // Demais canais: vb JÁ INCLUI frete cliente (validado empiricamente 25/05):
 //   - TikTok:   vb = itens + frete (payment.total_amount)
@@ -746,13 +752,16 @@ function renderAll(){
 function renderWaterfall(){
   var cur=calcPnL(STATE.pedidos,STATE.itensFocus);
   var prev=calcPnL(STATE.anteriores,[]);
+  var liquida=cur.receita-cur.devolucoes-cur.comissao-cur.frete;
+  var liquidaPrev=prev.receita-prev.devolucoes-prev.comissao-prev.frete;
   var items=[
     {lbl:'Receita Bruta',val:cur.receita,color:'#22c55e',prev:prev.receita},
-    {lbl:'− Devoluções',val:-cur.devolucoes,color:'#f43f5e',prev:-prev.devolucoes},
     {lbl:'− Comissão',val:-cur.comissao,color:'#f97316',prev:-prev.comissao},
-    {lbl:'− CMV',val:-cur.cmv,color:'#ec4899',prev:-prev.cmv},
+    {lbl:'− Devoluções',val:-cur.devolucoes,color:'#f43f5e',prev:-prev.devolucoes},
     {lbl:'− Frete',val:-cur.frete,color:'#8b5cf6',prev:-prev.frete},
-    {lbl:'= Lucro Op.',val:cur.lucro,color:cur.lucro>=0?'#22c55e':'#f43f5e',prev:prev.lucro}
+    {lbl:'= Receita Líquida',val:liquida,color:liquida>=0?'#06b6d4':'#f43f5e',prev:liquidaPrev},
+    {lbl:'− CMV',val:-cur.cmv,color:'#ec4899',prev:-prev.cmv},
+    {lbl:'= Resultado',val:cur.lucro,color:cur.lucro>=0?'#22c55e':'#f43f5e',prev:prev.lucro}
   ];
   var maxVal=Math.max.apply(null,items.map(function(i){return Math.abs(i.val);}));
   if(maxVal===0) maxVal=1;
@@ -769,13 +778,16 @@ function renderWaterfall(){
   document.getElementById('waterfall').innerHTML=html;
 }
 function calcPnL(pedidos,itens){
+  // Fase 7 P&L (31/05): usa valor_devolucao REAL de API (Fase 5) em vez de
+  // "valor de cancelados". Cancelados ficam fora da receita (filtro _canc).
+  // fee_canal real de API (Fase 1-4); fallback custoPct só pra pedidos onde a
+  // captura ainda não maturou (escrow Shopee D+X, statement TikTok D+15, etc).
   var receita=0,devolucoes=0,frete=0,comissao=0,cmv=0;
   pedidos.forEach(function(p){
     var v=valorReceita(p);
-    if(p._canc){devolucoes+=v;return;}
+    if(p._canc) return;  // cancelados/devolvidos fora da receita
     receita+=v;
-    // Frete: prioriza frete_ml_seller (custo real Fusion via /shipments/{id} ML ou
-    // shipping_fee_seller_discount TikTok); fallback pra p.frete (lado-cliente).
+    devolucoes+=parseFloat(p.valor_devolucao||0);
     var fSeller=parseFloat(p.frete_ml_seller||0);
     frete+=fSeller>0?fSeller:parseFloat(p.frete||0);
     var fee=parseFloat(p.fee_canal||0);
@@ -783,8 +795,10 @@ function calcPnL(pedidos,itens){
   });
   if(itens&&itens.length>0){itens.forEach(function(it){cmv+=(it._custoUn||0)*it._qtd;});}
   else{cmv=receita*0.45;} // placeholder CMV
-  var lucro=receita-comissao-cmv-frete;
-  return{receita:receita,devolucoes:devolucoes,comissao:comissao,cmv:cmv,frete:frete,lucro:lucro};
+  // P&L: Bruta − Comissão − Devoluções − Frete = Líquida; − CMV = Resultado
+  var liquida=receita-comissao-devolucoes-frete;
+  var lucro=liquida-cmv;
+  return{receita:receita,devolucoes:devolucoes,comissao:comissao,cmv:cmv,frete:frete,liquida:liquida,lucro:lucro};
 }
 
 // ── KPIs ──
@@ -801,7 +815,8 @@ function renderKPIs(){
   html+='<div class="kpi" style="--kpi-accent:#6366f1"><div class="kpi-lbl">Receita Bruta</div><div class="kpi-val">'+fmt(cur.receita)+'</div><div class="kpi-delta">'+deltaBadge(delta(cur.receita,prev.receita))+'</div></div>';
   html+='<div class="kpi" style="--kpi-accent:#22c55e"><div class="kpi-lbl">Pedidos</div><div class="kpi-val">'+fmtN(pedAtivos.length)+'</div><div class="kpi-delta">'+deltaBadge(delta(pedAtivos.length,pedAntAtivos.length))+'</div></div>';
   html+='<div class="kpi" style="--kpi-accent:#06b6d4"><div class="kpi-lbl">Ticket Médio</div><div class="kpi-val">'+fmt(tm)+'</div><div class="kpi-delta">'+deltaBadge(delta(tm,tmAnt))+'</div></div>';
-  html+='<div class="kpi" style="--kpi-accent:#a855f7"><div class="kpi-lbl">TACOS</div><div class="kpi-val" style="color:var(--txt3)">—</div><div class="kpi-sub">em breve</div></div>';
+  var devPct=cur.receita>0?cur.devolucoes/cur.receita*100:0;
+  html+='<div class="kpi" style="--kpi-accent:#06b6d4"><div class="kpi-lbl">Receita Líquida</div><div class="kpi-val">'+fmt(cur.liquida)+'</div><div class="kpi-sub">−'+fmtD(cur.devolucoes/cur.receita*100||0)+'% dev real</div><div class="kpi-delta">'+deltaBadge(delta(cur.liquida,prev.liquida))+'</div></div>';
   document.getElementById('kpis').innerHTML=html;
 }
 
