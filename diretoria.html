@@ -209,14 +209,12 @@ function destroyChart(id){ if(charts[id]){ charts[id].destroy(); delete charts[i
 
 async function carregar(){
   if(!DE||!ATE) return;
-  const [opMes, hist] = await Promise.all([
-    api('pedidos?select=data_pedido,valor_bruto,origem_conta,canal_nome_raw,loja_nome,status&data_pedido=gte.'+DE+'&data_pedido=lte.'+ATE+'&limit=100000'),
-    api('pedidos_historico?select=data_pedido,valor_bruto,origem_conta,canal_nome_raw,loja_nome,status&data_pedido=gte.'+DE+'&data_pedido=lte.'+ATE+'&limit=100000'),
-  ]);
+  // Unificado em 31/05/2026: vw_pedidos_full faz UNION ALL no servidor
+  // (pedidos + pedidos_historico). 1 chamada em vez de 2 paralelas.
+  const todos = await api('vw_pedidos_full?select=data_pedido,valor_bruto,origem_conta,canal_nome_raw,loja_nome,status&data_pedido=gte.'+DE+'&data_pedido=lte.'+ATE+'&limit=100000');
 
   const IGNORAR=[];
-  const todos=(opMes||[]).concat(hist||[]);
-  const ativos=todos.filter(p=>p.status!=='cancelado');
+  const ativos=(todos||[]).filter(p=>p.status!=='cancelado');
   const diasP=Math.max(1,Math.round((new Date(ATE)-new Date(DE))/86400000));
 
   // Por origem

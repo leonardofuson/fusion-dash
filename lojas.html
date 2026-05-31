@@ -458,19 +458,9 @@ function buildFilt(de,ate,cols){
     '&origem_conta=eq.kwid';
 }
 async function fetchPedidos(de,ate){
-  var inicio=inicioPedidos();
-  if(de>=inicio) return buscarTudo('pedidos',buildFilt(de,ate,SEL_PED));
-  if(ate<inicio){
-    var h=await buscarTudo('pedidos_historico',buildFilt(de,ate,SEL_HIST));
-    return h.map(function(p){p.id=p.id_tiny_origem||p.id;return p;});
-  }
-  var fimH=somaDias(inicio,-1);
-  var r=await Promise.all([
-    buscarTudo('pedidos_historico',buildFilt(de,fimH,SEL_HIST)),
-    buscarTudo('pedidos',buildFilt(inicio,ate,SEL_PED))
-  ]);
-  var h=r[0].map(function(p){p.id=p.id_tiny_origem||p.id;return p;});
-  return h.concat(r[1]);
+  // Unificado em 31/05/2026: vw_pedidos_full faz UNION ALL no servidor
+  // (id_tiny_origem do histórico vem como id_tiny). 1 chamada.
+  return buscarTudo('vw_pedidos_full',buildFilt(de,ate,SEL_PED));
 }
 
 async function fetchItensForIds(ids){

@@ -228,16 +228,14 @@ async function loadData(){
 }
 
 async function loadPedidosAgregado(){
-  const tab = ['pedidos','pedidos_historico'];
+  // Unificado 31/05/2026: vw_pedidos_full = UNION ALL pedidos+historico no servidor.
   const result = {};
-  for(const t of tab){
-    const rows = await pgGetPaginated(t, "select=data_pedido,valor_bruto,status&data_pedido=gte.2024-11-01&status=not.in.(cancelado,devolvido)");
-    rows.forEach(p => {
-      if(!p.data_pedido) return;
-      const mes = p.data_pedido.slice(0,7) + '-01';
-      result[mes] = (result[mes] || 0) + Number(p.valor_bruto || 0);
-    });
-  }
+  const rows = await pgGetPaginated('vw_pedidos_full', "select=data_pedido,valor_bruto,status&data_pedido=gte.2024-11-01&status=not.in.(cancelado,devolvido)");
+  rows.forEach(p => {
+    if(!p.data_pedido) return;
+    const mes = p.data_pedido.slice(0,7) + '-01';
+    result[mes] = (result[mes] || 0) + Number(p.valor_bruto || 0);
+  });
   STATE.pedidos = Object.entries(result).map(([ano_mes, valor]) => ({ano_mes, valor}));
 }
 
