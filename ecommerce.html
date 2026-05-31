@@ -569,9 +569,10 @@ async function buscarTudo(tab,filtro){
   }
   return todos;
 }
+// Após unificação 31/05/2026: dash lê de vw_pedidos_full (UNION ALL automático de
+// pedidos + pedidos_historico, schema padronizado, coluna fee_canal_fonte).
+// Antes: 2 chamadas paralelas (pedidos + pedidos_historico) com .concat() manual.
 var SEL_PED='id,data_pedido,valor_bruto,canal_nome_raw,origem_conta,status,frete,frete_ml_seller,desconto,valor_liquido,uf,cidade,fee_canal,valor_devolucao,metodo_pagamento,parcelas';
-// pedidos_historico (Fase 6 P&L, 31/05/2026): agora tem fee_canal/frete/frete_ml_seller/valor_devolucao/valor_liquido backfillados com taxas reais.
-var SEL_HIST='id,id_tiny_origem,data_pedido,valor_bruto,canal_nome_raw,origem_conta,status,uf,fee_canal,frete,frete_ml_seller,valor_devolucao,desconto,valor_liquido';
 // Receita inclui frete cliente APENAS pra ML (vb ML = total_amount = só itens, frete fora).
 // Demais canais: vb JÁ INCLUI frete cliente (validado empiricamente 25/05):
 //   - TikTok:   vb = itens + frete (payment.total_amount)
@@ -593,17 +594,12 @@ function buildFilt(de,ate,cols){
 async function fetchPedidos(de,ate){
   var useTeste=(document.getElementById('chk-ml-teste')||{}).checked;
   if(useTeste){
-    // Tabela teste só tem abril — ajustar range mínimo
     var deTest=de<'2026-04-01'?'2026-04-01':de;
     return buscarTudo('pedidos_ml_teste','select='+SEL_PED+'&data_pedido=gte.'+deTest+'&data_pedido=lte.'+ate);
   }
-  var inicio=inicioPedidos();
-  if(de>=inicio) return buscarTudo('pedidos',buildFilt(de,ate,SEL_PED));
-  if(ate<inicio){var h=await buscarTudo('pedidos_historico',buildFilt(de,ate,SEL_HIST));return h.map(function(p){p.id=p.id_tiny_origem||p.id;return p;});}
-  var fimH=somaDias(inicio,-1);
-  var r=await Promise.all([buscarTudo('pedidos_historico',buildFilt(de,fimH,SEL_HIST)),buscarTudo('pedidos',buildFilt(inicio,ate,SEL_PED))]);
-  var h=r[0].map(function(p){p.id=p.id_tiny_origem||p.id;return p;});
-  return h.concat(r[1]);
+  // vw_pedidos_full faz o UNION ALL no servidor (pedidos + pedidos_historico).
+  // 1 chamada em vez de 2 paralelas + .concat() manual.
+  return buscarTudo('vw_pedidos_full',buildFilt(de,ate,SEL_PED));
 }
 async function fetchItensForIds(ids,tabela){
   if(!ids.length)return[];
