@@ -209,8 +209,6 @@ function destroyChart(id){ if(charts[id]){ charts[id].destroy(); delete charts[i
 
 async function carregar(){
   if(!DE||!ATE) return;
-  // Unificado em 31/05/2026: vw_pedidos_full faz UNION ALL no servidor
-  // (pedidos + pedidos_historico). 1 chamada em vez de 2 paralelas.
   const todos = await api('vw_pedidos_full?select=data_pedido,valor_bruto,origem_conta,canal_nome_raw,loja_nome,status&data_pedido=gte.'+DE+'&data_pedido=lte.'+ATE+'&limit=100000');
 
   const IGNORAR=[];

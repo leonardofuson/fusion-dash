@@ -8,8 +8,8 @@
 - Catálogo de dashes hardcoded em `auth.js` (objeto `DASHES`)
 - Cada dash usa `fusionAuth.requireAuth('key')` como gate
 - Dashes ativos: `lojas`, `ecommerce`, `diretoria`, `estoque`, `financeiro`, `compras`, `simulador`
-- Padrão de fetch: paralelo de `pedidos` + `pedidos_historico` com `.concat()` no cliente
-- RLS em tudo (`pedidos`, `pedidos_historico`, `produtos`, `estoque`, `contas_pagar`, `user_roles`, `metas_lojas`) — sem login = sem dado
+- Padrão de fetch: 1 chamada em `vw_pedidos_full` (view UNION ALL + schema padronizado). **Antes 31/05/2026**: 2 chamadas paralelas a `pedidos` + `pedidos_historico` com `.concat()`. Tabelas físicas foram unificadas em `pedidos` única (473k rows, out/24→hoje); `pedidos_historico` virou backup `pedidos_historico_archived_20260531` (drop previsto 7-30d pós-estabilidade).
+- RLS em tudo (`pedidos`, `produtos`, `estoque`, `contas_pagar`, `user_roles`, `metas_lojas`) — sem login = sem dado
 
 ## Comandos
 ```bash
@@ -83,7 +83,7 @@ Pra criar um novo dash (ex: `marketing`):
 - **Datas**: fuso `America/Sao_Paulo` em todo agrupamento.
 - **Período default = MTD (Este Mês)**: chip `mtd` com classe `on` no HTML, init JS com `DE=inicioMesSP();ATE=h;`. Decisão padrão da Fusion (29/04/2026) — diretoria pensa em mês corrente. Não usar 30d/7d como default.
 - **Chip "Último Mês" (preset `m-1`)**: M-1 fechado (dia 01 ao último dia do mês anterior). Posicionado entre "Este Mês" e "Este Ano". Implementação: `ate=somaDias(inicioMesSP(),-1); de=ate.slice(0,7)+'-01'`. Em `lojas.html`, `ecommerce.html` e `diretoria.html` (02/05/2026).
-- **Pedidos**: fetch paralelo de `pedidos` + `pedidos_historico` com `.concat()`. Sempre filtrar `status NOT IN ('cancelado', 'devolvido')` em receita.
+- **Pedidos**: 1 fetch em `vw_pedidos_full` (UNION ALL no servidor + schema padronizado, inclui `fee_canal_fonte`). Sempre filtrar `status NOT IN ('cancelado', 'devolvido')` em receita.
 - **Mobile**: breakpoint principal 768px. Cards empilhados em mobile, lado-a-lado em desktop.
 - **Export PNG**: html2canvas. Aplicar em todo card de KPI relevante.
 
@@ -91,7 +91,7 @@ Pra criar um novo dash (ex: `marketing`):
 
 ## Dash Lojas (`lojas.html`) — v3 (deploy 17/04/2026)
 
-Fonte: `pedidos` + `pedidos_historico` (origem_conta=kwid). Atacado/flecha excluído via `IGNORAR_LOJA`.
+Fonte: `vw_pedidos_full` (origem_conta=kwid). Atacado/flecha excluído via `IGNORAR_LOJA`.
 
 **Conceitos-chave para código:**
 - Filtros persistentes na URL (`?de=...&ate=...&p=30d&lojas=...`)
@@ -135,14 +135,14 @@ Fonte única: tabela `contas_pagar` (só Fio e Trama).
 
 ## Dash Ecommerce (`ecommerce.html`)
 
-- Fonte: `pedidos` + `pedidos_historico` (excluindo lojas físicas e atacado).
+- Fonte: `vw_pedidos_full` (excluindo lojas físicas e atacado). Detalhe agregado opcional via `mvw_ecommerce_canal_dia`.
 - **Custos por canal**: tabela `CANAL_CUSTO` hardcoded. Fonte da verdade: [../CUSTOS_POR_CANAL.md](../CUSTOS_POR_CANAL.md).
 - Margem líquida = receita − (receita × custo_canal%) − Σ(qty × `produtos.custo_total`).
 
 ## Dash Diretoria (`diretoria.html`)
 
 - Visão consolidada (todos os canais). Receita, top SKUs, anomalias.
-- **Pendência**: refatorar pra usar `vw_pedidos_completo` em vez de fetch paralelo.
+- Lê `vw_pedidos_full` em 1 chamada (refatorado 31/05/2026 junto da unificação física).
 
 ## Dash Simulador (`simulador.html`)
 

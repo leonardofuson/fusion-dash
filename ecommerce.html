@@ -513,10 +513,8 @@ function shouldDedup(p){
 //   ML: order_items[].sale_fee   Shopee: escrow (commission+service+txn)
 //   TikTok: Finance API statement_transactions.fee_amount
 //   Site Próprio: Pagar.me payables (fee+anticipation_fee+fraud_coverage)
-// Histórico (pedidos_historico, jan/24-mar/26): backfillado com taxas REAIS médias
-// observadas em abr+mai (UPDATE em massa via psycopg2). Todos pedidos tem fee.
-// CANAL_CUSTO mantido só como safety-net pra pedidos novos onde captura ainda
-// não maturou (vai pra NULL no banco até o cron de re-captura preencher).
+// CANAL_CUSTO mantido só como safety-net pra pedidos novos onde captura
+// ainda não maturou (fee_canal NULL até o cron de re-captura preencher).
 var CANAL_CUSTO={'ML Fio':0.1043,'ML Confecções':0.0890,'Shopee':0.2967,'Shein':0.16,'TikTok Shop':0.1941,'Site Próprio':0.0727,'Outros':0.0};
 function custoPct(n){return CANAL_CUSTO[n]!==undefined?CANAL_CUSTO[n]:0.0;}
 
@@ -555,9 +553,6 @@ async function buscarTudo(tab,filtro){
   }
   return todos;
 }
-// Após unificação 31/05/2026: dash lê de vw_pedidos_full (UNION ALL automático de
-// pedidos + pedidos_historico, schema padronizado, coluna fee_canal_fonte).
-// Antes: 2 chamadas paralelas (pedidos + pedidos_historico) com .concat() manual.
 var SEL_PED='id,data_pedido,valor_bruto,canal_nome_raw,origem_conta,status,frete,frete_ml_seller,desconto,valor_liquido,uf,cidade,fee_canal,valor_devolucao,metodo_pagamento,parcelas';
 // Receita inclui frete cliente APENAS pra ML (vb ML = total_amount = só itens, frete fora).
 // Demais canais: vb JÁ INCLUI frete cliente (validado empiricamente 25/05):
