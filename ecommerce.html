@@ -392,23 +392,9 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
     </div>
   </div>
 
-  <!-- 7. RECEBÍVEIS ML -->
-  <div class="card">
-    <div class="card-title">Agenda de recebíveis <span class="sku-badge" style="background:rgba(250,204,21,0.15);color:#fde047">Mercado Livre — net após taxa MP</span></div>
-    <div id="recv-kpis" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px"></div>
-    <div class="grid2">
-      <div>
-        <div class="small-title">Cash-in por semana (sáb→sex)</div>
-        <div class="chart-sm" style="height:240px"><canvas id="chart-recv-weeks"></canvas></div>
-      </div>
-      <div>
-        <div class="small-title">Próximas liberações</div>
-        <div id="recv-next" style="max-height:240px;overflow-y:auto"></div>
-      </div>
-    </div>
-  </div>
+  <!-- (Agenda de recebíveis ML removida em 31/05/2026) -->
 
-  <!-- 8. DOW HEATMAP -->
+  <!-- 7. DOW HEATMAP -->
   <div class="card">
     <div class="card-title">Performance por canal × dia da semana</div>
     <div id="canal-dow-heat"></div>
@@ -658,16 +644,11 @@ async function fetchProdutos(){
   PROD_CACHE={byId:byId,bySku:bySku};return PROD_CACHE;
 }
 
-async function fetchRecebiveis(){
-  // Todos os releases futuros (a partir de hoje) — filtra status approved + data_liberacao>=today
-  var hoje=hojeSP();
-  var filt='select=conta,valor,fee,valor_liquido,data_liberacao,data_criacao,tipo,descricao,order_id&data_liberacao=gte.'+hoje+'&order=data_liberacao.asc';
-  return buscarTudo('recebiveis_ml',filt);
-}
+// (fetchRecebiveis removido em 31/05/2026 — card de recebíveis ML tirado do dash)
 
 // ── State ──
 var DE=null,ATE=null;
-var STATE={pedidos:[],pedidosFull:[],anteriores:[],anterioresFull:[],itens:[],itensFocus:[],canais:[],canaisSel:{},stackMode:'abs',focusCanal:null,skuGroups:[],recebiveis:[],ads:[],adsConta:'all'};
+var STATE={pedidos:[],pedidosFull:[],anteriores:[],anterioresFull:[],itens:[],itensFocus:[],canais:[],canaisSel:{},stackMode:'abs',focusCanal:null,skuGroups:[],ads:[],adsConta:'all'};
 var CHARTS={hero:null,pareto:null,recvWeeks:null};
 var GEO_UF_SEL=null;
 
@@ -709,15 +690,11 @@ async function carregar(){
     }).catch(function(e){console.warn('MV falhou (vai cair em pedidos detalhados):',e);});
     if(usarComp){fetchAgregadoMV(ant.de,ant.ate).then(function(r){STATE.mvRowsPrev=r;}).catch(function(){});}
     var fetches=[fetchPedidos(DE,ATE)];if(usarComp)fetches.push(fetchPedidos(ant.de,ant.ate));
-    // Recebíveis só na 1ª carga da sessão (independente do período)
-    var rcvIdx=-1;
-    if(!STATE.recebiveisLoaded){rcvIdx=fetches.length;fetches.push(fetchRecebiveis().catch(function(){return[];}));}
     // Ads — buscar do período do filtro (level=campaign+item, ambas plataformas eventualmente)
     var adsIdx=fetches.length;
     fetches.push(buscarTudo('ads_metrics','select=*&data=gte.'+DE+'&data=lte.'+ATE+'&order=gasto.desc').catch(function(){return[];}));
     var res=await Promise.all(fetches);
     STATE.pedidosRaw=res[0];STATE.anterioresRaw=usarComp?res[1]:[];
-    if(rcvIdx>=0){STATE.recebiveis=res[rcvIdx]||[];STATE.recebiveisLoaded=true;}
     STATE.ads=res[adsIdx]||[];
     if(STATE.canais.length===0){var seen={};STATE.pedidosRaw.forEach(function(p){if(shouldDedup(p))return;var n=getNome(p.canal_nome_raw,p.origem_conta);if(!seen[n]){seen[n]=true;STATE.canaisSel[n]=true;}});STATE.canais=Object.keys(seen).sort();renderCanalChips();}
 
@@ -775,7 +752,7 @@ function renderAll(){
     STATE.itensFocus=STATE.itens.filter(function(it){return it._canal===STATE.focusCanal;});
   }else{STATE.itensFocus=STATE.itens;}
   agruparSkus(STATE.itensFocus);
-  var fns=[renderWaterfall,renderKPIs,renderCanalTable,renderTopProdutos,renderHero,renderGeo,renderPayments,renderRecebiveis,renderDowHeat,renderPareto,renderAds,renderAlerts];
+  var fns=[renderWaterfall,renderKPIs,renderCanalTable,renderTopProdutos,renderHero,renderGeo,renderPayments,renderDowHeat,renderPareto,renderAds,renderAlerts];
   fns.forEach(function(fn){try{fn();}catch(e){console.error(fn.name+':',e);}});
 }
 
@@ -1022,109 +999,8 @@ function renderPayments(){
       return'<div class="pay-bar"><span class="pay-name">'+k+'</span><div class="pay-track"><div class="pay-fill" style="width:'+w.toFixed(1)+'%;background:#a855f7"></div></div><span class="pay-val">'+fmtN(d.n)+'</span></div>';}).join('');}
 }
 
-// ── RECEBÍVEIS ML ──
-function weekStartSat(ds){
-  // Semana operacional Fusion: sábado → sexta. offset = (weekday+1) % 7
-  var dt=new Date(ds+'T12:00:00Z');
-  var wd=dt.getUTCDay(); // 0=dom, 6=sáb
-  var off=(wd+1)%7;
-  dt.setUTCDate(dt.getUTCDate()-off);
-  return dt.toISOString().slice(0,10);
-}
-function rcvContaCanal(conta){
-  if(conta==='fio_e_trama') return 'Mercado Livre FIO';
-  if(conta==='confeccoes') return 'Mercado Livre Confeccoes';
-  return conta;
-}
-function renderRecebiveis(){
-  var host=document.getElementById('recv-kpis');
-  if(!host) return;
-  var raw=STATE.recebiveis||[];
-  // Filtra por chips de canal (respeita seleção atual)
-  var dados=raw.filter(function(r){
-    var canal=rcvContaCanal(r.conta);
-    if(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0){
-      // só filtra se o canal ML existe nos chips; se não, deixa passar
-      if(STATE.canais.indexOf(canal)>=0 && !STATE.canaisSel[canal]) return false;
-    }
-    if(STATE.focusCanal && STATE.focusCanal!==canal) return false;
-    return true;
-  });
-  if(dados.length===0){
-    host.innerHTML='<div class="kpi" style="grid-column:1/-1"><div class="kpi-lbl">Sem recebíveis futuros — rode o sync ou aguarde backfill</div></div>';
-    document.getElementById('recv-next').innerHTML='<div class="geo-empty">Sem liberações futuras.</div>';
-    if(CHARTS.recvWeeks){CHARTS.recvWeeks.destroy();CHARTS.recvWeeks=null;}
-    return;
-  }
-  var hoje=hojeSP();
-  var total=0, d7=0, d30=0, fees=0, gross=0;
-  var in7=somaDias(hoje,7), in30=somaDias(hoje,30);
-  dados.forEach(function(r){
-    var v=parseFloat(r.valor_liquido||0);
-    var vb=parseFloat(r.valor||0);
-    var fe=parseFloat(r.fee||0);
-    total+=v; gross+=vb; fees+=fe;
-    var dl=(r.data_liberacao||'').slice(0,10);
-    if(dl<=in7) d7+=v;
-    if(dl<=in30) d30+=v;
-  });
-  var taxaPct=gross>0?(fees/gross*100):0;
-  host.innerHTML=
-    '<div class="kpi"><div class="kpi-lbl">Total a receber</div><div class="kpi-val">'+fmtK(total)+'</div><div class="kpi-sub">'+fmtN(dados.length)+' liberações</div></div>'+
-    '<div class="kpi"><div class="kpi-lbl">Próximos 7 dias</div><div class="kpi-val">'+fmtK(d7)+'</div><div class="kpi-sub">até '+in7.slice(8)+'/'+in7.slice(5,7)+'</div></div>'+
-    '<div class="kpi"><div class="kpi-lbl">Próximos 30 dias</div><div class="kpi-val">'+fmtK(d30)+'</div><div class="kpi-sub">até '+in30.slice(8)+'/'+in30.slice(5,7)+'</div></div>'+
-    '<div class="kpi"><div class="kpi-lbl">Taxa MP média</div><div class="kpi-val">'+fmtP(taxaPct)+'</div><div class="kpi-sub">'+fmtK(fees)+' em taxas</div></div>';
-
-  // Chart: cash-in por semana (sáb→sex), próximas 8 semanas
-  var porSem={}; // week_start -> {fio: x, confec: x}
-  dados.forEach(function(r){
-    var dl=(r.data_liberacao||'').slice(0,10);
-    if(!dl||dl<hoje) return;
-    var ws=weekStartSat(dl);
-    if(!porSem[ws]) porSem[ws]={fio_e_trama:0,confeccoes:0};
-    porSem[ws][r.conta]=(porSem[ws][r.conta]||0)+parseFloat(r.valor_liquido||0);
-  });
-  var semanas=Object.keys(porSem).sort().slice(0,8);
-  var labels=semanas.map(function(ws){
-    var fim=somaDias(ws,6);
-    return ws.slice(8)+'/'+ws.slice(5,7)+'–'+fim.slice(8)+'/'+fim.slice(5,7);
-  });
-  var dsFio=semanas.map(function(w){return Math.round(porSem[w].fio_e_trama||0);});
-  var dsConfec=semanas.map(function(w){return Math.round(porSem[w].confeccoes||0);});
-  var ctx=document.getElementById('chart-recv-weeks');
-  if(CHARTS.recvWeeks) CHARTS.recvWeeks.destroy();
-  if(ctx){
-    CHARTS.recvWeeks=new Chart(ctx,{type:'bar',data:{labels:labels,datasets:[
-      {label:'Fio e Trama',data:dsFio,backgroundColor:'#6366f1',stack:'s'},
-      {label:'Confecções',data:dsConfec,backgroundColor:'#a855f7',stack:'s'}
-    ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{color:'#94a3b8',boxWidth:10}},tooltip:{callbacks:{label:function(c){return c.dataset.label+': '+fmtK(c.parsed.y);}}}},scales:{x:{stacked:true,ticks:{color:'#94a3b8',font:{size:10}},grid:{display:false}},y:{stacked:true,ticks:{color:'#94a3b8',callback:function(v){return fmtK(v);}},grid:{color:'rgba(148,163,184,0.08)'}}}}});
-  }
-
-  // Lista próximas liberações (próximos 30d, agrupado por data)
-  var porDia={};
-  dados.forEach(function(r){
-    var dl=(r.data_liberacao||'').slice(0,10);
-    if(!dl||dl>in30) return;
-    if(!porDia[dl]) porDia[dl]={total:0,contas:{}};
-    porDia[dl].total+=parseFloat(r.valor_liquido||0);
-    var c=r.conta;
-    porDia[dl].contas[c]=(porDia[dl].contas[c]||0)+parseFloat(r.valor_liquido||0);
-  });
-  var dias=Object.keys(porDia).sort().slice(0,20);
-  var nextEl=document.getElementById('recv-next');
-  if(dias.length===0){nextEl.innerHTML='<div class="geo-empty">Sem liberações nos próximos 30 dias.</div>';}
-  else{
-    nextEl.innerHTML=dias.map(function(d){
-      var info=porDia[d];
-      var breakdown=Object.keys(info.contas).map(function(c){
-        var lbl=c==='fio_e_trama'?'Fio':(c==='confeccoes'?'Confec':c);
-        var cor=c==='fio_e_trama'?'#6366f1':'#a855f7';
-        return '<span style="color:'+cor+';font-weight:600;font-size:10px;margin-right:6px">'+lbl+' '+fmtK(info.contas[c])+'</span>';
-      }).join('');
-      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid rgba(148,163,184,0.08)"><div><div style="font-size:11px;color:var(--txt2)">'+d.slice(8)+'/'+d.slice(5,7)+'</div><div style="margin-top:2px">'+breakdown+'</div></div><div style="font-weight:700;color:var(--txt1)">'+fmtK(info.total)+'</div></div>';
-    }).join('');
-  }
-}
+// (Seção RECEBÍVEIS ML removida em 31/05/2026 — fetchRecebiveis, renderRecebiveis,
+//  rcvContaCanal e weekStartSat retirados junto.)
 
 // ── DOW HEATMAP ──
 var DIAS_SEM=['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
