@@ -597,9 +597,31 @@ async function fetchPedidos(de,ate){
     var deTest=de<'2026-04-01'?'2026-04-01':de;
     return buscarTudo('pedidos_ml_teste','select='+SEL_PED+'&data_pedido=gte.'+deTest+'&data_pedido=lte.'+ate);
   }
-  // vw_pedidos_full faz o UNION ALL no servidor (pedidos + pedidos_historico).
-  // 1 chamada em vez de 2 paralelas + .concat() manual.
   return buscarTudo('vw_pedidos_full',buildFilt(de,ate,SEL_PED));
+}
+
+// Progressive load (31/05/2026 sprint 2): MV agregada vem PRIMEIRO (~200ms,
+// poucas centenas de linhas) e atualiza KPIs/Waterfall já. Detalhes vêm depois.
+async function fetchAgregadoMV(de,ate){
+  var f='select=*&data_pedido=gte.'+de+'&data_pedido=lte.'+ate;
+  return buscarTudo('mvw_ecommerce_canal_dia',f);
+}
+function calcPnLFromMV(rows){
+  if(!rows||!rows.length)return{receita:0,devolucoes:0,frete:0,comissao:0,cmv:0,liquida:0,lucro:0,pedidos:0};
+  var receita=0,dev=0,frete=0,com=0,liquida=0,ped=0;
+  rows.forEach(function(r){
+    var n=r.canal_nome_raw, _nome=getNome(n,r.origem_conta);
+    if(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[_nome])return;
+    receita+=parseFloat(r.receita_bruta||0);
+    dev+=parseFloat(r.devolucoes||0);
+    frete+=parseFloat(r.frete_seller||0);
+    com+=parseFloat(r.comissao||0);
+    ped+=parseInt(r.pedidos||0)-parseInt(r.cancelados||0);
+  });
+  liquida=receita-com-dev-frete;
+  // CMV: 45% placeholder até itens detalhados carregarem (calcPnL real vai sobrescrever).
+  var cmv=receita*0.45;
+  return{receita:receita,devolucoes:dev,frete:frete,comissao:com,cmv:cmv,liquida:liquida,lucro:liquida-cmv,pedidos:ped};
 }
 async function fetchItensForIds(ids,tabela){
   if(!ids.length)return[];
@@ -673,6 +695,19 @@ async function carregar(){
   document.getElementById('kpis').innerHTML='<div class="kpi"><div class="kpi-lbl">Carregando...</div><div class="spin"></div></div>';
   try{
     var usarComp=document.getElementById('chk-compare').checked;var ant=periodoAnterior(DE,ATE);
+    // Progressive load: dispara MV em paralelo, renderiza KPIs/Waterfall já quando ela chega.
+    fetchAgregadoMV(DE,ATE).then(function(mvRows){
+      if(!mvRows||!mvRows.length)return;
+      STATE.mvRows=mvRows;
+      var mvPrev=usarComp?STATE.mvRowsPrev:null;
+      var cur=calcPnLFromMV(mvRows);
+      var prev=mvPrev?calcPnLFromMV(mvPrev):{receita:0,liquida:0,lucro:0,comissao:0,devolucoes:0,frete:0,cmv:0,pedidos:0};
+      try{
+        renderKPIsImediato(cur,prev);
+        renderWaterfallImediato(cur,prev);
+      }catch(e){console.warn('render imediato MV:',e);}
+    }).catch(function(e){console.warn('MV falhou (vai cair em pedidos detalhados):',e);});
+    if(usarComp){fetchAgregadoMV(ant.de,ant.ate).then(function(r){STATE.mvRowsPrev=r;}).catch(function(){});}
     var fetches=[fetchPedidos(DE,ATE)];if(usarComp)fetches.push(fetchPedidos(ant.de,ant.ate));
     // Recebíveis só na 1ª carga da sessão (independente do período)
     var rcvIdx=-1;
@@ -744,7 +779,43 @@ function renderAll(){
   fns.forEach(function(fn){try{fn();}catch(e){console.error(fn.name+':',e);}});
 }
 
-// ── P&L WATERFALL ──
+// ── Render IMEDIATO via MV (progressive load 31/05/2026) ──
+// Quando MV agregada chega antes dos pedidos detalhados (200ms vs 5s), exibe
+// KPIs e waterfall imediatamente. Pedidos detalhados depois sobrescrevem com
+// CMV real, filtros aplicados, focusCanal etc.
+function renderKPIsImediato(cur,prev){
+  var tm=cur.pedidos>0?cur.receita/cur.pedidos:0;
+  var tmAnt=prev.pedidos>0?prev.receita/prev.pedidos:0;
+  var mp=cur.receita>0?cur.lucro/cur.receita*100:0;
+  var html='';
+  html+='<div class="kpi" style="--kpi-accent:'+(cur.lucro>=0?'#22c55e':'#f43f5e')+'"><div class="kpi-lbl">Lucro Operacional</div><div class="kpi-val" style="color:'+(cur.lucro>=0?'#22c55e':'#f43f5e')+'">'+fmt(cur.lucro)+'</div><div class="kpi-sub">margem '+fmtD(mp)+'% • CMV estim</div><div class="kpi-delta">'+deltaBadge(delta(cur.lucro,prev.lucro))+'</div></div>';
+  html+='<div class="kpi" style="--kpi-accent:#6366f1"><div class="kpi-lbl">Receita Bruta</div><div class="kpi-val">'+fmt(cur.receita)+'</div><div class="kpi-delta">'+deltaBadge(delta(cur.receita,prev.receita))+'</div></div>';
+  html+='<div class="kpi" style="--kpi-accent:#22c55e"><div class="kpi-lbl">Pedidos</div><div class="kpi-val">'+fmtN(cur.pedidos)+'</div><div class="kpi-delta">'+deltaBadge(delta(cur.pedidos,prev.pedidos))+'</div></div>';
+  html+='<div class="kpi" style="--kpi-accent:#06b6d4"><div class="kpi-lbl">Ticket Médio</div><div class="kpi-val">'+fmt(tm)+'</div><div class="kpi-delta">'+deltaBadge(delta(tm,tmAnt))+'</div></div>';
+  html+='<div class="kpi" style="--kpi-accent:#06b6d4"><div class="kpi-lbl">Receita Líquida</div><div class="kpi-val">'+fmt(cur.liquida)+'</div><div class="kpi-sub">−'+fmtD(cur.devolucoes/cur.receita*100||0)+'% dev real</div><div class="kpi-delta">'+deltaBadge(delta(cur.liquida,prev.liquida))+'</div></div>';
+  document.getElementById('kpis').innerHTML=html;
+}
+function renderWaterfallImediato(cur,prev){
+  var items=[
+    {lbl:'Receita Bruta',val:cur.receita,color:'#22c55e',prev:prev.receita},
+    {lbl:'− Comissão',val:-cur.comissao,color:'#f97316',prev:-prev.comissao},
+    {lbl:'− Devoluções',val:-cur.devolucoes,color:'#f43f5e',prev:-prev.devolucoes},
+    {lbl:'− Frete',val:-cur.frete,color:'#8b5cf6',prev:-prev.frete},
+    {lbl:'= Receita Líquida',val:cur.liquida,color:cur.liquida>=0?'#06b6d4':'#f43f5e',prev:prev.liquida},
+    {lbl:'− CMV (estim)',val:-cur.cmv,color:'#ec4899',prev:-prev.cmv},
+    {lbl:'= Resultado',val:cur.lucro,color:cur.lucro>=0?'#22c55e':'#f43f5e',prev:prev.lucro}
+  ];
+  var maxVal=Math.max.apply(null,items.map(function(i){return Math.abs(i.val);}));
+  if(maxVal===0)maxVal=1;
+  var html=items.map(function(item){
+    var h=Math.max(Math.abs(item.val)/maxVal*140,8);
+    var d=delta(Math.abs(item.val),Math.abs(item.prev));
+    return'<div class="wf-bar"><div class="wf-bar-val">'+fmtK(Math.abs(item.val))+'</div><div class="wf-bar-inner" style="height:'+h+'px;background:'+item.color+'"></div><div class="wf-bar-lbl">'+item.lbl+'</div><div class="wf-bar-delta">'+deltaBadge(d)+'</div></div>';
+  }).join('');
+  var wf=document.getElementById('waterfall');if(wf)wf.innerHTML=html;
+}
+
+// ── P&L WATERFALL (full, com itens detalhados) ──
 function renderWaterfall(){
   var cur=calcPnL(STATE.pedidos,STATE.itensFocus);
   var prev=calcPnL(STATE.anteriores,[]);
