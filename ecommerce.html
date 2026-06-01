@@ -584,9 +584,28 @@ async function fetchPedidos(de,ate){
 // Progressive load (31/05/2026 sprint 2): MV agregada vem PRIMEIRO (~200ms,
 // poucas centenas de linhas) e atualiza KPIs/Waterfall já. Detalhes vêm depois.
 async function fetchAgregadoMV(de,ate){
-  var f='select=*&data_pedido=gte.'+de+'&data_pedido=lte.'+ate;
+  // order explícito (MV não tem coluna `id` — buscarTudo cairia no &order=id.asc)
+  var f='select=*&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc';
   return buscarTudo('mvw_ecommerce_canal_dia',f);
 }
+
+// localStorage cache (TTL 5min) — só MV rows agregados (~200KB cabe folgado).
+// Pedidos detalhados continuam vindo do servidor.
+function cacheKey(de,ate){return 'ecomm_v1_'+de+'_'+ate;}
+function cacheGet(de,ate){
+  try{
+    var raw=localStorage.getItem(cacheKey(de,ate));
+    if(!raw) return null;
+    var obj=JSON.parse(raw);
+    if(Date.now()-obj.ts > 5*60*1000) return null;
+    return obj.data;
+  }catch(e){return null;}
+}
+function cacheSet(de,ate,data){
+  try{ localStorage.setItem(cacheKey(de,ate),JSON.stringify({ts:Date.now(),data:data})); }catch(e){}
+}
+// Defer renders pesados (charts/heatmaps) pra não bloquear first paint.
+var idle = window.requestIdleCallback || function(fn){return setTimeout(fn,0);};
 function calcPnLFromMV(rows){
   if(!rows||!rows.length)return{receita:0,devolucoes:0,frete:0,comissao:0,cmv:0,liquida:0,lucro:0,pedidos:0};
   var receita=0,dev=0,frete=0,com=0,liquida=0,ped=0;
@@ -668,12 +687,25 @@ function filtrarPedidos(lista){
 
 async function carregar(){
   if(!DE||!ATE)return;
-  document.getElementById('kpis').innerHTML='<div class="kpi"><div class="kpi-lbl">Carregando...</div><div class="spin"></div></div>';
+  // Cache local: hit válido (<5min) pinta KPIs/Waterfall IMEDIATO antes do fetch
+  var cached=cacheGet(DE,ATE);
+  if(cached && cached.mv){
+    try{
+      STATE.mvRows=cached.mv;
+      var c=calcPnLFromMV(cached.mv);
+      var p=cached.mvPrev?calcPnLFromMV(cached.mvPrev):{receita:0,liquida:0,lucro:0,comissao:0,devolucoes:0,frete:0,cmv:0,pedidos:0};
+      renderKPIsImediato(c,p);
+      renderWaterfallImediato(c,p);
+      document.getElementById('upd').textContent='Cache · atualizando…';
+    }catch(e){console.warn('cache render:',e);}
+  } else {
+    document.getElementById('kpis').innerHTML='<div class="kpi"><div class="kpi-lbl">Carregando...</div><div class="spin"></div></div>';
+  }
   try{
     var usarComp=document.getElementById('chk-compare').checked;var ant=periodoAnterior(DE,ATE);
     // Progressive load: dispara MV em paralelo, renderiza KPIs/Waterfall já quando ela chega.
-    fetchAgregadoMV(DE,ATE).then(function(mvRows){
-      if(!mvRows||!mvRows.length)return;
+    var pMV=fetchAgregadoMV(DE,ATE).then(function(mvRows){
+      if(!mvRows||!mvRows.length)return null;
       STATE.mvRows=mvRows;
       var mvPrev=usarComp?STATE.mvRowsPrev:null;
       var cur=calcPnLFromMV(mvRows);
@@ -682,7 +714,8 @@ async function carregar(){
         renderKPIsImediato(cur,prev);
         renderWaterfallImediato(cur,prev);
       }catch(e){console.warn('render imediato MV:',e);}
-    }).catch(function(e){console.warn('MV falhou (vai cair em pedidos detalhados):',e);});
+      return mvRows;
+    }).catch(function(e){console.warn('MV falhou (vai cair em pedidos detalhados):',e);return null;});
     if(usarComp){fetchAgregadoMV(ant.de,ant.ate).then(function(r){STATE.mvRowsPrev=r;}).catch(function(){});}
     var fetches=[fetchPedidos(DE,ATE)];if(usarComp)fetches.push(fetchPedidos(ant.de,ant.ate));
     // Ads — buscar do período do filtro (level=campaign+item, ambas plataformas eventualmente)
@@ -724,6 +757,8 @@ async function carregar(){
     try{renderTopProdutos();}catch(e){console.error('renderTopProdutos:',e);}
     try{renderPareto();}catch(e){console.error('renderPareto:',e);}
     document.getElementById('upd').textContent='Atualizado '+new Date().toLocaleTimeString('pt-BR');
+    // Salva cache pra próxima visita (TTL 5min)
+    try{var mvNow=await pMV;cacheSet(DE,ATE,{mv:mvNow,mvPrev:STATE.mvRowsPrev||null});}catch(e){}
   }catch(err){console.error(err);document.getElementById('kpis').innerHTML='<div class="kpi"><div class="kpi-lbl">Erro</div><div class="kpi-val d-dn">!</div><div class="kpi-sub">'+err.message+'</div></div>';}
 }
 
@@ -747,8 +782,15 @@ function renderAll(){
     STATE.itensFocus=STATE.itens.filter(function(it){return it._canal===STATE.focusCanal;});
   }else{STATE.itensFocus=STATE.itens;}
   agruparSkus(STATE.itensFocus);
-  var fns=[renderWaterfall,renderKPIs,renderCanalTable,renderTopProdutos,renderHero,renderGeo,renderPayments,renderDowHeat,renderPareto,renderAds,renderAlerts];
-  fns.forEach(function(fn){try{fn();}catch(e){console.error(fn.name+':',e);}});
+  // Critical render path — visualmente prioritário (KPIs + tabela canais + Top Produtos)
+  var criticos=[renderWaterfall,renderKPIs,renderCanalTable,renderTopProdutos];
+  criticos.forEach(function(fn){try{fn();}catch(e){console.error(fn.name+':',e);}});
+  // Charts/heatmaps pesados — deferidos pro idle. Em janelas grandes esses
+  // somam ~600-1000ms de Chart.js; idle deixa o browser respirar.
+  var diferidos=[renderHero,renderGeo,renderPayments,renderDowHeat,renderPareto,renderAds,renderAlerts];
+  idle(function(){
+    diferidos.forEach(function(fn){try{fn();}catch(e){console.error(fn.name+':',e);}});
+  });
 }
 
 // ── Render IMEDIATO via MV (progressive load 31/05/2026) ──

@@ -142,6 +142,22 @@ function fmt(n){ return 'R$ '+Math.round(n||0).toLocaleString('pt-BR'); }
 function fmtN(n){ return Math.round(n||0).toLocaleString('pt-BR'); }
 function fmtPct(n){ return (n||0).toFixed(1)+'%'; }
 
+// localStorage cache TTL 5min — só rows da MV (~50-200KB conforme janela).
+function cacheKey(de,ate){return 'diretoria_v1_'+de+'_'+ate;}
+function cacheGet(de,ate){
+  try{
+    const raw=localStorage.getItem(cacheKey(de,ate));
+    if(!raw) return null;
+    const obj=JSON.parse(raw);
+    if(Date.now()-obj.ts > 5*60*1000) return null;
+    return obj.data;
+  }catch(e){return null;}
+}
+function cacheSet(de,ate,data){
+  try{ localStorage.setItem(cacheKey(de,ate),JSON.stringify({ts:Date.now(),data:data})); }catch(e){}
+}
+const idle = window.requestIdleCallback || function(fn){return setTimeout(fn,0);};
+
 let charts={};
 let DE=null,ATE=null;
 
@@ -209,21 +225,35 @@ function destroyChart(id){ if(charts[id]){ charts[id].destroy(); delete charts[i
 
 async function carregar(){
   if(!DE||!ATE) return;
-  const todos = await api('vw_pedidos_full?select=data_pedido,valor_bruto,origem_conta,canal_nome_raw,loja_nome,status&data_pedido=gte.'+DE+'&data_pedido=lte.'+ATE+'&limit=100000');
+  // Cache local pinta dashboard IMEDIATO antes do fetch (TTL 5min)
+  const cached=cacheGet(DE,ATE);
+  if(cached){
+    try{ renderTudo(cached); document.getElementById('upd').textContent='Cache · atualizando…'; }
+    catch(e){console.warn('cache render:',e);}
+  }
+  // mvw_diretoria_dia substitui o fetch de vw_pedidos_full (antes 100k+ rows → 4k rows agregadas)
+  const mvRows = await api('mvw_diretoria_dia?select=*&data_pedido=gte.'+DE+'&data_pedido=lte.'+ATE+'&order=data_pedido.asc');
+  if(!mvRows || !Array.isArray(mvRows)){ document.getElementById('upd').textContent='Erro'; return; }
+  renderTudo(mvRows);
+  cacheSet(DE,ATE,mvRows);
+}
 
-  const IGNORAR=[];
-  const ativos=(todos||[]).filter(p=>p.status!=='cancelado');
+// Renderização completa a partir de rows da mvw_diretoria_dia.
+// Cada row é pré-agregada por (data_pedido, origem_conta, canal_nome_raw, loja_nome).
+function renderTudo(mvRows){
   const diasP=Math.max(1,Math.round((new Date(ATE)-new Date(DE))/86400000));
+  const REC=r=>parseFloat(r.receita_bruta||0);
+  const PED=r=>(parseInt(r.pedidos||0)-parseInt(r.cancelados||0));
 
   // Por origem
   const porOrigem={};
-  ativos.forEach(p=>{
-    const cfg=ORIGEM_CONFIG[p.origem_conta];
+  mvRows.forEach(r=>{
+    const cfg=ORIGEM_CONFIG[r.origem_conta];
     if(!cfg) return;
     const nome=cfg.nome;
     if(!porOrigem[nome]) porOrigem[nome]={nome,cor:cfg.cor,fat:0,ped:0};
-    porOrigem[nome].fat+=+(p.valor_bruto||0);
-    porOrigem[nome].ped++;
+    porOrigem[nome].fat+=REC(r);
+    porOrigem[nome].ped+=PED(r);
   });
   const origens=Object.values(porOrigem).sort((a,b)=>b.fat-a.fat);
   const fatTotal=origens.reduce((s,o)=>s+o.fat,0);
@@ -258,11 +288,11 @@ async function carregar(){
 
   // Chart mensal
   const porMes={};
-  ativos.forEach(p=>{
-    const m=p.data_pedido?.substring(0,7);
+  mvRows.forEach(r=>{
+    const m=r.data_pedido?.substring(0,7);
     if(!m) return;
     if(!porMes[m]) porMes[m]=0;
-    porMes[m]+=+(p.valor_bruto||0);
+    porMes[m]+=REC(r);
   });
   const meses=Object.keys(porMes).sort().slice(-12);
   const labMes=meses.map(m=>{ const [y,mo]=m.split('-'); return mo+'/'+y.slice(2); });
@@ -282,12 +312,12 @@ async function carregar(){
 
   // E-commerce por canal
   const porCanal={};
-  ativos.filter(p=>['fio_e_trama','confeccoes','shopify'].includes(p.origem_conta)).forEach(p=>{
-    const nome=nomCanal(p.canal_nome_raw);
+  mvRows.filter(r=>['fio_e_trama','confeccoes','shopify','tiktok_shop'].includes(r.origem_conta)).forEach(r=>{
+    const nome=nomCanal(r.canal_nome_raw);
     const cor=CANAL_CORES[nome]||'#6B7280';
     if(!porCanal[nome]) porCanal[nome]={nome,cor,fat:0,ped:0};
-    porCanal[nome].fat+=+(p.valor_bruto||0);
-    porCanal[nome].ped++;
+    porCanal[nome].fat+=REC(r);
+    porCanal[nome].ped+=PED(r);
   });
   const canais=Object.values(porCanal).sort((a,b)=>b.fat-a.fat);
   const maxCF=Math.max(...canais.map(c=>c.fat),1);
@@ -297,9 +327,9 @@ async function carregar(){
 
   // E-commerce diário
   const eDia={};
-  ativos.filter(p=>['fio_e_trama','confeccoes','shopify'].includes(p.origem_conta)).forEach(p=>{
-    if(!eDia[p.data_pedido]) eDia[p.data_pedido]=0;
-    eDia[p.data_pedido]+=+(p.valor_bruto||0);
+  mvRows.filter(r=>['fio_e_trama','confeccoes','shopify','tiktok_shop'].includes(r.origem_conta)).forEach(r=>{
+    if(!eDia[r.data_pedido]) eDia[r.data_pedido]=0;
+    eDia[r.data_pedido]+=REC(r);
   });
   const eDl=Object.keys(eDia).sort();
   destroyChart('ecom');
@@ -309,13 +339,12 @@ async function carregar(){
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#71717a',maxTicksLimit:8,font:{size:10}},grid:{color:'rgba(255,255,255,0.04)'}},y:{ticks:{color:'#71717a',font:{size:10},callback:function(v){return 'R$'+Math.round(v/1000)+'k';}},grid:{color:'rgba(255,255,255,0.04)'}}}}});
 
   // Lojas por nome
-  const IGNORAR2=[];
   const porLoja={};
-  ativos.filter(p=>p.origem_conta==='kwid'&&p.loja_nome&&!IGNORAR2.includes(p.loja_nome)).forEach(p=>{
-    const l=p.loja_nome;
+  mvRows.filter(r=>r.origem_conta==='kwid' && r.loja_nome && r.loja_nome!=='Atacado WhatsApp').forEach(r=>{
+    const l=r.loja_nome;
     if(!porLoja[l]) porLoja[l]={nome:l,fat:0,ped:0};
-    porLoja[l].fat+=+(p.valor_bruto||0);
-    porLoja[l].ped++;
+    porLoja[l].fat+=REC(r);
+    porLoja[l].ped+=PED(r);
   });
   const lojas=Object.values(porLoja).sort((a,b)=>b.fat-a.fat);
   const maxLF=Math.max(...lojas.map(l=>l.fat),1);
@@ -326,9 +355,9 @@ async function carregar(){
     <div class="bar-track"><div class="bar-fill" style="width:${Math.round(l.fat/maxLF*100)}%;background:${cL(l.nome)}"></div></div></div>`).join('');
 
   const lDia={};
-  ativos.filter(p=>p.origem_conta==='kwid').forEach(p=>{
-    if(!lDia[p.data_pedido]) lDia[p.data_pedido]=0;
-    lDia[p.data_pedido]+=+(p.valor_bruto||0);
+  mvRows.filter(r=>r.origem_conta==='kwid').forEach(r=>{
+    if(!lDia[r.data_pedido]) lDia[r.data_pedido]=0;
+    lDia[r.data_pedido]+=REC(r);
   });
   const lDl=Object.keys(lDia).sort();
   destroyChart('lojas');
