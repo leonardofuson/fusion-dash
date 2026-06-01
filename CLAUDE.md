@@ -107,7 +107,7 @@ Cada dash tem chave própria pra evitar colisão. Cache pinta dashboard IMEDIATA
 |---|---|---|
 | lojas | `lojas_v2_<de>_<ate>` | `{mv, mvPrev, sku}` da `mvw_lojas_dia` + `_sku_dia` |
 | ecommerce | `ecomm_v1_<de>_<ate>` | `{mv, mvPrev}` da `mvw_ecommerce_canal_dia` |
-| diretoria | `diretoria_v1_<de>_<ate>` | rows da `mvw_diretoria_dia` |
+| diretoria | `diretoria_v2_<de>_<ate>` | `{cur, prev}` rows da `mvw_diretoria_dia` (período atual + anterior pra Δ%) |
 | financeiro | `financeiro_contas_v1` | rows de `contas_pagar` (cap 8000 pra prevenir QuotaExceeded) |
 | cockpit | `cockpit_data_v1` | `{dre, proj, entradasCaixa, saldosBancarios}` (~1MB) |
 | estoque | `estoque_data_v1` | `{prods, est, vendaItens}` (3 datasets) |
@@ -187,8 +187,14 @@ Fonte única: tabela `contas_pagar` (só Fio e Trama).
 
 ## Dash Diretoria (`diretoria.html`)
 
-- Visão consolidada (todos os canais). Receita, top SKUs, anomalias.
-- Lê `vw_pedidos_full` em 1 chamada (refatorado 31/05/2026 junto da unificação física).
+- Visão executiva consolidada **agrupada por CANAL** (não por empresa/CNPJ — reescrito 01/06/2026). 4 grandes grupos → subgrupos.
+- Fonte: `mvw_diretoria_dia` (todas as origens). 1 fetch cobre [período anterior + atual]; split client-side por `data_pedido` pra calcular **Δ% vs período anterior equivalente** (mesma duração imediatamente antes de DE).
+- **Classificação canal-first** (`classificarGrupo(row)` — toda row cai em 1 grupo, Σ grupos == total):
+  - **Marketplaces**: `classificarCanal(canal_nome_raw)` ∈ {Mercado Livre, Shopee, Shein, TikTok Shop, Magalu}. Classificador por substring (`includes`) cobre as 15+ variantes históricas (`ML Fio e Trama`, `ML Confecções`, `Mercado Livre FIO`...). ⚠️ O `CANAL_MAP` exato-match antigo perdia ~R$13M de ML — não voltar pra ele.
+  - **E-commerce (Site)**: canal = Site Próprio/web (ou fallback `origem_conta='shopify'`).
+  - **Lojas Físicas**: `origem_conta='kwid'` via `loja_nome` normalizado (NÃO `canal_nome_raw`), exceto Atacado WhatsApp.
+  - **Atacado** (4º grupo, decisão 01/06/2026): `flecha` + KWID `loja_nome='Atacado WhatsApp'`.
+- Validar mudança no classificador: Σ dos 4 grupos deve bater com soma de todas as origens (`mvw_diretoria_dia`). 12m em 01/06: total R$46,3M = Mkt 60,5% + Lojas 29,8% + E-com 7,5% + Atacado 2,1%.
 
 ## Dash Simulador (`simulador.html`)
 

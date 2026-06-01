@@ -33,6 +33,7 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
 .section-title{font-size:14px;font-weight:700;color:var(--txt1);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--bdr);}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
 .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px;}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;}
 .card{background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;padding:20px;}
 .card-title{font-size:13px;font-weight:600;color:var(--txt1);margin-bottom:16px;}
 .chart-wrap{position:relative;height:240px;}
@@ -41,6 +42,10 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
 .origem-nome{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;}
 .origem-fat{font-size:1.3rem;font-weight:700;margin-bottom:4px;}
 .origem-info{font-size:11px;color:var(--txt2);}
+.delta{font-weight:600;}
+.delta-up{color:var(--green);}
+.delta-down{color:var(--red);}
+.delta-flat{color:var(--txt3);}
 /* Best practice: border-collapse:separate (collapse quebra sticky em Chrome/Safari).
    Nenhum ancestral cria scroll container, então sticky trava contra o viewport. */
 table.tb{width:100%;border-collapse:separate;border-spacing:0;font-size:12px;}
@@ -50,15 +55,18 @@ table.tb th.r{text-align:right;}
 table.tb td{padding:9px 12px;border-bottom:1px solid var(--bdr);color:var(--txt1);}
 table.tb td.r{text-align:right;color:var(--txt2);}
 table.tb td.val{text-align:right;font-weight:600;}
+table.tb tr.grupo-row td{background:rgba(255,255,255,0.03);font-weight:700;}
+table.tb tr.sub-row td:first-child{padding-left:30px;color:var(--txt2);}
 table.tb tr:last-child td{border-bottom:none;}
 table.tb tr:hover td{background:rgba(255,255,255,0.02);}
 .bar-row{margin-bottom:10px;}
-.bar-label{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;}
+.bar-label{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;gap:8px;}
+.bar-label .bl-val{color:var(--txt2);white-space:nowrap;}
 .bar-track{background:var(--bg3);border-radius:4px;height:6px;overflow:hidden;}
 .bar-fill{height:100%;border-radius:4px;transition:width 0.6s;}
 .spin{width:24px;height:24px;border:2px solid var(--bdr);border-top-color:var(--purple);border-radius:50%;animation:spin 0.7s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg)}}
-@media(max-width:768px){.kpi-grid{grid-template-columns:repeat(2,1fr);}.grid2,.grid3{grid-template-columns:1fr;}}
+@media(max-width:768px){.kpi-grid{grid-template-columns:repeat(2,1fr);}.grid2,.grid3,.grid4{grid-template-columns:1fr 1fr;}}
 
 .btn-back, .btn-logout-tb{
   background:transparent;border:1px solid var(--bdr);color:var(--txt2);
@@ -100,18 +108,18 @@ table.tb tr:hover td{background:rgba(255,255,255,0.02);}
 
   <div class="kpi-grid" id="kpis"><div class="kpi"><div class="kpi-label">Carregando</div><div class="kpi-value">—</div></div></div>
 
-  <div class="section-title" style="margin-bottom:14px;">Visão Consolidada do Grupo</div>
-  <div class="grid3" id="origem-cards"></div>
+  <div class="section-title" style="margin-bottom:14px;">Visão por Canal</div>
+  <div class="grid4" id="grupo-cards"></div>
 
   <div class="grid2">
-    <div class="card"><div class="card-title">Evolução mensal — Grupo</div><div class="chart-wrap"><canvas id="chart-mensal"></canvas></div></div>
-    <div class="card"><div class="card-title">Mix de receita por origem</div><div class="chart-wrap"><canvas id="chart-mix"></canvas></div></div>
+    <div class="card"><div class="card-title">Evolução mensal por canal</div><div class="chart-wrap"><canvas id="chart-mensal"></canvas></div></div>
+    <div class="card"><div class="card-title">Mix de faturamento por canal</div><div class="chart-wrap"><canvas id="chart-mix"></canvas></div></div>
   </div>
 
-  <div class="section-title" style="margin-bottom:14px;">E-commerce</div>
+  <div class="section-title" style="margin-bottom:14px;">Marketplaces</div>
   <div class="grid2">
-    <div class="card"><div class="card-title">Faturamento por canal</div><div id="canal-bars"></div></div>
-    <div class="card"><div class="card-title">Evolução diária — E-commerce</div><div class="chart-wrap"><canvas id="chart-ecom"></canvas></div></div>
+    <div class="card"><div class="card-title">Faturamento por marketplace</div><div id="mkt-bars"></div></div>
+    <div class="card"><div class="card-title">Evolução diária — Marketplaces</div><div class="chart-wrap"><canvas id="chart-mkt"></canvas></div></div>
   </div>
 
   <div class="section-title" style="margin-bottom:14px;">Lojas Físicas</div>
@@ -121,9 +129,9 @@ table.tb tr:hover td{background:rgba(255,255,255,0.02);}
   </div>
 
   <div class="card" style="margin-bottom:16px;">
-    <div class="card-title">Resumo consolidado por origem</div>
+    <div class="card-title">Resumo consolidado por canal</div>
     <table class="tb">
-      <thead><tr><th>Origem</th><th class="r">Pedidos</th><th class="r">Faturamento</th><th class="r">Ticket Médio</th><th class="r">Fat/Dia</th><th class="r">% Total</th></tr></thead>
+      <thead><tr><th>Canal</th><th class="r">Pedidos</th><th class="r">Faturamento</th><th class="r">Ticket Médio</th><th class="r">Fat/Dia</th><th class="r">% Total</th><th class="r">vs ant.</th></tr></thead>
       <tbody id="tabela-grupo"></tbody>
     </table>
   </div>
@@ -131,19 +139,64 @@ table.tb tr:hover td{background:rgba(255,255,255,0.02);}
 const SB_URL='https://spulbhnmkomvgohzhfvj.supabase.co';
 let AUTH_HEADERS = null; // populated after requireAuth
 
-const CANAL_MAP={'Mercado Livre Full FIO':'Mercado Livre','Mercado Livre FIO':'Mercado Livre','Mercado Livre Full Confec':'Mercado Livre','Mercado Livre Confeções':'Mercado Livre','Shopee FIO':'Shopee','Shopee':'Shopee','tiktok':'TikTok Shop','web':'Site Próprio','Site Próprio':'Site Próprio','Shein Confecções':'Shein'};
-const CANAL_CORES={'Mercado Livre':'#F59E0B','Shopee':'#EF4444','TikTok Shop':'#EC4899','Site Próprio':'#3B82F6','Shein':'#8B5CF6'};
-const LOJA_CORES={'Oriente':'#3B82F6','Marcolina':'#10B981','São Bernardo':'#F59E0B','Vautier':'#8B5CF6','Polo Plaza':'#EC4899','Atacado WhatsApp':'#06B6D4','Outras Receitas Lojas':'#EF4444'};
-const ORIGEM_CONFIG={'fio_e_trama':{nome:'Fio e Trama',cor:'#3B82F6'},'confeccoes':{nome:'Confecções',cor:'#10B981'},'shopify':{nome:'Shopify',cor:'#8B5CF6'},'kwid':{nome:'Lojas Físicas',cor:'#F59E0B'},'flecha':{nome:'Atacado',cor:'#06B6D4'}};
+// ── Classificação por CANAL (não por empresa/origem_conta) ──────────────────
+// Grandes grupos: Marketplaces, E-commerce (Site), Lojas Físicas, Atacado.
+// Subgrupos: marketplace individual, loja individual, etc.
+const GRUPO_ORDER=['Marketplaces','E-commerce','Lojas','Atacado'];
+const GRUPO_CORES={'Marketplaces':'#F59E0B','E-commerce':'#3B82F6','Lojas':'#10B981','Atacado':'#06B6D4'};
+const MKT_CORES={'Mercado Livre':'#F59E0B','Shopee':'#EF4444','TikTok Shop':'#EC4899','Shein':'#8B5CF6','Magalu':'#6366F1','Outros':'#6B7280'};
+const LOJA_CORES={'Oriente':'#3B82F6','Marcolina':'#10B981','São Bernardo':'#F59E0B','Vautier':'#8B5CF6','Polo Plaza':'#EC4899','Outras Receitas Lojas':'#EF4444'};
 
-function nomCanal(r){ return CANAL_MAP[r]||r||'Outros'; }
+// Normaliza canal_nome_raw (15+ variantes históricas) → marketplace/canal canônico.
+// Cobre nomes legados ("ML Fio e Trama","ML Confecções","Mercado Livre FIO"...) que o
+// CANAL_MAP antigo perdia, somindo ~R$13M de ML do dash.
+function classificarCanal(raw){
+  const c=(raw||'').toLowerCase().trim();
+  if(c.includes('mercado livre')||c.startsWith('ml ')||c==='ml') return 'Mercado Livre';
+  if(c.includes('shopee')) return 'Shopee';
+  if(c.includes('shein')) return 'Shein';
+  if(c.includes('tiktok')) return 'TikTok Shop';
+  if(c.includes('magalu')) return 'Magalu';
+  if(c.includes('site próprio')||c.includes('site proprio')||c==='web') return 'Site Próprio';
+  return null;
+}
+// Mapeia cada row da MV → {grupo, sub}. Toda row cai em algum grupo (Σ grupos == total).
+function classificarGrupo(r){
+  const oc=r.origem_conta;
+  if(oc==='kwid'){
+    if(r.loja_nome==='Atacado WhatsApp') return {grupo:'Atacado',sub:'Atacado WhatsApp (KWID)'};
+    return {grupo:'Lojas',sub:r.loja_nome||'(sem loja)'};
+  }
+  if(oc==='flecha') return {grupo:'Atacado',sub:'Flecha'};
+  // origens de ecommerce: fio_e_trama, confeccoes, shopify, tiktok_shop
+  const canal=classificarCanal(r.canal_nome_raw);
+  if(canal==='Site Próprio') return {grupo:'E-commerce',sub:'Site Próprio'};
+  if(canal) return {grupo:'Marketplaces',sub:canal};
+  // canal vazio/desconhecido → fallback por origem
+  if(oc==='shopify') return {grupo:'E-commerce',sub:'Site Próprio'};
+  if(oc==='tiktok_shop') return {grupo:'Marketplaces',sub:'TikTok Shop'};
+  return {grupo:'Marketplaces',sub:'Outros'};
+}
+function corSub(grupo,sub){
+  if(grupo==='Marketplaces') return MKT_CORES[sub]||'#6B7280';
+  if(grupo==='Lojas') return LOJA_CORES[sub]||'#6B7280';
+  return GRUPO_CORES[grupo]||'#6B7280';
+}
+
 async function api(p){ const r=await fetch(SB_URL+'/rest/v1/'+p,{headers:AUTH_HEADERS});return r.json(); }
 function fmt(n){ return 'R$ '+Math.round(n||0).toLocaleString('pt-BR'); }
 function fmtN(n){ return Math.round(n||0).toLocaleString('pt-BR'); }
 function fmtPct(n){ return (n||0).toFixed(1)+'%'; }
+// Δ% vs período anterior. null quando não há base de comparação (período anterior vazio).
+function delta(cur,prev){ if(prev===null||prev===undefined||prev===0) return null; return (cur-prev)/prev*100; }
+function deltaHtml(d){
+  if(d===null||!isFinite(d)) return '<span class="delta delta-flat">—</span>';
+  const up=d>=0; const arr=up?'▲':'▼'; const cls=up?'delta-up':'delta-down';
+  return `<span class="delta ${cls}">${arr} ${Math.abs(d).toFixed(1)}%</span>`;
+}
 
-// localStorage cache TTL 5min — só rows da MV (~50-200KB conforme janela).
-function cacheKey(de,ate){return 'diretoria_v1_'+de+'_'+ate;}
+// localStorage cache TTL 5min — rows da MV das DUAS janelas (atual + anterior).
+function cacheKey(de,ate){return 'diretoria_v2_'+de+'_'+ate;}
 function cacheGet(de,ate){
   try{
     const raw=localStorage.getItem(cacheKey(de,ate));
@@ -223,142 +276,167 @@ function aplicarFiltro(){
 }
 function destroyChart(id){ if(charts[id]){ charts[id].destroy(); delete charts[id]; } }
 
-async function carregar(){
-  if(!DE||!ATE) return;
-  // Cache local pinta dashboard IMEDIATO antes do fetch (TTL 5min)
-  const cached=cacheGet(DE,ATE);
-  if(cached){
-    try{ renderTudo(cached); document.getElementById('upd').textContent='Cache · atualizando…'; }
-    catch(e){console.warn('cache render:',e);}
-  }
-  // mvw_diretoria_dia substitui o fetch de vw_pedidos_full (antes 100k+ rows → 4k rows agregadas)
-  const mvRows = await api('mvw_diretoria_dia?select=*&data_pedido=gte.'+DE+'&data_pedido=lte.'+ATE+'&order=data_pedido.asc');
-  if(!mvRows || !Array.isArray(mvRows)){ document.getElementById('upd').textContent='Erro'; return; }
-  renderTudo(mvRows);
-  cacheSet(DE,ATE,mvRows);
+// Período anterior equivalente: mesma duração imediatamente antes de DE.
+function periodoAnterior(de,ate){
+  const d1=new Date(de+'T12:00:00'), d2=new Date(ate+'T12:00:00');
+  const dur=Math.round((d2-d1)/86400000)+1; // dias inclusivos
+  const pAte=new Date(d1.getTime()-86400000);
+  const pDe=new Date(pAte.getTime()-(dur-1)*86400000);
+  return [pDe.toISOString().split('T')[0], pAte.toISOString().split('T')[0]];
 }
 
-// Renderização completa a partir de rows da mvw_diretoria_dia.
-// Cada row é pré-agregada por (data_pedido, origem_conta, canal_nome_raw, loja_nome).
-function renderTudo(mvRows){
-  const diasP=Math.max(1,Math.round((new Date(ATE)-new Date(DE))/86400000));
-  const REC=r=>parseFloat(r.receita_bruta||0);
-  const PED=r=>(parseInt(r.pedidos||0)-parseInt(r.cancelados||0));
+async function carregar(){
+  if(!DE||!ATE) return;
+  const [pDE,pATE]=periodoAnterior(DE,ATE);
+  // Cache local pinta dashboard IMEDIATO antes do fetch (TTL 5min)
+  const cached=cacheGet(DE,ATE);
+  if(cached && cached.cur){
+    try{ renderTudo(cached.cur,cached.prev||[],pDE,pATE); document.getElementById('upd').textContent='Cache · atualizando…'; }
+    catch(e){console.warn('cache render:',e);}
+  }
+  // 1 fetch cobre [período anterior + atual]; split client-side por data_pedido.
+  // mvw_diretoria_dia já é pré-agregada por (data, origem, canal, loja) — ~4k rows/365d.
+  const allRows = await api('mvw_diretoria_dia?select=*&data_pedido=gte.'+pDE+'&data_pedido=lte.'+ATE+'&order=data_pedido.asc');
+  if(!allRows || !Array.isArray(allRows)){ document.getElementById('upd').textContent='Erro'; return; }
+  const cur=allRows.filter(r=>r.data_pedido>=DE);
+  const prev=allRows.filter(r=>r.data_pedido<DE);
+  renderTudo(cur,prev,pDE,pATE);
+  cacheSet(DE,ATE,{cur,prev});
+}
 
-  // Por origem
-  const porOrigem={};
-  mvRows.forEach(r=>{
-    const cfg=ORIGEM_CONFIG[r.origem_conta];
-    if(!cfg) return;
-    const nome=cfg.nome;
-    if(!porOrigem[nome]) porOrigem[nome]={nome,cor:cfg.cor,fat:0,ped:0};
-    porOrigem[nome].fat+=REC(r);
-    porOrigem[nome].ped+=PED(r);
+const REC=r=>parseFloat(r.receita_bruta||0);
+const PED=r=>(parseInt(r.pedidos||0)-parseInt(r.cancelados||0));
+
+// Agrega um conjunto de rows por grande grupo + subgrupo.
+function agrupar(rows){
+  const grupos={}, subBy={};
+  let totFat=0,totPed=0;
+  rows.forEach(r=>{
+    const {grupo,sub}=classificarGrupo(r);
+    const rec=REC(r), ped=PED(r);
+    totFat+=rec; totPed+=ped;
+    (grupos[grupo]=grupos[grupo]||{fat:0,ped:0}); grupos[grupo].fat+=rec; grupos[grupo].ped+=ped;
+    (subBy[grupo]=subBy[grupo]||{});
+    (subBy[grupo][sub]=subBy[grupo][sub]||{fat:0,ped:0}); subBy[grupo][sub].fat+=rec; subBy[grupo][sub].ped+=ped;
   });
-  const origens=Object.values(porOrigem).sort((a,b)=>b.fat-a.fat);
-  const fatTotal=origens.reduce((s,o)=>s+o.fat,0);
-  const pedTotal=origens.reduce((s,o)=>s+o.ped,0);
+  return {grupos,subBy,totFat,totPed};
+}
 
-  // KPIs
+// Renderização completa a partir de rows (período atual + anterior) da mvw_diretoria_dia.
+function renderTudo(cur,prev,pDE,pATE){
+  const diasP=Math.max(1,Math.round((new Date(ATE)-new Date(DE))/86400000)+1);
+  const A=agrupar(cur), P=agrupar(prev);
+  const fatTotal=A.totFat, pedTotal=A.totPed;
+  const temPrev=prev.length>0;
+
+  // ── KPIs (com Δ% vs período anterior) ──
+  const tmCur=pedTotal>0?fatTotal/pedTotal:0;
+  const tmPrev=P.totPed>0?P.totFat/P.totPed:0;
+  const fatDiaCur=fatTotal/diasP;
+  const diasPrev=Math.max(1,Math.round((new Date(pATE)-new Date(pDE))/86400000)+1);
+  const fatDiaPrev=P.totFat/diasPrev;
+  const subKPI=(d)=> temPrev?('vs ant. '+deltaHtml(d)):'no período';
   document.getElementById('kpis').innerHTML=`
-    <div class="kpi"><div class="kpi-label">Faturamento Grupo</div><div class="kpi-value">${fmt(fatTotal)}</div><div class="kpi-sub">todas as origens</div></div>
-    <div class="kpi kpi-blue"><div class="kpi-label">Total Pedidos</div><div class="kpi-value">${fmtN(pedTotal)}</div><div class="kpi-sub">no período</div></div>
-    <div class="kpi kpi-green"><div class="kpi-label">Ticket Médio</div><div class="kpi-value">${fmt(pedTotal>0?fatTotal/pedTotal:0)}</div><div class="kpi-sub">por pedido</div></div>
-    <div class="kpi kpi-amber"><div class="kpi-label">Fat/Dia</div><div class="kpi-value">${fmt(fatTotal/diasP)}</div><div class="kpi-sub">média diária</div></div>
-    <div class="kpi kpi-purple"><div class="kpi-label">Origens Ativas</div><div class="kpi-value">${origens.length}</div><div class="kpi-sub">canais e lojas</div></div>
+    <div class="kpi"><div class="kpi-label">Faturamento Total</div><div class="kpi-value">${fmt(fatTotal)}</div><div class="kpi-sub">${subKPI(delta(fatTotal,P.totFat))}</div></div>
+    <div class="kpi kpi-blue"><div class="kpi-label">Total Pedidos</div><div class="kpi-value">${fmtN(pedTotal)}</div><div class="kpi-sub">${subKPI(delta(pedTotal,P.totPed))}</div></div>
+    <div class="kpi kpi-green"><div class="kpi-label">Ticket Médio</div><div class="kpi-value">${fmt(tmCur)}</div><div class="kpi-sub">${subKPI(delta(tmCur,tmPrev))}</div></div>
+    <div class="kpi kpi-amber"><div class="kpi-label">Fat/Dia</div><div class="kpi-value">${fmt(fatDiaCur)}</div><div class="kpi-sub">${subKPI(delta(fatDiaCur,fatDiaPrev))}</div></div>
+    <div class="kpi kpi-purple"><div class="kpi-label">Canais Ativos</div><div class="kpi-value">${Object.keys(A.grupos).length}</div><div class="kpi-sub">grandes grupos</div></div>
   `;
 
-  // Cards por origem
-  document.getElementById('origem-cards').innerHTML=origens.map(o=>`
-    <div class="origem-card" style="border-left-color:${o.cor}">
-      <div class="origem-nome" style="color:${o.cor}">${o.nome}</div>
-      <div class="origem-fat" style="color:${o.cor}">${fmt(o.fat)}</div>
+  // ── Cards por grande grupo ──
+  const gruposOrd=GRUPO_ORDER.filter(g=>A.grupos[g]);
+  document.getElementById('grupo-cards').innerHTML=gruposOrd.map(g=>{
+    const o=A.grupos[g], cor=GRUPO_CORES[g];
+    const d=temPrev?delta(o.fat, P.grupos[g]?.fat ?? 0):null;
+    return `<div class="origem-card" style="border-left-color:${cor}">
+      <div class="origem-nome" style="color:${cor}">${g}</div>
+      <div class="origem-fat" style="color:${cor}">${fmt(o.fat)}</div>
       <div class="origem-info">${fmtN(o.ped)} pedidos &bull; TM ${fmt(o.ped>0?o.fat/o.ped:0)} &bull; ${fmtPct(fatTotal>0?o.fat/fatTotal*100:0)}</div>
-    </div>`).join('');
+      ${temPrev?`<div class="origem-info" style="margin-top:4px;">vs ant. ${deltaHtml(d)}</div>`:''}
+    </div>`;
+  }).join('');
 
-  // Tabela grupo
-  document.getElementById('tabela-grupo').innerHTML=origens.map(o=>`
-    <tr>
-      <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${o.cor};margin-right:8px;"></span>${o.nome}</td>
+  // ── Tabela consolidada: grande grupo (bold) → subgrupos ──
+  let tbody='';
+  gruposOrd.forEach(g=>{
+    const o=A.grupos[g];
+    const dG=temPrev?delta(o.fat,P.grupos[g]?.fat ?? 0):null;
+    tbody+=`<tr class="grupo-row">
+      <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${GRUPO_CORES[g]};margin-right:8px;"></span>${g}</td>
       <td class="val">${fmtN(o.ped)}</td><td class="val">${fmt(o.fat)}</td>
       <td class="val">${fmt(o.ped>0?o.fat/o.ped:0)}</td>
       <td class="r">${fmt(o.fat/diasP)}</td>
       <td class="r">${fmtPct(fatTotal>0?o.fat/fatTotal*100:0)}</td>
-    </tr>`).join('');
+      <td class="r">${temPrev?deltaHtml(dG):'—'}</td></tr>`;
+    const subs=Object.entries(A.subBy[g]||{}).sort((a,b)=>b[1].fat-a[1].fat);
+    subs.forEach(([sub,s])=>{
+      const dS=temPrev?delta(s.fat, P.subBy[g]?.[sub]?.fat ?? 0):null;
+      tbody+=`<tr class="sub-row">
+        <td>${sub}</td>
+        <td class="val">${fmtN(s.ped)}</td><td class="val">${fmt(s.fat)}</td>
+        <td class="val">${fmt(s.ped>0?s.fat/s.ped:0)}</td>
+        <td class="r">${fmt(s.fat/diasP)}</td>
+        <td class="r">${fmtPct(fatTotal>0?s.fat/fatTotal*100:0)}</td>
+        <td class="r">${temPrev?deltaHtml(dS):'—'}</td></tr>`;
+    });
+  });
+  document.getElementById('tabela-grupo').innerHTML=tbody;
 
-  // Chart mensal
-  const porMes={};
-  mvRows.forEach(r=>{
-    const m=r.data_pedido?.substring(0,7);
-    if(!m) return;
-    if(!porMes[m]) porMes[m]=0;
-    porMes[m]+=REC(r);
+  // ── Chart mensal empilhado por grande grupo ──
+  const porMes={}; // {mes:{grupo:fat}}
+  cur.forEach(r=>{
+    const m=r.data_pedido?.substring(0,7); if(!m) return;
+    const {grupo}=classificarGrupo(r);
+    (porMes[m]=porMes[m]||{}); porMes[m][grupo]=(porMes[m][grupo]||0)+REC(r);
   });
   const meses=Object.keys(porMes).sort().slice(-12);
   const labMes=meses.map(m=>{ const [y,mo]=m.split('-'); return mo+'/'+y.slice(2); });
   destroyChart('mensal');
   charts['mensal']=new Chart(document.getElementById('chart-mensal'),{
     type:'bar',
-    data:{labels:labMes,datasets:[{label:'Faturamento',data:meses.map(m=>porMes[m]||0),backgroundColor:'rgba(139,92,246,0.6)',borderColor:'#8b5cf6',borderWidth:1,borderRadius:4}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#71717a',font:{size:10}},grid:{display:false}},y:{ticks:{color:'#71717a',font:{size:10},callback:function(v){return 'R$'+Math.round(v/1000)+'k';}},grid:{color:'rgba(255,255,255,0.04)'}}}}});
+    data:{labels:labMes,datasets:gruposOrd.map(g=>({label:g,data:meses.map(m=>porMes[m]?.[g]||0),backgroundColor:GRUPO_CORES[g]+'CC',borderColor:GRUPO_CORES[g],borderWidth:1,borderRadius:3}))},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#a1a1aa',font:{size:10},padding:8,boxWidth:10}}},scales:{x:{stacked:true,ticks:{color:'#71717a',font:{size:10}},grid:{display:false}},y:{stacked:true,ticks:{color:'#71717a',font:{size:10},callback:function(v){return 'R$'+Math.round(v/1000)+'k';}},grid:{color:'rgba(255,255,255,0.04)'}}}}});
 
-  // Chart mix doughnut
+  // ── Mix doughnut por grande grupo ──
   destroyChart('mix');
   charts['mix']=new Chart(document.getElementById('chart-mix'),{
     type:'doughnut',
-    data:{labels:origens.map(o=>o.nome),datasets:[{data:origens.map(o=>o.fat),backgroundColor:origens.map(o=>o.cor+'CC'),borderColor:origens.map(o=>o.cor),borderWidth:2}]},
+    data:{labels:gruposOrd,datasets:[{data:gruposOrd.map(g=>A.grupos[g].fat),backgroundColor:gruposOrd.map(g=>GRUPO_CORES[g]+'CC'),borderColor:gruposOrd.map(g=>GRUPO_CORES[g]),borderWidth:2}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:'#a1a1aa',font:{size:11},padding:12}}}}
   });
 
-  // E-commerce por canal
-  const porCanal={};
-  mvRows.filter(r=>['fio_e_trama','confeccoes','shopify','tiktok_shop'].includes(r.origem_conta)).forEach(r=>{
-    const nome=nomCanal(r.canal_nome_raw);
-    const cor=CANAL_CORES[nome]||'#6B7280';
-    if(!porCanal[nome]) porCanal[nome]={nome,cor,fat:0,ped:0};
-    porCanal[nome].fat+=REC(r);
-    porCanal[nome].ped+=PED(r);
-  });
-  const canais=Object.values(porCanal).sort((a,b)=>b.fat-a.fat);
-  const maxCF=Math.max(...canais.map(c=>c.fat),1);
-  document.getElementById('canal-bars').innerHTML=canais.map(c=>`
-    <div class="bar-row"><div class="bar-label"><span style="color:var(--txt1);font-weight:500">${c.nome}</span><span style="color:var(--txt2)">${fmt(c.fat)}</span></div>
-    <div class="bar-track"><div class="bar-fill" style="width:${Math.round(c.fat/maxCF*100)}%;background:${c.cor}"></div></div></div>`).join('');
+  // ── Marketplaces: barras por subgrupo + Δ ──
+  const mkt=Object.entries(A.subBy['Marketplaces']||{}).sort((a,b)=>b[1].fat-a[1].fat);
+  const maxMkt=Math.max(...mkt.map(m=>m[1].fat),1);
+  document.getElementById('mkt-bars').innerHTML=mkt.length?mkt.map(([nome,m])=>{
+    const dS=temPrev?delta(m.fat, P.subBy['Marketplaces']?.[nome]?.fat ?? 0):null;
+    return `<div class="bar-row"><div class="bar-label"><span style="color:var(--txt1);font-weight:500">${nome}</span><span class="bl-val">${fmt(m.fat)} ${temPrev?deltaHtml(dS):''}</span></div>
+    <div class="bar-track"><div class="bar-fill" style="width:${Math.round(m.fat/maxMkt*100)}%;background:${corSub('Marketplaces',nome)}"></div></div></div>`;
+  }).join(''):'<div style="color:var(--txt3);font-size:12px;">Sem vendas no período</div>';
 
-  // E-commerce diário
-  const eDia={};
-  mvRows.filter(r=>['fio_e_trama','confeccoes','shopify','tiktok_shop'].includes(r.origem_conta)).forEach(r=>{
-    if(!eDia[r.data_pedido]) eDia[r.data_pedido]=0;
-    eDia[r.data_pedido]+=REC(r);
-  });
-  const eDl=Object.keys(eDia).sort();
-  destroyChart('ecom');
-  charts['ecom']=new Chart(document.getElementById('chart-ecom'),{
+  // Marketplaces diário
+  const mDia={};
+  cur.forEach(r=>{ if(classificarGrupo(r).grupo!=='Marketplaces') return; mDia[r.data_pedido]=(mDia[r.data_pedido]||0)+REC(r); });
+  const mDl=Object.keys(mDia).sort();
+  destroyChart('mkt');
+  charts['mkt']=new Chart(document.getElementById('chart-mkt'),{
     type:'line',
-    data:{labels:eDl.map(d=>new Date(d+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})),datasets:[{label:'E-com',data:eDl.map(d=>eDia[d]||0),borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,0.08)',fill:true,tension:0.4,pointRadius:2,borderWidth:2}]},
+    data:{labels:mDl.map(d=>new Date(d+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})),datasets:[{label:'Marketplaces',data:mDl.map(d=>mDia[d]||0),borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,0.08)',fill:true,tension:0.4,pointRadius:2,borderWidth:2}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#71717a',maxTicksLimit:8,font:{size:10}},grid:{color:'rgba(255,255,255,0.04)'}},y:{ticks:{color:'#71717a',font:{size:10},callback:function(v){return 'R$'+Math.round(v/1000)+'k';}},grid:{color:'rgba(255,255,255,0.04)'}}}}});
 
-  // Lojas por nome
-  const porLoja={};
-  mvRows.filter(r=>r.origem_conta==='kwid' && r.loja_nome && r.loja_nome!=='Atacado WhatsApp').forEach(r=>{
-    const l=r.loja_nome;
-    if(!porLoja[l]) porLoja[l]={nome:l,fat:0,ped:0};
-    porLoja[l].fat+=REC(r);
-    porLoja[l].ped+=PED(r);
-  });
-  const lojas=Object.values(porLoja).sort((a,b)=>b.fat-a.fat);
-  const maxLF=Math.max(...lojas.map(l=>l.fat),1);
-  const LOJA_C={'Oriente':'#3B82F6','Marcolina':'#10B981','São Bernardo':'#F59E0B','Vautier':'#8B5CF6','Polo Plaza':'#EC4899','Atacado WhatsApp':'#06B6D4','Outras Receitas Lojas':'#EF4444'};
-  const cL=n=>LOJA_C[n]||'#6B7280';
-  document.getElementById('loja-bars').innerHTML=lojas.map(l=>`
-    <div class="bar-row"><div class="bar-label"><span style="color:var(--txt1);font-weight:500">${l.nome}</span><span style="color:var(--txt2)">${fmt(l.fat)}</span></div>
-    <div class="bar-track"><div class="bar-fill" style="width:${Math.round(l.fat/maxLF*100)}%;background:${cL(l.nome)}"></div></div></div>`).join('');
+  // ── Lojas Físicas: barras por loja + Δ ──
+  const lojas=Object.entries(A.subBy['Lojas']||{}).sort((a,b)=>b[1].fat-a[1].fat);
+  const maxLF=Math.max(...lojas.map(l=>l[1].fat),1);
+  document.getElementById('loja-bars').innerHTML=lojas.length?lojas.map(([nome,l])=>{
+    const dS=temPrev?delta(l.fat, P.subBy['Lojas']?.[nome]?.fat ?? 0):null;
+    return `<div class="bar-row"><div class="bar-label"><span style="color:var(--txt1);font-weight:500">${nome}</span><span class="bl-val">${fmt(l.fat)} ${temPrev?deltaHtml(dS):''}</span></div>
+    <div class="bar-track"><div class="bar-fill" style="width:${Math.round(l.fat/maxLF*100)}%;background:${corSub('Lojas',nome)}"></div></div></div>`;
+  }).join(''):'<div style="color:var(--txt3);font-size:12px;">Sem vendas no período</div>';
 
+  // Lojas diário
   const lDia={};
-  mvRows.filter(r=>r.origem_conta==='kwid').forEach(r=>{
-    if(!lDia[r.data_pedido]) lDia[r.data_pedido]=0;
-    lDia[r.data_pedido]+=REC(r);
-  });
+  cur.forEach(r=>{ if(classificarGrupo(r).grupo!=='Lojas') return; lDia[r.data_pedido]=(lDia[r.data_pedido]||0)+REC(r); });
   const lDl=Object.keys(lDia).sort();
   destroyChart('lojas');
   charts['lojas']=new Chart(document.getElementById('chart-lojas'),{
