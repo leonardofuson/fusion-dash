@@ -319,36 +319,6 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
   <div class="topbar-div"></div>
   <span class="topbar-label">Lojas Físicas</span>
   <div class="topbar-actions"><span id="user-info-tb"></span><button id="btn-metas" class="btn-metas-toggle" onclick="abrirMetas()" style="display:none;" title="Cadastrar metas mensais por loja/vendedor (acesso restrito)">✏️ Cadastro Metas/Vendedores</button><a href="/index.html" class="btn-back">Menu</a><button class="btn-logout-tb" onclick="fusionAuth.signOut()">Sair</button></div>
-
-<!-- Drawer de Metas (carrega só quando o botão for clicado; visibilidade controlada por whitelist em auth.js DASHES_METAS_EDITORS) -->
-<div id="metas-overlay" class="metas-overlay" onclick="if(event.target===this)fecharMetas()">
-  <div class="metas-drawer">
-    <div class="metas-head">
-      <h2>✏️ Cadastro de Metas</h2>
-      <button class="btn-close" onclick="fecharMetas()" title="Fechar">✕</button>
-    </div>
-    <div class="metas-tabs">
-      <button class="metas-tab on" data-tab="lojas" onclick="setTabMetas('lojas')">🏬 Por Loja</button>
-      <button class="metas-tab" data-tab="vendedores" onclick="setTabMetas('vendedores')">👤 Por Vendedor</button>
-    </div>
-    <div class="metas-body">
-      <div class="metas-controls">
-        <label>Ano: <select id="metas-ano" onchange="popularGridMetas()"></select></label>
-        <span style="font-size:11px;color:var(--txt2);">Valores em R$ · células em laranja foram editadas · só salva o que mudou</span>
-      </div>
-      <div style="overflow-x:auto;max-height:65vh;">
-        <table class="metas-grid" id="metas-grid"></table>
-      </div>
-    </div>
-    <div class="metas-foot">
-      <div class="metas-status" id="metas-status">—</div>
-      <div class="metas-actions">
-        <button class="btn-meta-cancel" onclick="fecharMetas()">Cancelar</button>
-        <button class="btn-meta-save" id="btn-meta-save" onclick="salvarMetas()">Salvar</button>
-      </div>
-    </div>
-  </div>
-</div>
 </header>
 
 <div class="main">
@@ -2221,5 +2191,36 @@ async function salvarMetas(){
   carregar();
 })();
 </script>
+
+<!-- Drawer Metas (FORA do <header> — header tem backdrop-filter+isolation que
+     criam stacking context novo e quebram position:fixed do drawer descendant) -->
+<div id="metas-overlay" class="metas-overlay" onclick="if(event.target===this)fecharMetas()">
+  <div class="metas-drawer">
+    <div class="metas-head">
+      <h2>✏️ Cadastro de Metas</h2>
+      <button class="btn-close" onclick="fecharMetas()" title="Fechar">✕</button>
+    </div>
+    <div class="metas-tabs">
+      <button class="metas-tab on" data-tab="lojas" onclick="setTabMetas('lojas')">🏬 Por Loja</button>
+      <button class="metas-tab" data-tab="vendedores" onclick="setTabMetas('vendedores')">👤 Por Vendedor</button>
+    </div>
+    <div class="metas-body">
+      <div class="metas-controls">
+        <label>Ano: <select id="metas-ano" onchange="popularGridMetas()"></select></label>
+        <span style="font-size:11px;color:var(--txt2);">Valores em R$ · células em laranja foram editadas · só salva o que mudou</span>
+      </div>
+      <div style="overflow-x:auto;max-height:65vh;">
+        <table class="metas-grid" id="metas-grid"></table>
+      </div>
+    </div>
+    <div class="metas-foot">
+      <div class="metas-status" id="metas-status">—</div>
+      <div class="metas-actions">
+        <button class="btn-meta-cancel" onclick="fecharMetas()">Cancelar</button>
+        <button class="btn-meta-save" id="btn-meta-save" onclick="salvarMetas()">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
 </body>
 </html>
