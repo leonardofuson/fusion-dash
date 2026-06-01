@@ -195,6 +195,9 @@ Fonte única: tabela `contas_pagar` (só Fio e Trama).
   - **Lojas Físicas**: `origem_conta='kwid'` via `loja_nome` normalizado (NÃO `canal_nome_raw`), exceto Atacado WhatsApp.
   - **Atacado** (4º grupo, decisão 01/06/2026): `flecha` + KWID `loja_nome='Atacado WhatsApp'`.
 - Validar mudança no classificador: Σ dos 4 grupos deve bater com soma de todas as origens (`mvw_diretoria_dia`). 12m em 01/06: total R$46,3M = Mkt 60,5% + Lojas 29,8% + E-com 7,5% + Atacado 2,1%.
+- **Gráfico "Evolução mensal por canal" = SEMPRE últimos 12 meses** (independente do filtro); o resto (KPIs/cards/mix/barras/tabela) segue o período. Por isso o fetch cobre a união `[12m fixos + período anterior]` e fatia client-side (`cur`/`prev`/`mensalRows`).
+- **Mix (doughnut)** mostra % em cada fatia via `chartjs-plugin-datalabels` (registrado **per-chart** em `plugins:[ChartDataLabels]`, não global — senão poluiria barras/linhas); esconde fatias <3%.
+- ⚠️ **Fetch DEVE paginar** (`apiAll()`, não `api()`): a MV tem ~4.4k linhas em 12m e o PostgREST corta em 1000. Sem paginar, `order=data_pedido.asc` trazia só as 1000 mais antigas e o período atual zerava (regressão 01/06, corrigida no mesmo dia). Ordem de paginação = chave única da MV (`data_pedido,origem_conta,canal_nome_raw,loja_nome`) pra offset exato. Ver [[feedback-postgrest-pagination]].
 
 ## Dash Simulador (`simulador.html`)
 
