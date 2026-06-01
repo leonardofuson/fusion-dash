@@ -306,6 +306,8 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
 .btn-meta-cancel{background:transparent;border:1px solid var(--bdr);color:var(--txt2);padding:8px 14px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px;}
 .btn-add-vend{background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.55);color:#22c55e;padding:7px 14px;border-radius:8px;font-weight:700;cursor:pointer;font-family:inherit;font-size:12px;transition:all 0.15s;}
 .btn-add-vend:hover{background:rgba(34,197,94,0.28);color:#fff;}
+.btn-vend-del{background:rgba(239,68,68,0.15) !important;border:1px solid rgba(239,68,68,0.55) !important;color:#ef4444 !important;border-radius:6px !important;padding:4px 9px !important;font-size:13px !important;font-weight:700 !important;cursor:pointer !important;transition:all 0.15s;}
+.btn-vend-del:hover{background:#ef4444 !important;color:#fff !important;}
 .metas-grid select.meta-cell.dirty,.metas-grid input.meta-cell.dirty{border-color:var(--amber);background:rgba(245,158,11,0.10);}
 .metas-grid tr.linha-novo{background:rgba(34,197,94,0.06);}
 .metas-grid tr.linha-novo td:first-child::before{content:'NOVO · ';color:var(--green);font-size:9px;font-weight:700;}
@@ -2180,24 +2182,70 @@ function adicionarVendedor(){
     alert('Erro ao adicionar: '+err.message);
   }
 }
+// Quando o nome de um vendedor muda, as keys das metas mensais (data-key="nome|mes")
+// ficam DESALINHADAS. Esse helper re-aponta as data-keys + renomeia entradas em
+// METAS_STATE.dirty pra usar o nome atualizado. Sem isso, meta digitada num
+// vendedor novo grava com vendedor="" (nome vazio na hora do render inicial).
+function renomearKeysDeVendedor(tr, oldName, newName){
+  if(oldName===newName) return;
+  tr.querySelectorAll('input.meta-cell[data-key]').forEach(function(cell){
+    var parts=(cell.dataset.key||'').split('|');
+    if(parts[0]===oldName){
+      var mes=parts[1];
+      var oldKey=oldName+'|'+mes;
+      var newKey=newName+'|'+mes;
+      cell.dataset.key=newKey;
+      if(METAS_STATE.dirty[oldKey]!==undefined){
+        METAS_STATE.dirty[newKey]=METAS_STATE.dirty[oldKey];
+        delete METAS_STATE.dirty[oldKey];
+      }
+      if(METAS_STATE.original[oldKey]!==undefined){
+        METAS_STATE.original[newKey]=METAS_STATE.original[oldKey];
+        delete METAS_STATE.original[oldKey];
+      }
+    }
+  });
+  // Atualizar data-ent do total-ano da linha
+  var totalCell=tr.querySelector('.meta-total');
+  if(totalCell) totalCell.dataset.ent=newName;
+}
+
 function onVendNomeChange(inp){
-  var tempId=parseInt(inp.dataset.tempid);
-  var novo=METAS_STATE.vendNovos.find(function(v){return v.tempId===tempId;});
-  if(novo){ novo.vendedor=inp.value.trim(); atualizarStatusMetas(); }
+  try{
+    var tempId=parseInt(inp.dataset.tempid);
+    var novo=METAS_STATE.vendNovos.find(function(v){return v.tempId===tempId;});
+    if(!novo) return;
+    var oldName=novo.vendedor;
+    var newName=inp.value.trim();
+    novo.vendedor=newName;
+    var tr=inp.closest('tr');
+    if(tr) renomearKeysDeVendedor(tr, oldName, newName);
+    atualizarStatusMetas();
+  }catch(err){console.error('onVendNomeChange:',err); alert('Erro: '+err.message);}
 }
 function onVendNomeExistChange(inp){
   try{
     var id=parseInt(inp.dataset.vendid);
-    var v=inp.value.trim();
+    var newName=inp.value.trim();
+    var origData=METAS_STATE.vendData[id]||{};
+    var oldName=origData.vendedor||'';
+    // Diff vs original (snapshot do load)
     if(!METAS_STATE.vendDirty[id]) METAS_STATE.vendDirty[id]={};
-    if(v !== (METAS_STATE.vendData[id]||{}).vendedor){
-      METAS_STATE.vendDirty[id].vendedor=v;
+    if(newName !== oldName){
+      METAS_STATE.vendDirty[id].vendedor=newName;
       inp.classList.add('dirty');
     } else {
       delete METAS_STATE.vendDirty[id].vendedor;
       if(!Object.keys(METAS_STATE.vendDirty[id]).length) delete METAS_STATE.vendDirty[id];
       inp.classList.remove('dirty');
     }
+    // Pra preservar as metas mensais já digitadas com o nome antigo, re-aponta as data-keys
+    // pro nome atual. Diff é vs o que está na TELA (mais recente), não vs o original do load.
+    var tr=inp.closest('tr');
+    // Pega nome anterior (do data-key dos cells de meta) — pode não ser o oldName se já houve renames
+    var anyCell=tr?tr.querySelector('input.meta-cell[data-key]'):null;
+    var prevName=anyCell?(anyCell.dataset.key||'').split('|')[0]:oldName;
+    if(tr) renomearKeysDeVendedor(tr, prevName, newName);
     atualizarStatusMetas();
   }catch(err){console.error('onVendNomeExistChange:',err); alert('Erro: '+err.message);}
 }
@@ -2312,17 +2360,31 @@ async function salvarMetas(){
         throw new Error('Metas — HTTP '+r.status+': '+txt.substring(0,300));
       }
     }
-    // 2) Salvar vendedores editados (PATCH cada) — só loja_primaria e/ou ativo
+    // 2) Salvar vendedores editados (PATCH cada) — vendedor, loja_primaria e/ou ativo
     if(nVendEdit){
       for(var idStr in METAS_STATE.vendDirty){
         var id=parseInt(idStr);
-        var patch=METAS_STATE.vendDirty[idStr];
+        var patch=Object.assign({}, METAS_STATE.vendDirty[idStr]);
+        var origRec=METAS_STATE.vendData[id]||{};
+        var renomeou=patch.vendedor && patch.vendedor!==origRec.vendedor;
         patch.atualizado_em=new Date().toISOString();
         var rp=await fetch(SB_URL+'/rest/v1/kwid_vendedores?id=eq.'+id,
           {method:'PATCH',headers:Object.assign({},baseHeaders,{'Prefer':'return=minimal'}),body:JSON.stringify(patch)});
         if(!rp.ok){
           var tx=await rp.text();
           throw new Error('Vendedor id='+id+' — HTTP '+rp.status+': '+tx.substring(0,200));
+        }
+        // Se renomeou, migrar TODAS as metas antigas pra novo nome
+        // (metas_vendedores referencia por NOME, não por FK — manter consistência)
+        if(renomeou){
+          var oldName=origRec.vendedor;
+          var newName=patch.vendedor;
+          var rm=await fetch(SB_URL+'/rest/v1/metas_vendedores?vendedor=eq.'+encodeURIComponent(oldName),
+            {method:'PATCH',headers:Object.assign({},baseHeaders,{'Prefer':'return=minimal'}),
+             body:JSON.stringify({vendedor:newName, atualizado_em:new Date().toISOString()})});
+          if(!rm.ok){
+            console.warn('Migração de metas antigas falhou (vendedor "'+oldName+'" → "'+newName+'"): '+rm.status);
+          }
         }
       }
     }
