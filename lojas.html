@@ -2145,10 +2145,11 @@ function renderLinhaVendedor(vd, existing, isNovo){
     return '<option value="'+esc(l)+'"'+(l===loja?' selected':'')+'>'+(l||'—')+'</option>';
   }).join('');
   var html='<tr data-vend-id="'+idKey+'"'+(isNovo?' data-novo="1" class="linha-novo"':'')+'>';
+  // Nome editável tanto pros novos quanto pros existentes (UPDATE em kwid_vendedores)
   if(isNovo){
     html+='<td><input type="text" class="meta-cell" data-tempid="'+vd.tempId+'" style="width:160px;text-align:left;" value="'+esc(nome)+'" placeholder="Nome do vendedor" oninput="onVendNomeChange(this)"></td>';
   } else {
-    html+='<td>'+esc(nome)+'</td>';
+    html+='<td><input type="text" class="meta-cell vend-nome" data-vendid="'+idKey+'" style="width:160px;text-align:left;" value="'+esc(nome)+'" oninput="onVendNomeExistChange(this)"></td>';
   }
   html+='<td><select class="meta-cell" data-vendid="'+idKey+'" data-novo="'+(isNovo?'1':'0')+'" style="width:130px;text-align:left;" onchange="onVendLojaChange(this)">'+opt+'</select></td>';
   for(var m=1;m<=12;m++){
@@ -2183,6 +2184,22 @@ function onVendNomeChange(inp){
   var tempId=parseInt(inp.dataset.tempid);
   var novo=METAS_STATE.vendNovos.find(function(v){return v.tempId===tempId;});
   if(novo){ novo.vendedor=inp.value.trim(); atualizarStatusMetas(); }
+}
+function onVendNomeExistChange(inp){
+  try{
+    var id=parseInt(inp.dataset.vendid);
+    var v=inp.value.trim();
+    if(!METAS_STATE.vendDirty[id]) METAS_STATE.vendDirty[id]={};
+    if(v !== (METAS_STATE.vendData[id]||{}).vendedor){
+      METAS_STATE.vendDirty[id].vendedor=v;
+      inp.classList.add('dirty');
+    } else {
+      delete METAS_STATE.vendDirty[id].vendedor;
+      if(!Object.keys(METAS_STATE.vendDirty[id]).length) delete METAS_STATE.vendDirty[id];
+      inp.classList.remove('dirty');
+    }
+    atualizarStatusMetas();
+  }catch(err){console.error('onVendNomeExistChange:',err); alert('Erro: '+err.message);}
 }
 function onVendLojaChange(sel){
   try{
