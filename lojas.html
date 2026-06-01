@@ -471,6 +471,30 @@ async function fetchAgregadoMV(de,ate){
   // MV não tem coluna `id` — passar order explícito pra evitar fallback &order=id.asc do buscarTudo.
   return buscarTudo('mvw_lojas_dia','select=*&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc');
 }
+async function fetchTopProdutosMV(de,ate){
+  return buscarTudo('mvw_lojas_sku_dia','select=loja_nome,sku_pai,nome,categoria,quantidade,receita&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc');
+}
+async function fetchVendedoresMV(de,ate){
+  return buscarTudo('mvw_lojas_vend_dia','select=*&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc');
+}
+
+// localStorage cache (TTL 5min) — só pra rows agregados das MVs (~200KB cabe folgado).
+// Pedidos detalhados continuam vindo do servidor pra evitar quota stress.
+function cacheKey(de,ate){return 'lojas_v2_'+de+'_'+ate;}
+function cacheGet(de,ate){
+  try{
+    var raw=localStorage.getItem(cacheKey(de,ate));
+    if(!raw) return null;
+    var obj=JSON.parse(raw);
+    if(Date.now()-obj.ts > 5*60*1000) return null; // 5min TTL
+    return obj.data;
+  }catch(e){return null;}
+}
+function cacheSet(de,ate,data){
+  try{ localStorage.setItem(cacheKey(de,ate),JSON.stringify({ts:Date.now(),data:data})); }
+  catch(e){/* quota stress — silent */}
+}
+
 function calcKPIsFromMV(rows){
   if(!rows||!rows.length) return {fat:0,ped:0,tm:0,porLoja:{}};
   var fat=0,ped=0,porLoja={};
@@ -585,6 +609,39 @@ function filtrarPedidos(lista){
   return ativos;
 }
 
+// Constrói STATE.skuGroups a partir de mvw_lojas_sku_dia (rows agregados
+// por data×loja×sku_pai). Preserva porLoja; porTam só vem com itens
+// detalhados (drilldown de tamanho). Permite renderPareto/renderSkuList
+// rodarem antes do fetch full de itens.
+function agruparSkusFromMV(rows){
+  var map={};
+  rows.forEach(function(r){
+    var loja=r.loja_nome;
+    if(!loja || IGNORAR_LOJA.indexOf(loja)>=0) return;
+    if(STATE.lojasSel && Object.keys(STATE.lojasSel).length>0 && !STATE.lojasSel[loja]) return;
+    if(STATE.catSel && r.categoria!==STATE.catSel) return;
+    var k=r.sku_pai;
+    if(!map[k]) map[k]={sku_pai:k,nome:r.nome||k,cat:r.categoria||'OUTROS',receita:0,qtd:0,porLoja:{},porTam:{}};
+    var rec=parseFloat(r.receita||0), qtd=parseFloat(r.quantidade||0);
+    map[k].receita+=rec; map[k].qtd+=qtd;
+    if(!map[k].porLoja[loja]) map[k].porLoja[loja]={receita:0,qtd:0,pedidos:{}};
+    map[k].porLoja[loja].receita+=rec;
+    map[k].porLoja[loja].qtd+=qtd;
+  });
+  return Object.values(map).sort(function(a,b){return b.receita-a.receita;});
+}
+function renderTopProdutosImediato(skuRows){
+  if(!skuRows||!skuRows.length) return;
+  STATE.skuGroups=agruparSkusFromMV(skuRows);
+  try{ renderPareto(); }catch(e){console.warn('renderPareto imediato:',e);}
+  try{ renderCatChips(); }catch(e){}
+}
+
+// Defer renders pesados (Geo, DOW heatmap) pra não bloquear first paint.
+// Idle callback espera CPU vagar — fallback pra setTimeout(0) em browsers
+// que não suportam (Safari < 16.4).
+var idle = window.requestIdleCallback || function(fn){return setTimeout(fn,0);};
+
 // Render IMEDIATO via MV (progressive load 01/06/2026) — sub-set dos KPIs
 // que dão pra calcular sem itens detalhados. PA, sparklines, loja líder por
 // SKU etc só vêm depois quando renderKPIs() completo sobrescreve.
@@ -609,24 +666,47 @@ function renderKPIsImediato(cur,prev){
 
 async function carregar(){
   if(!DE||!ATE) return;
-  document.getElementById('kpis').innerHTML='<div class="kpi hero"><div class="kpi-lbl">Carregando...</div><div class="spin"></div></div>';
+
+  // 1) CACHE LOCAL — se hit válido (<5min), pinta tudo IMEDIATO antes do fetch.
+  var cached=cacheGet(DE,ATE);
+  if(cached){
+    try{
+      if(cached.mv){
+        STATE.mvRows=cached.mv;
+        var c=calcKPIsFromMV(cached.mv);
+        var p=cached.mvPrev?calcKPIsFromMV(cached.mvPrev):{fat:0,ped:0,tm:0,porLoja:{}};
+        renderKPIsImediato(c,p);
+      }
+      if(cached.sku) renderTopProdutosImediato(cached.sku);
+      document.getElementById('upd').textContent='Cache · atualizando…';
+    }catch(e){console.warn('cache render:',e);}
+  } else {
+    document.getElementById('kpis').innerHTML='<div class="kpi hero"><div class="kpi-lbl">Carregando...</div><div class="spin"></div></div>';
+  }
 
   try {
     var usarComp=document.getElementById('chk-compare').checked;
     var ant=periodoAnterior(DE,ATE);
 
-    // Progressive load: MV agregada PRIMEIRO (~200ms), renderiza KPIs imediato
-    fetchAgregadoMV(DE,ATE).then(function(mv){
+    // 2) Progressive load: MV agregada PRIMEIRO (~200ms), renderiza KPIs imediato
+    var pMV=fetchAgregadoMV(DE,ATE).then(function(mv){
       STATE.mvRows=mv;
       try{
         var cur=calcKPIsFromMV(mv);
         var prev=STATE.mvRowsPrev?calcKPIsFromMV(STATE.mvRowsPrev):{fat:0,ped:0,tm:0,porLoja:{}};
         if(!STATE.pedidosRaw) renderKPIsImediato(cur,prev);
       }catch(e){console.warn('MV render:',e);}
-    }).catch(function(e){console.warn('MV falhou (vai cair em pedidos detalhados):',e);});
+      return mv;
+    }).catch(function(e){console.warn('MV falhou (vai cair em pedidos detalhados):',e);return null;});
     if(usarComp){
       fetchAgregadoMV(ant.de,ant.ate).then(function(r){STATE.mvRowsPrev=r;}).catch(function(){});
     }
+    // Top Produtos via MV (Pareto + lista SKU imediatos)
+    var pSku=fetchTopProdutosMV(DE,ATE).then(function(rows){
+      STATE.mvSku=rows;
+      if(!STATE.itens||!STATE.itens.length) renderTopProdutosImediato(rows);
+      return rows;
+    }).catch(function(e){console.warn('MV sku:',e);return null;});
 
     var fetches=[fetchPedidos(DE,ATE)];
     if(usarComp) fetches.push(fetchPedidos(ant.de,ant.ate));
@@ -708,6 +788,13 @@ async function carregar(){
     renderAll();
     var freshTxt=STATE.freshness?'Dados até '+new Date(STATE.freshness+'T12:00:00').toLocaleDateString('pt-BR'):'';
     document.getElementById('upd').textContent=freshTxt+' · Atualizado '+new Date().toLocaleTimeString('pt-BR');
+
+    // Salva cache pra reload rápido na próxima visita (TTL 5min)
+    try{
+      var mvNow=await pMV;
+      var skuNow=await pSku;
+      cacheSet(DE,ATE,{mv:mvNow,mvPrev:STATE.mvRowsPrev||null,sku:skuNow});
+    }catch(e){/* cache best-effort */}
   } catch(err) {
     console.error(err);
     document.getElementById('kpis').innerHTML='<div class="kpi hero"><div class="kpi-lbl">Erro</div><div class="kpi-val d-dn">!</div><div class="kpi-sub">'+err.message+'</div></div>';
@@ -737,16 +824,24 @@ function renderAll(){
   STATE.anteriores=filtrarPedidos(STATE.anterioresRaw);
   STATE.pedidosEscopo=STATE.vendSel?STATE.pedidos.filter(function(p){return p._vend===STATE.vendSel;}):STATE.pedidos;
   STATE.anterioresEscopo=STATE.vendSel?STATE.anteriores.filter(function(p){return p._vend===STATE.vendSel;}):STATE.anteriores;
+
+  // Critical render path — visualmente prioritário
   renderKPIs();
   renderHighlights();
-  renderHero();
-  renderLojaCards();
-  renderPareto();
   renderCatChips();
   renderSkuList();
   renderVendedores();
-  if(STATE.skuSel) renderSkuDetail();
   syncToURL();
+
+  // Charts pesados — deferidos pro browser respirar (Chart.js bottleneck).
+  // Em janelas grandes (12 meses), esses renders somam ~500-800ms; mover
+  // pro idle deixa as KPIs e a tabela aparecerem antes.
+  idle(function(){
+    try{renderHero();}catch(e){console.error('renderHero:',e);}
+    try{renderLojaCards();}catch(e){console.error('renderLojaCards:',e);}
+    try{renderPareto();}catch(e){console.error('renderPareto:',e);}
+    if(STATE.skuSel){try{renderSkuDetail();}catch(e){console.error('renderSkuDetail:',e);}}
+  });
 }
 
 // ---- KPIs ----
