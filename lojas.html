@@ -2027,7 +2027,10 @@ function renderVendedores(){
 // AO MESMO TEMPO: (a) UI (visibilidade do botão), (b) RLS de write (policies
 // que consultam app_config). Pra adicionar/remover: UPDATE app_config SET value=ARRAY[...] WHERE key='metas_editors_emails'.
 var METAS_EDITORS=[]; // populado dinamicamente no init
-var METAS_STATE={tab:'lojas', ano:null, lojas:[], vendedores:[], original:{}, dirty:{}};
+// vendData[id] = {id, vendedor, loja_primaria, ativo} (snapshot original);
+// vendDirty[id] = {loja_primaria?, ativo?} (mudanças no kwid_vendedores);
+// vendNovos = [{tempId, vendedor, loja_primaria}] (insert pendentes — id real só após save)
+var METAS_STATE={tab:'lojas', ano:null, lojas:[], vendedores:[], vendData:{}, vendDirty:{}, vendNovos:[], original:{}, dirty:{}};
 var MES_NOMES=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
 function podeEditarMetas(email){return METAS_EDITORS.indexOf((email||'').toLowerCase())>=0;}
@@ -2051,10 +2054,12 @@ async function abrirMetas(){
     return '<option value="'+a+'"'+(a===anoAtual?' selected':'')+'>'+a+'</option>';}).join('');
   // Lojas (canônicas — mesma whitelist do dash, sem Atacado WhatsApp)
   METAS_STATE.lojas=['Marcolina','Oriente','Polo Plaza','Vautier','São Bernardo'];
-  // Vendedores: pega da kwid_vendedores ativos
+  // Vendedores: id, nome, loja_primaria, ativo — pra CRUD na aba "Por Vendedor"
+  METAS_STATE.vendData={}; METAS_STATE.vendDirty={}; METAS_STATE.vendNovos=[];
   try{
-    var vRows=await buscarTudo('kwid_vendedores','select=vendedor&ativo=eq.true&order=vendedor.asc');
+    var vRows=await buscarTudo('kwid_vendedores','select=id,vendedor,loja_primaria,ativo&ativo=eq.true&order=vendedor.asc');
     METAS_STATE.vendedores=vRows.map(function(r){return r.vendedor;}).filter(Boolean);
+    vRows.forEach(function(r){METAS_STATE.vendData[r.id]={id:r.id,vendedor:r.vendedor,loja_primaria:r.loja_primaria,ativo:r.ativo};});
   }catch(e){console.warn('vendedores:',e); METAS_STATE.vendedores=[];}
   document.getElementById('metas-overlay').classList.add('on');
   await popularGridMetas();
@@ -2073,9 +2078,10 @@ function setTabMetas(tab){
 async function popularGridMetas(){
   var ano=parseInt(document.getElementById('metas-ano').value);
   METAS_STATE.ano=ano;
-  var tabela=METAS_STATE.tab==='lojas'?'metas_lojas':'metas_vendedores';
-  var coluna=METAS_STATE.tab==='lojas'?'loja_nome':'vendedor';
-  var entidades=METAS_STATE.tab==='lojas'?METAS_STATE.lojas:METAS_STATE.vendedores;
+  var ehVendedor=METAS_STATE.tab==='vendedores';
+  var tabela=ehVendedor?'metas_vendedores':'metas_lojas';
+  var coluna=ehVendedor?'vendedor':'loja_nome';
+  var entidades=ehVendedor?METAS_STATE.vendedores:METAS_STATE.lojas;
   // Fetch metas existentes
   var existing={};
   try{
@@ -2086,21 +2092,129 @@ async function popularGridMetas(){
   Object.assign(METAS_STATE.original, existing);
   METAS_STATE.dirty={};
   // Render grid
-  var html='<thead><tr><th style="min-width:180px;">'+(METAS_STATE.tab==='lojas'?'Loja':'Vendedor')+'</th>';
+  var html='<thead><tr>';
+  html+='<th style="min-width:160px;">'+(ehVendedor?'Vendedor':'Loja')+'</th>';
+  if(ehVendedor) html+='<th style="min-width:140px;">Loja</th>';
   for(var m=1;m<=12;m++) html+='<th>'+MES_NOMES[m-1]+'</th>';
-  html+='<th>Total ano</th></tr></thead><tbody>';
-  entidades.forEach(function(ent){
-    html+='<tr><td>'+ent+'</td>';
-    for(var m=1;m<=12;m++){
-      var k=ent+'|'+m;
-      var v=existing[k]||0;
-      html+='<td><input type="number" step="100" class="meta-cell" data-key="'+k+'" value="'+(v||'')+'" placeholder="0" oninput="onMetaCellChange(this)"></td>';
-    }
-    html+='<td class="meta-total" data-ent="'+ent+'" style="text-align:right;color:var(--txt2);font-variant-numeric:tabular-nums;">'+fmt(somaLinhaMetas(ent,existing))+'</td>';
-    html+='</tr>';
-  });
+  html+='<th>Total ano</th>';
+  if(ehVendedor) html+='<th style="width:32px;"></th>'; // delete
+  html+='</tr></thead><tbody id="metas-tbody">';
+  // Vendedores: incluir tanto os existentes (vendData) quanto os novos (vendNovos)
+  // Pra lojas: lista fixa.
+  if(ehVendedor){
+    Object.values(METAS_STATE.vendData).forEach(function(vd){
+      html+=renderLinhaVendedor(vd, existing);
+    });
+    METAS_STATE.vendNovos.forEach(function(vn){
+      html+=renderLinhaVendedor(vn, existing, true);
+    });
+  } else {
+    entidades.forEach(function(ent){
+      html+=renderLinhaLoja(ent, existing);
+    });
+  }
   html+='</tbody>';
   document.getElementById('metas-grid').innerHTML=html;
+  // Botão "Adicionar vendedor" — só na aba vendedores
+  var foot=document.getElementById('metas-status');
+  if(foot){
+    if(ehVendedor){
+      foot.innerHTML='<button class="btn-meta-cancel" onclick="adicionarVendedor()" style="font-size:12px;">+ Adicionar vendedor</button> <span id="metas-status-text">—</span>';
+    } else {
+      foot.innerHTML='<span id="metas-status-text">—</span>';
+    }
+  }
+  atualizarStatusMetas();
+}
+
+function renderLinhaLoja(ent, existing){
+  var html='<tr><td>'+ent+'</td>';
+  for(var m=1;m<=12;m++){
+    var k=ent+'|'+m;
+    var v=existing[k]||0;
+    html+='<td><input type="number" step="100" class="meta-cell" data-key="'+k+'" value="'+(v||'')+'" placeholder="0" oninput="onMetaCellChange(this)"></td>';
+  }
+  html+='<td class="meta-total" data-ent="'+esc(ent)+'" style="text-align:right;color:var(--txt2);font-variant-numeric:tabular-nums;">'+fmt(somaLinhaMetas(ent,existing))+'</td>';
+  return html+'</tr>';
+}
+function renderLinhaVendedor(vd, existing, isNovo){
+  var nome=vd.vendedor;
+  var idKey=isNovo?('novo_'+vd.tempId):vd.id;
+  var loja=vd.loja_primaria||'';
+  var opt=['','Marcolina','Oriente','Polo Plaza','Vautier','São Bernardo'].map(function(l){
+    return '<option value="'+esc(l)+'"'+(l===loja?' selected':'')+'>'+(l||'—')+'</option>';
+  }).join('');
+  var html='<tr data-vend-id="'+idKey+'"'+(isNovo?' data-novo="1"':'')+'>';
+  if(isNovo){
+    html+='<td><input type="text" class="meta-cell" data-tempid="'+vd.tempId+'" style="width:160px;text-align:left;" value="'+esc(nome)+'" placeholder="Nome do vendedor" oninput="onVendNomeChange(this)"></td>';
+  } else {
+    html+='<td>'+esc(nome)+'</td>';
+  }
+  html+='<td><select class="meta-cell" data-vendid="'+idKey+'" data-novo="'+(isNovo?'1':'0')+'" style="width:130px;text-align:left;" onchange="onVendLojaChange(this)">'+opt+'</select></td>';
+  for(var m=1;m<=12;m++){
+    var k=nome+'|'+m;
+    var v=existing[k]||0;
+    html+='<td><input type="number" step="100" class="meta-cell" data-key="'+k+'" value="'+(v||'')+'" placeholder="0" oninput="onMetaCellChange(this)"></td>';
+  }
+  html+='<td class="meta-total" data-ent="'+esc(nome)+'" style="text-align:right;color:var(--txt2);font-variant-numeric:tabular-nums;">'+fmt(somaLinhaMetas(nome,existing))+'</td>';
+  html+='<td style="text-align:center;"><button class="btn-vend-del" data-vendid="'+idKey+'" data-novo="'+(isNovo?'1':'0')+'" onclick="removerVendedor(this)" title="Desativar (soft delete)" style="background:transparent;border:0;color:var(--red);cursor:pointer;font-size:14px;padding:4px 8px;">✕</button></td>';
+  return html+'</tr>';
+}
+function esc(s){return String(s||'').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function adicionarVendedor(){
+  var tempId=Date.now()+Math.floor(Math.random()*1000);
+  METAS_STATE.vendNovos.push({tempId:tempId, vendedor:'', loja_primaria:''});
+  popularGridMetas(); // re-render
+  // focar no input do nome do recém-adicionado
+  setTimeout(function(){
+    var inp=document.querySelector('input[data-tempid="'+tempId+'"]');
+    if(inp) inp.focus();
+  },50);
+}
+function onVendNomeChange(inp){
+  var tempId=parseInt(inp.dataset.tempid);
+  var novo=METAS_STATE.vendNovos.find(function(v){return v.tempId===tempId;});
+  if(novo){ novo.vendedor=inp.value.trim(); atualizarStatusMetas(); }
+}
+function onVendLojaChange(sel){
+  var vendid=sel.dataset.vendid;
+  var isNovo=sel.dataset.novo==='1';
+  var v=sel.value;
+  if(isNovo){
+    var tempId=parseInt(vendid.replace('novo_',''));
+    var novo=METAS_STATE.vendNovos.find(function(x){return x.tempId===tempId;});
+    if(novo) novo.loja_primaria=v;
+  } else {
+    var id=parseInt(vendid);
+    if(!METAS_STATE.vendDirty[id]) METAS_STATE.vendDirty[id]={};
+    if(v !== METAS_STATE.vendData[id].loja_primaria){
+      METAS_STATE.vendDirty[id].loja_primaria=v;
+      sel.style.borderColor='var(--amber)';
+    } else {
+      delete METAS_STATE.vendDirty[id].loja_primaria;
+      if(!Object.keys(METAS_STATE.vendDirty[id]).length) delete METAS_STATE.vendDirty[id];
+      sel.style.borderColor='';
+    }
+  }
+  atualizarStatusMetas();
+}
+function removerVendedor(btn){
+  var vendid=btn.dataset.vendid;
+  var isNovo=btn.dataset.novo==='1';
+  if(isNovo){
+    var tempId=parseInt(vendid.replace('novo_',''));
+    METAS_STATE.vendNovos=METAS_STATE.vendNovos.filter(function(v){return v.tempId!==tempId;});
+  } else {
+    var id=parseInt(vendid);
+    var nome=METAS_STATE.vendData[id].vendedor;
+    if(!confirm('Desativar "'+nome+'"? Soft delete — vendedor some da lista mas histórico preservado.')) return;
+    if(!METAS_STATE.vendDirty[id]) METAS_STATE.vendDirty[id]={};
+    METAS_STATE.vendDirty[id].ativo=false;
+  }
+  // Visual: marca linha como riscada
+  var tr=btn.closest('tr');
+  if(tr) tr.style.opacity='0.4', tr.style.textDecoration='line-through';
   atualizarStatusMetas();
 }
 function somaLinhaMetas(ent, source){
@@ -2120,46 +2234,92 @@ function onMetaCellChange(inp){
   atualizarStatusMetas();
 }
 function atualizarStatusMetas(){
-  var n=Object.keys(METAS_STATE.dirty).length;
-  var st=document.getElementById('metas-status');
-  st.textContent=n===0?'Sem alterações':(n+' célula(s) modificada(s)');
-  document.getElementById('btn-meta-save').disabled=(n===0);
+  var nMetas=Object.keys(METAS_STATE.dirty).length;
+  var nVendEdit=Object.keys(METAS_STATE.vendDirty).length;
+  var nVendNovo=METAS_STATE.vendNovos.filter(function(v){return v.vendedor && v.loja_primaria;}).length;
+  var total=nMetas+nVendEdit+nVendNovo;
+  var st=document.getElementById('metas-status-text');
+  if(!st) st=document.getElementById('metas-status');
+  var parts=[];
+  if(nMetas) parts.push(nMetas+' meta(s)');
+  if(nVendEdit) parts.push(nVendEdit+' vend edit/del');
+  if(nVendNovo) parts.push(nVendNovo+' vend novo(s)');
+  st.textContent=total===0?'Sem alterações':parts.join(' · ');
+  document.getElementById('btn-meta-save').disabled=(total===0);
 }
 async function salvarMetas(){
-  var dirty=METAS_STATE.dirty;
-  var keys=Object.keys(dirty);
-  if(!keys.length){alert('Nada a salvar.');return;}
+  var nMetas=Object.keys(METAS_STATE.dirty).length;
+  var nVendEdit=Object.keys(METAS_STATE.vendDirty).length;
+  var vendNovosValidos=METAS_STATE.vendNovos.filter(function(v){return v.vendedor && v.loja_primaria;});
+  if(!nMetas && !nVendEdit && !vendNovosValidos.length){alert('Nada a salvar.');return;}
   var btn=document.getElementById('btn-meta-save');
   btn.disabled=true; btn.textContent='Salvando…';
-  var tabela=METAS_STATE.tab==='lojas'?'metas_lojas':'metas_vendedores';
-  var coluna=METAS_STATE.tab==='lojas'?'loja_nome':'vendedor';
-  var ano=METAS_STATE.ano;
-  var payload=keys.map(function(k){
-    var [ent,mes]=k.split('|');
-    var row={ano:ano,mes:parseInt(mes),meta_receita:parseFloat(dirty[k]||0)};
-    row[coluna]=ent;
-    if(tabela==='metas_vendedores') row.atualizado_em=new Date().toISOString();
-    return row;
-  });
   try{
-    // Token fresh (JWT expira em ~1h — padrão de compras.html)
     var sess=await fusionAuth.getSession();
-    var headers={apikey:fusionAuth.SUPABASE_ANON_KEY,Authorization:'Bearer '+sess.access_token,
-                 'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'};
-    var url=SB_URL+'/rest/v1/'+tabela+'?on_conflict='+coluna+',ano,mes';
-    var r=await fetch(url,{method:'POST',headers:headers,body:JSON.stringify(payload)});
-    if(!r.ok){
-      var txt=await r.text();
-      if(r.status===401||r.status===403) throw new Error('Sem permissão pra editar metas (RLS bloqueou).');
-      throw new Error('HTTP '+r.status+': '+txt.substring(0,200));
+    var baseHeaders={apikey:fusionAuth.SUPABASE_ANON_KEY,Authorization:'Bearer '+sess.access_token,
+                     'Content-Type':'application/json'};
+    var ano=METAS_STATE.ano;
+    var ehVendedor=METAS_STATE.tab==='vendedores';
+    // 1) Salvar metas (upsert) — só se tem dirty
+    if(nMetas){
+      var tabela=ehVendedor?'metas_vendedores':'metas_lojas';
+      var coluna=ehVendedor?'vendedor':'loja_nome';
+      var payload=Object.keys(METAS_STATE.dirty).map(function(k){
+        var p=k.split('|'); var ent=p[0]; var mes=p[1];
+        var row={ano:ano,mes:parseInt(mes),meta_receita:parseFloat(METAS_STATE.dirty[k]||0)};
+        row[coluna]=ent;
+        if(tabela==='metas_vendedores') row.atualizado_em=new Date().toISOString();
+        return row;
+      });
+      var url=SB_URL+'/rest/v1/'+tabela+'?on_conflict='+coluna+',ano,mes';
+      var h=Object.assign({}, baseHeaders, {'Prefer':'resolution=merge-duplicates,return=representation'});
+      var r=await fetch(url,{method:'POST',headers:h,body:JSON.stringify(payload)});
+      if(!r.ok){
+        var txt=await r.text();
+        throw new Error('Metas — HTTP '+r.status+': '+txt.substring(0,300));
+      }
     }
-    alert('✅ '+payload.length+' meta(s) salva(s).');
-    METAS_STATE.dirty={};
+    // 2) Salvar vendedores editados (PATCH cada) — só loja_primaria e/ou ativo
+    if(nVendEdit){
+      for(var idStr in METAS_STATE.vendDirty){
+        var id=parseInt(idStr);
+        var patch=METAS_STATE.vendDirty[idStr];
+        patch.atualizado_em=new Date().toISOString();
+        var rp=await fetch(SB_URL+'/rest/v1/kwid_vendedores?id=eq.'+id,
+          {method:'PATCH',headers:Object.assign({},baseHeaders,{'Prefer':'return=minimal'}),body:JSON.stringify(patch)});
+        if(!rp.ok){
+          var tx=await rp.text();
+          throw new Error('Vendedor id='+id+' — HTTP '+rp.status+': '+tx.substring(0,200));
+        }
+      }
+    }
+    // 3) Inserir vendedores novos (INSERT em kwid_vendedores)
+    if(vendNovosValidos.length){
+      var novos=vendNovosValidos.map(function(v){
+        return {vendedor:v.vendedor, loja_primaria:v.loja_primaria, regra_fallback:'loja_primaria', ativo:true};
+      });
+      var ri=await fetch(SB_URL+'/rest/v1/kwid_vendedores',
+        {method:'POST',headers:Object.assign({},baseHeaders,{'Prefer':'return=minimal'}),body:JSON.stringify(novos)});
+      if(!ri.ok){
+        var ti=await ri.text();
+        if(ri.status===409) throw new Error('Vendedor já existe (nome duplicado).');
+        throw new Error('Novo vendedor — HTTP '+ri.status+': '+ti.substring(0,300));
+      }
+    }
+    alert('✅ Salvo: '+nMetas+' meta(s) · '+nVendEdit+' vend edit/del · '+vendNovosValidos.length+' vend novo(s).');
+    // Reset state + re-fetch
+    METAS_STATE.dirty={}; METAS_STATE.vendDirty={}; METAS_STATE.vendNovos=[];
+    var vRows=await buscarTudo('kwid_vendedores','select=id,vendedor,loja_primaria,ativo&ativo=eq.true&order=vendedor.asc');
+    METAS_STATE.vendedores=vRows.map(function(r){return r.vendedor;}).filter(Boolean);
+    METAS_STATE.vendData={};
+    vRows.forEach(function(r){METAS_STATE.vendData[r.id]={id:r.id,vendedor:r.vendedor,loja_primaria:r.loja_primaria,ativo:r.ativo};});
     await popularGridMetas();
-    // Re-fetch metas do dash principal pra refletir alterações
     STATE.metasLoaded=false;
   }catch(err){
-    alert('🔴 Erro: '+err.message);
+    if(err.message.indexOf('401')>=0||err.message.indexOf('403')>=0)
+      alert('🔴 Sem permissão (RLS bloqueou). Verifique se seu email está em app_config.metas_editors_emails.');
+    else
+      alert('🔴 Erro: '+err.message);
     btn.disabled=false;
   }
   btn.textContent='Salvar';
