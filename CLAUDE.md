@@ -198,6 +198,10 @@ Fonte única: tabela `contas_pagar` (só Fio e Trama).
 - **Gráfico "Evolução mensal por canal" = SEMPRE últimos 12 meses** (independente do filtro); o resto (KPIs/cards/mix/barras/tabela) segue o período. Por isso o fetch cobre a união `[12m fixos + período anterior]` e fatia client-side (`cur`/`prev`/`mensalRows`).
 - **Mix (doughnut)** mostra % em cada fatia via `chartjs-plugin-datalabels` (registrado **per-chart** em `plugins:[ChartDataLabels]`, não global — senão poluiria barras/linhas); esconde fatias <3%.
 - ⚠️ **Fetch DEVE paginar** (`apiAll()`, não `api()`): a MV tem ~4.4k linhas em 12m e o PostgREST corta em 1000. Sem paginar, `order=data_pedido.asc` trazia só as 1000 mais antigas e o período atual zerava (regressão 01/06, corrigida no mesmo dia). Ordem de paginação = chave única da MV (`data_pedido,origem_conta,canal_nome_raw,loja_nome`) pra offset exato. Ver [[feedback-postgrest-pagination]].
+- **Chip "Ano (YTD)"** (`setPeriodoYTD`): 1º jan do ano corrente → hoje.
+- **Seção "Projeção de Receita 2026"** (`renderProjecao`, sempre ano calendário — **independe do filtro**, como o gráfico mensal): 4 KPIs (realizado YTD c/ % da meta YTD · forecast fechamento · meta oficial · atingimento) + gráfico Jan-Dez de barras empilhadas (realizado + projeção) com linha de meta.
+  - **Forecast = sazonal**: ritmo diário do YTD 2026 (`ytd/dias_decorridos`) × índice de sazonalidade de 2025 por mês (`daily25[m]/baseline`). Mês corrente = realizado + projeção dos dias restantes; futuros = projeção cheia. ⚠️ Como a MV só guarda 365d, a sazonalidade usa **2025-06→12** (não o ano anterior inteiro) — meses sem base usam índice 1.
+  - **Meta** vem de `projecao_faturamento` (Cockpit; `tipo=projetado`, `versao=1`, planilha `PROJEÇÃO FUSION 2026.xlsx`), somada por mês entre os macro_canais. Carregada 1× em `META_ROWS`. Validação 01/06: forecast R$51,4M vs meta R$40,9M (126%); realizado YTD = 118% da meta YTD.
 
 ## Dash Simulador (`simulador.html`)
 
