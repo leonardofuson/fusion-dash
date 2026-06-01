@@ -372,6 +372,24 @@ async function pgGet(table, qs){
   return r.json();
 }
 
+// localStorage cache TTL 5min — dataset todo (~1MB).
+// Cockpit raramente muda dado intra-dia (DRE é mensal); cache 5min é seguro.
+const COCKPIT_CACHE_KEY = 'cockpit_data_v1';
+const COCKPIT_TTL = 5 * 60 * 1000;
+function cockpitCacheGet(){
+  try{
+    const raw = localStorage.getItem(COCKPIT_CACHE_KEY);
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    if (Date.now() - obj.ts > COCKPIT_TTL) return null;
+    return obj.data;
+  }catch(e){return null;}
+}
+function cockpitCacheSet(data){
+  try{ localStorage.setItem(COCKPIT_CACHE_KEY, JSON.stringify({ ts: Date.now(), data })); }catch(e){}
+}
+const idle = window.requestIdleCallback || function(fn){return setTimeout(fn,0);};
+
 // ── Boot ──
 async function init(){
   STATE.ctx = await window.fusionAuth.requireAuth('cockpit-fusion');
@@ -418,6 +436,22 @@ async function init(){
 }
 
 async function loadData(){
+  // Cache local: se hit válido, hidrata STATE imediato e o refresh()
+  // do init() pinta tudo sem esperar a rede.
+  const cached = cockpitCacheGet();
+  if (cached) {
+    STATE.dre = cached.dre;
+    STATE.proj = cached.proj;
+    STATE.entradasCaixa = cached.entradasCaixa;
+    STATE.saldosBancarios = cached.saldosBancarios;
+    // Refresh em background pra pegar dado fresco
+    fetchAndUpdate().catch(e => console.warn('cockpit refresh bg:', e));
+    return;
+  }
+  await fetchAndUpdate();
+}
+
+async function fetchAndUpdate(){
   const [dre, proj, entradas, saldos] = await Promise.all([
     pgGet('dre_mensal', 'select=ano_mes,macro,tipo,categoria,valor&order=ano_mes,macro,tipo&limit=2000'),
     pgGet('projecao_faturamento', 'select=ano_mes,macro_canal,canal,tipo,valor,origem&versao=eq.1&order=ano_mes&limit=2000'),
@@ -434,6 +468,15 @@ async function loadData(){
   for (const r of saldos) {
     const k = r.banco + '|' + r.conta_apelido;
     if (!seen[k]) { seen[k] = true; STATE.saldosBancarios.push(r); }
+  }
+  cockpitCacheSet({
+    dre: STATE.dre, proj: STATE.proj,
+    entradasCaixa: STATE.entradasCaixa, saldosBancarios: STATE.saldosBancarios
+  });
+  // Se já está mostrando dados cached, re-render com fresh
+  if (typeof refresh === 'function' && document.getElementById('loading') &&
+      document.getElementById('loading').style.display === 'none') {
+    refresh();
   }
 }
 

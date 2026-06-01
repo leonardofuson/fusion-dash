@@ -555,10 +555,27 @@ async function apiAll(base) {
   return all;
 }
 
+// localStorage cache TTL 5min (estoque muda pouco entre páginas)
+const EST_CACHE_KEY = 'estoque_data_v1';
+const EST_CACHE_TTL = 5 * 60 * 1000;
+function estCacheGet(){
+  try{
+    const raw = localStorage.getItem(EST_CACHE_KEY);
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    if (Date.now() - obj.ts > EST_CACHE_TTL) return null;
+    return obj.data;
+  }catch(e){return null;}
+}
+function estCacheSet(data){
+  try{ localStorage.setItem(EST_CACHE_KEY, JSON.stringify({ ts: Date.now(), data })); }catch(e){}
+}
+const idle = window.requestIdleCallback || function(fn){return setTimeout(fn,0);};
+
 // ═══════════════════════════════════════════
 // DATA LOADING
 // ═══════════════════════════════════════════
-async function carregar() {
+async function carregar(_fromBgRefresh) {
   try {
     // Janela de 30d pra velocidade de venda Shopify (dias de cobertura)
     const d30 = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
@@ -566,11 +583,20 @@ async function carregar() {
       + '&pedidos.origem_conta=eq.shopify&pedidos.data_pedido=gte.' + d30
       + '&pedidos.status=not.in.(cancelado,devolvido)';
 
-    const [prods, est, vendaItens] = await Promise.all([
-      apiAll('produtos?select=id,sku,descricao,nome,categoria,tipo,sku_pai,cor,tamanho,preco_venda,fabricacao_propria&ativo=eq.true'),
-      apiAll('estoque?select=produto_id,sku,quantidade,localizacao'),
-      apiAll(vendaQ),
-    ]);
+    // Cache local: hit válido (<5min) pinta tudo IMEDIATO e dispara fetch fresh em bg
+    let prods, est, vendaItens;
+    const cached = !_fromBgRefresh ? estCacheGet() : null;
+    if (cached) {
+      prods = cached.prods; est = cached.est; vendaItens = cached.vendaItens;
+      setTimeout(() => carregar(true).catch(e => console.warn('estoque bg:', e)), 200);
+    } else {
+      [prods, est, vendaItens] = await Promise.all([
+        apiAll('produtos?select=id,sku,descricao,nome,categoria,tipo,sku_pai,cor,tamanho,preco_venda,fabricacao_propria&ativo=eq.true'),
+        apiAll('estoque?select=produto_id,sku,quantidade,localizacao'),
+        apiAll(vendaQ),
+      ]);
+      estCacheSet({ prods, est, vendaItens });
+    }
 
     // Popula SKU_FINALIZADOS a partir de produtos.fabricacao_propria (live, não-hardcoded)
     SKU_FINALIZADOS = new Set();

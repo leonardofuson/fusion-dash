@@ -313,6 +313,28 @@ async function buscarTudo(tab,filtro){
   return todos;
 }
 
+// localStorage cache (TTL 5min) — contas_pagar é static-ish entre reloads.
+// 13k rows × ~400B JSON ≈ 5MB; cabe no quota (5-10MB) mas vou cap em 8000 rows
+// pra prevenir QuotaExceeded em browsers menos generosos.
+var FIN_CACHE_KEY='financeiro_contas_v1';
+var FIN_CACHE_TTL=5*60*1000;
+function cacheGet(){
+  try{
+    var raw=localStorage.getItem(FIN_CACHE_KEY);
+    if(!raw) return null;
+    var obj=JSON.parse(raw);
+    if(Date.now()-obj.ts > FIN_CACHE_TTL) return null;
+    return obj.data;
+  }catch(e){return null;}
+}
+function cacheSet(data){
+  try{
+    var compact=data.length>8000?data.slice(-8000):data; // limita pra evitar quota
+    localStorage.setItem(FIN_CACHE_KEY,JSON.stringify({ts:Date.now(),data:compact}));
+  }catch(e){/* quota — silent */}
+}
+var idle = window.requestIdleCallback || function(fn){return setTimeout(fn,0);};
+
 // =================== PROCESSAMENTO ====================
 function processar(raw){
   var hoje=hojeSP();
@@ -889,11 +911,23 @@ function wireUI(){
 // ==================== CARREGAR =======================
 async function carregar(){
   try{
+    // Cache local: hit válido (<5min) pinta tudo IMEDIATO antes do fetch
+    var cached=cacheGet();
+    if(cached && Array.isArray(cached) && cached.length){
+      try{
+        TODAS=processar(cached);
+        popularDropdowns(TODAS);
+        atualizarView();
+        document.getElementById('upd').textContent='Cache · atualizando…';
+      }catch(e){console.warn('cache render:',e);}
+    }
     var raw=await buscarTudo('contas_pagar','select=*&order=vencimento.asc');
     TODAS=processar(raw);
     popularDropdowns(TODAS);
     atualizarView();
     document.getElementById('upd').textContent='Atualizado '+new Date().toLocaleTimeString('pt-BR')+' · '+fmtN(TODAS.length)+' registros';
+    // Cache pra próxima visita (TTL 5min)
+    cacheSet(raw);
   }catch(err){
     console.error(err);
     document.getElementById('kpis').innerHTML=
