@@ -260,6 +260,22 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
   .small-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
   /* Comparativo table mobile — sem sticky, scroll livre */
 }
+/* ====== Botão Cadastro Metas (topbar, destacado) ====== */
+.btn-metas-toggle{
+  background:linear-gradient(135deg, rgba(34,197,94,0.18), rgba(34,197,94,0.08));
+  border:1px solid rgba(34,197,94,0.55);
+  color:#22c55e;
+  padding:7px 14px;border-radius:8px;font-size:13px;font-weight:700;
+  cursor:pointer;font-family:inherit;transition:all 0.15s;
+  display:inline-flex;align-items:center;gap:6px;
+  box-shadow:0 0 0 0 rgba(34,197,94,0);
+}
+.btn-metas-toggle:hover{
+  background:rgba(34,197,94,0.28);
+  border-color:#22c55e;
+  color:#fff;
+  box-shadow:0 0 12px rgba(34,197,94,0.35);
+}
 /* ====== Drawer Metas (acesso restrito) ====== */
 .metas-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;display:none;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;}
 .metas-overlay.on{display:flex;}
@@ -302,7 +318,7 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
   <img src="/logo-urso.png" alt="Fusion">
   <div class="topbar-div"></div>
   <span class="topbar-label">Lojas Físicas</span>
-  <div class="topbar-actions"><span id="user-info-tb"></span><button id="btn-metas" class="btn-ghost" onclick="abrirMetas()" style="display:none;" title="Cadastrar metas mensais por loja/vendedor (acesso restrito)">✏️ Cadastro Metas/Vendedores</button><a href="/index.html" class="btn-back">Menu</a><button class="btn-logout-tb" onclick="fusionAuth.signOut()">Sair</button></div>
+  <div class="topbar-actions"><span id="user-info-tb"></span><button id="btn-metas" class="btn-metas-toggle" onclick="abrirMetas()" style="display:none;" title="Cadastrar metas mensais por loja/vendedor (acesso restrito)">✏️ Cadastro Metas/Vendedores</button><a href="/index.html" class="btn-back">Menu</a><button class="btn-logout-tb" onclick="fusionAuth.signOut()">Sair</button></div>
 
 <!-- Drawer de Metas (carrega só quando o botão for clicado; visibilidade controlada por whitelist em auth.js DASHES_METAS_EDITORS) -->
 <div id="metas-overlay" class="metas-overlay" onclick="if(event.target===this)fecharMetas()">
