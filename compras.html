@@ -510,6 +510,8 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
       <select id="flt-hist-status" class="dselect" onchange="renderHistorico()">
         <option value="">Todos status</option>
         <option value="Entregue">Entregue</option>
+        <option value="Em Produção">Em Produção (parciais)</option>
+        <option value="Devolvido Fornecedor">Devolvido Fornecedor</option>
         <option value="Cancelado">Cancelado</option>
       </select>
       <select id="flt-hist-produto" class="dselect" onchange="renderHistorico()"><option value="">Todos produtos</option></select>
@@ -522,8 +524,8 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
     </div>
     <div class="card" style="overflow:visible">
       <div class="card-header">
-        <span class="card-title">Histórico de Compras + Produções<small id="hist-count"></small></span>
-        <small style="color:var(--txt3)">cada linha = compra de tecido + produção correspondente</small>
+        <span class="card-title">Histórico de Entregas<small id="hist-count"></small></span>
+        <small style="color:var(--txt3)">cada linha = uma entrega (parcial ou total) · path B (fechamento direto) também aparece</small>
       </div>
       <div class="hist-scroll-sticky">
         <div class="hist-scroll-top" id="hist-scroll-top"><div class="scroll-ghost"></div></div>
@@ -531,22 +533,21 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
       <div class="tb-historico-scroll" id="tb-historico-scroll">
         <table class="tb tb-historico">
         <thead><tr>
-          <th>Dt. Faturamento</th>
-          <th>NF</th>
-          <th>Fornecedor</th>
-          <th>Tecido</th>
-          <th>Cor</th>
-          <th class="r">Qtde</th>
-          <th>Un.</th>
+          <th>Dt. Entrega</th>
+          <th class="r">OP #</th>
           <th>Produto</th>
+          <th>Cor</th>
           <th>Costureiro</th>
-          <th class="r">Projetadas</th>
-          <th class="r">Entregues</th>
-          <th class="r">Valor Tecido (NF)</th>
+          <th>Tecido</th>
+          <th>NF Compra</th>
+          <th>Fornecedor</th>
+          <th class="r" title="Peças entregues neste evento">Esta Entrega</th>
+          <th class="r" title="Peças defeituosas reportadas nesta entrega">Defeito</th>
+          <th>NF Remessa</th>
+          <th class="r" title="Acumulado entregue da OP / Projetado">% OP</th>
           <th class="r">Custo Costureiro</th>
-          <th class="r">Total Lote</th>
-          <th class="r">Total/pç</th>
-          <th>Status</th>
+          <th class="r" title="Rateio do valor da NF de compra proporcional ao que esta entrega representa do total entregue da OP">Valor NF (rateado)</th>
+          <th>Status OP</th>
         </tr></thead><tbody id="tbody-historico"></tbody></table>
       </div>
     </div>
@@ -713,7 +714,7 @@ async function buscarTudo(tab, filtro) {
 
 async function carregar() {
   try {
-    var [ops, compras, costureiros, precos, insumos, consumo, planejamento, fornecedores, produtos, coresValidas, custosSku, saldoLocal, eficiencia] = await Promise.all([
+    var [ops, compras, costureiros, precos, insumos, consumo, planejamento, fornecedores, produtos, coresValidas, custosSku, saldoLocal, eficiencia, entregas] = await Promise.all([
       buscarTudo('ordens_producao', 'select=*&order=criado_em.desc'),
       buscarTudo('ordens_compra', 'select=*&order=data_faturamento.desc'),
       buscarTudo('costureiros', 'select=*&order=nome'),
@@ -727,6 +728,7 @@ async function carregar() {
       buscarTudo('custos_sku', 'select=*&order=sku_pai'),
       buscarTudo('vw_insumo_saldo_local', 'select=*'),
       buscarTudo('vw_eficiencia_costureiro_global', 'select=*&order=eficiencia.asc'),
+      buscarTudo('producao_entregas', 'select=*&order=data_entrega.desc'),
     ]);
     STATE.ops = ops;
     STATE.compras = compras;
@@ -741,6 +743,7 @@ async function carregar() {
     STATE.custosSku = custosSku || [];
     STATE.saldoLocal = saldoLocal || [];
     STATE.eficienciaCostureiros = eficiencia || [];
+    STATE.entregas = entregas || [];
     // Index saldo por (insumo_id, localizacao) — modelo event-sourced (Sprint 2)
     STATE.saldoLocalIdx = {};
     STATE.saldoLocal.forEach(function(r) {
@@ -3787,35 +3790,81 @@ function valorCosturaPecaComFallback(o) {
 function renderHistorico() {
   construirLookupValorCosturaPeca();
 
-  // Fonte única: ordens_producao com status Entregue/Cancelado (historico)
-  // Cruza com ordens_compra via ordem_compra_id para resgatar dados de NF/fornecedor
+  // Histórico per-entrega:
+  //   (A) Cada producao_entregas vira 1 linha.
+  //   (B) Cada OP Entregue/Cancelado SEM producao_entregas vira 1 linha sintética (fechamento direto / path B).
+  // Cruza com ordens_compra (via ordem_compra_id da OP) e estoque_insumos (via insumo_id) pra resgatar tecido/NF/fornecedor.
   var comprasMap = {};
   (STATE.compras || []).forEach(function(c) { comprasMap[c.id] = c; });
+  var opById = {};
+  (STATE.ops || []).forEach(function(o) { opById[o.id] = o; });
+  var entregasPorOp = {};
+  (STATE.entregas || []).forEach(function(e) {
+    if (!entregasPorOp[e.ordem_producao_id]) entregasPorOp[e.ordem_producao_id] = [];
+    entregasPorOp[e.ordem_producao_id].push(e);
+  });
 
-  var historico = (STATE.ops || []).filter(function(o) {
-    return o.status === 'Entregue' || o.status === 'Cancelado';
-  }).map(function(o) {
-    var compra = o.ordem_compra_id ? comprasMap[o.ordem_compra_id] : null;
-    var insumo = o.insumo_id ? STATE.insumos.find(function(i){return i.id===o.insumo_id;}) : null;
+  function contextoOC(o) {
+    var compra = o && o.ordem_compra_id ? comprasMap[o.ordem_compra_id] : null;
+    var insumo = o && o.insumo_id ? STATE.insumos.find(function(i){return i.id===o.insumo_id;}) : null;
     return {
-      id: o.id,
-      data_faturamento: (compra ? compra.data_faturamento : null) || o.data_envio_tecido,
+      compra: compra, insumo: insumo,
       nota: compra ? compra.nota : (insumo ? insumo.numero_nf : null),
       fornecedor: compra ? compra.fornecedor : null,
-      tecido: (compra ? compra.tecido : null) || (insumo ? insumo.nome : null) || o.tecido,
-      cor: o.cor || (compra ? compra.cor : null),
-      quantidade_metros_kg: o.metros_kg || (compra ? compra.quantidade_metros_kg : null),
-      unidade: o.unidade || (compra ? compra.unidade : null) || (insumo ? insumo.unidade : null),
-      valor_nf: compra ? compra.valor_nf : null,
-      valor_metro_kg: compra ? compra.valor_metro_kg : null,
-      consumo_por_peca: o.consumo_por_peca || (compra ? compra.consumo_por_peca : null),
-      produto: o.produto,
-      costureiro_id: o.costureiro_id,
-      qtde_projetada: o.qtde_pecas,
-      qtde_entregue: o.qtde_pecas_entregues,
-      valor_peca_costureiro: valorCosturaPecaComFallback(o),  // R$ por peça com fallback do último valor daquele costureiro+produto
-      status: o.status === 'Cancelado' ? 'Cancelado' : 'Entregue',
+      tecido: (compra ? compra.tecido : null) || (insumo ? insumo.nome : null) || (o ? o.tecido : null),
+      valor_nf: compra ? (compra.valor_nf || 0) : 0,
     };
+  }
+
+  function linhaEntrega(e, o) {
+    var ctx = contextoOC(o);
+    var pecas = e.quantidade || 0;
+    var totalEntregueOP = o.qtde_pecas_entregues || 0;
+    // Rateio do valor da NF de compra pela proporção dessa entrega sobre o total entregue da OP
+    var valorNFRateado = totalEntregueOP > 0 ? (ctx.valor_nf * (pecas / totalEntregueOP)) : 0;
+    return {
+      tipo: 'entrega', op_id: o.id, entrega_id: e.id,
+      data: e.data_entrega, nota: ctx.nota, fornecedor: ctx.fornecedor, tecido: ctx.tecido,
+      cor: o.cor || (ctx.compra ? ctx.compra.cor : null),
+      produto: o.produto, costureiro_id: o.costureiro_id,
+      qtde_projetada_op: o.qtde_pecas || 0, qtde_entregue_op: totalEntregueOP,
+      pecas_entrega: pecas, defeito: e.qtde_defeito || 0,
+      nf_remessa: e.nf_remessa || null,
+      valor_peca_costureiro: valorCosturaPecaComFallback(o),
+      valor_nf_rateado: valorNFRateado,
+      status: o.status,
+    };
+  }
+
+  function linhaPathB(o) {
+    var ctx = contextoOC(o);
+    var pecas = o.qtde_pecas_entregues || 0;
+    return {
+      tipo: 'fechamento', op_id: o.id, entrega_id: null,
+      data: o.data_entrega_real || o.data_envio_tecido, nota: ctx.nota, fornecedor: ctx.fornecedor,
+      tecido: ctx.tecido, cor: o.cor || (ctx.compra ? ctx.compra.cor : null),
+      produto: o.produto, costureiro_id: o.costureiro_id,
+      qtde_projetada_op: o.qtde_pecas || 0, qtde_entregue_op: pecas,
+      pecas_entrega: pecas, defeito: 0,
+      nf_remessa: null,
+      valor_peca_costureiro: valorCosturaPecaComFallback(o),
+      valor_nf_rateado: ctx.valor_nf,  // OP sem entregas registradas → 100% do valor NF
+      status: o.status,
+    };
+  }
+
+  var historico = [];
+  // (A) Entregas registradas
+  (STATE.entregas || []).forEach(function(e) {
+    var o = opById[e.ordem_producao_id];
+    if (!o) return;
+    historico.push(linhaEntrega(e, o));
+  });
+  // (B) Path B: OPs Entregue/Cancelado sem nenhuma entrega registrada
+  (STATE.ops || []).forEach(function(o) {
+    if (o.status !== 'Entregue' && o.status !== 'Cancelado') return;
+    if (entregasPorOp[o.id]) return;
+    historico.push(linhaPathB(o));
   });
 
   var fSt = (document.getElementById('flt-hist-status') || {}).value || '';
@@ -3830,71 +3879,67 @@ function renderHistorico() {
     if (fProd && (c.produto||'').trim() !== fProd) return false;
     if (fCost && String(c.costureiro_id) !== fCost) return false;
     if (fForn && (c.fornecedor||'').trim() !== fForn) return false;
-    if (fAno && (c.data_faturamento || '').slice(0, 4) !== fAno) return false;
+    if (fAno && (c.data || '').slice(0, 4) !== fAno) return false;
     if (q) {
-      var blob = [(c.tecido||''),(c.cor||''),(c.produto||''),(c.fornecedor||''),(c.nota||''),costuName(c.costureiro_id)].join(' ').toLowerCase();
+      var blob = [(c.tecido||''),(c.cor||''),(c.produto||''),(c.fornecedor||''),(c.nota||''),(c.nf_remessa||''),costuName(c.costureiro_id),'OP'+c.op_id].join(' ').toLowerCase();
       if (blob.indexOf(q) < 0) return false;
     }
     return true;
   });
 
   // KPIs
-  var totalNF = filtered.reduce(function(s, c) { return s + (c.valor_nf || 0); }, 0);
-  var totalQtde = filtered.reduce(function(s, c) { return s + (c.quantidade_metros_kg || 0); }, 0);
-  var totalPecasEnt = filtered.reduce(function(s, c) { return s + (c.qtde_entregue || 0); }, 0);
-  var totalCustoCost = filtered.reduce(function(s, c) {
-    return s + ((c.valor_peca_costureiro || 0) * (c.qtde_entregue || 0));
-  }, 0);
-  var totalLote = totalNF + totalCustoCost;
+  var totalEventos = filtered.length;
+  var totalPecas = filtered.reduce(function(s, c) { return s + (c.pecas_entrega || 0); }, 0);
+  var totalDefeito = filtered.reduce(function(s, c) { return s + (c.defeito || 0); }, 0);
+  var totalCustoCost = filtered.reduce(function(s, c) { return s + ((c.valor_peca_costureiro || 0) * (c.pecas_entrega || 0)); }, 0);
+  var totalNFRat = filtered.reduce(function(s, c) { return s + (c.valor_nf_rateado || 0); }, 0);
 
   document.getElementById('kpis-historico').innerHTML = [
-    kpiHtml('Total de Registros', fmt(filtered.length), 'compras + produções', '--kpi-accent:var(--indigo)'),
-    kpiHtml('Valor Tecido (NF)', fmtR0(totalNF), 'soma das notas fiscais', '--kpi-accent:var(--amber)'),
-    kpiHtml('Custo Costureiro', fmtR0(totalCustoCost), 'valor/peça × entregues', '--kpi-accent:var(--purple)'),
-    kpiHtml('Total (tecido + costureiro)', fmtR0(totalLote), 'custo total do filtro', '--kpi-accent:var(--green)'),
-    kpiHtml('Peças Entregues', fmt(Math.round(totalPecasEnt)), 'produção concluída', '--kpi-accent:var(--cyan)'),
+    kpiHtml('Entregas', fmt(totalEventos), 'eventos no filtro', '--kpi-accent:var(--indigo)'),
+    kpiHtml('Peças Entregues', fmt(Math.round(totalPecas)), 'somatório das entregas', '--kpi-accent:var(--cyan)'),
+    kpiHtml('Defeito', fmt(Math.round(totalDefeito)), 'reportado nas entregas', '--kpi-accent:var(--red)'),
+    kpiHtml('Custo Costureiro', fmtR0(totalCustoCost), 'peças × R$/peça', '--kpi-accent:var(--purple)'),
+    kpiHtml('Valor NF (rateado)', fmtR0(totalNFRat), 'NF compra rateada por entrega', '--kpi-accent:var(--amber)'),
   ].join('');
 
-  var temFiltroTop = fSt || fProd || fCost || fForn || fAno || q;
-  var limiteTop = temFiltroTop ? null : 50;
-  var countTxt = ' — ' + filtered.length + ' registros';
-  if (limiteTop && filtered.length > limiteTop) countTxt += ' (mostrando últimos ' + limiteTop + ' — use filtros para ver mais)';
-  document.getElementById('hist-count').textContent = countTxt;
-
-  // Ordenar por data_faturamento desc
-  filtered.sort(function(a, b) {
-    return (b.data_faturamento || '').localeCompare(a.data_faturamento || '');
-  });
-
-  // Ordenar por data mais recente e limitar a 50 (a menos que tenha filtro ativo)
   var temFiltro = fSt || fProd || fCost || fForn || fAno || q;
   var limite = temFiltro ? 2000 : 50;
-  var html = filtered.slice(0, limite).map(function(c) {
-    var entregues = Math.round(c.qtde_entregue || 0);
-    var valorNF = c.valor_nf || 0;  // total do tecido (NF inteira)
-    var custoCostTotal = (c.valor_peca_costureiro || 0) * entregues;  // valor/peça × entregues
-    var totalLote = valorNF + custoCostTotal;
-    var totalPorPeca = entregues > 0 ? (totalLote / entregues) : 0;
+  var countTxt = ' — ' + filtered.length + ' entregas';
+  if (!temFiltro && filtered.length > limite) countTxt += ' (mostrando últimas ' + limite + ' — use filtros para ver mais)';
+  document.getElementById('hist-count').textContent = countTxt;
 
-    return '<tr style="cursor:pointer" onclick="openDrawerEdit('+c.id+')" title="Editar OP #'+c.id+'">' +
-      '<td class="dim" style="white-space:nowrap">' + (c.data_faturamento ? formatDate(c.data_faturamento) + '/' + c.data_faturamento.slice(2,4) : '—') + '</td>' +
+  // Ordena desc por data da entrega
+  filtered.sort(function(a, b) { return (b.data || '').localeCompare(a.data || ''); });
+
+  var html = filtered.slice(0, limite).map(function(c) {
+    var pecas = Math.round(c.pecas_entrega || 0);
+    var defeito = Math.round(c.defeito || 0);
+    var custoCost = (c.valor_peca_costureiro || 0) * pecas;
+    var nfRat = c.valor_nf_rateado || 0;
+    var pctOP = c.qtde_projetada_op > 0 ? (c.qtde_entregue_op / c.qtde_projetada_op * 100) : 0;
+    var corPct = pctOP >= 100 ? 'var(--green)' : (pctOP >= 70 ? 'var(--amber)' : 'var(--txt2)');
+    var tipoTag = c.tipo === 'fechamento'
+      ? '<span style="font-size:9px;padding:1px 5px;background:rgba(99,102,241,0.15);color:var(--indigo);border-radius:3px;margin-left:4px" title="Fechamento direto (sem entregas parciais)">FECH</span>'
+      : (defeito > 0 ? '<span style="font-size:9px;padding:1px 5px;background:rgba(248,113,113,0.15);color:var(--red);border-radius:3px;margin-left:4px">DEF</span>' : '');
+
+    return '<tr style="cursor:pointer" onclick="openDrawerEdit('+c.op_id+')" title="Editar OP #'+c.op_id+'">' +
+      '<td class="dim" style="white-space:nowrap">' + (c.data ? formatDate(c.data) + '/' + c.data.slice(2,4) : '—') + '</td>' +
+      '<td class="r" style="font-weight:700;color:var(--indigo);white-space:nowrap">#'+c.op_id+tipoTag+'</td>' +
+      '<td style="font-size:12px"><strong>' + ((c.produto||'').trim() || '—') + '</strong></td>' +
+      '<td class="dim">' + ((c.cor||'').trim() || '—') + '</td>' +
+      '<td style="font-size:12px">' + costuName(c.costureiro_id) + '</td>' +
+      '<td style="font-size:12px">' + ((c.tecido||'').trim() || '—') + '</td>' +
       '<td class="dim" style="font-size:11px;white-space:nowrap">' + (c.nota || '—') + '</td>' +
       '<td style="font-size:12px">' + ((c.fornecedor||'').trim() || '—') + '</td>' +
-      '<td style="font-size:12px">' + ((c.tecido||'').trim() || '—') + '</td>' +
-      '<td class="dim">' + ((c.cor||'').trim() || '—') + '</td>' +
-      '<td class="r" style="white-space:nowrap">' + fmt(Math.round(c.quantidade_metros_kg || 0)) + '</td>' +
-      '<td class="dim">' + (c.unidade || '—') + '</td>' +
-      '<td style="font-size:12px"><strong>' + ((c.produto||'').trim() || '—') + '</strong></td>' +
-      '<td style="font-size:12px">' + costuName(c.costureiro_id) + '</td>' +
-      '<td class="r" style="white-space:nowrap">' + fmt(Math.round(c.qtde_projetada || 0)) + '</td>' +
-      '<td class="r" style="white-space:nowrap">' + fmt(entregues) + '</td>' +
-      '<td class="r" style="white-space:nowrap">' + (valorNF > 0 ? fmtR0(valorNF) : '—') + '</td>' +
-      '<td class="r" style="white-space:nowrap">' + (custoCostTotal > 0 ? fmtR0(custoCostTotal) : '—') + '</td>' +
-      '<td class="r" style="color:var(--amber);font-weight:700;white-space:nowrap">' + (totalLote > 0 ? fmtR0(totalLote) : '—') + '</td>' +
-      '<td class="r" style="font-weight:700;color:var(--indigo);white-space:nowrap">' + (totalPorPeca > 0 ? fmtR0(totalPorPeca) : '—') + '</td>' +
+      '<td class="r" style="font-weight:700;white-space:nowrap">' + fmt(pecas) + '</td>' +
+      '<td class="r" style="white-space:nowrap;color:'+(defeito > 0 ? 'var(--red)' : 'var(--txt3)')+'">' + (defeito > 0 ? fmt(defeito) : '—') + '</td>' +
+      '<td class="dim" style="font-size:11px;white-space:nowrap">' + (c.nf_remessa || '—') + '</td>' +
+      '<td class="r" style="white-space:nowrap;color:'+corPct+';font-weight:'+(pctOP >= 100 ? '700' : '400')+'">' + (c.qtde_projetada_op > 0 ? Math.round(pctOP)+'%' : '—') + '</td>' +
+      '<td class="r" style="white-space:nowrap">' + (custoCost > 0 ? fmtR0(custoCost) : '—') + '</td>' +
+      '<td class="r" style="color:var(--amber);white-space:nowrap">' + (nfRat > 0 ? fmtR0(nfRat) : '—') + '</td>' +
       '<td>' + statusPill(c.status) + '</td></tr>';
   }).join('');
-  document.getElementById('tbody-historico').innerHTML = html || '<tr><td colspan="16" class="empty">Nenhum registro</td></tr>';
+  document.getElementById('tbody-historico').innerHTML = html || '<tr><td colspan="15" class="empty">Nenhuma entrega no filtro</td></tr>';
   initHistoricoDragScroll();
 }
 
@@ -3963,32 +4008,75 @@ function limparFiltrosHist() {
 }
 
 function exportHistoricoCSV() {
-  var rows = [['Dt Faturamento','NF','Fornecedor','Tecido','Cor','Qtde','Un','Produto','Costureiro','Projetadas','Entregues','Valor NF','Status']];
-  (STATE.compras || []).forEach(function(c) {
-    rows.push([
-      c.data_faturamento || '', c.nota || '', c.fornecedor || '', c.tecido || '', c.cor || '',
-      c.quantidade_metros_kg || 0, c.unidade || '', c.produto || '', costuName(c.costureiro_id),
-      Math.round(c.qtde_projetada || 0), Math.round(c.qtde_entregue || 0), c.valor_nf || 0, c.status || ''
-    ]);
+  // Exporta o histórico per-entrega (mesma lógica do renderHistorico).
+  var comprasMap = {};
+  (STATE.compras || []).forEach(function(c) { comprasMap[c.id] = c; });
+  var opById = {};
+  (STATE.ops || []).forEach(function(o) { opById[o.id] = o; });
+  var entregasPorOp = {};
+  (STATE.entregas || []).forEach(function(e) {
+    if (!entregasPorOp[e.ordem_producao_id]) entregasPorOp[e.ordem_producao_id] = [];
+    entregasPorOp[e.ordem_producao_id].push(e);
   });
+  construirLookupValorCosturaPeca();
+  function ctx(o) {
+    var c = o && o.ordem_compra_id ? comprasMap[o.ordem_compra_id] : null;
+    var i = o && o.insumo_id ? STATE.insumos.find(function(x){return x.id===o.insumo_id;}) : null;
+    return { nota: c?c.nota:(i?i.numero_nf:null), fornecedor: c?c.fornecedor:null,
+             tecido: (c?c.tecido:null) || (i?i.nome:null) || (o?o.tecido:null),
+             valor_nf: c?(c.valor_nf||0):0, cor_compra: c?c.cor:null };
+  }
+  var linhas = [];
+  (STATE.entregas || []).forEach(function(e) {
+    var o = opById[e.ordem_producao_id]; if (!o) return;
+    var x = ctx(o); var totEnt = o.qtde_pecas_entregues || 0;
+    var rat = totEnt > 0 ? (x.valor_nf * ((e.quantidade||0)/totEnt)) : 0;
+    linhas.push(['entrega', e.data_entrega || '', o.id, o.produto || '', o.cor || x.cor_compra || '',
+                 costuName(o.costureiro_id), x.tecido || '', x.nota || '', x.fornecedor || '',
+                 Math.round(e.quantidade||0), Math.round(e.qtde_defeito||0), e.nf_remessa || '',
+                 o.qtde_pecas||0, totEnt,
+                 (valorCosturaPecaComFallback(o) || 0) * (e.quantidade||0),
+                 rat, o.status || '']);
+  });
+  (STATE.ops || []).forEach(function(o) {
+    if (o.status !== 'Entregue' && o.status !== 'Cancelado') return;
+    if (entregasPorOp[o.id]) return;
+    var x = ctx(o); var pecas = o.qtde_pecas_entregues || 0;
+    linhas.push(['fechamento', o.data_entrega_real || '', o.id, o.produto || '', o.cor || x.cor_compra || '',
+                 costuName(o.costureiro_id), x.tecido || '', x.nota || '', x.fornecedor || '',
+                 pecas, 0, '', o.qtde_pecas||0, pecas,
+                 (valorCosturaPecaComFallback(o) || 0) * pecas,
+                 x.valor_nf, o.status || '']);
+  });
+  linhas.sort(function(a,b){ return (b[1]||'').localeCompare(a[1]||''); });
+  var rows = [['Tipo','Dt Entrega','OP','Produto','Cor','Costureiro','Tecido','NF Compra','Fornecedor',
+               'Esta Entrega','Defeito','NF Remessa','Projetadas OP','Entregue Acum OP',
+               'Custo Costureiro','Valor NF (rateado)','Status OP']].concat(linhas);
   var csv = rows.map(function(r) { return r.map(function(v) { return '"' + String(v||'').replace(/"/g, '""') + '"'; }).join(','); }).join('\n');
   var blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
-  var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'historico-compras.csv'; a.click();
+  var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'historico-entregas.csv'; a.click();
 }
 
 function populateHistoricoFilters() {
   var prods = {}, forns = {}, anos = {}, costIds = {};
-  // Produtos, fornecedores e anos vem de ordens_compra (onde estao os dados de NF)
+  // Produtos do HISTÓRICO incluem OPs com entregas (qualquer status), não só Entregue/Cancelado.
+  // Iteramos pelas entregas + OPs Entregue/Cancelado (path B) pra cobrir os mesmos casos do render.
+  var opIdsComEntrega = {};
+  (STATE.entregas || []).forEach(function(e) { opIdsComEntrega[e.ordem_producao_id] = 1; });
+  (STATE.ops || []).forEach(function(o) {
+    var apareceNoHist = !!opIdsComEntrega[o.id] || o.status === 'Entregue' || o.status === 'Cancelado';
+    if (!apareceNoHist) return;
+    if (o.produto) prods[o.produto.trim()] = 1;
+    if (o.costureiro_id) costIds[o.costureiro_id] = 1;
+  });
+  // Fornecedores e anos: das OCs vinculadas
   (STATE.compras || []).forEach(function(c) {
-    if (c.produto) prods[c.produto.trim()] = 1;
     if (c.fornecedor) forns[c.fornecedor.trim()] = 1;
     if (c.data_faturamento) anos[c.data_faturamento.slice(0,4)] = 1;
   });
-  // Costureiros vem do HISTORICO de ordens_producao (mesma fonte que alimenta a tabela)
-  (STATE.ops || []).forEach(function(o) {
-    if ((o.status === 'Entregue' || o.status === 'Cancelado') && o.costureiro_id) {
-      costIds[o.costureiro_id] = 1;
-    }
+  // Anos: também os de entregas (data_entrega) — mais relevante quando feed é per-entrega
+  (STATE.entregas || []).forEach(function(e) {
+    if (e.data_entrega) anos[e.data_entrega.slice(0,4)] = 1;
   });
   var selP = document.getElementById('flt-hist-produto');
   if (selP) selP.innerHTML = '<option value="">Todos produtos</option>' + Object.keys(prods).sort().map(function(p){return '<option value="'+p+'">'+p+'</option>';}).join('');
