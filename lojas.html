@@ -2047,7 +2047,9 @@ var MES_NOMES=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov'
 function podeEditarMetas(email){return METAS_EDITORS.indexOf((email||'').toLowerCase())>=0;}
 async function carregarWhitelistMetas(){
   try{
-    var rows=await buscarTudo('app_config','select=value&key=eq.metas_editors_emails');
+    // app_config tem `key` como PK (não `id`) — sem &order=key.asc explícito,
+    // buscarTudo injeta &order=id.asc por default e o PostgREST devolve 400.
+    var rows=await buscarTudo('app_config','select=value&key=eq.metas_editors_emails&order=key.asc');
     if(rows && rows.length && Array.isArray(rows[0].value)){
       METAS_EDITORS=rows[0].value.map(function(e){return (e||'').toLowerCase();});
     }
