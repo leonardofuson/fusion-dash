@@ -95,6 +95,7 @@ table.tb tr:hover td{background:rgba(255,255,255,0.02);}
       <button class="chip" onclick="setPeriodo(30)">30 dias</button>
       <button class="chip ativo" onclick="setPeriodoMTD()">Este Mês</button>
       <button class="chip" onclick="setPeriodoUltMes()">Último Mês</button>
+      <button class="chip" onclick="setPeriodoYTD()">Ano (YTD)</button>
       <button class="chip" onclick="setPeriodo(365)">12 meses</button>
     </div>
     <div class="date-range">
@@ -114,6 +115,13 @@ table.tb tr:hover td{background:rgba(255,255,255,0.02);}
   <div class="grid2">
     <div class="card"><div class="card-title">Evolução mensal por canal <span style="color:var(--txt3);font-weight:400">· últimos 12 meses</span></div><div class="chart-wrap"><canvas id="chart-mensal"></canvas></div></div>
     <div class="card"><div class="card-title">Mix de faturamento por canal <span style="color:var(--txt3);font-weight:400">· período selecionado</span></div><div class="chart-wrap"><canvas id="chart-mix"></canvas></div></div>
+  </div>
+
+  <div class="section-title" style="margin-bottom:14px;">Projeção de Receita 2026 <span style="color:var(--txt3);font-weight:400;font-size:11px;">· realizado + forecast sazonal vs meta · ano calendário (independe do filtro)</span></div>
+  <div class="grid4" id="proj-kpis"></div>
+  <div class="card" style="margin-bottom:16px;">
+    <div class="card-title">2026 — realizado, projeção e meta por mês</div>
+    <div class="chart-wrap"><canvas id="chart-proj"></canvas></div>
   </div>
 
   <div class="section-title" style="margin-bottom:14px;">Marketplaces</div>
@@ -229,6 +237,7 @@ const idle = window.requestIdleCallback || function(fn){return setTimeout(fn,0);
 
 let charts={};
 let DE=null,ATE=null;
+let META_ROWS=null; // projecao_faturamento tipo=projetado (meta oficial 2026); carregado 1x
 
 function setPeriodo(dias){
   document.querySelectorAll('.chip').forEach(c=>c.classList.remove('ativo'));
@@ -284,6 +293,16 @@ function setPeriodoUltMes(){
   document.getElementById('dt-ate').value=ATE;
   carregar();
 }
+function setPeriodoYTD(){
+  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('ativo'));
+  if(typeof event!=='undefined'&&event.target) event.target.classList.add('ativo');
+  const h=new Date();
+  DE=new Date(h.getFullYear(),0,1).toISOString().split('T')[0];  // 1º jan do ano corrente
+  ATE=h.toISOString().split('T')[0];
+  document.getElementById('dt-de').value=DE;
+  document.getElementById('dt-ate').value=ATE;
+  carregar();
+}
 function aplicarFiltro(){
   DE=document.getElementById('dt-de').value;
   ATE=document.getElementById('dt-ate').value;
@@ -327,6 +346,11 @@ async function carregar(){
   // apiAll pagina (cap PostgREST 1000); ordem pela chave única da MV pra offset exato.
   const allRows = await apiAll('mvw_diretoria_dia?select=*&data_pedido=gte.'+fetchDe+'&data_pedido=lte.'+fetchAte+'&order=data_pedido.asc,origem_conta.asc,canal_nome_raw.asc,loja_nome.asc');
   if(!allRows || !Array.isArray(allRows)){ document.getElementById('upd').textContent='Erro'; return; }
+  // Meta oficial 2026 (planilha → projecao_faturamento). Carrega 1x; usada na projeção.
+  if(META_ROWS===null){
+    try{ const m=await api('projecao_faturamento?select=ano_mes,valor,macro_canal&tipo=eq.projetado&versao=eq.1');
+      META_ROWS=Array.isArray(m)?m:[]; }catch(e){ META_ROWS=[]; }
+  }
   renderTudo(allRows,pDE,pATE,wDe);
   cacheSet(DE,ATE,{rows:allRows});
 }
@@ -484,7 +508,89 @@ function renderTudo(allRows,pDE,pATE,wDe){
     data:{labels:lDl.map(d=>new Date(d+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})),datasets:[{label:'Lojas',data:lDl.map(d=>lDia[d]||0),borderColor:'#10b981',backgroundColor:'rgba(16,185,129,0.08)',fill:true,tension:0.4,pointRadius:2,borderWidth:2}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#71717a',maxTicksLimit:8,font:{size:10}},grid:{color:'rgba(255,255,255,0.04)'}},y:{ticks:{color:'#71717a',font:{size:10},callback:function(v){return 'R$'+Math.round(v/1000)+'k';}},grid:{color:'rgba(255,255,255,0.04)'}}}}});
 
+  renderProjecao(allRows);
+
   document.getElementById('upd').textContent='Atualizado '+new Date().toLocaleTimeString('pt-BR');
+}
+
+// ── Projeção de Receita 2026 — SEMPRE ano calendário (independe do filtro) ──
+// Forecast sazonal: ritmo diário do YTD 2026 × sazonalidade de 2025 (índice por
+// mês). Meses fechados = realizado; mês corrente = realizado + projeção do resto;
+// futuros = projeção. Meta = projecao_faturamento (planilha). Limitação: a MV só
+// guarda 365d, então a sazonalidade usa 2025-06→12 (não o ano cheio anterior).
+const MES_LABELS=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+function renderProjecao(allRows){
+  const ANO=2026;
+  const real26={}, real25={}; // 'MM' -> faturamento
+  allRows.forEach(r=>{
+    if(!r.data_pedido) return;
+    const y=r.data_pedido.substring(0,4), mo=r.data_pedido.substring(5,7), rec=REC(r);
+    if(y===String(ANO)) real26[mo]=(real26[mo]||0)+rec;
+    else if(y===String(ANO-1)) real25[mo]=(real25[mo]||0)+rec;
+  });
+  const hj=new Date();
+  const dim=mo=>new Date(ANO, parseInt(mo,10), 0).getDate();           // dias no mês de 2026
+  const diasDecorr=Math.round((hj-new Date(ANO,0,1))/86400000)+1;
+  const ytd=Object.values(real26).reduce((a,b)=>a+b,0);
+  const avgDaily=diasDecorr>0?ytd/diasDecorr:0;
+  // Sazonalidade 2025 (meses cheios disponíveis na MV — tipicamente 06..12).
+  const mesesRef=Object.keys(real25);
+  const daily25={}; mesesRef.forEach(mo=>daily25[mo]=real25[mo]/dim(mo));
+  const baseline=mesesRef.length?Object.values(daily25).reduce((a,b)=>a+b,0)/mesesRef.length:avgDaily;
+  const idx=mo=>(baseline>0&&daily25[mo])?daily25[mo]/baseline:1; // índice 1 onde falta base
+  // Meta por mês (soma macro_canais).
+  const meta={}; (META_ROWS||[]).forEach(r=>{ const mo=(r.ano_mes||'').substring(5,7); if(mo) meta[mo]=(meta[mo]||0)+(r.valor||0); });
+  const metaTotal=Object.values(meta).reduce((a,b)=>a+b,0);
+
+  const mesHoje=hj.getMonth()+1, diaHoje=hj.getDate();
+  const realSerie=[], foreInc=[], metaSerie=[];
+  let forecastRest=0;
+  for(let m=1;m<=12;m++){
+    const mo=String(m).padStart(2,'0');
+    metaSerie.push(meta[mo]||0);
+    if(m<mesHoje){                       // mês fechado → realizado
+      realSerie.push(real26[mo]||0); foreInc.push(0);
+    }else if(m===mesHoje){               // mês corrente → realizado + projeção do resto
+      const rs=real26[mo]||0, resto=avgDaily*idx(mo)*Math.max(0,dim(mo)-diaHoje);
+      realSerie.push(rs); foreInc.push(resto); forecastRest+=resto;
+    }else{                               // futuro → projeção cheia
+      const proj=avgDaily*idx(mo)*dim(mo);
+      realSerie.push(0); foreInc.push(proj); forecastRest+=proj;
+    }
+  }
+  const forecastTotal=ytd+forecastRest;
+  const ating=metaTotal>0?forecastTotal/metaTotal*100:null;
+  const atingYtd=()=>{ // realizado YTD vs meta YTD (meses fechados + corrente)
+    let mYtd=0; for(let m=1;m<=mesHoje;m++) mYtd+=meta[String(m).padStart(2,'0')]||0;
+    return mYtd>0?ytd/mYtd*100:null;
+  };
+
+  // KPIs da projeção
+  const card=(cor,label,val,sub)=>`<div class="origem-card" style="border-left-color:${cor}">
+    <div class="origem-nome" style="color:${cor}">${label}</div>
+    <div class="origem-fat" style="color:${cor}">${val}</div>
+    <div class="origem-info">${sub}</div></div>`;
+  const atColor=ating===null?'#a1a1aa':(ating>=100?'#10b981':'#ef4444');
+  document.getElementById('proj-kpis').innerHTML=
+    card('#3B82F6','Realizado YTD', fmt(ytd), `${diasDecorr} dias · ${atingYtd()!==null?'<b style="color:'+(atingYtd()>=100?'#10b981':'#ef4444')+'">'+fmtPct(atingYtd())+'</b> da meta YTD':'—'}`)+
+    card('#8B5CF6','Forecast 2026', fmt(forecastTotal), `realizado + R$ ${fmtN(forecastRest)} projetado`)+
+    card('#F59E0B','Meta 2026', metaTotal>0?fmt(metaTotal):'—', 'planilha oficial')+
+    card(atColor,'Atingimento', ating!==null?fmtPct(ating):'—', 'forecast ÷ meta');
+
+  // Chart: barras empilhadas (realizado + forecast) + linha de meta
+  destroyChart('proj');
+  charts['proj']=new Chart(document.getElementById('chart-proj'),{
+    data:{labels:MES_LABELS,datasets:[
+      {type:'bar',label:'Realizado',data:realSerie,backgroundColor:'#3b82f6CC',borderColor:'#3b82f6',borderWidth:1,borderRadius:3,stack:'s'},
+      {type:'bar',label:'Projeção',data:foreInc,backgroundColor:'rgba(139,92,246,0.45)',borderColor:'#8b5cf6',borderWidth:1,borderDash:[4,2],borderRadius:3,stack:'s'},
+      {type:'line',label:'Meta',data:metaSerie,borderColor:'#f59e0b',backgroundColor:'transparent',borderWidth:2,pointRadius:3,pointBackgroundColor:'#f59e0b',tension:0.3,borderDash:[6,3],stack:'meta'}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom',labels:{color:'#a1a1aa',font:{size:11},padding:10,boxWidth:12}},
+        tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt(c.parsed.y)}}},
+      scales:{x:{stacked:true,ticks:{color:'#71717a',font:{size:10}},grid:{display:false}},
+        y:{stacked:true,ticks:{color:'#71717a',font:{size:10},callback:v=>'R$'+Math.round(v/1000)+'k'},grid:{color:'rgba(255,255,255,0.04)'}}}}
+  });
 }
 
 // Default = MTD (Este Mês), alinhado com o chip pintado como ativo
