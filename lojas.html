@@ -260,6 +260,38 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
   .small-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
   /* Comparativo table mobile — sem sticky, scroll livre */
 }
+/* ====== Drawer Metas (acesso restrito) ====== */
+.metas-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;display:none;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;}
+.metas-overlay.on{display:flex;}
+.metas-drawer{background:#1a1a1d;border:1px solid var(--bdr);border-radius:14px;width:min(1100px,100%);max-height:none;display:flex;flex-direction:column;}
+.metas-head{padding:18px 22px;border-bottom:1px solid var(--bdr);display:flex;justify-content:space-between;align-items:center;}
+.metas-head h2{margin:0;font-size:16px;font-weight:700;color:var(--txt1);}
+.metas-head .btn-close{background:transparent;border:0;color:var(--txt2);font-size:22px;cursor:pointer;padding:4px 10px;}
+.metas-tabs{display:flex;border-bottom:1px solid var(--bdr);padding:0 22px;}
+.metas-tab{background:transparent;border:0;color:var(--txt2);padding:12px 18px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;border-bottom:2px solid transparent;}
+.metas-tab.on{color:var(--blue);border-bottom-color:var(--blue);}
+.metas-body{padding:18px 22px;}
+.metas-controls{display:flex;gap:12px;align-items:center;margin-bottom:14px;flex-wrap:wrap;}
+.metas-controls label{font-size:12px;color:var(--txt2);font-weight:600;}
+.metas-controls select,.metas-controls input{background:#0f0f12;border:1px solid var(--bdr);border-radius:6px;color:var(--txt1);padding:6px 10px;font-family:inherit;font-size:12px;}
+.metas-grid{width:100%;border-collapse:collapse;font-size:12px;}
+.metas-grid th,.metas-grid td{padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.05);}
+.metas-grid th{font-weight:700;color:var(--txt2);text-align:right;text-transform:uppercase;font-size:10px;letter-spacing:0.05em;background:#141417;position:sticky;top:0;}
+.metas-grid th:first-child{text-align:left;position:sticky;left:0;z-index:2;}
+.metas-grid td:first-child{font-weight:600;color:var(--txt1);position:sticky;left:0;background:#1a1a1d;z-index:1;}
+.metas-grid input.meta-cell{width:96px;background:transparent;border:1px solid rgba(255,255,255,0.04);border-radius:4px;color:var(--txt1);padding:5px 7px;font-family:inherit;font-size:11px;text-align:right;font-variant-numeric:tabular-nums;}
+.metas-grid input.meta-cell:focus{outline:none;border-color:var(--blue);background:#0f0f12;}
+.metas-grid input.meta-cell.dirty{border-color:var(--amber);background:rgba(245,158,11,0.05);}
+.metas-foot{padding:14px 22px;border-top:1px solid var(--bdr);display:flex;justify-content:space-between;align-items:center;gap:12px;}
+.metas-foot .metas-status{font-size:11px;color:var(--txt2);}
+.metas-foot .metas-actions{display:flex;gap:8px;}
+.btn-meta-save{background:var(--green);border:1px solid var(--green);color:#0a0a0a;padding:8px 18px;border-radius:8px;font-weight:700;cursor:pointer;font-family:inherit;font-size:13px;}
+.btn-meta-save:disabled{opacity:0.5;cursor:not-allowed;}
+.btn-meta-cancel{background:transparent;border:1px solid var(--bdr);color:var(--txt2);padding:8px 14px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px;}
+@media (max-width:768px){
+  .metas-overlay{padding:12px 6px;}
+  .metas-grid input.meta-cell{width:80px;font-size:10px;}
+}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="/auth.js"></script>
@@ -270,7 +302,37 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
   <img src="/logo-urso.png" alt="Fusion">
   <div class="topbar-div"></div>
   <span class="topbar-label">Lojas Físicas</span>
-  <div class="topbar-actions"><span id="user-info-tb"></span><a href="/index.html" class="btn-back">Menu</a><button class="btn-logout-tb" onclick="fusionAuth.signOut()">Sair</button></div>
+  <div class="topbar-actions"><span id="user-info-tb"></span><button id="btn-metas" class="btn-ghost" onclick="abrirMetas()" style="display:none;" title="Cadastrar metas mensais por loja/vendedor (acesso restrito)">✏️ Metas</button><a href="/index.html" class="btn-back">Menu</a><button class="btn-logout-tb" onclick="fusionAuth.signOut()">Sair</button></div>
+
+<!-- Drawer de Metas (carrega só quando o botão for clicado; visibilidade controlada por whitelist em auth.js DASHES_METAS_EDITORS) -->
+<div id="metas-overlay" class="metas-overlay" onclick="if(event.target===this)fecharMetas()">
+  <div class="metas-drawer">
+    <div class="metas-head">
+      <h2>✏️ Cadastro de Metas</h2>
+      <button class="btn-close" onclick="fecharMetas()" title="Fechar">✕</button>
+    </div>
+    <div class="metas-tabs">
+      <button class="metas-tab on" data-tab="lojas" onclick="setTabMetas('lojas')">🏬 Por Loja</button>
+      <button class="metas-tab" data-tab="vendedores" onclick="setTabMetas('vendedores')">👤 Por Vendedor</button>
+    </div>
+    <div class="metas-body">
+      <div class="metas-controls">
+        <label>Ano: <select id="metas-ano" onchange="popularGridMetas()"></select></label>
+        <span style="font-size:11px;color:var(--txt2);">Valores em R$ · células em laranja foram editadas · só salva o que mudou</span>
+      </div>
+      <div style="overflow-x:auto;max-height:65vh;">
+        <table class="metas-grid" id="metas-grid"></table>
+      </div>
+    </div>
+    <div class="metas-foot">
+      <div class="metas-status" id="metas-status">—</div>
+      <div class="metas-actions">
+        <button class="btn-meta-cancel" onclick="fecharMetas()">Cancelar</button>
+        <button class="btn-meta-save" id="btn-meta-save" onclick="salvarMetas()">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
 </header>
 
 <div class="main">
@@ -1971,6 +2033,142 @@ function renderVendedores(){
   document.getElementById('tbody-vendedores').innerHTML=html||'<tr><td colspan="7" style="text-align:center;color:#d4d4d8;padding:20px;">Sem vendedores no escopo.</td></tr>';
 }
 
+// ============================================================
+// ✏️ Cadastro de Metas (drawer restrito)
+// ============================================================
+// Whitelist de emails autorizados a editar — DEVE espelhar as policies
+// RLS de write em metas_lojas + metas_vendedores (sql/2026-06-01_metas_vendedores.sql).
+// Defesa em profundidade: UI esconde botão + DB rejeita INSERT/UPDATE/DELETE
+// pra quem não está na lista.
+var METAS_EDITORS=['leonardo@usefusion.com.br','tiago@usefusion.com.br','tales@usefusion.com.br','gerentesfusion@gmail.com'];
+var METAS_STATE={tab:'lojas', ano:null, lojas:[], vendedores:[], original:{}, dirty:{}};
+var MES_NOMES=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+function podeEditarMetas(email){return METAS_EDITORS.indexOf((email||'').toLowerCase())>=0;}
+
+async function abrirMetas(){
+  var anoAtual=new Date().getFullYear();
+  METAS_STATE.ano=anoAtual;
+  // Popula seletor de ano (anoAtual-1 até anoAtual+1)
+  var selAno=document.getElementById('metas-ano');
+  selAno.innerHTML=[anoAtual-1,anoAtual,anoAtual+1].map(function(a){
+    return '<option value="'+a+'"'+(a===anoAtual?' selected':'')+'>'+a+'</option>';}).join('');
+  // Lojas (canônicas — mesma whitelist do dash, sem Atacado WhatsApp)
+  METAS_STATE.lojas=['Marcolina','Oriente','Polo Plaza','Vautier','São Bernardo'];
+  // Vendedores: pega da kwid_vendedores ativos
+  try{
+    var vRows=await buscarTudo('kwid_vendedores','select=vendedor&ativo=eq.true&order=vendedor.asc');
+    METAS_STATE.vendedores=vRows.map(function(r){return r.vendedor;}).filter(Boolean);
+  }catch(e){console.warn('vendedores:',e); METAS_STATE.vendedores=[];}
+  document.getElementById('metas-overlay').classList.add('on');
+  await popularGridMetas();
+}
+function fecharMetas(){
+  if(Object.keys(METAS_STATE.dirty).length>0 && !confirm('Há alterações não salvas. Descartar?')) return;
+  document.getElementById('metas-overlay').classList.remove('on');
+  METAS_STATE.dirty={};
+  document.getElementById('metas-status').textContent='—';
+}
+function setTabMetas(tab){
+  METAS_STATE.tab=tab;
+  document.querySelectorAll('.metas-tab').forEach(function(b){b.classList.toggle('on',b.dataset.tab===tab);});
+  popularGridMetas();
+}
+async function popularGridMetas(){
+  var ano=parseInt(document.getElementById('metas-ano').value);
+  METAS_STATE.ano=ano;
+  var tabela=METAS_STATE.tab==='lojas'?'metas_lojas':'metas_vendedores';
+  var coluna=METAS_STATE.tab==='lojas'?'loja_nome':'vendedor';
+  var entidades=METAS_STATE.tab==='lojas'?METAS_STATE.lojas:METAS_STATE.vendedores;
+  // Fetch metas existentes
+  var existing={};
+  try{
+    var rows=await buscarTudo(tabela,'select='+coluna+',ano,mes,meta_receita&ano=eq.'+ano);
+    rows.forEach(function(r){existing[r[coluna]+'|'+r.mes]=parseFloat(r.meta_receita)||0;});
+  }catch(e){console.warn('fetch metas:',e);}
+  METAS_STATE.original={};
+  Object.assign(METAS_STATE.original, existing);
+  METAS_STATE.dirty={};
+  // Render grid
+  var html='<thead><tr><th style="min-width:180px;">'+(METAS_STATE.tab==='lojas'?'Loja':'Vendedor')+'</th>';
+  for(var m=1;m<=12;m++) html+='<th>'+MES_NOMES[m-1]+'</th>';
+  html+='<th>Total ano</th></tr></thead><tbody>';
+  entidades.forEach(function(ent){
+    html+='<tr><td>'+ent+'</td>';
+    for(var m=1;m<=12;m++){
+      var k=ent+'|'+m;
+      var v=existing[k]||0;
+      html+='<td><input type="number" step="100" class="meta-cell" data-key="'+k+'" value="'+(v||'')+'" placeholder="0" oninput="onMetaCellChange(this)"></td>';
+    }
+    html+='<td class="meta-total" data-ent="'+ent+'" style="text-align:right;color:var(--txt2);font-variant-numeric:tabular-nums;">'+fmt(somaLinhaMetas(ent,existing))+'</td>';
+    html+='</tr>';
+  });
+  html+='</tbody>';
+  document.getElementById('metas-grid').innerHTML=html;
+  atualizarStatusMetas();
+}
+function somaLinhaMetas(ent, source){
+  var t=0; for(var m=1;m<=12;m++) t+=parseFloat(source[ent+'|'+m]||0); return t;
+}
+function onMetaCellChange(inp){
+  var k=inp.dataset.key, v=parseFloat(inp.value||0);
+  var orig=METAS_STATE.original[k]||0;
+  if(Math.abs(v-orig)>0.001){ METAS_STATE.dirty[k]=v; inp.classList.add('dirty'); }
+  else { delete METAS_STATE.dirty[k]; inp.classList.remove('dirty'); }
+  // Recalc total da linha
+  var ent=k.split('|')[0];
+  var live={};
+  Object.assign(live, METAS_STATE.original, METAS_STATE.dirty);
+  var totEl=document.querySelector('.meta-total[data-ent="'+ent.replace(/"/g,'\\"')+'"]');
+  if(totEl) totEl.textContent=fmt(somaLinhaMetas(ent,live));
+  atualizarStatusMetas();
+}
+function atualizarStatusMetas(){
+  var n=Object.keys(METAS_STATE.dirty).length;
+  var st=document.getElementById('metas-status');
+  st.textContent=n===0?'Sem alterações':(n+' célula(s) modificada(s)');
+  document.getElementById('btn-meta-save').disabled=(n===0);
+}
+async function salvarMetas(){
+  var dirty=METAS_STATE.dirty;
+  var keys=Object.keys(dirty);
+  if(!keys.length){alert('Nada a salvar.');return;}
+  var btn=document.getElementById('btn-meta-save');
+  btn.disabled=true; btn.textContent='Salvando…';
+  var tabela=METAS_STATE.tab==='lojas'?'metas_lojas':'metas_vendedores';
+  var coluna=METAS_STATE.tab==='lojas'?'loja_nome':'vendedor';
+  var ano=METAS_STATE.ano;
+  var payload=keys.map(function(k){
+    var [ent,mes]=k.split('|');
+    var row={ano:ano,mes:parseInt(mes),meta_receita:parseFloat(dirty[k]||0)};
+    row[coluna]=ent;
+    if(tabela==='metas_vendedores') row.atualizado_em=new Date().toISOString();
+    return row;
+  });
+  try{
+    // Token fresh (JWT expira em ~1h — padrão de compras.html)
+    var sess=await fusionAuth.getSession();
+    var headers={apikey:fusionAuth.SUPABASE_ANON_KEY,Authorization:'Bearer '+sess.access_token,
+                 'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'};
+    var url=SB_URL+'/rest/v1/'+tabela+'?on_conflict='+coluna+',ano,mes';
+    var r=await fetch(url,{method:'POST',headers:headers,body:JSON.stringify(payload)});
+    if(!r.ok){
+      var txt=await r.text();
+      if(r.status===401||r.status===403) throw new Error('Sem permissão pra editar metas (RLS bloqueou).');
+      throw new Error('HTTP '+r.status+': '+txt.substring(0,200));
+    }
+    alert('✅ '+payload.length+' meta(s) salva(s).');
+    METAS_STATE.dirty={};
+    await popularGridMetas();
+    // Re-fetch metas do dash principal pra refletir alterações
+    STATE.metasLoaded=false;
+  }catch(err){
+    alert('🔴 Erro: '+err.message);
+    btn.disabled=false;
+  }
+  btn.textContent='Salvar';
+}
+
 // ---- Init ----
 (async()=>{
   const auth=await fusionAuth.requireAuth('lojas');
@@ -1978,6 +2176,11 @@ function renderVendedores(){
   AUTH_HEADERS=auth.headers;
   var ui=document.getElementById('user-info-tb');
   if(ui) ui.textContent=(auth.role.nome||auth.role.email);
+  // Mostra botão "Metas" só se email em whitelist
+  if(podeEditarMetas(auth.role.email)){
+    var btnM=document.getElementById('btn-metas');
+    if(btnM) btnM.style.display='inline-block';
+  }
   var h=hojeSP();
   var urlPreset=loadFromURL();
   if(!DE){DE=inicioMesSP();ATE=h;}
