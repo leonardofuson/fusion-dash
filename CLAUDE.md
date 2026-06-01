@@ -87,6 +87,54 @@ Pra criar um novo dash (ex: `marketing`):
 - **Mobile**: breakpoint principal 768px. Cards empilhados em mobile, lado-a-lado em desktop.
 - **Export PNG**: html2canvas. Aplicar em todo card de KPI relevante.
 
+## Padrão de performance — Progressive load + cache + lazy (01/06/2026)
+
+Padrão aplicado em 6 dashes (lojas, ecommerce, diretoria, financeiro, cockpit, estoque). Catálogo de MVs em [`../SCHEMA.md > Performance`](../SCHEMA.md#performance--materialized-views--índice-composto-01062026).
+
+### 1. MV agregada por dia (progressive load)
+
+Cada dash que consome `pedidos` em janelas grandes tem MV dedicada agregada por `data_pedido` (cobre 365d). Dashboard busca a MV PRIMEIRO (200-700ms, ~600-4k linhas) e pinta **KPIs + Pareto + Top Produtos imediato** via `renderKPIsImediato(curMV, prevMV)` + `renderTopProdutosImediato(mvSku)`. Em paralelo dispara `fetchPedidos()` detalhado pra rankings/PA/sparklines/drilldowns — quando chega, `renderAll()` completo sobrescreve.
+
+- **lojas.html**: `mvw_lojas_dia` + `mvw_lojas_sku_dia` (Top Produtos) + `mvw_lojas_vend_dia` (preparada, integração pendente). TTFP 12m: **20s → 0.6s (33x)**.
+- **ecommerce.html**: `mvw_ecommerce_canal_dia` (KPIs + Waterfall). Padrão original (31/05/2026 sprint 2).
+- **diretoria.html**: `mvw_diretoria_dia` (TODAS origens, agregação client-side por origem/canal/loja). **98x speedup** (247s → 2.5s em 12m) — descobriu bug oculto: `vw_pedidos_full?limit=100000` era truncado em 1000 pelo PostgREST, dash mostrava só primeiros 1000 sem ninguém notar.
+
+### 2. Cache localStorage (TTL 5min)
+
+Cada dash tem chave própria pra evitar colisão. Cache pinta dashboard IMEDIATAMENTE antes do fetch; refresh fresh roda em background e re-renderiza. Quota total ~5MB no pior caso (todos os 6 cacheados juntos), dentro do limite Chrome (5-10MB).
+
+| Dash | Chave | Conteúdo cacheado |
+|---|---|---|
+| lojas | `lojas_v2_<de>_<ate>` | `{mv, mvPrev, sku}` da `mvw_lojas_dia` + `_sku_dia` |
+| ecommerce | `ecomm_v1_<de>_<ate>` | `{mv, mvPrev}` da `mvw_ecommerce_canal_dia` |
+| diretoria | `diretoria_v1_<de>_<ate>` | rows da `mvw_diretoria_dia` |
+| financeiro | `financeiro_contas_v1` | rows de `contas_pagar` (cap 8000 pra prevenir QuotaExceeded) |
+| cockpit | `cockpit_data_v1` | `{dre, proj, entradasCaixa, saldosBancarios}` (~1MB) |
+| estoque | `estoque_data_v1` | `{prods, est, vendaItens}` (3 datasets) |
+
+Helpers padronizados: `cacheKey()`, `cacheGet()`, `cacheSet()` no início do `<script>`. TTL 5min é seguro pra operação intra-dia (dados mudam pouco; refresh recupera fresh em background).
+
+### 3. Lazy load de charts pesados
+
+`requestIdleCallback` (fallback `setTimeout(0)`) defere Chart.js do critical render path. Em janelas grandes esses charts somam 500-1000ms de bloqueio JS — KPIs/tabelas pintam imediato, charts entram quando o browser respira.
+
+- **lojas.html** `renderAll()`: critical = renderKPIs + renderHighlights + renderCatChips + renderSkuList + renderVendedores; deferred = renderHero + renderLojaCards + renderPareto.
+- **ecommerce.html** `renderAll()`: critical = renderWaterfall + renderKPIs + renderCanalTable + renderTopProdutos; deferred = renderHero + renderGeo + renderPayments + renderDowHeat + renderPareto + renderAds + renderAlerts.
+
+### ⚠️ Armadilha do PostgREST: fetch de MV precisa `order` explícito
+
+`buscarTudo()` injeta `&order=id.asc` por default se nenhuma order foi passada. **Materialized views não têm coluna `id`** → PostgREST devolve 400 silencioso e o KPI imediato nunca pinta. Sempre passar order explícito ao fetchar MV:
+
+```js
+async function fetchAgregadoMV(de, ate){
+  return buscarTudo('mvw_lojas_dia',
+    'select=*&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+
+    '&order=data_pedido.asc');  // ← sem isso, 400 silencioso
+}
+```
+
+Bug detectado em produção 01/06/2026 — KPIs imediatos do lojas.html não apareciam.
+
 ---
 
 ## Dash Lojas Físicas (`lojas.html`) — Linx Microvix desde 01/06/2026
