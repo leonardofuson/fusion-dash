@@ -468,7 +468,8 @@ async function fetchPedidos(de,ate){
 // Atualiza KPIs/Hero JÁ. Pedidos detalhados vêm depois pra rankings, vendedores, SKUs.
 // Refresh CONCURRENTLY rola no cron_enriquecimento_financeiro.py (06h BRT).
 async function fetchAgregadoMV(de,ate){
-  return buscarTudo('mvw_lojas_dia','select=*&data_pedido=gte.'+de+'&data_pedido=lte.'+ate);
+  // MV não tem coluna `id` — passar order explícito pra evitar fallback &order=id.asc do buscarTudo.
+  return buscarTudo('mvw_lojas_dia','select=*&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc');
 }
 function calcKPIsFromMV(rows){
   if(!rows||!rows.length) return {fat:0,ped:0,tm:0,porLoja:{}};
