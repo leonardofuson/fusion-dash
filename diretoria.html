@@ -184,6 +184,22 @@ function corSub(grupo,sub){
 }
 
 async function api(p){ const r=await fetch(SB_URL+'/rest/v1/'+p,{headers:AUTH_HEADERS});return r.json(); }
+// Fetch paginado — PostgREST corta em 1000 linhas (cap do servidor). A MV tem
+// ~4.4k linhas em 12m, então sem paginar vinham só as 1000 mais antigas e o
+// período atual zerava. Ordem = chave única da MV (total) → offset exato.
+async function apiAll(p){
+  const PAGE=1000; let off=0; const out=[];
+  while(true){
+    const sep=p.includes('?')?'&':'?';
+    const r=await fetch(SB_URL+'/rest/v1/'+p+sep+'limit='+PAGE+'&offset='+off,{headers:AUTH_HEADERS});
+    const chunk=await r.json();
+    if(!Array.isArray(chunk)) return chunk; // propaga erro do PostgREST
+    out.push(...chunk);
+    if(chunk.length<PAGE) break;
+    off+=PAGE;
+  }
+  return out;
+}
 function fmt(n){ return 'R$ '+Math.round(n||0).toLocaleString('pt-BR'); }
 function fmtN(n){ return Math.round(n||0).toLocaleString('pt-BR'); }
 function fmtPct(n){ return (n||0).toFixed(1)+'%'; }
@@ -308,7 +324,8 @@ async function carregar(){
     catch(e){console.warn('cache render:',e);}
   }
   // mvw_diretoria_dia já é pré-agregada por (data, origem, canal, loja) — ~4k rows/365d.
-  const allRows = await api('mvw_diretoria_dia?select=*&data_pedido=gte.'+fetchDe+'&data_pedido=lte.'+fetchAte+'&order=data_pedido.asc');
+  // apiAll pagina (cap PostgREST 1000); ordem pela chave única da MV pra offset exato.
+  const allRows = await apiAll('mvw_diretoria_dia?select=*&data_pedido=gte.'+fetchDe+'&data_pedido=lte.'+fetchAte+'&order=data_pedido.asc,origem_conta.asc,canal_nome_raw.asc,loja_nome.asc');
   if(!allRows || !Array.isArray(allRows)){ document.getElementById('upd').textContent='Erro'; return; }
   renderTudo(allRows,pDE,pATE,wDe);
   cacheSet(DE,ATE,{rows:allRows});
