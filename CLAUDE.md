@@ -89,9 +89,11 @@ Pra criar um novo dash (ex: `marketing`):
 
 ---
 
-## Dash Lojas (`lojas.html`) — v3 (deploy 17/04/2026)
+## Dash Lojas Físicas (`lojas.html`) — Linx Microvix desde 01/06/2026
 
-Fonte: `vw_pedidos_full` (origem_conta=kwid). Atacado/flecha excluído via `IGNORAR_LOJA`.
+Renomeado de "Lojas v3" pra "Lojas Físicas" em 01/06/2026 junto com cutover Tiny→Linx.
+
+Fonte: `vw_pedidos_full` (origem_conta=kwid). Histórico completo (out/24 → hoje) numa série única: pré-01/06 via Tiny (id_tiny numérico puro), pós-01/06 via Linx Microvix (`id_tiny LIKE 'linx_<uuid>'`, canal_nome_raw='Venda Loja'). Atacado/flecha excluído via `IGNORAR_LOJA`.
 
 **Conceitos-chave para código:**
 - Filtros persistentes na URL (`?de=...&ate=...&p=30d&lojas=...`)
@@ -103,15 +105,11 @@ Fonte: `vw_pedidos_full` (origem_conta=kwid). Atacado/flecha excluído via `IGNO
 - Cross-filtering bidirecional: click vendedor ↔ click SKU.
 - Categorias excluídas: TECIDO, TROCA.
 
-## Dash Lojas Lynx (`lojas-lynx.html`) — espelho POC migração Microvix (21/05/2026)
+## ~~Dash Lojas Lynx~~ — REMOVIDO em 01/06/2026
 
-Cópia de `lojas.html` lendo `pedidos_linx_staging` + `itens_linx_staging` (em vez de `pedidos` + `itens_pedido`). Serve pra bater vendas físicas das lojas KWID contra o que foi registrado no Linx Microvix durante o rollout.
+`lojas-lynx.html` e o entry `'lojas-lynx'` em `auth.js` foram **deletados** após o cutover Tiny→Linx. O dash POC servia pra bater vendas físicas durante o rollout do Linx Microvix; depois do cutover, todas as vendas Linx vão direto pra `pedidos` (não mais pra staging) e o `lojas.html` ("Lojas Físicas") cobre tudo.
 
-- **Fonte**: `pedidos_linx_staging` + `itens_linx_staging` (populadas por `fusion-sync/fusion_sync_lojas_linx_poc.py`)
-- `fetchPedidos` simplificado — só staging, sem `pedidos_historico` (Microvix Fusion só tem dados desde 30/03/2026)
-- Acesso restrito a `leonardo@usefusion.com.br` (`restritoPara` no `auth.js` + `user_roles.dashes`)
-- **Temporário** — vive enquanto a migração Tiny→Linx é POC. Detalhes em memória `project_linx_microvix_poc`.
-- ⚠️ Dados Linx ≠ Tiny: são fontes complementares (numero_pedido independente), não duplicação. Cobertura parcial: Vautier 0, Polo Plaza ~30%.
+As tabelas `pedidos_linx_staging` + `itens_linx_staging` continuam no Supabase como histórico imutável do POC (3.609 ped maio/2026) — podem ser dropadas no futuro quando claramente irrelevantes. Detalhes do POC em memória `linx-microvix-poc-kwid` (arqueológica) e `cutover-lojas-tiny-linx-atacado-rotina-unica`.
 
 ## Dash Financeiro (`financeiro.html`)
 
