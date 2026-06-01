@@ -304,6 +304,12 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
 .btn-meta-save{background:var(--green);border:1px solid var(--green);color:#0a0a0a;padding:8px 18px;border-radius:8px;font-weight:700;cursor:pointer;font-family:inherit;font-size:13px;}
 .btn-meta-save:disabled{opacity:0.5;cursor:not-allowed;}
 .btn-meta-cancel{background:transparent;border:1px solid var(--bdr);color:var(--txt2);padding:8px 14px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px;}
+.btn-add-vend{background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.55);color:#22c55e;padding:7px 14px;border-radius:8px;font-weight:700;cursor:pointer;font-family:inherit;font-size:12px;transition:all 0.15s;}
+.btn-add-vend:hover{background:rgba(34,197,94,0.28);color:#fff;}
+.metas-grid select.meta-cell.dirty,.metas-grid input.meta-cell.dirty{border-color:var(--amber);background:rgba(245,158,11,0.10);}
+.metas-grid tr.linha-novo{background:rgba(34,197,94,0.06);}
+.metas-grid tr.linha-novo td:first-child::before{content:'NOVO · ';color:var(--green);font-size:9px;font-weight:700;}
+.metas-grid tr.linha-removida{opacity:0.4;text-decoration:line-through;}
 @media (max-width:768px){
   .metas-overlay{padding:12px 6px;}
   .metas-grid input.meta-cell{width:80px;font-size:10px;}
@@ -2115,15 +2121,9 @@ async function popularGridMetas(){
   }
   html+='</tbody>';
   document.getElementById('metas-grid').innerHTML=html;
-  // Botão "Adicionar vendedor" — só na aba vendedores
-  var foot=document.getElementById('metas-status');
-  if(foot){
-    if(ehVendedor){
-      foot.innerHTML='<button class="btn-meta-cancel" onclick="adicionarVendedor()" style="font-size:12px;">+ Adicionar vendedor</button> <span id="metas-status-text">—</span>';
-    } else {
-      foot.innerHTML='<span id="metas-status-text">—</span>';
-    }
-  }
+  // Botão "+ Adicionar vendedor" — visível só na aba vendedores
+  var btnAdd=document.getElementById('btn-add-vend');
+  if(btnAdd) btnAdd.style.display=ehVendedor?'inline-block':'none';
   atualizarStatusMetas();
 }
 
@@ -2144,7 +2144,7 @@ function renderLinhaVendedor(vd, existing, isNovo){
   var opt=['','Marcolina','Oriente','Polo Plaza','Vautier','São Bernardo'].map(function(l){
     return '<option value="'+esc(l)+'"'+(l===loja?' selected':'')+'>'+(l||'—')+'</option>';
   }).join('');
-  var html='<tr data-vend-id="'+idKey+'"'+(isNovo?' data-novo="1"':'')+'>';
+  var html='<tr data-vend-id="'+idKey+'"'+(isNovo?' data-novo="1" class="linha-novo"':'')+'>';
   if(isNovo){
     html+='<td><input type="text" class="meta-cell" data-tempid="'+vd.tempId+'" style="width:160px;text-align:left;" value="'+esc(nome)+'" placeholder="Nome do vendedor" oninput="onVendNomeChange(this)"></td>';
   } else {
@@ -2163,14 +2163,21 @@ function renderLinhaVendedor(vd, existing, isNovo){
 function esc(s){return String(s||'').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
 function adicionarVendedor(){
-  var tempId=Date.now()+Math.floor(Math.random()*1000);
-  METAS_STATE.vendNovos.push({tempId:tempId, vendedor:'', loja_primaria:''});
-  popularGridMetas(); // re-render
-  // focar no input do nome do recém-adicionado
-  setTimeout(function(){
-    var inp=document.querySelector('input[data-tempid="'+tempId+'"]');
-    if(inp) inp.focus();
-  },50);
+  try{
+    if(METAS_STATE.tab!=='vendedores'){
+      alert('Mude pra aba "Por Vendedor" pra adicionar.');
+      return;
+    }
+    var tempId=Date.now()+Math.floor(Math.random()*1000);
+    METAS_STATE.vendNovos.push({tempId:tempId, vendedor:'', loja_primaria:''});
+    popularGridMetas().then(function(){
+      var inp=document.querySelector('input[data-tempid="'+tempId+'"]');
+      if(inp){ inp.focus(); inp.scrollIntoView({behavior:'smooth',block:'center'}); }
+    });
+  }catch(err){
+    console.error('adicionarVendedor:',err);
+    alert('Erro ao adicionar: '+err.message);
+  }
 }
 function onVendNomeChange(inp){
   var tempId=parseInt(inp.dataset.tempid);
@@ -2178,44 +2185,51 @@ function onVendNomeChange(inp){
   if(novo){ novo.vendedor=inp.value.trim(); atualizarStatusMetas(); }
 }
 function onVendLojaChange(sel){
-  var vendid=sel.dataset.vendid;
-  var isNovo=sel.dataset.novo==='1';
-  var v=sel.value;
-  if(isNovo){
-    var tempId=parseInt(vendid.replace('novo_',''));
-    var novo=METAS_STATE.vendNovos.find(function(x){return x.tempId===tempId;});
-    if(novo) novo.loja_primaria=v;
-  } else {
-    var id=parseInt(vendid);
-    if(!METAS_STATE.vendDirty[id]) METAS_STATE.vendDirty[id]={};
-    if(v !== METAS_STATE.vendData[id].loja_primaria){
-      METAS_STATE.vendDirty[id].loja_primaria=v;
-      sel.style.borderColor='var(--amber)';
+  try{
+    var vendid=sel.dataset.vendid;
+    var isNovo=sel.dataset.novo==='1';
+    var v=sel.value;
+    if(isNovo){
+      var tempId=parseInt(vendid.replace('novo_',''));
+      var novo=METAS_STATE.vendNovos.find(function(x){return x.tempId===tempId;});
+      if(novo) novo.loja_primaria=v;
+      sel.classList.add('dirty');
     } else {
-      delete METAS_STATE.vendDirty[id].loja_primaria;
-      if(!Object.keys(METAS_STATE.vendDirty[id]).length) delete METAS_STATE.vendDirty[id];
-      sel.style.borderColor='';
+      var id=parseInt(vendid);
+      if(!METAS_STATE.vendDirty[id]) METAS_STATE.vendDirty[id]={};
+      if(v !== (METAS_STATE.vendData[id]||{}).loja_primaria){
+        METAS_STATE.vendDirty[id].loja_primaria=v;
+        sel.classList.add('dirty');
+      } else {
+        delete METAS_STATE.vendDirty[id].loja_primaria;
+        if(!Object.keys(METAS_STATE.vendDirty[id]).length) delete METAS_STATE.vendDirty[id];
+        sel.classList.remove('dirty');
+      }
     }
-  }
-  atualizarStatusMetas();
+    atualizarStatusMetas();
+  }catch(err){console.error('onVendLojaChange:',err); alert('Erro: '+err.message);}
 }
 function removerVendedor(btn){
-  var vendid=btn.dataset.vendid;
-  var isNovo=btn.dataset.novo==='1';
-  if(isNovo){
-    var tempId=parseInt(vendid.replace('novo_',''));
-    METAS_STATE.vendNovos=METAS_STATE.vendNovos.filter(function(v){return v.tempId!==tempId;});
-  } else {
-    var id=parseInt(vendid);
-    var nome=METAS_STATE.vendData[id].vendedor;
-    if(!confirm('Desativar "'+nome+'"? Soft delete — vendedor some da lista mas histórico preservado.')) return;
-    if(!METAS_STATE.vendDirty[id]) METAS_STATE.vendDirty[id]={};
-    METAS_STATE.vendDirty[id].ativo=false;
-  }
-  // Visual: marca linha como riscada
-  var tr=btn.closest('tr');
-  if(tr) tr.style.opacity='0.4', tr.style.textDecoration='line-through';
-  atualizarStatusMetas();
+  try{
+    var vendid=btn.dataset.vendid;
+    var isNovo=btn.dataset.novo==='1';
+    if(isNovo){
+      var tempId=parseInt(vendid.replace('novo_',''));
+      METAS_STATE.vendNovos=METAS_STATE.vendNovos.filter(function(v){return v.tempId!==tempId;});
+      var tr=btn.closest('tr');
+      if(tr) tr.remove();
+    } else {
+      var id=parseInt(vendid);
+      var dataRec=METAS_STATE.vendData[id];
+      var nome=dataRec?dataRec.vendedor:'#'+id;
+      if(!confirm('Desativar "'+nome+'"? Soft delete — vendedor some da lista mas histórico preservado.')) return;
+      if(!METAS_STATE.vendDirty[id]) METAS_STATE.vendDirty[id]={};
+      METAS_STATE.vendDirty[id].ativo=false;
+      var tr=btn.closest('tr');
+      if(tr) tr.classList.add('linha-removida');
+    }
+    atualizarStatusMetas();
+  }catch(err){console.error('removerVendedor:',err); alert('Erro: '+err.message);}
 }
 function somaLinhaMetas(ent, source){
   var t=0; for(var m=1;m<=12;m++) t+=parseFloat(source[ent+'|'+m]||0); return t;
@@ -2238,14 +2252,16 @@ function atualizarStatusMetas(){
   var nVendEdit=Object.keys(METAS_STATE.vendDirty).length;
   var nVendNovo=METAS_STATE.vendNovos.filter(function(v){return v.vendedor && v.loja_primaria;}).length;
   var total=nMetas+nVendEdit+nVendNovo;
-  var st=document.getElementById('metas-status-text');
-  if(!st) st=document.getElementById('metas-status');
-  var parts=[];
-  if(nMetas) parts.push(nMetas+' meta(s)');
-  if(nVendEdit) parts.push(nVendEdit+' vend edit/del');
-  if(nVendNovo) parts.push(nVendNovo+' vend novo(s)');
-  st.textContent=total===0?'Sem alterações':parts.join(' · ');
-  document.getElementById('btn-meta-save').disabled=(total===0);
+  var st=document.getElementById('metas-status');
+  if(st){
+    var parts=[];
+    if(nMetas) parts.push(nMetas+' meta(s)');
+    if(nVendEdit) parts.push(nVendEdit+' vend edit/del');
+    if(nVendNovo) parts.push(nVendNovo+' vend novo(s)');
+    st.textContent=total===0?'Sem alterações':parts.join(' · ');
+  }
+  var bs=document.getElementById('btn-meta-save');
+  if(bs) bs.disabled=(total===0);
 }
 async function salvarMetas(){
   var nMetas=Object.keys(METAS_STATE.dirty).length;
@@ -2367,7 +2383,8 @@ async function salvarMetas(){
     <div class="metas-body">
       <div class="metas-controls">
         <label>Ano: <select id="metas-ano" onchange="popularGridMetas()"></select></label>
-        <span style="font-size:11px;color:var(--txt2);">Valores em R$ · células em laranja foram editadas · só salva o que mudou</span>
+        <button id="btn-add-vend" class="btn-add-vend" onclick="adicionarVendedor()" style="display:none;">+ Adicionar vendedor</button>
+        <span style="font-size:11px;color:var(--txt2);margin-left:auto;">Valores em R$ · laranja = editado · só salva o que mudou</span>
       </div>
       <div style="overflow-x:auto;max-height:65vh;">
         <table class="metas-grid" id="metas-grid"></table>
