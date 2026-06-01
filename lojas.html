@@ -302,7 +302,7 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
   <img src="/logo-urso.png" alt="Fusion">
   <div class="topbar-div"></div>
   <span class="topbar-label">Lojas Físicas</span>
-  <div class="topbar-actions"><span id="user-info-tb"></span><button id="btn-metas" class="btn-ghost" onclick="abrirMetas()" style="display:none;" title="Cadastrar metas mensais por loja/vendedor (acesso restrito)">✏️ Metas</button><a href="/index.html" class="btn-back">Menu</a><button class="btn-logout-tb" onclick="fusionAuth.signOut()">Sair</button></div>
+  <div class="topbar-actions"><span id="user-info-tb"></span><button id="btn-metas" class="btn-ghost" onclick="abrirMetas()" style="display:none;" title="Cadastrar metas mensais por loja/vendedor (acesso restrito)">✏️ Cadastro Metas/Vendedores</button><a href="/index.html" class="btn-back">Menu</a><button class="btn-logout-tb" onclick="fusionAuth.signOut()">Sair</button></div>
 
 <!-- Drawer de Metas (carrega só quando o botão for clicado; visibilidade controlada por whitelist em auth.js DASHES_METAS_EDITORS) -->
 <div id="metas-overlay" class="metas-overlay" onclick="if(event.target===this)fecharMetas()">
@@ -2036,15 +2036,23 @@ function renderVendedores(){
 // ============================================================
 // ✏️ Cadastro de Metas (drawer restrito)
 // ============================================================
-// Whitelist de emails autorizados a editar — DEVE espelhar as policies
-// RLS de write em metas_lojas + metas_vendedores (sql/2026-06-01_metas_vendedores.sql).
-// Defesa em profundidade: UI esconde botão + DB rejeita INSERT/UPDATE/DELETE
-// pra quem não está na lista.
-var METAS_EDITORS=['leonardo@usefusion.com.br','tiago@usefusion.com.br','tales@usefusion.com.br','gerentesfusion@gmail.com'];
+// Whitelist de emails carregada da tabela app_config (key='metas_editors_emails').
+// Single source of truth — atualizar UM ÚNICO REGISTRO no Supabase atualiza
+// AO MESMO TEMPO: (a) UI (visibilidade do botão), (b) RLS de write (policies
+// que consultam app_config). Pra adicionar/remover: UPDATE app_config SET value=ARRAY[...] WHERE key='metas_editors_emails'.
+var METAS_EDITORS=[]; // populado dinamicamente no init
 var METAS_STATE={tab:'lojas', ano:null, lojas:[], vendedores:[], original:{}, dirty:{}};
 var MES_NOMES=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
 function podeEditarMetas(email){return METAS_EDITORS.indexOf((email||'').toLowerCase())>=0;}
+async function carregarWhitelistMetas(){
+  try{
+    var rows=await buscarTudo('app_config','select=value&key=eq.metas_editors_emails');
+    if(rows && rows.length && Array.isArray(rows[0].value)){
+      METAS_EDITORS=rows[0].value.map(function(e){return (e||'').toLowerCase();});
+    }
+  }catch(e){console.warn('whitelist metas:',e); METAS_EDITORS=[];}
+}
 
 async function abrirMetas(){
   var anoAtual=new Date().getFullYear();
@@ -2176,7 +2184,8 @@ async function salvarMetas(){
   AUTH_HEADERS=auth.headers;
   var ui=document.getElementById('user-info-tb');
   if(ui) ui.textContent=(auth.role.nome||auth.role.email);
-  // Mostra botão "Metas" só se email em whitelist
+  // Whitelist dinâmica via app_config — depois mostra o botão se email permitido
+  await carregarWhitelistMetas();
   if(podeEditarMetas(auth.role.email)){
     var btnM=document.getElementById('btn-metas');
     if(btnM) btnM.style.display='inline-block';
