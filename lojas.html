@@ -463,6 +463,31 @@ async function fetchPedidos(de,ate){
   return buscarTudo('vw_pedidos_full',buildFilt(de,ate,SEL_PED));
 }
 
+// Progressive load (01/06/2026): MV agregada vem PRIMEIRO (~200ms,
+// ~600 linhas pra 120d×7 lojas vs ~57k pedidos detalhados em vw_pedidos_full).
+// Atualiza KPIs/Hero JÁ. Pedidos detalhados vêm depois pra rankings, vendedores, SKUs.
+// Refresh CONCURRENTLY rola no cron_enriquecimento_financeiro.py (06h BRT).
+async function fetchAgregadoMV(de,ate){
+  return buscarTudo('mvw_lojas_dia','select=*&data_pedido=gte.'+de+'&data_pedido=lte.'+ate);
+}
+function calcKPIsFromMV(rows){
+  if(!rows||!rows.length) return {fat:0,ped:0,tm:0,porLoja:{}};
+  var fat=0,ped=0,porLoja={};
+  rows.forEach(function(r){
+    var loja=r.loja_nome;
+    if(!loja) return;
+    if(IGNORAR_LOJA.indexOf(loja)>=0) return;
+    if(STATE.lojasSel && Object.keys(STATE.lojasSel).length>0 && !STATE.lojasSel[loja]) return;
+    var rec=parseFloat(r.receita_bruta||0);
+    var pp=(parseInt(r.pedidos||0)-parseInt(r.cancelados||0));
+    fat+=rec; ped+=pp;
+    if(!porLoja[loja]) porLoja[loja]={fat:0,ped:0};
+    porLoja[loja].fat+=rec;
+    porLoja[loja].ped+=pp;
+  });
+  return {fat:fat,ped:ped,tm:ped>0?fat/ped:0,porLoja:porLoja};
+}
+
 async function fetchItensForIds(ids){
   if(!ids.length) return [];
   var batches=[];
@@ -559,6 +584,28 @@ function filtrarPedidos(lista){
   return ativos;
 }
 
+// Render IMEDIATO via MV (progressive load 01/06/2026) — sub-set dos KPIs
+// que dão pra calcular sem itens detalhados. PA, sparklines, loja líder por
+// SKU etc só vêm depois quando renderKPIs() completo sobrescreve.
+function renderKPIsImediato(cur,prev){
+  var html='';
+  html+='<div class="kpi hero">';
+  html+='<div class="kpi-lbl">Receita Bruta</div>';
+  html+='<div class="kpi-val">'+fmt(cur.fat)+'</div>';
+  html+='<div class="kpi-delta">'+deltaBadge(delta(cur.fat,prev.fat))+' <span style="color:#d4d4d8">vs anterior</span></div>';
+  html+='<div class="kpi-sub" style="margin-top:6px;font-size:9px;opacity:0.6;">Estimativa rápida · detalhes carregando…</div>';
+  html+='</div>';
+  html+='<div class="kpi"><div class="kpi-lbl">Pedidos</div><div class="kpi-val">'+fmtN(cur.ped)+'</div><div class="kpi-delta">'+deltaBadge(delta(cur.ped,prev.ped))+'</div></div>';
+  html+='<div class="kpi"><div class="kpi-lbl">Ticket Médio</div><div class="kpi-val">'+fmt(cur.tm)+'</div><div class="kpi-delta">'+deltaBadge(delta(cur.tm,prev.tm))+'</div></div>';
+  // Loja líder via MV
+  var lojasArr=Object.keys(cur.porLoja).map(function(k){return {n:k,fat:cur.porLoja[k].fat};}).sort(function(a,b){return b.fat-a.fat;});
+  if(lojasArr.length){
+    var liderNome=lojasArr[0].n;
+    html+='<div class="kpi"><div class="kpi-lbl">Loja Líder</div><div class="kpi-val" style="font-size:1.15rem;color:'+getCor(liderNome)+'">'+liderNome+'</div><div class="kpi-sub">'+fmt(lojasArr[0].fat)+'</div></div>';
+  }
+  document.getElementById('kpis').innerHTML=html;
+}
+
 async function carregar(){
   if(!DE||!ATE) return;
   document.getElementById('kpis').innerHTML='<div class="kpi hero"><div class="kpi-lbl">Carregando...</div><div class="spin"></div></div>';
@@ -566,6 +613,19 @@ async function carregar(){
   try {
     var usarComp=document.getElementById('chk-compare').checked;
     var ant=periodoAnterior(DE,ATE);
+
+    // Progressive load: MV agregada PRIMEIRO (~200ms), renderiza KPIs imediato
+    fetchAgregadoMV(DE,ATE).then(function(mv){
+      STATE.mvRows=mv;
+      try{
+        var cur=calcKPIsFromMV(mv);
+        var prev=STATE.mvRowsPrev?calcKPIsFromMV(STATE.mvRowsPrev):{fat:0,ped:0,tm:0,porLoja:{}};
+        if(!STATE.pedidosRaw) renderKPIsImediato(cur,prev);
+      }catch(e){console.warn('MV render:',e);}
+    }).catch(function(e){console.warn('MV falhou (vai cair em pedidos detalhados):',e);});
+    if(usarComp){
+      fetchAgregadoMV(ant.de,ant.ate).then(function(r){STATE.mvRowsPrev=r;}).catch(function(){});
+    }
 
     var fetches=[fetchPedidos(DE,ATE)];
     if(usarComp) fetches.push(fetchPedidos(ant.de,ant.ate));
