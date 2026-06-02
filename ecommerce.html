@@ -492,7 +492,7 @@ async function buscarTudo(tab,filtro){
   }
   return todos;
 }
-var SEL_PED='id,data_pedido,valor_bruto,canal_nome_raw,origem_conta,status,frete,frete_ml_seller,desconto,valor_liquido,uf,cidade,fee_canal,valor_devolucao,metodo_pagamento,parcelas';
+var SEL_PED='id,data_pedido,valor_bruto,canal_nome_raw,origem_conta,status,frete,frete_ml_seller,desconto,valor_liquido,uf,cidade,fee_canal,valor_devolucao,valor_chargeback,metodo_pagamento,parcelas';
 // Receita inclui frete cliente APENAS pra ML (vb ML = total_amount = só itens, frete fora).
 // Demais canais: vb JÁ INCLUI frete cliente (validado empiricamente 25/05):
 //   - TikTok:   vb = itens + frete (payment.total_amount)
@@ -617,9 +617,15 @@ function aplicarFiltro(){DE=document.getElementById('dt-de').value;ATE=document.
 function setStack(m){STATE.stackMode=m;document.getElementById('stk-abs').classList.toggle('on',m==='abs');document.getElementById('stk-pct').classList.toggle('on',m==='pct');renderHero();}
 
 function filtrarPedidos(lista){
-  var incCanc=document.getElementById('chk-canc').checked;var CANC=['cancelado','devolvido'];var ativos=[];
-  lista.forEach(function(p){if(shouldDedup(p))return;var st=(p.status||'').toLowerCase();var isCanc=CANC.indexOf(st)>=0;if(isCanc&&!incCanc)return;
-    p._nome=getNome(p.canal_nome_raw,p.origem_conta);p._cor=getCor(p._nome);p._canc=isCanc;
+  var incCanc=document.getElementById('chk-canc').checked;var ativos=[];
+  lista.forEach(function(p){if(shouldDedup(p))return;var st=(p.status||'').toLowerCase();
+    var isCancelado=(st==='cancelado');var isDevolvido=(st==='devolvido');
+    // cancelado = não-venda → fora (salvo toggle). devolvido = venda que voltou → SEMPRE entra:
+    // calcPnL conta como receita bruta + devolução (Gross Sales − Returns = Net); _canc o mantém
+    // fora dos gráficos/rankings operacionais (comportamento inalterado lá).
+    if(isCancelado&&!incCanc)return;
+    p._nome=getNome(p.canal_nome_raw,p.origem_conta);p._cor=getCor(p._nome);
+    p._cancelado=isCancelado;p._devolvido=isDevolvido;p._canc=(isCancelado||isDevolvido);
     if(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[p._nome])return;ativos.push(p);});
   return ativos;
 }
@@ -808,9 +814,11 @@ function calcPnL(pedidos,itens){
   var receita=0,devolucoes=0,frete=0,comissao=0,cmv=0;
   pedidos.forEach(function(p){
     var v=valorReceita(p);
-    if(p._canc) return;  // cancelados/devolvidos fora da receita
+    if(p._cancelado) return;  // só cancelado fora; devolvido conta como venda bruta + devolução
     receita+=v;
-    devolucoes+=parseFloat(p.valor_devolucao||0);
+    // valor_devolucao: refund parcial (faturado) ou reversão total (devolvido — no site é assim).
+    // + valor_chargeback (estorno por contestação, perda total) na mesma linha de perdas.
+    devolucoes+=parseFloat(p.valor_devolucao||0)+parseFloat(p.valor_chargeback||0);
     var fSeller=parseFloat(p.frete_ml_seller||0);
     frete+=fSeller>0?fSeller:parseFloat(p.frete||0);
     var fee=parseFloat(p.fee_canal||0);

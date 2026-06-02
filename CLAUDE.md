@@ -148,6 +148,7 @@ Fonte: `vw_pedidos_full` (origem_conta=kwid). Histórico completo (out/24 → ho
 - `lojaDisplay()` = identity (desde 23/04/2026). Nomes curtos são fonte da verdade na base. `LOJA_CORES` usa keys sem prefixo.
 - Fotos vendedores: `vendedores/{primeiro-nome}.jpg` (lowercase, sem acento). `avatarHtml()` tenta `{primeiro-segundo}.jpg` → `{primeiro}.jpg` → iniciais.
 - Metas: fetch de `metas_lojas` uma vez por sessão (`STATE.metasLoaded`). Sem meta = fallback gracioso.
+- **Cadastro de metas (botão verde topbar, 01/06)**: visível só pra whitelist `app_config.metas_editors_emails` (`carregarWhitelistMetas()` antes do `requireAuth`). Drawer escreve `metas_lojas` + `metas_vendedores` + CRUD `kwid_vendedores` via PostgREST com JWT (RLS valida whitelist). Whitelist é **fonte única** (UI + RLS). Policies usam `auth.jwt() ->> 'email'` (nunca `auth.users`). Drawer **fora do `<header>`** (backdrop-filter aprisiona `position:fixed`). Ler `app_config` com `&order=key.asc` (PK=`key`). DDL `sql/2026-06-01_metas_vendedores.sql`.
 - Projeção do mês: média por DOW dos dias observados, fallback pra média diária. Ativa quando range inclui hoje.
 - Charts: registro em `CHARTS`. Sparklines em `CHARTS.lojaSparklines[]`.
 - Cross-filtering bidirecional: click vendedor ↔ click SKU.
@@ -182,6 +183,7 @@ Fonte única: tabela `contas_pagar` (só Fio e Trama).
 ## Dash Ecommerce (`ecommerce.html`)
 
 - Fonte: `vw_pedidos_full` (excluindo lojas físicas e atacado). Detalhe agregado opcional via `mvw_ecommerce_canal_dia`.
+- **P&L trata `devolvido` como venda bruta + devolução** (02/06/2026, Gross Sales − Returns = Net). ⚠️ Exceção à convenção compartilhada "filtrar `status NOT IN (cancelado,devolvido)`": só `cancelado` (não-venda) fica fora do P&L. `devolvido` entra na Receita Bruta E na linha Devoluções. Motivo: no Site Próprio a devolução vira **reversão total** (`status='devolvido'`, valor no `valor_devolucao`), não refund parcial como nos marketplaces — excluir devolvido inteiro escondia ~90% da devolução do site (mostrava R$2k de R$21k). `calcPnL` pula só `p._cancelado`; `filtrarPedidos` mantém devolvido em `ativos` mas com `_canc=true` (gráficos/rankings operacionais seguem excluindo). Linha Devoluções soma `valor_devolucao + valor_chargeback`. A MV `mvw_ecommerce_canal_dia` espelha (FILTER `status<>'cancelado'`; `cancelados` conta só cancelado). DDL: `sql/2026-06-02_mvw_ecommerce_devolvido.sql` + `_vw_pedidos_full_chargeback.sql`.
 - **Custos por canal**: tabela `CANAL_CUSTO` hardcoded. Fonte da verdade: [../CUSTOS_POR_CANAL.md](../CUSTOS_POR_CANAL.md).
 - Margem líquida = receita − (receita × custo_canal%) − Σ(qty × `produtos.custo_total`).
 
