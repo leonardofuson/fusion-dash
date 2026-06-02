@@ -116,6 +116,7 @@ movimentacao_insumos (event log) ──► trigger fn_atualizar_estoque_insumo �
 - **Criar OP (smart origin):** se costureiro já tem saldo do insumo, só gera `envio_costureiro` pra qty que falta vir do CD.
 - **Exclusão/cancelamento de OP:** busca `envio_costureiro` da OP → inverte (`retorno_cd`) → PATCH movs `ordem_producao_id=NULL` (preserva auditoria) → DELETE OP.
 - **Entrega Parcial vs Total** (radio): Parcial = INSERT entrega + `consumo_op` proporcional, OP fica `Em Produção`. Total = + PATCH `status='Entregue'` + data (CHECK garante data).
+- **⚠️ Data no Histórico ≠ `data_entrega_real` da OP:** o Histórico é **per-entrega** (`producao_entregas.data_entrega`). Editar "Data de Entrega Real" no form da OP **só** afeta a régua de Pagamentos — não o Histórico, se a OP tiver entregas registradas (`data_entrega_real` só dirige o Histórico no path B, OP sem entregas). Pra corrigir a data exibida no Histórico: editar cada entrega, ou usar o botão **"↧ Aplicar esta data às N entrega(s)"** no form (propaga `data_entrega_real` → todas as `producao_entregas.data_entrega`, só data). Adicionado 02/06 após caso OP #1327.
 - **Editar/excluir entrega:** mov de delta / mov reversa; trigger `trg_excluir_op_entrega` decrementa `qtde_pecas_entregues` simétrico.
 - **Custos faixa menor/maior:** `costureiros.tamanho_corte_menor_max` + `ordens_producao.valor_costura_*_maior`. `valor_total` = grade_menor×custo_menor + grade_maior×custo_maior.
 
@@ -169,6 +170,7 @@ Service `fusion-sync-producao`: `SUPABASE_URL` + `SUPABASE_KEY` (service_role). 
 
 ## 14. Changelog
 
+- **2026-06-02** — Form Editar OP: nota + botão "↧ Aplicar esta data às N entrega(s)" quando a OP tem entregas parciais (`aplicarDataEntregaRealEntregas`). Resolve armadilha em que editar `data_entrega_real` não mexia no Histórico (per-entrega). Caso disparador: OP #1327 (2 entregas corrigidas 29/04→29/05 direto no banco). Commit `317db85`.
 - **2026-05-15** — Custo WAC v6 (média ponderada 90d + IQR + cap R$300) — `sql/2026-05-15_custos_v6_wac.sql`.
 - **2026-05-11** — fix 3 bugs triggers/constraint (status canônicos, AFTER DELETE entregas, `chk_entregue_tem_data`).
 - **2026-05-02** — aba Produtos centralizada, `fabricacao_propria` flag, split filtro MRP, heatmaps cor×tam.
