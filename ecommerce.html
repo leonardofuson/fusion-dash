@@ -678,6 +678,7 @@ async function carregar(){
       var p=cached.mvPrev?calcPnLFromMV(cached.mvPrev):{receita:0,liquida:0,lucro:0,comissao:0,devolucoes:0,frete:0,cmv:0,pedidos:0};
       renderKPIsImediato(c,p);
       renderWaterfallImediato(c,p);
+      renderCanalTableFromMV(cached.mv);
       document.getElementById('upd').textContent='Cache · atualizando…';
     }catch(e){console.warn('cache render:',e);}
   } else {
@@ -696,6 +697,7 @@ async function carregar(){
       try{
         renderKPIsImediato(cur,prev);
         renderWaterfallImediato(cur,prev);
+        renderCanalTableFromMV(mvRows);
       }catch(e){console.warn('render imediato MV:',e);}
       return mvRows;
     }).catch(function(e){console.warn('MV falhou (vai cair em pedidos detalhados):',e);return null;});
@@ -899,6 +901,56 @@ function renderKPIs(){
 }
 
 // ── CANAL TABLE ──
+// HTML compartilhado entre o render rápido (MV) e o detalhado (pedidos+itens) — mesmo formato.
+function _canalRowsArr(byCanal,cmvByCanal){
+  var totalR=Object.values(byCanal).reduce(function(s,c){return s+c.r;},0);
+  return Object.keys(byCanal).map(function(n){
+    var c=byCanal[n];var cmv=(cmvByCanal&&cmvByCanal[n])||c.r*cmvPct(n);
+    var liquida=c.r-c.fee-c.dev-c.frete;var resultado=liquida-cmv;
+    return{nome:n,cor:c.cor||getCor(n),r:c.r,ped:c.ped,fee:c.fee,dev:c.dev,frete:c.frete,
+      liquida:liquida,cmv:cmv,resultado:resultado,share:totalR>0?c.r/totalR*100:0};
+  }).sort(function(a,b){return b.r-a.r;});
+}
+function _canalTbodyHTML(rows){
+  function vp(v,base){var p=base>0?v/base*100:0;return fmtK(v)+' <span style="opacity:.55;font-size:.82em">('+fmtD(p)+'%)</span>';}
+  return rows.map(function(r){
+    var cls='canal-row';
+    if(STATE.focusCanal===r.nome)cls+=' focused';
+    else if(STATE.focusCanal)cls+=' dimmed';
+    return'<tr class="'+cls+'" onclick="focusCanal(\''+r.nome.replace(/'/g,"\\'")+'\')">' +
+      '<td><span class="canal-dot" style="color:'+r.cor+';background:'+r.cor+'"></span>'+r.nome+'</td>'+
+      '<td class="r">'+fmtN(r.ped)+'</td>'+
+      '<td class="r">'+fmtK(r.r)+' <span style="opacity:.55;font-size:.82em">('+fmtD(r.share)+'% do total)</span></td>'+
+      '<td class="r">'+vp(r.fee,r.r)+'</td>'+
+      '<td class="r">'+vp(r.dev,r.r)+'</td>'+
+      '<td class="r">'+vp(r.frete,r.r)+'</td>'+
+      '<td class="r">'+vp(r.liquida,r.r)+'</td>'+
+      '<td class="r">'+vp(r.cmv,r.r)+'</td>'+
+      '<td class="r" style="color:'+(r.resultado>=0?'#22c55e':'#f43f5e')+';font-weight:600">'+vp(r.resultado,r.r)+'</td>'+
+    '</tr>';
+  }).join('');
+}
+// Render RÁPIDO via MV (primeiro paint na troca de período, como os KPIs). Antes a tabela
+// esperava o fetch detalhado de pedidos (28k-115k linhas, 16-24s em janelas grandes) e ficava
+// CONGELADA no período anterior — sensação de "dado não bate". CMV aqui é proporção; o
+// renderCanalTable detalhado refina com CMV real (item × custo) quando os itens chegam.
+function renderCanalTableFromMV(rows){
+  if(!rows||!rows.length)return;
+  var byCanal={};
+  rows.forEach(function(r){
+    var n=getNome(r.canal_nome_raw,r.origem_conta);
+    if(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[n])return;
+    if(STATE.focusCanal&&n!==STATE.focusCanal)return;
+    if(!byCanal[n])byCanal[n]={r:0,ped:0,dev:0,frete:0,fee:0,cor:getCor(n)};
+    var c=byCanal[n];
+    c.r+=parseFloat(r.receita_bruta||0);
+    c.ped+=(parseInt(r.pedidos||0)-parseInt(r.cancelados||0));
+    c.fee+=parseFloat(r.comissao||0);
+    c.frete+=parseFloat(r.frete_seller||0);
+    c.dev+=parseFloat(r.devolucoes||0);
+  });
+  try{document.getElementById('canal-tbody').innerHTML=_canalTbodyHTML(_canalRowsArr(byCanal,null));}catch(e){console.error('canalMV:',e);}
+}
 function renderCanalTable(){
   var ped=STATE.pedidosFull||STATE.pedidos;
   var byCanal={};
@@ -918,35 +970,7 @@ function renderCanalTable(){
     if(!cmvByCanal[it._canal])cmvByCanal[it._canal]=0;
     cmvByCanal[it._canal]+=(it._custoUn||0)*it._qtd;
   });
-
-  var totalR=Object.values(byCanal).reduce(function(s,c){return s+c.r;},0);
-  var rows=Object.keys(byCanal).map(function(n){
-    var c=byCanal[n];var cmv=cmvByCanal[n]||c.r*cmvPct(n);
-    var liquida=c.r-c.fee-c.dev-c.frete;var resultado=liquida-cmv;
-    return{nome:n,cor:c.cor||getCor(n),r:c.r,ped:c.ped,fee:c.fee,dev:c.dev,frete:c.frete,
-      liquida:liquida,cmv:cmv,resultado:resultado,share:totalR>0?c.r/totalR*100:0};
-  }).sort(function(a,b){return b.r-a.r;});
-
-  // valor + (% da Receita Bruta do canal) no parêntese
-  function vp(v,base){var p=base>0?v/base*100:0;return fmtK(v)+' <span style="opacity:.55;font-size:.82em">('+fmtD(p)+'%)</span>';}
-
-  var html=rows.map(function(r){
-    var cls='canal-row';
-    if(STATE.focusCanal===r.nome)cls+=' focused';
-    else if(STATE.focusCanal)cls+=' dimmed';
-    return'<tr class="'+cls+'" onclick="focusCanal(\''+r.nome.replace(/'/g,"\\'")+'\')">' +
-      '<td><span class="canal-dot" style="color:'+r.cor+';background:'+r.cor+'"></span>'+r.nome+'</td>'+
-      '<td class="r">'+fmtN(r.ped)+'</td>'+
-      '<td class="r">'+fmtK(r.r)+' <span style="opacity:.55;font-size:.82em">('+fmtD(r.share)+'% do total)</span></td>'+
-      '<td class="r">'+vp(r.fee,r.r)+'</td>'+
-      '<td class="r">'+vp(r.dev,r.r)+'</td>'+
-      '<td class="r">'+vp(r.frete,r.r)+'</td>'+
-      '<td class="r">'+vp(r.liquida,r.r)+'</td>'+
-      '<td class="r">'+vp(r.cmv,r.r)+'</td>'+
-      '<td class="r" style="color:'+(r.resultado>=0?'#22c55e':'#f43f5e')+';font-weight:600">'+vp(r.resultado,r.r)+'</td>'+
-    '</tr>';
-  }).join('');
-  document.getElementById('canal-tbody').innerHTML=html;
+  document.getElementById('canal-tbody').innerHTML=_canalTbodyHTML(_canalRowsArr(byCanal,cmvByCanal));
 }
 
 // ── HERO STACKED AREA ──
