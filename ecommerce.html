@@ -1211,9 +1211,11 @@ function renderEcommSkuDetail(){
   var receita=s.receita;var qtd=s.qtd;
   var feePct=receita>0?(s.fee/receita*100):0;
   var devPct=receita>0?(s.devolucao/receita*100):0;
-  var freteLiq=s.freteCliente-s.freteSeller; // positivo = ganhou, negativo = subsidiou
-  var freteLiqPct=receita>0?(freteLiq/receita*100):0;
-  var margemLiq=receita-s.custoTotal-s.fee-s.devolucao-Math.max(0,-freteLiq); // ignorar subsidio embutido em ML (vb ML não inclui frete)
+  // Frete = CUSTO do seller (dedução), consistente com a tabela Performance por canal e o P&L.
+  // (Antes era "frete líquido" = cliente−seller, que dava positivo/verde e confundia.)
+  var freteSeller=s.freteSeller;
+  var fretePct=receita>0?(freteSeller/receita*100):0;
+  var margemLiq=receita-s.custoTotal-s.fee-s.devolucao-freteSeller;
   var margemPct=receita>0?(margemLiq/receita*100):0;
   // Velocidade
   var datas=Object.keys(s.datas||{}).sort();
@@ -1257,13 +1259,13 @@ function renderEcommSkuDetail(){
   // KPIs row 2 — comissão real / devolução / frete líquido / velocidade
   var feeCls=feePct<=12?'good':(feePct<=22?'mid':'bad');
   var devCls=devPct<=3?'good':(devPct<=8?'mid':'bad');
-  var fretCls=freteLiq>=0?'good':(freteLiqPct>=-5?'mid':'bad');
+  var fretCls=fretePct<=8?'good':(fretePct<=15?'mid':'bad');  // custo de frete sobre receita (menor = melhor)
   var tendSym=tendPct>=5?'▲':(tendPct<=-5?'▼':'→');
   var tendCor=tendPct>=5?'#22c55e':(tendPct<=-5?'#ef4444':'#a1a1aa');
   html+='<div class="dr-kpi-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:18px;">';
   html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Comissão real</div><div class="dr-kpi-val">'+fmtD(feePct)+'%</div><div class="dr-kpi-sub"><span class="margem-pill '+feeCls+'">'+fmtK(s.fee)+'</span></div></div>';
   html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Devolução real</div><div class="dr-kpi-val">'+fmtD(devPct)+'%</div><div class="dr-kpi-sub"><span class="margem-pill '+devCls+'">'+fmtK(s.devolucao)+'</span></div></div>';
-  html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Frete líquido</div><div class="dr-kpi-val" style="color:'+(freteLiq>=0?'#22c55e':'#ef4444')+';">'+(freteLiq>=0?'+':'')+fmtK(freteLiq)+'</div><div class="dr-kpi-sub"><span class="margem-pill '+fretCls+'">'+fmtD(freteLiqPct)+'%</span> '+(freteLiq>=0?'recebido':'subsidiado')+'</div></div>';
+  html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Frete (custo seller)</div><div class="dr-kpi-val">'+fmtK(freteSeller)+'</div><div class="dr-kpi-sub"><span class="margem-pill '+fretCls+'">'+fmtD(fretePct)+'%</span> da receita</div></div>';
   html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Velocidade</div><div class="dr-kpi-val">'+fmtD(v7d)+' un/d</div><div class="dr-kpi-sub" style="color:'+tendCor+';">'+tendSym+' '+(tendPct>=0?'+':'')+Math.round(tendPct)+'% vs 30d</div></div>';
   html+='</div>';
 
@@ -1272,16 +1274,16 @@ function renderEcommSkuDetail(){
     var p=s.porCanal[c];
     var fc=p.receita>0?(p.fee/p.receita*100):0;
     var dc=p.receita>0?(p.devolucao/p.receita*100):0;
-    var fr=p.freteCliente-p.freteSeller;
+    var fr=p.freteSeller;   // custo de frete do seller (dedução), igual ao P&L
     var custo=p.custoTotal;
-    var marg=p.receita-custo-p.fee-p.devolucao-Math.max(0,-fr);
+    var marg=p.receita-custo-p.fee-p.devolucao-fr;
     var mp=p.receita>0?(marg/p.receita*100):0;
     return {nome:c,cor:getCor(c),qtd:p.qtd,receita:p.receita,fee:p.fee,feePct:fc,devolucao:p.devolucao,devPct:dc,frete:fr,margem:marg,margemPct:mp};
   }).sort(function(a,b){return b.receita-a.receita;});
 
   html+='<div class="drawer-section" style="margin-bottom:18px;"><div class="drawer-section-title">Comparativo cross-canal</div>';
   html+=  '<div style="overflow-x:auto;"><table class="dr-tbl" style="width:100%;font-size:11px;">';
-  html+=    '<thead><tr><th style="text-align:left;">Canal</th><th class="r">Qtd</th><th class="r">Receita</th><th class="r">Comissão</th><th class="r">Devol.</th><th class="r">Frete líq.</th><th class="r">Margem</th><th class="r">Margem %</th></tr></thead><tbody>';
+  html+=    '<thead><tr><th style="text-align:left;">Canal</th><th class="r">Qtd</th><th class="r">Receita</th><th class="r">Comissão</th><th class="r">Devol.</th><th class="r">Frete</th><th class="r">Margem</th><th class="r">Margem %</th></tr></thead><tbody>';
   canaisRows.forEach(function(c){
     var mc=c.margemPct>=40?'good':(c.margemPct>=20?'mid':'bad');
     html+='<tr>'
@@ -1290,7 +1292,7 @@ function renderEcommSkuDetail(){
       +'<td class="r" style="font-weight:700;color:var(--txt1);">'+fmt(c.receita)+'</td>'
       +'<td class="r"><span style="color:var(--txt2)">'+fmtD(c.feePct)+'%</span> <span style="color:var(--txt3);font-size:10px">('+fmtK(c.fee)+')</span></td>'
       +'<td class="r"><span style="color:'+(c.devPct>=10?'#ef4444':(c.devPct>=5?'#eab308':'var(--txt2)'))+'">'+fmtD(c.devPct)+'%</span></td>'
-      +'<td class="r" style="color:'+(c.frete>=0?'#22c55e':'#ef4444')+'">'+(c.frete>=0?'+':'')+fmtK(c.frete)+'</td>'
+      +'<td class="r"><span style="color:var(--txt2)">'+fmtK(c.frete)+'</span></td>'
       +'<td class="r" style="font-weight:700">'+fmtK(c.margem)+'</td>'
       +'<td class="r"><span class="margem-pill '+mc+'">'+Math.round(c.margemPct)+'%</span></td>'
       +'</tr>';
