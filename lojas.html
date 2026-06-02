@@ -421,6 +421,9 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
       <th class="r sortable" data-sort="qtd" onclick="setVendSort('qtd')" title="Peças vendidas (unidades)">Peças</th>
       <th class="r sortable" data-sort="tm" onclick="setVendSort('tm')">TM</th>
       <th class="r sortable" data-sort="pa" onclick="setVendSort('pa')">PA</th>
+      <th class="r sortable" data-sort="meta" onclick="setVendSort('meta')" title="Meta do vendedor no(s) mês(es) do período">Meta</th>
+      <th class="r sortable" data-sort="metaPct" onclick="setVendSort('metaPct')" title="% atingido da meta (realizado do período ÷ meta)">Atg.%</th>
+      <th class="r sortable" data-sort="proj" onclick="setVendSort('proj')" title="Previsão fim do mês: realizado + projeção do resto do mês corrente (ritmo atual)">Prev. mês</th>
     </tr></thead><tbody id="tbody-vendedores"></tbody></table></div>
   </div>
 
@@ -606,7 +609,7 @@ async function fetchProdutos(){
 
 // ---- State ----
 var DE=null, ATE=null;
-var STATE={pedidos:[],anteriores:[],pedidosEscopo:[],anterioresEscopo:[],itens:[],prods:null,lojas:[],lojasSel:{},stackMode:'abs',skuGroups:[],skuSel:null,vendSel:null,totLoja:{},metas:{},metasLoaded:false,freshness:null,lojaHighlight:null,catSel:null,vendSort:{key:'fat',dir:'desc'},skuSort:{key:'receita',dir:'desc'}};
+var STATE={pedidos:[],anteriores:[],pedidosEscopo:[],anterioresEscopo:[],itens:[],prods:null,lojas:[],lojasSel:{},stackMode:'abs',skuGroups:[],skuSel:null,vendSel:null,totLoja:{},metas:{},metasVend:{},metasLoaded:false,freshness:null,lojaHighlight:null,catSel:null,vendSort:{key:'fat',dir:'desc'},skuSort:{key:'receita',dir:'desc'}};
 var CHARTS={hero:null,pareto:null,sparkPed:null,sparkTM:null,sparkPA:null,lojaSparklines:[]};
 
 function setPeriodo(preset,el){
@@ -837,6 +840,14 @@ async function carregar(){
         var h=hojeSP();var mesAtual=parseInt(h.slice(5,7));var anoAtual=parseInt(h.slice(0,4));
         var metasRaw=await buscarTudo('metas_lojas','select=loja_nome,meta_receita&ano=eq.'+anoAtual+'&mes=eq.'+mesAtual);
         metasRaw.forEach(function(m){STATE.metas[m.loja_nome]=parseFloat(m.meta_receita)||0;});
+        // metas por vendedor (TODOS os meses) — month-keyed 'YYYY-MM' pra colunas
+        // Meta/Atg%/Previsão seguirem o mês do período selecionado.
+        var metasV=await buscarTudo('metas_vendedores','select=vendedor,ano,mes,meta_receita');
+        metasV.forEach(function(m){
+          var k=m.ano+'-'+String(m.mes).padStart(2,'0');
+          if(!STATE.metasVend[m.vendedor]) STATE.metasVend[m.vendedor]={};
+          STATE.metasVend[m.vendedor][k]=parseFloat(m.meta_receita)||0;
+        });
         STATE.metasLoaded=true;
       }catch(e){console.warn('Metas não carregadas:',e.message);}
     }
@@ -1499,6 +1510,34 @@ function calcProjMesLoja(){
   return proj;
 }
 
+// Fat do mês corrente (MTD) + projeção linear até fim do mês, POR VENDEDOR.
+// Independente do filtro de período/produto — meta é mensal (igual aos loja cards).
+function calcVendMes(){
+  var inicioMes=inicioMesSP(), hoje=hojeSP(), fimMes=fimMesSP();
+  var diasDecorridos=daysBetween(inicioMes,hoje), diasTotalMes=daysBetween(inicioMes,fimMes);
+  var fatMes={};
+  (STATE.pedidosRaw||[]).forEach(function(p){
+    var d=(p.data_pedido||'').slice(0,10);
+    if(d<inicioMes||d>hoje) return;
+    var st=(p.status||'').toLowerCase();
+    if(st==='cancelado'||st==='devolvido') return;
+    var nome=getLoja(p.loja_nome,p.origem_conta);
+    if(IGNORAR_LOJA.indexOf(nome)>=0) return;
+    var v=(p.vendedor||'').trim()||'Vendedor Não Identificado';
+    fatMes[v]=(fatMes[v]||0)+parseFloat(p.valor_bruto||0);
+  });
+  var proj={};
+  if(diasDecorridos>0) Object.keys(fatMes).forEach(function(v){proj[v]=fatMes[v]/diasDecorridos*diasTotalMes;});
+  return {fatMes:fatMes, proj:proj};
+}
+
+// Lista de meses 'YYYY-MM' cobertos por [de,ate] (inclusive).
+function mesesNoRange(de,ate){
+  var out=[], y=+de.slice(0,4), m=+de.slice(5,7), ey=+ate.slice(0,4), em=+ate.slice(5,7);
+  while(y<ey||(y===ey&&m<=em)){ out.push(y+'-'+String(m).padStart(2,'0')); m++; if(m>12){m=1;y++;} }
+  return out;
+}
+
 function renderLojaCards(){
   var pedidosUse=STATE.pedidosEscopo||STATE.pedidos;
   var anterioresUse=STATE.anterioresEscopo||STATE.anteriores;
@@ -2018,6 +2057,14 @@ function renderVendedores(){
     Object.keys(qtdV).forEach(function(v){paVend[v]=pedV[v]>0?qtdV[v]/pedV[v]:null;});
   }
 
+  // --- Meta / atingimento / previsão (period-aware: segue o mês do período) ---
+  var vm=calcVendMes();                 // fatMes (MTD do mês corrente) — base da projeção do resto do mês
+  var mesesRange=mesesNoRange(DE,ATE);  // meses cobertos pelo período selecionado
+  var fatPerVend={};                    // realizado do período por vendedor (sem filtro de produto)
+  STATE.pedidos.forEach(function(p){if(!p._canc) fatPerVend[p._vend]=(fatPerVend[p._vend]||0)+parseFloat(p.valor_bruto||0);});
+  var _im=inicioMesSP(), _h=hojeSP(), _fm=fimMesSP();
+  var diasDec=daysBetween(_im,_h), diasTot=daysBetween(_im,_fm);
+  var periodoAberto=ATE>=_h;            // range alcança hoje → projeta o resto do mês corrente
   Object.values(agg).forEach(function(v){
     var mx=0,top='—';
     Object.keys(v.lojas).forEach(function(l){if(v.lojas[l]>mx){mx=v.lojas[l];top=l;}});
@@ -2026,6 +2073,13 @@ function renderVendedores(){
     v.pa=paVend[v.nome]!=null?paVend[v.nome]:-1;
     v.qtd=qtdV[v.nome]||0;   // peças vendidas (do escopo filtrado, se houver)
     v.loja=lojaDisplay(v.lojaTop);
+    var mvend=STATE.metasVend[v.nome]||{};
+    v.meta=mesesRange.reduce(function(s,mk){return s+(mvend[mk]||0);},0);  // meta do(s) mês(es) do período
+    var realizado=fatPerVend[v.nome]||0;  // total do período (não filtrado por produto) — base da meta
+    var remanescente=(periodoAberto&&diasDec>0)?(vm.fatMes[v.nome]||0)/diasDec*(diasTot-diasDec):0;
+    v.proj=realizado+remanescente;        // previsão até fim do mês (só projeta a parte do mês corrente)
+    v.metaPct=v.meta>0?realizado/v.meta*100:-1;
+    v.projPct=v.meta>0?v.proj/v.meta*100:-1;
   });
   var sk=STATE.vendSort.key, sd=STATE.vendSort.dir==='asc'?1:-1;
   var arr=Object.values(agg).sort(function(a,b){
@@ -2057,12 +2111,16 @@ function renderVendedores(){
     var pa=paVend[v.nome];
     var isActive=STATE.vendSel===v.nome;
     var activeStyle=isActive?'background:rgba(34,197,94,0.15);':'';
-    return '<tr style="cursor:pointer;'+activeStyle+'" onclick="selectVend(\''+v.nome.replace(/'/g,"\\'")+'\')"><td class="r">'+(i+1)+'</td><td style="font-weight:600">'+v.nome+'</td><td style="color:'+getCor(v.lojaTop)+'">'+lojaDisplay(v.lojaTop)+'</td><td class="val">'+fmt(v.fat)+'</td><td class="val">'+fmtN(v.ped)+'</td><td class="val">'+fmtN(v.qtd)+'</td><td class="val">'+fmt(tm)+'</td><td class="val">'+(pa!=null?fmtD(pa):'—')+'</td></tr>';
+    function corMeta(pct){return pct>=100?'var(--green)':(pct>=70?'var(--amber)':'var(--red)');}
+    var metaTd=v.meta>0
+      ?'<td class="val">'+fmt(v.meta)+'</td><td class="val" style="color:'+corMeta(v.metaPct)+';font-weight:700;">'+v.metaPct.toFixed(0)+'%</td><td class="val" style="color:'+corMeta(v.projPct)+';">'+fmt(v.proj)+'</td>'
+      :'<td class="val">—</td><td class="val">—</td><td class="val">'+(v.proj>0?fmt(v.proj):'—')+'</td>';
+    return '<tr style="cursor:pointer;'+activeStyle+'" onclick="selectVend(\''+v.nome.replace(/'/g,"\\'")+'\')"><td class="r">'+(i+1)+'</td><td style="font-weight:600">'+v.nome+'</td><td style="color:'+getCor(v.lojaTop)+'">'+lojaDisplay(v.lojaTop)+'</td><td class="val">'+fmt(v.fat)+'</td><td class="val">'+fmtN(v.ped)+'</td><td class="val">'+fmtN(v.qtd)+'</td><td class="val">'+fmt(tm)+'</td><td class="val">'+(pa!=null?fmtD(pa):'—')+'</td>'+metaTd+'</tr>';
   }).join('');
   var wrap=document.getElementById('tbody-vendedores').parentElement.parentElement.parentElement; // .tb-wrap-scroll
   // inject breadcrumb above the table
   document.getElementById('vend-breadcrumb-slot').innerHTML=breadcrumb;
-  document.getElementById('tbody-vendedores').innerHTML=html||'<tr><td colspan="8" style="text-align:center;color:#d4d4d8;padding:20px;">Sem vendedores no escopo.</td></tr>';
+  document.getElementById('tbody-vendedores').innerHTML=html||'<tr><td colspan="11" style="text-align:center;color:#d4d4d8;padding:20px;">Sem vendedores no escopo.</td></tr>';
 }
 
 // ============================================================
