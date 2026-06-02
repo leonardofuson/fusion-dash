@@ -1164,15 +1164,19 @@ function loadFromURL(){
 
 // ---- Highlights row ----
 function renderHighlights(){
-  // Top 5 vendedores — respeita filtro de produto (skuSel), igual à tabela renderVendedores.
+  // Top 5 vendedores — respeita filtro de produto (skuSel) E de categoria (catSel),
+  // igual à tabela renderVendedores. skuSel é mais específico que catSel.
   var porVend={};
-  if(STATE.skuSel){
-    // Filtro de produto ativo: agrega só os itens do SKU selecionado.
+  if(STATE.skuSel || STATE.catSel){
+    // Filtro ativo: agrega só os itens que casam (SKU selecionado ou categoria).
+    var itemMatch=STATE.skuSel
+      ? function(it){return it._sku_pai===STATE.skuSel;}
+      : function(it){return (it._cat||'OUTROS')===STATE.catSel;};
     var pedToVend={};
     STATE.pedidos.forEach(function(p){if(!p._canc) pedToVend[p.id]=p._vend;});
     var pedSeen={};
     STATE.itens.forEach(function(it){
-      if(it._sku_pai!==STATE.skuSel) return;
+      if(!itemMatch(it)) return;
       var v=pedToVend[it.pedido_id];
       if(!v) return;
       if(!porVend[v]) porVend[v]={nome:v,fat:0,ped:0,lojas:{}};
@@ -1719,6 +1723,8 @@ function toggleCat(c){
   STATE.catSel=c;
   renderCatChips();
   renderSkuList();
+  renderVendedores();
+  renderHighlights();
   if(STATE.skuSel) renderSkuDetail();
 }
 
@@ -1966,15 +1972,19 @@ function renderVendedores(){
   var pedToVend={};
   STATE.pedidos.forEach(function(p){if(!p._canc) pedToVend[p.id]=p._vend;});
 
-  // Quando skuSel está ativo, só consideramos vendas do SKU selecionado (dos itens).
-  // O fat/ped do vendedor vem dos itens filtrados do SKU, não dos pedidos inteiros.
+  // Quando há filtro de produto (skuSel) OU de categoria (catSel), só consideramos
+  // as vendas correspondentes (dos itens). O fat/ped do vendedor vem dos itens
+  // filtrados, não dos pedidos inteiros. skuSel é mais específico que catSel.
   var agg={}, paVend={};
+  var itemMatch=STATE.skuSel
+    ? function(it){return it._sku_pai===STATE.skuSel;}
+    : function(it){return (it._cat||'OUTROS')===STATE.catSel;};
 
-  if(STATE.skuSel){
-    // Monta agregação baseada em itens do SKU
+  if(STATE.skuSel || STATE.catSel){
+    // Monta agregação baseada nos itens que casam o filtro
     var qtdV={}, pedV={}, pedSeen={};
     STATE.itens.forEach(function(it){
-      if(it._sku_pai!==STATE.skuSel) return;
+      if(!itemMatch(it)) return;
       var v=pedToVend[it.pedido_id];
       if(!v) return;
       if(!agg[v]) agg[v]={nome:v,fat:0,ped:0,lojas:{}};
@@ -2036,6 +2046,8 @@ function renderVendedores(){
     var sku=STATE.skuGroups.find(function(s){return s.sku_pai===STATE.skuSel;});
     var nome=sku?(sku.nome||sku.sku_pai):STATE.skuSel;
     breadcrumb='<div style="padding:8px 12px;margin-bottom:10px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.3);border-radius:8px;font-size:11px;color:#d4d4d8;">Filtrado: vendedores que venderam <b style="color:var(--green)">'+nome+'</b> <button onclick="selectSku(\''+STATE.skuSel.replace(/'/g,"\\'")+'\')" style="margin-left:8px;background:transparent;border:1px solid rgba(34,197,94,0.4);color:var(--green);padding:2px 8px;border-radius:4px;cursor:pointer;font-size:10px;">✕ limpar</button></div>';
+  } else if(STATE.catSel){
+    breadcrumb='<div style="padding:8px 12px;margin-bottom:10px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.3);border-radius:8px;font-size:11px;color:#d4d4d8;">Filtrado: vendedores na categoria <b style="color:var(--green)">'+STATE.catSel+'</b> <button onclick="toggleCat(null)" style="margin-left:8px;background:transparent;border:1px solid rgba(34,197,94,0.4);color:var(--green);padding:2px 8px;border-radius:4px;cursor:pointer;font-size:10px;">✕ limpar</button></div>';
   }
 
   var html=arr.map(function(v,i){
