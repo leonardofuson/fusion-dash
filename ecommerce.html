@@ -321,6 +321,16 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
         <tbody id="canal-tbody"></tbody>
       </table>
     </div>
+    <div style="margin-top:10px;font-size:11.5px;line-height:1.6;color:var(--muted,#94a3b8);border-top:1px solid rgba(148,163,184,.15);padding-top:9px">
+      <strong>Fontes</strong> (dados reais da API por pedido; % = sobre a Receita Bruta do canal):
+      <b>Receita Bruta</b> = vendas (exclui cancelados; inclui devolvidos como venda + devolução). ·
+      <b>Comissão</b> = taxa real da API (ML <i>sale_fee</i>, Shopee <i>escrow</i>, TikTok <i>statement</i>, Site <i>Pagar.me payables</i>); estimada onde ainda não maturou e na Shein (sem API). ·
+      <b>Devoluções</b> = reembolso real por canal (ML <i>claims</i>, Shopee <i>returns</i>, TikTok <i>statement</i>, Site <i>Shopify refunds</i>) + <i>chargeback</i> Pagar.me (só Site). Troca/vale-crédito do site (Troque) NÃO entra aqui (não é perda de caixa). ·
+      <b>Frete</b> = custo do seller via API (ML/TikTok <i>shipments</i>). ·
+      <b>Receita Líquida</b> = Bruta − Comissão − Devoluções − Frete. ·
+      <b>CMV</b> = custo real (item × custo do produto / WAC dos costureiros) nos meses recentes; proporção real por canal nos meses antigos. ·
+      <b>Resultado</b> = Líquida − CMV.
+    </div>
   </div>
 
   <!-- 4. ANÁLISE POR PRODUTO — lista pesquisável + detalhe inline cross-canal -->
