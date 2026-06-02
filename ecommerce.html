@@ -420,6 +420,9 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
 <script>
 var SB_URL='https://spulbhnmkomvgohzhfvj.supabase.co';
 var MAX_PAGES=50, BATCH_SZ=400;
+// Token de sequência de carga: trocar período rápido dispara carregar() concorrentes;
+// renders de um load antigo NÃO podem pintar por cima do load atual (causava coluna vazia/stale).
+var LOAD_SEQ=0;
 let AUTH_HEADERS=null;
 
 // Chart.js defaults
@@ -665,6 +668,7 @@ function filtrarPedidos(lista){
 
 async function carregar(){
   if(!DE||!ATE)return;
+  var seq=++LOAD_SEQ;   // só este load pode renderizar; loads anteriores viram no-op
   // Cache local: hit válido (<5min) pinta KPIs/Waterfall IMEDIATO antes do fetch
   var cached=cacheGet(DE,ATE);
   if(cached && cached.mv){
@@ -684,6 +688,7 @@ async function carregar(){
     // Progressive load: dispara MV em paralelo, renderiza KPIs/Waterfall já quando ela chega.
     var pMV=fetchAgregadoMV(DE,ATE).then(function(mvRows){
       if(!mvRows||!mvRows.length)return null;
+      if(seq!==LOAD_SEQ)return mvRows;   // load mais novo já assumiu — não pintar por cima
       STATE.mvRows=mvRows;
       var mvPrev=usarComp?STATE.mvRowsPrev:null;
       var cur=calcPnLFromMV(mvRows);
@@ -697,6 +702,7 @@ async function carregar(){
     if(usarComp){fetchAgregadoMV(ant.de,ant.ate).then(function(r){STATE.mvRowsPrev=r;}).catch(function(){});}
     var fetches=[fetchPedidos(DE,ATE)];if(usarComp)fetches.push(fetchPedidos(ant.de,ant.ate));
     var res=await Promise.all(fetches);
+    if(seq!==LOAD_SEQ)return;   // período mudou durante o fetch — aborta este load
     STATE.pedidosRaw=res[0];STATE.anterioresRaw=usarComp?res[1]:[];
     fetchTroqueSite(DE,ATE).then(function(rows){STATE.troqueSite=rows;try{renderAlerts();}catch(e){}}).catch(function(){STATE.troqueSite=null;});
     if(STATE.canais.length===0){var seen={};STATE.pedidosRaw.forEach(function(p){if(shouldDedup(p))return;var n=getNome(p.canal_nome_raw,p.origem_conta);if(!seen[n]){seen[n]=true;STATE.canaisSel[n]=true;}});STATE.canais=Object.keys(seen).sort();renderCanalChips();}
@@ -714,6 +720,7 @@ async function carregar(){
       var useTeste=(document.getElementById('chk-ml-teste')||{}).checked;
       var itensTab=useTeste?'itens_pedido_ml_teste':'itens_pedido';
       var itens=await fetchItensForIds(ids,itensTab);var prods=await fetchProdutos();
+      if(seq!==LOAD_SEQ)return;   // período mudou durante a carga de itens — aborta
       var pedById={};recentes.forEach(function(p){pedById[p.id]=p;});
       itens.forEach(function(it){var ped=pedById[it.pedido_id];if(!ped)return;var prod=prods.byId[it.produto_id];if(!prod)return;
         var skuPai=prod.sku_pai;var pai;
@@ -733,11 +740,14 @@ async function carregar(){
       });
       STATE.itens=itens.filter(function(it){return it._sku_pai&&(!['cancelado','devolvido'].includes(it._canc));});
     }else{STATE.itens=[];}
-    // Só atualizar seções de produto (não re-filtrar pedidos)
+    // Itens carregaram → RE-RENDER autoritativo dos blocos que dependem de CMV real
+    // (waterfall/KPIs/tabela canal). Antes só re-renderizava Top Produtos/Pareto, então
+    // CMV/frete ficavam no valor do render-sem-itens (ou no da MV, o que vencesse a corrida)
+    // → coluna vinha vazia/0 de forma intermitente ao trocar período. (fix 02/06)
     STATE.itensFocus=STATE.focusCanal?STATE.itens.filter(function(it){return it._canal===STATE.focusCanal;}):STATE.itens;
     agruparSkus(STATE.itensFocus);
-    try{renderTopProdutos();}catch(e){console.error('renderTopProdutos:',e);}
-    try{renderPareto();}catch(e){console.error('renderPareto:',e);}
+    [renderWaterfall,renderKPIs,renderCanalTable,renderTopProdutos,renderPareto].forEach(function(fn){
+      try{fn();}catch(e){console.error(fn.name+':',e);}});
     document.getElementById('upd').textContent='Atualizado '+new Date().toLocaleTimeString('pt-BR');
     // Salva cache pra próxima visita (TTL 5min)
     try{var mvNow=await pMV;cacheSet(DE,ATE,{mv:mvNow,mvPrev:STATE.mvRowsPrev||null});}catch(e){}
