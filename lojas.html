@@ -106,12 +106,13 @@ table.tb tr:last-child td{border-bottom:none;}
 .premio-card{background:var(--bg3);border:1px solid var(--bdr);border-top:3px solid var(--lc,#64748b);border-radius:12px;padding:11px 12px 12px;}
 .premio-head{font-size:13px;font-weight:800;color:var(--lc,#fff);margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;}
 .premio-sec{font-size:8px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:var(--txt3);margin:8px 0 4px;}
-.premio-line{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11px;}
-.premio-line .ic{font-size:12px;flex-shrink:0;width:14px;text-align:center;}
-.premio-line .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--txt1);font-weight:600;}
-.premio-line .nm.none{color:var(--txt3);font-weight:400;}
-.premio-line .vl{font-weight:800;color:var(--txt1);font-variant-numeric:tabular-nums;white-space:nowrap;}
-.premio-legend{grid-column:1/-1;font-size:9px;color:var(--txt3);margin-top:8px;text-align:center;}
+.premio-aw{padding:4px 0 5px;}
+.premio-aw-top{display:flex;align-items:center;gap:5px;}
+.premio-aw-top .ic{font-size:12px;flex-shrink:0;}
+.premio-aw-top .lb{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.04em;color:var(--txt2);}
+.premio-aw-top .vl{margin-left:auto;font-size:13px;font-weight:800;color:var(--txt1);font-variant-numeric:tabular-nums;white-space:nowrap;}
+.premio-aw .nm{font-size:11px;font-weight:600;color:var(--txt1);padding-left:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.premio-aw .nm.none{color:var(--txt3);font-weight:400;}
 .premio-empty{grid-column:1/-1;color:var(--txt3);font-size:11px;padding:14px 0;}
 table.tb tr:hover td{background:rgba(255,255,255,0.06);}
 
@@ -986,9 +987,10 @@ async function loadPremio(){
     PREMIO.semana={de:seg,ate:dom}; PREMIO.loaded=true;
   }catch(e){console.warn('premio load',e);} finally{PREMIO.loading=false;}
 }
-function premioLine(icon,best,fmtFn){
-  if(!best) return '<div class="premio-line"><span class="ic">'+icon+'</span><span class="nm none">sem dados</span></div>';
-  return '<div class="premio-line"><span class="ic">'+icon+'</span><span class="nm">'+best.vend+'</span><span class="vl">'+fmtFn(best.val)+'</span></div>';
+function premioAward(icon,label,best,fmtFn){
+  var top='<div class="premio-aw-top"><span class="ic">'+icon+'</span><span class="lb">'+label+'</span>'+(best?'<span class="vl">'+fmtFn(best.val)+'</span>':'')+'</div>';
+  var nm=best?'<div class="nm">'+best.vend+'</div>':'<div class="nm none">sem dados</div>';
+  return '<div class="premio-aw">'+top+nm+'</div>';
 }
 async function renderPremiacao(){
   var box=document.getElementById('premiacao-grid'); if(!box) return;
@@ -1005,13 +1007,13 @@ async function renderPremiacao(){
     return '<div class="premio-card" style="--lc:'+getCor(loja)+'">'+
       '<div class="premio-head"><span>'+loja+'</span><span>&#x1F3C6;</span></div>'+
       '<div class="premio-sec">Semana · '+diaMes(sem.de)+'–'+diaMes(sem.ate)+'</div>'+
-      premioLine('&#x1F947;',wFat,fmt)+
-      premioLine('&#x1F3AF;',wTM,fmt)+
+      premioAward('&#x1F947;','Faturamento',wFat,fmt)+
+      premioAward('&#x1F3AF;','Ticket médio',wTM,fmt)+
       '<div class="premio-sec">Mês · '+mesLbl+'</div>'+
-      premioLine('&#x1F947;',mFat,fmt)+
-      premioLine('&#x1F454;',mTer,fmtN)+
+      premioAward('&#x1F947;','Faturamento',mFat,fmt)+
+      premioAward('&#x1F454;','Ternos',mTer,fmtN)+
     '</div>';
-  }).join('')+'<div class="premio-legend">&#x1F947; maior faturamento · &#x1F3AF; melhor ticket médio · &#x1F454; mais ternos</div>';
+  }).join('');
 }
 
 function renderAll(){
