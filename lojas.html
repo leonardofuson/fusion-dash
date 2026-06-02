@@ -261,15 +261,16 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
   /* SKU table: nome fixo + truncado */
   #sku-list{max-height:55vh;overflow:auto;-webkit-overflow-scrolling:touch;}
   #sku-list table.tb{min-width:520px;}
-  #sku-list table.tb td:first-child{max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  #sku-list table.tb td:nth-child(1),#sku-list table.tb th:nth-child(1){position:sticky;left:0;z-index:4;background:var(--bg2);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  #sku-list table.tb th:nth-child(1){z-index:12;} /* canto fixo acima do cabeçalho */
 
   /* Vendedores table: # e nome fixos */
   .tb-wrap-scroll{max-height:55vh;overflow:auto;-webkit-overflow-scrolling:touch;}
   .tb-wrap-scroll table.tb{min-width:480px;}
   .tb-wrap-scroll table.tb td:nth-child(1),.tb-wrap-scroll table.tb th:nth-child(1){position:sticky;left:0;z-index:4;background:var(--bg2);min-width:24px;}
   .tb-wrap-scroll table.tb td:nth-child(2),.tb-wrap-scroll table.tb th:nth-child(2){position:sticky;left:24px;z-index:4;background:var(--bg2);max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .tb-wrap-scroll table.tb th:nth-child(1){z-index:6;}
-  .tb-wrap-scroll table.tb th:nth-child(2){z-index:6;}
+  .tb-wrap-scroll table.tb th:nth-child(1){z-index:12;} /* canto fixo acima do cabeçalho (z10) */
+  .tb-wrap-scroll table.tb th:nth-child(2){z-index:12;}
   .tb-wrap-scroll table.tb td:nth-child(2)::after,.tb-wrap-scroll table.tb th:nth-child(2)::after{content:'';position:absolute;right:-4px;top:0;bottom:0;width:4px;background:linear-gradient(90deg,rgba(0,0,0,0.2),transparent);pointer-events:none;}
 
   /* SKU detail mobile */
@@ -1147,7 +1148,7 @@ function renderKPIs(){
   }
   html+='</div>';
   html+='<div class="kpi" style="position:relative;overflow:hidden"><div class="kpi-lbl">Pedidos</div><div class="kpi-val">'+fmtN(cur.ped)+'</div><div class="kpi-delta">'+deltaBadge(delta(cur.ped,prev.ped))+'</div><canvas class="kpi-spark" id="spark-ped"></canvas></div>';
-  html+='<div class="kpi"><div class="kpi-lbl">Qtd. Produtos</div><div class="kpi-val">'+(qtdTotal!==null?fmtN(qtdTotal):'—')+'</div><div class="kpi-sub">'+(qtdTotal!==null?'peças vendidas':'carregando…')+'</div></div>';
+  html+='<div class="kpi" style="position:relative;overflow:hidden"><div class="kpi-lbl">Qtd. Produtos</div><div class="kpi-val">'+(qtdTotal!==null?fmtN(qtdTotal):'—')+'</div><div class="kpi-sub">'+(qtdTotal!==null?'peças vendidas':'carregando…')+'</div><canvas class="kpi-spark" id="spark-qtd"></canvas></div>';
   html+='<div class="kpi" style="position:relative;overflow:hidden"><div class="kpi-lbl">Ticket Médio</div><div class="kpi-val">'+fmt(cur.tm)+'</div><div class="kpi-delta">'+deltaBadge(delta(cur.tm,prev.tm))+'</div><canvas class="kpi-spark" id="spark-tm"></canvas></div>';
   html+='<div class="kpi hero">';
   html+='<div class="kpi-lbl">Peças / Atendimento</div>';
@@ -1193,6 +1194,7 @@ function renderKPIs(){
     });
     var paK=Object.keys(porDiaPA).sort();
     mkSpark('spark-pa','sparkPA',paK,paK.map(function(k){var n=porDiaPedPA[k]?Object.keys(porDiaPedPA[k]).length:1;return n>0?porDiaPA[k]/n:0;}),'#a855f7');
+    mkSpark('spark-qtd','sparkQtd',paK,paK.map(function(k){return porDiaPA[k];}),'#22c55e');
   }
 }
 
