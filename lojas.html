@@ -448,7 +448,7 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
   </div>
 
   <div class="card">
-    <div class="card-title">&#x1F3C6; Premiação por loja</div>
+    <div class="card-title">&#x1F3C6; Premiação por loja <button class="btn-export" onclick="exportImage('premiacao')">Compartilhar</button></div>
     <div id="premiacao-grid" class="premiacao-grid"><div class="premio-empty">Carregando premiação…</div></div>
   </div>
 
@@ -1217,13 +1217,17 @@ function exportImage(tipo){
   // Header
   var header=document.createElement('div');
   header.style.cssText='font-size:14px;font-weight:700;margin-bottom:12px;color:#fafafa;';
-  var titles={'vendedores':'Top Vendedores','lojas':'Desempenho por Loja','produtos':'Venda de Produtos por Loja','top5vend':'Top 5 Vendedores'};
+  var titles={'vendedores':'Top Vendedores','lojas':'Desempenho por Loja','produtos':'Venda de Produtos por Loja','top5vend':'Top 5 Vendedores','premiacao':'🏆 Premiação por loja'};
   header.textContent=titles[tipo]||tipo;
   wrapper.appendChild(header);
 
   var periodo=document.createElement('div');
   periodo.style.cssText='font-size:11px;color:#d4d4d8;margin-bottom:14px;';
-  periodo.textContent='Período: '+new Date(DE+'T12:00:00').toLocaleDateString('pt-BR')+' a '+new Date(ATE+'T12:00:00').toLocaleDateString('pt-BR');
+  if(tipo==='premiacao' && PREMIO.semana){
+    periodo.textContent='Semana '+diaMes(PREMIO.semana.de)+' – '+diaMes(PREMIO.semana.ate)+'  ·  Mês de '+MES_ABREV[parseInt(hojeSP().slice(5,7))-1];
+  } else {
+    periodo.textContent='Período: '+new Date(DE+'T12:00:00').toLocaleDateString('pt-BR')+' a '+new Date(ATE+'T12:00:00').toLocaleDateString('pt-BR');
+  }
   wrapper.appendChild(periodo);
 
   var sourceEl;
@@ -1233,6 +1237,8 @@ function exportImage(tipo){
     sourceEl=document.getElementById('loja-cards');
   } else if(tipo==='top5vend'){
     sourceEl=document.querySelector('#highlights .hl-card');
+  } else if(tipo==='premiacao'){
+    sourceEl=document.getElementById('premiacao-grid');
   } else {
     var legend=document.getElementById('sku-legend');
     if(legend) wrapper.appendChild(legend.cloneNode(true));
