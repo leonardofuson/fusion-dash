@@ -1164,16 +1164,33 @@ function loadFromURL(){
 
 // ---- Highlights row ----
 function renderHighlights(){
-  // Top 5 vendedores
+  // Top 5 vendedores — respeita filtro de produto (skuSel), igual à tabela renderVendedores.
   var porVend={};
-  STATE.pedidos.forEach(function(p){
-    if(p._canc) return;
-    var v=p._vend;
-    if(!porVend[v]) porVend[v]={nome:v,fat:0,ped:0,lojas:{}};
-    porVend[v].fat+=parseFloat(p.valor_bruto||0);
-    porVend[v].ped++;
-    porVend[v].lojas[p._nome]=(porVend[v].lojas[p._nome]||0)+parseFloat(p.valor_bruto||0);
-  });
+  if(STATE.skuSel){
+    // Filtro de produto ativo: agrega só os itens do SKU selecionado.
+    var pedToVend={};
+    STATE.pedidos.forEach(function(p){if(!p._canc) pedToVend[p.id]=p._vend;});
+    var pedSeen={};
+    STATE.itens.forEach(function(it){
+      if(it._sku_pai!==STATE.skuSel) return;
+      var v=pedToVend[it.pedido_id];
+      if(!v) return;
+      if(!porVend[v]) porVend[v]={nome:v,fat:0,ped:0,lojas:{}};
+      porVend[v].fat+=it._receita;
+      porVend[v].lojas[it._loja]=(porVend[v].lojas[it._loja]||0)+it._receita;
+      var k=v+'|'+it.pedido_id;
+      if(!pedSeen[k]){pedSeen[k]=true;porVend[v].ped++;}
+    });
+  } else {
+    STATE.pedidos.forEach(function(p){
+      if(p._canc) return;
+      var v=p._vend;
+      if(!porVend[v]) porVend[v]={nome:v,fat:0,ped:0,lojas:{}};
+      porVend[v].fat+=parseFloat(p.valor_bruto||0);
+      porVend[v].ped++;
+      porVend[v].lojas[p._nome]=(porVend[v].lojas[p._nome]||0)+parseFloat(p.valor_bruto||0);
+    });
+  }
   Object.values(porVend).forEach(function(v){
     var mx=0,top='—';
     Object.keys(v.lojas).forEach(function(l){if(v.lojas[l]>mx){mx=v.lojas[l];top=l;}});
