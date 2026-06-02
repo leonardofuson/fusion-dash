@@ -418,6 +418,7 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
       <th class="sortable" data-sort="loja" onclick="setVendSort('loja')">Loja</th>
       <th class="r sortable" data-sort="fat" onclick="setVendSort('fat')">Faturamento</th>
       <th class="r sortable" data-sort="ped" onclick="setVendSort('ped')">Vendas</th>
+      <th class="r sortable" data-sort="qtd" onclick="setVendSort('qtd')" title="Peças vendidas (unidades)">Peças</th>
       <th class="r sortable" data-sort="tm" onclick="setVendSort('tm')">TM</th>
       <th class="r sortable" data-sort="pa" onclick="setVendSort('pa')">PA</th>
     </tr></thead><tbody id="tbody-vendedores"></tbody></table></div>
@@ -2023,6 +2024,7 @@ function renderVendedores(){
     v.lojaTop=top; delete v.lojas;
     v.tm=v.ped>0?v.fat/v.ped:0;
     v.pa=paVend[v.nome]!=null?paVend[v.nome]:-1;
+    v.qtd=qtdV[v.nome]||0;   // peças vendidas (do escopo filtrado, se houver)
     v.loja=lojaDisplay(v.lojaTop);
   });
   var sk=STATE.vendSort.key, sd=STATE.vendSort.dir==='asc'?1:-1;
@@ -2055,12 +2057,12 @@ function renderVendedores(){
     var pa=paVend[v.nome];
     var isActive=STATE.vendSel===v.nome;
     var activeStyle=isActive?'background:rgba(34,197,94,0.15);':'';
-    return '<tr style="cursor:pointer;'+activeStyle+'" onclick="selectVend(\''+v.nome.replace(/'/g,"\\'")+'\')"><td class="r">'+(i+1)+'</td><td style="font-weight:600">'+v.nome+'</td><td style="color:'+getCor(v.lojaTop)+'">'+lojaDisplay(v.lojaTop)+'</td><td class="val">'+fmt(v.fat)+'</td><td class="val">'+fmtN(v.ped)+'</td><td class="val">'+fmt(tm)+'</td><td class="val">'+(pa!=null?fmtD(pa):'—')+'</td></tr>';
+    return '<tr style="cursor:pointer;'+activeStyle+'" onclick="selectVend(\''+v.nome.replace(/'/g,"\\'")+'\')"><td class="r">'+(i+1)+'</td><td style="font-weight:600">'+v.nome+'</td><td style="color:'+getCor(v.lojaTop)+'">'+lojaDisplay(v.lojaTop)+'</td><td class="val">'+fmt(v.fat)+'</td><td class="val">'+fmtN(v.ped)+'</td><td class="val">'+fmtN(v.qtd)+'</td><td class="val">'+fmt(tm)+'</td><td class="val">'+(pa!=null?fmtD(pa):'—')+'</td></tr>';
   }).join('');
   var wrap=document.getElementById('tbody-vendedores').parentElement.parentElement.parentElement; // .tb-wrap-scroll
   // inject breadcrumb above the table
   document.getElementById('vend-breadcrumb-slot').innerHTML=breadcrumb;
-  document.getElementById('tbody-vendedores').innerHTML=html||'<tr><td colspan="7" style="text-align:center;color:#d4d4d8;padding:20px;">Sem vendedores no escopo.</td></tr>';
+  document.getElementById('tbody-vendedores').innerHTML=html||'<tr><td colspan="8" style="text-align:center;color:#d4d4d8;padding:20px;">Sem vendedores no escopo.</td></tr>';
 }
 
 // ============================================================
