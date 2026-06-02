@@ -527,6 +527,13 @@ async function fetchAgregadoMV(de,ate){
   var f='select=*&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc';
   return buscarTudo('mvw_ecommerce_canal_dia',f);
 }
+// Devolução REAL do Site Próprio via Troquecommerce (RMA): inclui TROCAS (vale-crédito,
+// sem dinheiro de volta) que são invisíveis no refund Shopify. Coorte por data do pedido.
+async function fetchTroqueSite(de,ate){
+  var f='select=dia,reversas,trocas,devolucoes,valor_operacional,valor_caixa,valor_troca'+
+        '&dia=gte.'+de+'&dia=lte.'+ate+'&order=dia.asc';
+  return buscarTudo('vw_devolucao_site_dia',f);
+}
 
 // localStorage cache (TTL 5min) — só MV rows agregados (~200KB cabe folgado).
 // Pedidos detalhados continuam vindo do servidor.
@@ -665,6 +672,7 @@ async function carregar(){
     var fetches=[fetchPedidos(DE,ATE)];if(usarComp)fetches.push(fetchPedidos(ant.de,ant.ate));
     var res=await Promise.all(fetches);
     STATE.pedidosRaw=res[0];STATE.anterioresRaw=usarComp?res[1]:[];
+    fetchTroqueSite(DE,ATE).then(function(rows){STATE.troqueSite=rows;try{renderAlerts();}catch(e){}}).catch(function(){STATE.troqueSite=null;});
     if(STATE.canais.length===0){var seen={};STATE.pedidosRaw.forEach(function(p){if(shouldDedup(p))return;var n=getNome(p.canal_nome_raw,p.origem_conta);if(!seen[n]){seen[n]=true;STATE.canaisSel[n]=true;}});STATE.canais=Object.keys(seen).sort();renderCanalChips();}
 
     // RENDER IMEDIATO — sem itens (waterfall, canais, geo, pagamentos, alertas)
@@ -1346,6 +1354,19 @@ function renderAlerts(){
   var alerts=[];
   if(cancRate>=5)alerts.push({level:'red',text:'Taxa de cancelamento alta: '+fmtD(cancRate)+'% ('+fmtN(cancPed)+' pedidos)'});
   else if(cancRate>=2)alerts.push({level:'amber',text:'Taxa de cancelamento: '+fmtD(cancRate)+'%'});
+
+  // Devolução REAL do Site Próprio via Troquecommerce (RMA): inclui TROCAS (vale-crédito)
+  // invisíveis no refund Shopify. Mostra taxa operacional (incl. troca) e perda de caixa (estorno $).
+  if(STATE.troqueSite&&STATE.troqueSite.length){
+    var tOp=0,tCx=0,tTr=0,tRev=0;
+    STATE.troqueSite.forEach(function(d){tOp+=parseFloat(d.valor_operacional||0);tCx+=parseFloat(d.valor_caixa||0);tTr+=parseFloat(d.valor_troca||0);tRev+=parseInt(d.reversas||0);});
+    var siteBruta=0;(STATE.pedidosFull||STATE.pedidos).forEach(function(p){if(p._cancelado)return;if(p._nome==='Site Próprio')siteBruta+=valorReceita(p);});
+    if(siteBruta>0&&tOp>0){
+      var taxaOp=tOp/siteBruta*100,taxaCx=tCx/siteBruta*100;
+      alerts.push({level: taxaOp>=12?'amber':'green',
+        text:'Site Próprio — devolução real (Troque): '+fmtD(taxaOp)+'% operacional ('+fmtN(tRev)+' reversas, '+fmt(tTr)+' em troca/crédito) vs '+fmtD(taxaCx)+'% de perda de caixa (estorno). Trocas não saem no refund Shopify.'});
+    }
+  }
 
   // Early-warning TikTok: devoluções em PROCESSO (endpoint dedicado) que o statement
   // settled ainda não capturou. Sinaliza quando o pipeline supera o confirmado.
