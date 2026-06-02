@@ -455,6 +455,19 @@ function shouldDedup(p){
 // CANAL_CUSTO mantido só como safety-net pra pedidos novos onde captura
 // ainda não maturou (fee_canal NULL até o cron de re-captura preencher).
 var CANAL_CUSTO={'ML Fio':0.1043,'ML Confecções':0.0890,'Shopee':0.2967,'Shein':0.16,'TikTok Shop':0.1941,'Site Próprio':0.0727,'Outros':0.0};
+// CMV% REAL por canal (média abr+mai 2026, item-level via produtos.custo_total).
+// Usado como proporção pra pedidos SEM detalhe de item carregado (meses antigos / first-paint),
+// substituindo o antigo 45% chutado. Pra meses com item carregado (recente), usa CMV REAL.
+// Refresh: rodar a query de proporção CMV por canal e atualizar estes valores.
+var CMV_PCT_CANAL={ml:0.434, shopee:0.40, tiktok:0.468, site:0.291, shein:0.377};
+var CMV_PCT_GERAL=0.415;
+function cmvPct(nome){var n=(nome||'').toLowerCase();
+  if(n.indexOf('mercado livre')>=0||n.indexOf('ml ')>=0)return CMV_PCT_CANAL.ml;
+  if(n.indexOf('shopee')>=0)return CMV_PCT_CANAL.shopee;
+  if(n.indexOf('tiktok')>=0)return CMV_PCT_CANAL.tiktok;
+  if(n.indexOf('site')>=0)return CMV_PCT_CANAL.site;
+  if(n.indexOf('shein')>=0)return CMV_PCT_CANAL.shein;
+  return CMV_PCT_GERAL;}
 function custoPct(n){return CANAL_CUSTO[n]!==undefined?CANAL_CUSTO[n]:0.0;}
 
 // ── Helpers ──
@@ -467,6 +480,11 @@ function hojeSP(){return new Date().toLocaleString('sv-SE',{timeZone:'America/Sa
 function somaDias(ds,d){var t=new Date(ds+'T00:00:00Z');t.setUTCDate(t.getUTCDate()+d);return t.toISOString().slice(0,10);}
 function daysBetween(a,b){return Math.round((new Date(b+'T00:00:00Z')-new Date(a+'T00:00:00Z'))/86400000)+1;}
 function inicioPedidos(){var h=hojeSP();var y=parseInt(h.slice(0,4));var m=parseInt(h.slice(5,7))-1;if(m<1){m=12;y--;}return y+'-'+String(m).padStart(2,'0')+'-01';}
+// Janela de carga de ITENS (pra CMV real): cobre o período selecionado, mas com teto de
+// ~130d (perf + cobertura de custo confiável). Meses dentro dela usam CMV REAL (item×custo);
+// mais antigos caem na proporção real por canal (cmvPct). Estende a antiga janela M+M-1.
+var CMV_DIAS_REAIS=130;
+function janelaItens(de){var cap=somaDias(hojeSP(),-CMV_DIAS_REAIS);var ini=inicioPedidos();var start=(de&&de<ini)?de:ini;return start<cap?cap:start;}
 function inicioMesSP(){return hojeSP().slice(0,7)+'-01';}
 function inicioTrimestre(){var h=hojeSP();var m=parseInt(h.slice(5,7));var q=Math.floor((m-1)/3)*3+1;return h.slice(0,4)+'-'+String(q).padStart(2,'0')+'-01';}
 function inicioAno(){return hojeSP().slice(0,4)+'-01-01';}
@@ -554,19 +572,19 @@ function cacheSet(de,ate,data){
 var idle = window.requestIdleCallback || function(fn){return setTimeout(fn,0);};
 function calcPnLFromMV(rows){
   if(!rows||!rows.length)return{receita:0,devolucoes:0,frete:0,comissao:0,cmv:0,liquida:0,lucro:0,pedidos:0};
-  var receita=0,dev=0,frete=0,com=0,liquida=0,ped=0;
+  var receita=0,dev=0,frete=0,com=0,liquida=0,ped=0,cmv=0;
   rows.forEach(function(r){
     var n=r.canal_nome_raw, _nome=getNome(n,r.origem_conta);
     if(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[_nome])return;
-    receita+=parseFloat(r.receita_bruta||0);
+    var rb=parseFloat(r.receita_bruta||0);
+    receita+=rb;
     dev+=parseFloat(r.devolucoes||0);
     frete+=parseFloat(r.frete_seller||0);
     com+=parseFloat(r.comissao||0);
+    cmv+=rb*cmvPct(_nome);   // CMV pela proporção REAL por canal (first-paint; calcPnL real sobrescreve no recente)
     ped+=parseInt(r.pedidos||0)-parseInt(r.cancelados||0);
   });
   liquida=receita-com-dev-frete;
-  // CMV: 45% placeholder até itens detalhados carregarem (calcPnL real vai sobrescrever).
-  var cmv=receita*0.45;
   return{receita:receita,devolucoes:dev,frete:frete,comissao:com,cmv:cmv,liquida:liquida,lucro:liquida-cmv,pedidos:ped};
 }
 async function fetchItensForIds(ids,tabela){
@@ -681,7 +699,7 @@ async function carregar(){
     document.getElementById('upd').textContent='Carregando produtos...';
 
     // BACKGROUND — itens + produtos (pra rankings)
-    var inicio=inicioPedidos();var skuDisponivel=(DE>=inicio)||(ATE>=inicio);
+    var inicio=janelaItens(DE);var skuDisponivel=(DE>=inicio)||(ATE>=inicio);
     if(skuDisponivel){
       var recentes=STATE.pedidosRaw.filter(function(p){return p.data_pedido>=inicio&&!shouldDedup(p);});
       var ids=recentes.map(function(p){return p.id;}).filter(function(x){return x;});
@@ -832,8 +850,11 @@ function calcPnL(pedidos,itens){
     var fee=parseFloat(p.fee_canal||0);
     comissao+=fee>0?fee:v*custoPct(p._nome);
   });
+  // CMV REAL dos itens carregados (período dentro da janela janelaItens — abr/mai/jun);
+  // pedidos mais ANTIGOS que a janela (sem item) usam a proporção REAL por canal (cmvPct).
+  var iniItens=janelaItens(DE);
   if(itens&&itens.length>0){itens.forEach(function(it){cmv+=(it._custoUn||0)*it._qtd;});}
-  else{cmv=receita*0.45;} // placeholder CMV
+  pedidos.forEach(function(p){if(p._cancelado)return;if((p.data_pedido||'')>=iniItens)return;cmv+=valorReceita(p)*cmvPct(p._nome);});
   // P&L: Bruta − Comissão − Devoluções − Frete = Líquida; − CMV = Resultado
   var liquida=receita-comissao-devolucoes-frete;
   var lucro=liquida-cmv;
@@ -885,7 +906,7 @@ function renderCanalTable(){
 
   var totalR=Object.values(byCanal).reduce(function(s,c){return s+c.r;},0);
   var rows=Object.keys(byCanal).map(function(n){
-    var c=byCanal[n];var cmv=cmvByCanal[n]||c.r*0.45;
+    var c=byCanal[n];var cmv=cmvByCanal[n]||c.r*cmvPct(n);
     var margem=c.r-c.fee-cmv;var margemPct=c.r>0?margem/c.r*100:0;
     var prevR=(byCanAlAnt[n]||{}).r||0;
     return{nome:n,cor:c.cor||getCor(n),r:c.r,ped:c.ped,tm:c.ped>0?c.r/c.ped:0,fee:c.fee,feePct:c.r>0?c.fee/c.r*100:0,cmv:cmv,margem:margem,margemPct:margemPct,pct:totalR>0?c.r/totalR*100:0,delta:delta(c.r,prevR),diario:c.diario};
@@ -1381,7 +1402,7 @@ function renderAlerts(){
   // Margem por canal
   var ped=STATE.pedidosFull||STATE.pedidos;
   var byCanal={};ped.forEach(function(p){if(p._canc)return;var n=p._nome;if(!byCanal[n])byCanal[n]=0;byCanal[n]+=valorReceita(p);});
-  Object.keys(byCanal).forEach(function(n){var r=byCanal[n];var fee=r*custoPct(n);var cmv=r*0.45;var m=r-fee-cmv;var mp=r>0?m/r*100:0;
+  Object.keys(byCanal).forEach(function(n){var r=byCanal[n];var fee=r*custoPct(n);var cmv=r*cmvPct(n);var m=r-fee-cmv;var mp=r>0?m/r*100:0;
     if(mp<15)alerts.push({level:mp<5?'red':'amber',text:n+': margem estimada '+Math.round(mp)+'% — verificar custos'});});
 
   if(alerts.length===0)alerts.push({level:'green',text:'Tudo operando normalmente — sem alertas no período'});

@@ -187,6 +187,7 @@ Fonte única: tabela `contas_pagar` (só Fio e Trama).
 - **Devolução real do Site Próprio = Troquecommerce, não Shopify** (02/06/2026): o site gere trocas/devoluções no Troque (RMA); ~64% são TROCAS (vale-crédito, sem dinheiro de volta) → invisíveis no refund Shopify. `fetchTroqueSite()` lê `vw_devolucao_site_dia`; `renderAlerts` mostra **taxa operacional** (incl. troca, ~11-14%) vs **perda de caixa** (estorno, ~5%). Refund monetário do Shopify (`valor_devolucao`) ≈ `refund_value` do Troque — segue sendo o que entra no P&L (troca não é perda de receita). Tabela `devolucoes_site` via `fusion_sync_troque.py`.
 - **Custos por canal**: tabela `CANAL_CUSTO` hardcoded. Fonte da verdade: [../CUSTOS_POR_CANAL.md](../CUSTOS_POR_CANAL.md).
 - Margem líquida = receita − (receita × custo_canal%) − Σ(qty × `produtos.custo_total`).
+- **CMV (02/06/2026)**: real (item × `produtos.custo_total`; p/ fab. própria = `custos_sku.cmv_total_peca`, custo dinâmico WAC dos costureiros) pros meses dentro de `janelaItens()` (período selecionado, teto `CMV_DIAS_REAIS=130`d — cobre abr/mai/jun); meses mais antigos + first-paint usam **proporção REAL por canal** `cmvPct()`/`CMV_PCT_CANAL` (média abr+mai: ML 43% Shopee 40% TikTok 47% Site 29% Shein 38%), que substituiu o placeholder fixo de 45%. `calcPnL` particiona por `data_pedido`>=`janelaItens(DE)` (sem double-count). Atualizar `CMV_PCT_CANAL` periodicamente.
 
 ## Dash Diretoria (`diretoria.html`)
 
