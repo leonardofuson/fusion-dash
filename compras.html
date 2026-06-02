@@ -4796,6 +4796,25 @@ function openDrawer(type) {
   overlay.classList.add('open');
 }
 
+// Propaga a "Data de Entrega Real" da OP pra TODAS as suas producao_entregas.
+// Resolve a armadilha: editar a data na OP não muda o Histórico (que é per-entrega).
+// Só altera data_entrega — quantidades/grade/saldo de insumo ficam intactos.
+async function aplicarDataEntregaRealEntregas(opId) {
+  var data = (document.getElementById('f-edit-data-entrega') || {}).value;
+  if (!data) { alert('Preencha a Data de Entrega Real primeiro.'); return; }
+  var ents = (STATE.entregas || []).filter(function(e){ return e.ordem_producao_id === opId; });
+  if (!ents.length) { alert('Esta OP não tem entregas registradas.'); return; }
+  if (!confirm('Aplicar a data ' + formatDate(data) + ' a TODAS as ' + ents.length + ' entrega(s) desta OP?\n\nIsso sobrescreve as datas individuais e atualiza o Histórico. As quantidades não mudam.')) return;
+  try {
+    for (var i = 0; i < ents.length; i++) {
+      await patchSupabase('producao_entregas', ents[i].id, { data_entrega: data });
+    }
+    closeDrawer();
+    await carregar();
+    alert('Data aplicada a ' + ents.length + ' entrega(s). Histórico atualizado.');
+  } catch (e) { alert('Erro ao aplicar data: ' + e.message); }
+}
+
 function closeDrawer() {
   document.getElementById('drawer-overlay').classList.remove('open');
   STATE.drawerType = null;
@@ -5842,6 +5861,16 @@ function buildEditOPForm(op) {
     '</div>'
   ) : '';
 
+  // Entregas registradas desta OP. Quando >0, o Histórico mostra a data de CADA entrega
+  // (producao_entregas.data_entrega), não o data_entrega_real da OP — daí a nota + botão de propagação abaixo.
+  var nEntregasOP = (STATE.entregas || []).filter(function(e){ return e.ordem_producao_id === op.id; }).length;
+  var notaDataEntregaBlock = nEntregasOP > 0 ? (
+    '<div style="margin:-4px 0 10px;padding:9px 11px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);border-radius:8px;font-size:11.5px;color:var(--txt2);line-height:1.5">' +
+      'ℹ️ Esta OP tem <strong>' + nEntregasOP + ' entrega(s)</strong> registrada(s). O <strong>Histórico</strong> mostra a data de cada entrega — não esta. Esta data alimenta só a régua de <strong>Pagamentos</strong>. Para refletir no Histórico, edite cada entrega ou: ' +
+      '<button type="button" class="btnf ghost" style="margin-top:6px;font-size:11px;padding:3px 9px" onclick="aplicarDataEntregaRealEntregas(' + op.id + ')">↧ Aplicar esta data às ' + nEntregasOP + ' entrega(s)</button>' +
+    '</div>'
+  ) : '';
+
   return infoTecidoBlock +
     '<div class="form-group"><label class="form-label">Produto</label>' +
       '<select class="form-select" id="f-edit-produto" onchange="atualizarCamposProduto(\'edit\')">' +
@@ -5868,6 +5897,7 @@ function buildEditOPForm(op) {
       '<input class="form-input" type="date" id="f-edit-data-entrega" value="' + (op.data_entrega_real || '') + '" oninput="updateDiffEntrega()"></div>' +
     '<div class="form-group"><label class="form-label">Status</label><select class="form-select" id="f-edit-status" onchange="updateDiffEntrega()">' + statusOpts + '</select></div></div>' +
     '<div class="form-row"><div class="form-group" style="flex:0 0 auto"><label class="form-label">Corte Externo?</label><select class="form-select" id="f-edit-corte"><option value="false"' + (!op.corte_externo ? ' selected' : '') + '>Não</option><option value="true"' + (op.corte_externo ? ' selected' : '') + '>Sim</option></select></div></div>' +
+    notaDataEntregaBlock +
     '<div id="diff-entrega-alert" style="margin:8px 0;display:none"></div>' +
     '<div id="f-edit-lbl-menor" style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.04em;margin:8px 0 4px">Custo de costura por peça</div>' +
     '<div class="form-row">' +
