@@ -280,6 +280,10 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
   /* Share bar overflow */
   .small-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
   /* Comparativo table mobile — sem sticky, scroll livre */
+  /* Botão Cadastro Metas — compacto e harmônico no mobile */
+  .btn-metas-toggle{padding:5px 10px;font-size:11px;border-radius:7px;gap:4px;}
+  .btn-metas-toggle .metas-lbl-long{display:none;}
+  .btn-metas-toggle .metas-lbl-short{display:inline;}
 }
 /* ====== Botão Cadastro Metas (topbar, destacado) ====== */
 .btn-metas-toggle{
@@ -297,6 +301,7 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
   color:#fff;
   box-shadow:0 0 12px rgba(34,197,94,0.35);
 }
+.metas-lbl-short{display:none;}
 /* ====== Drawer Metas (acesso restrito) ====== */
 .metas-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;display:none;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;}
 .metas-overlay.on{display:flex;}
@@ -354,7 +359,7 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
   <img src="/logo-urso.png" alt="Fusion">
   <div class="topbar-div"></div>
   <span class="topbar-label">Lojas Físicas</span>
-  <div class="topbar-actions"><span id="user-info-tb"></span><button id="btn-metas" class="btn-metas-toggle" onclick="abrirMetas()" style="display:none;" title="Cadastrar metas mensais por loja/vendedor (acesso restrito)">✏️ Cadastro Metas/Vendedores</button><a href="/index.html" class="btn-back">Menu</a><button class="btn-logout-tb" onclick="fusionAuth.signOut()">Sair</button></div>
+  <div class="topbar-actions"><span id="user-info-tb"></span><button id="btn-metas" class="btn-metas-toggle" onclick="abrirMetas()" style="display:none;" title="Cadastrar metas mensais por loja/vendedor (acesso restrito)">✏️ <span class="metas-lbl-long">Cadastro Metas/Vendedores</span><span class="metas-lbl-short">Metas</span></button><a href="/index.html" class="btn-back">Menu</a><button class="btn-logout-tb" onclick="fusionAuth.signOut()">Sair</button></div>
 </header>
 
 <div class="main">
@@ -377,7 +382,6 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
       <button class="btnf" onclick="aplicarFiltro()">Filtrar</button>
     </div>
     <label class="toggle"><input type="checkbox" id="chk-compare" checked onchange="carregar()"> vs período anterior</label>
-    <label class="toggle"><input type="checkbox" id="chk-canc" onchange="carregar()"> incluir cancelados</label>
     <span id="upd" style="margin-left:auto;font-size:11px;color:#d4d4d8;font-weight:600;"></span>
   </div>
 
@@ -683,7 +687,7 @@ function periodoAnterior(de,ate){
 }
 
 function filtrarPedidos(lista){
-  var incCanc=document.getElementById('chk-canc').checked;
+  var incCanc=false; // filtro "incluir cancelados" removido — sempre exclui cancelados/devolvidos
   var CANC=['cancelado','devolvido'];
   var ativos=[];
   lista.forEach(function(p){
