@@ -98,6 +98,22 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
 .atg-fill{position:absolute;left:0;top:0;bottom:0;border-radius:5px 0 0 5px;transition:width 0.5s cubic-bezier(0.4,0,0.2,1);}
 .atg-txt{position:relative;z-index:1;display:block;text-align:center;line-height:18px;font-size:10px;font-weight:800;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.7);font-variant-numeric:tabular-nums;}
 table.tb tr:last-child td{border-bottom:none;}
+
+/* Premiação por loja (pódio) */
+.premiacao-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+@media(max-width:900px){.premiacao-grid{grid-template-columns:1fr;}}
+.premio-card{background:var(--bg3);border:1px solid var(--bdr);border-top:3px solid var(--lc,#64748b);border-radius:14px;padding:16px 16px 18px;}
+.premio-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.premio-loja{font-size:14px;font-weight:800;letter-spacing:0.02em;color:var(--lc,#fff);}
+.premio-sec{font-size:9px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:var(--txt3);margin-bottom:10px;}
+.premio-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.premio-win{background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;padding:12px 10px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px;}
+.premio-win .hl-avatar{width:56px;height:56px;font-size:16px;border:2px solid var(--lc,#3f3f46);box-shadow:0 2px 8px rgba(0,0,0,0.35);}
+.premio-cat{font-size:10px;font-weight:700;color:var(--txt2);}
+.premio-name{font-size:12px;font-weight:700;color:var(--txt1);line-height:1.2;min-height:30px;display:flex;align-items:center;justify-content:center;}
+.premio-val{font-size:15px;font-weight:800;color:var(--txt1);font-variant-numeric:tabular-nums;}
+.premio-empty{color:var(--txt3);font-size:11px;padding:16px 0;}
+.premio-div{height:1px;background:var(--bdr);margin:14px 0;}
 table.tb tr:hover td{background:rgba(255,255,255,0.06);}
 
 .delta-badge{display:inline-block;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:700;}
@@ -429,6 +445,11 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
       <th class="r sortable" data-sort="metaPct" onclick="setVendSort('metaPct')" title="% atingido da meta (realizado do período ÷ meta)">Atg.%</th>
       <th class="r sortable" data-sort="proj" onclick="setVendSort('proj')" title="Previsão fim do mês: realizado + projeção do resto do mês corrente (ritmo atual)">Prev. mês</th>
     </tr></thead><tbody id="tbody-vendedores"></tbody></table></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">&#x1F3C6; Premiação por loja</div>
+    <div id="premiacao-grid" class="premiacao-grid"><div class="premio-empty">Carregando premiação…</div></div>
   </div>
 
 </div>
@@ -895,6 +916,113 @@ function toggleLoja(n,el){
 function selAllLojas(){STATE.lojas.forEach(function(n){STATE.lojasSel[n]=true;});renderLojaChips();renderAll();}
 function clearLojas(){STATE.lojas.forEach(function(n){STATE.lojasSel[n]=false;});renderLojaChips();renderAll();}
 
+// ════════ Premiação por loja (semana seg–dom dinâmica + mês corrente) ════════
+var PREMIO={loaded:false,loading:false,week:null,month:null,ternos:null,semana:null};
+var MES_ABREV=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+function inicioSemana(){var h=hojeSP();var dt=new Date(h+'T12:00:00Z');var dow=(dt.getUTCDay()+6)%7;return somaDias(h,-dow);} // 0=seg
+function diaMes(ds){return ds.slice(8,10)+' '+MES_ABREV[parseInt(ds.slice(5,7))-1];}
+function aggVendPremio(rows){
+  var m={};
+  (rows||[]).forEach(function(r){
+    var loja=(r.loja_nome||'').trim(), vend=(r.vendedor||'').trim();
+    if(!vend||vend==='Vendedor Não Identificado'||IGNORAR_LOJA.indexOf(loja)>=0) return;
+    var k=loja+'|'+vend;
+    if(!m[k]) m[k]={loja:loja,vend:vend,fat:0,ped:0};
+    m[k].fat+=(+r.receita||0);
+    m[k].ped+=((+r.pedidos||0)-(+r.cancelados||0)); // pedidos líquidos (sem cancelados)
+  });
+  return m;
+}
+function premioSelVend(map,loja,metric,minPed){
+  minPed=minPed||1; var best=null;
+  Object.keys(map).forEach(function(k){
+    var e=map[k]; if(e.loja!==loja) return;
+    var val; if(metric==='tm'){ if(e.ped<minPed) return; val=e.fat/e.ped; } else { val=e.fat; }
+    if(val<=0) return;
+    if(!best||val>best.val) best={vend:e.vend,val:val};
+  });
+  return best;
+}
+// ternos do mês por (loja, vendedor) — fetch DEDICADO (independente do período do dash).
+// vendedor vem do pedido (itens_pedido não tem vendedor); categoria via fetchProdutos().
+async function ternosMesPorVend(mIni,hoje){
+  var peds=await buscarTudo('pedidos','select=id,vendedor,loja_nome,origem_conta,status,data_pedido&data_pedido=gte.'+mIni+'&data_pedido=lte.'+hoje+'&order=id.asc');
+  var pedInfo={}, ids=[];
+  peds.forEach(function(p){
+    var st=(p.status||'').toLowerCase(); if(st==='cancelado'||st==='devolvido') return;
+    pedInfo[p.id]={vend:(p.vendedor||'').trim(), loja:getLoja(p.loja_nome,p.origem_conta)};
+    ids.push(p.id);
+  });
+  var prods=await fetchProdutos();
+  var itens=await fetchItensForIds(ids);
+  var m={};
+  itens.forEach(function(it){
+    var prod=prods.byId[it.produto_id]; if(!prod||prod.cat!=='BLAZER & TERNO') return;
+    var pi=pedInfo[it.pedido_id]; if(!pi) return;
+    if(!pi.vend||pi.vend==='Vendedor Não Identificado'||IGNORAR_LOJA.indexOf(pi.loja)>=0) return;
+    var k=pi.loja+'|'+pi.vend; m[k]=(m[k]||0)+(parseFloat(it.quantidade)||0);
+  });
+  return m;
+}
+function premioSelTernos(map,loja){
+  var best=null;
+  Object.keys(map).forEach(function(k){
+    var parts=k.split('|'); if(parts[0]!==loja) return;
+    var q=map[k]; if(q<=0) return;
+    if(!best||q>best.val) best={vend:parts.slice(1).join('|'),val:q};
+  });
+  return best;
+}
+async function loadPremio(){
+  if(PREMIO.loading||PREMIO.loaded) return; PREMIO.loading=true;
+  try{
+    var seg=inicioSemana(), dom=somaDias(seg,6), mIni=inicioMesSP(), hoje=hojeSP();
+    var sel='select=loja_nome,vendedor,pedidos,cancelados,receita,data_pedido&order=data_pedido.asc';
+    var res=await Promise.all([
+      buscarTudo('mvw_lojas_vend_dia',sel+'&data_pedido=gte.'+seg+'&data_pedido=lte.'+dom),
+      buscarTudo('mvw_lojas_vend_dia',sel+'&data_pedido=gte.'+mIni+'&data_pedido=lte.'+hoje),
+      ternosMesPorVend(mIni,hoje)
+    ]);
+    PREMIO.week=aggVendPremio(res[0]); PREMIO.month=aggVendPremio(res[1]); PREMIO.ternos=res[2];
+    PREMIO.semana={de:seg,ate:dom}; PREMIO.loaded=true;
+  }catch(e){console.warn('premio load',e);} finally{PREMIO.loading=false;}
+}
+function premioWin(cat,icon,best,loja,fmtFn){
+  if(!best) return '<div class="premio-win"><div class="premio-cat">'+icon+' '+cat+'</div><div class="premio-empty">sem dados</div></div>';
+  return '<div class="premio-win">'+avatarHtml(best.vend,getCor(loja),null)+
+    '<div class="premio-cat">'+icon+' '+cat+'</div>'+
+    '<div class="premio-name">'+best.vend+'</div>'+
+    '<div class="premio-val">'+fmtFn(best.val)+'</div></div>';
+}
+async function renderPremiacao(){
+  var box=document.getElementById('premiacao-grid'); if(!box) return;
+  if(!PREMIO.loaded){ await loadPremio(); if(!PREMIO.loaded){ box.innerHTML='<div class="premio-empty">Não foi possível carregar a premiação.</div>'; return; } }
+  var ternos=PREMIO.ternos||{};
+  var lojas=(STATE.lojas||[]).filter(function(n){return IGNORAR_LOJA.indexOf(n)<0 && (!STATE.lojasSel||STATE.lojasSel[n]);});
+  if(!lojas.length){ box.innerHTML='<div class="premio-empty">Selecione ao menos uma loja.</div>'; return; }
+  var sem=PREMIO.semana, mesLbl=MES_ABREV[parseInt(hojeSP().slice(5,7))-1];
+  box.innerHTML=lojas.map(function(loja){
+    var wFat=premioSelVend(PREMIO.week,loja,'fat');
+    var wTM=premioSelVend(PREMIO.week,loja,'tm',3)||premioSelVend(PREMIO.week,loja,'tm',1);
+    var mFat=premioSelVend(PREMIO.month,loja,'fat');
+    var mTer=premioSelTernos(ternos,loja);
+    return '<div class="premio-card" style="--lc:'+getCor(loja)+'">'+
+      '<div class="premio-head"><span class="premio-loja">'+loja+'</span><span style="font-size:18px;">&#x1F3C6;</span></div>'+
+      '<div class="premio-sec">Semana · '+diaMes(sem.de)+' – '+diaMes(sem.ate)+'</div>'+
+      '<div class="premio-row">'+
+        premioWin('Faturamento','&#x1F947;',wFat,loja,fmt)+
+        premioWin('Melhor TM','&#x1F3AF;',wTM,loja,fmt)+
+      '</div>'+
+      '<div class="premio-div"></div>'+
+      '<div class="premio-sec">Mês · '+mesLbl+'</div>'+
+      '<div class="premio-row">'+
+        premioWin('Faturamento','&#x1F947;',mFat,loja,fmt)+
+        premioWin('Ternos','&#x1F454;',mTer,loja,function(v){return fmtN(v)+(v===1?' terno':' ternos');})+
+      '</div>'+
+    '</div>';
+  }).join('');
+}
+
 function renderAll(){
   STATE.pedidos=filtrarPedidos(STATE.pedidosRaw);
   STATE.anteriores=filtrarPedidos(STATE.anterioresRaw);
@@ -907,6 +1035,7 @@ function renderAll(){
   renderCatChips();
   renderSkuList();
   renderVendedores();
+  renderPremiacao();
   syncToURL();
 
   // Charts pesados — deferidos pro browser respirar (Chart.js bottleneck).
