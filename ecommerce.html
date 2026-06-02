@@ -309,16 +309,14 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
       <table class="canal-tbl" id="canal-table">
         <thead><tr>
           <th>Canal</th>
-          <th class="r">Receita</th>
           <th class="r">Pedidos</th>
-          <th class="r">Ticket</th>
+          <th class="r">Receita Bruta</th>
           <th class="r">Comissão</th>
+          <th class="r">Devoluções</th>
+          <th class="r">Frete</th>
+          <th class="r">Receita Líquida</th>
           <th class="r">CMV</th>
-          <th class="r">Margem</th>
-          <th class="r">Margem %</th>
-          <th class="r">% Total</th>
-          <th class="r">Δ%</th>
-          <th>Trend</th>
+          <th class="r">Resultado</th>
         </tr></thead>
         <tbody id="canal-tbody"></tbody>
       </table>
@@ -883,21 +881,18 @@ function renderKPIs(){
 // ── CANAL TABLE ──
 function renderCanalTable(){
   var ped=STATE.pedidosFull||STATE.pedidos;
-  var ant=STATE.anterioresFull||STATE.anteriores;
   var byCanal={};
+  // Mesma lógica do P&L (calcPnL): só `cancelado` fora; `devolvido` conta como bruta + devolução.
   ped.forEach(function(p){
-    var n=p._nome;if(!byCanal[n])byCanal[n]={r:0,ped:0,canc:0,frete:0,fee:0,cor:p._cor,diario:{}};
-    if(p._canc){byCanal[n].canc++;return;}
+    var n=p._nome;if(!byCanal[n])byCanal[n]={r:0,ped:0,dev:0,frete:0,fee:0,cor:p._cor};
+    if(p._cancelado)return;
     var v=valorReceita(p);
-    var fSel=parseFloat(p.frete_ml_seller||0);
-    byCanal[n].r+=v;byCanal[n].ped++;byCanal[n].frete+=(fSel>0?fSel:parseFloat(p.frete||0));
+    byCanal[n].r+=v;byCanal[n].ped++;
+    byCanal[n].dev+=parseFloat(p.valor_devolucao||0)+parseFloat(p.valor_chargeback||0);
+    var fSel=parseFloat(p.frete_ml_seller||0);byCanal[n].frete+=(fSel>0?fSel:parseFloat(p.frete||0));
     var f=parseFloat(p.fee_canal||0);byCanal[n].fee+=f>0?f:v*custoPct(n);
-    var d=(p.data_pedido||'').slice(0,10);byCanal[n].diario[d]=(byCanal[n].diario[d]||0)+v;
   });
-  var byCanAlAnt={};
-  ant.forEach(function(p){if(p._canc)return;var n=p._nome;if(!byCanAlAnt[n])byCanAlAnt[n]={r:0};byCanAlAnt[n].r+=valorReceita(p);});
-
-  // CMV por canal from itens
+  // CMV por canal dos itens carregados; fallback proporção real por canal (cmvPct).
   var cmvByCanal={};
   (STATE.itens||[]).forEach(function(it){
     if(!cmvByCanal[it._canal])cmvByCanal[it._canal]=0;
@@ -907,44 +902,31 @@ function renderCanalTable(){
   var totalR=Object.values(byCanal).reduce(function(s,c){return s+c.r;},0);
   var rows=Object.keys(byCanal).map(function(n){
     var c=byCanal[n];var cmv=cmvByCanal[n]||c.r*cmvPct(n);
-    var margem=c.r-c.fee-cmv;var margemPct=c.r>0?margem/c.r*100:0;
-    var prevR=(byCanAlAnt[n]||{}).r||0;
-    return{nome:n,cor:c.cor||getCor(n),r:c.r,ped:c.ped,tm:c.ped>0?c.r/c.ped:0,fee:c.fee,feePct:c.r>0?c.fee/c.r*100:0,cmv:cmv,margem:margem,margemPct:margemPct,pct:totalR>0?c.r/totalR*100:0,delta:delta(c.r,prevR),diario:c.diario};
+    var liquida=c.r-c.fee-c.dev-c.frete;var resultado=liquida-cmv;
+    return{nome:n,cor:c.cor||getCor(n),r:c.r,ped:c.ped,fee:c.fee,dev:c.dev,frete:c.frete,
+      liquida:liquida,cmv:cmv,resultado:resultado,share:totalR>0?c.r/totalR*100:0};
   }).sort(function(a,b){return b.r-a.r;});
+
+  // valor + (% da Receita Bruta do canal) no parêntese
+  function vp(v,base){var p=base>0?v/base*100:0;return fmtK(v)+' <span style="opacity:.55;font-size:.82em">('+fmtD(p)+'%)</span>';}
 
   var html=rows.map(function(r){
     var cls='canal-row';
     if(STATE.focusCanal===r.nome)cls+=' focused';
     else if(STATE.focusCanal)cls+=' dimmed';
-    var mCls=r.margemPct>=30?'good':(r.margemPct>=15?'mid':'bad');
-    // Sparkline data
-    var dias=Object.keys(r.diario).sort();
-    var sparkId='spark-'+r.nome.replace(/[^a-z0-9]/gi,'');
     return'<tr class="'+cls+'" onclick="focusCanal(\''+r.nome.replace(/'/g,"\\'")+'\')">' +
       '<td><span class="canal-dot" style="color:'+r.cor+';background:'+r.cor+'"></span>'+r.nome+'</td>'+
-      '<td class="val">'+fmt(r.r)+'</td>'+
-      '<td class="val">'+fmtN(r.ped)+'</td>'+
-      '<td class="val">'+fmt(r.tm)+'</td>'+
-      '<td class="r">'+Math.round(r.feePct)+'%</td>'+
-      '<td class="r">'+fmtK(r.cmv)+'</td>'+
-      '<td class="val" style="color:'+(r.margem>=0?'#22c55e':'#f43f5e')+'">'+fmt(r.margem)+'</td>'+
-      '<td class="r"><span class="margem-pill '+mCls+'">'+Math.round(r.margemPct)+'%</span></td>'+
-      '<td class="r">'+Math.round(r.pct)+'%</td>'+
-      '<td class="r">'+deltaBadge(r.delta)+'</td>'+
-      '<td><canvas class="canal-spark" id="'+sparkId+'"></canvas></td>'+
+      '<td class="r">'+fmtN(r.ped)+'</td>'+
+      '<td class="r">'+fmtK(r.r)+' <span style="opacity:.55;font-size:.82em">('+fmtD(r.share)+'% do total)</span></td>'+
+      '<td class="r">'+vp(r.fee,r.r)+'</td>'+
+      '<td class="r">'+vp(r.dev,r.r)+'</td>'+
+      '<td class="r">'+vp(r.frete,r.r)+'</td>'+
+      '<td class="r">'+vp(r.liquida,r.r)+'</td>'+
+      '<td class="r">'+vp(r.cmv,r.r)+'</td>'+
+      '<td class="r" style="color:'+(r.resultado>=0?'#22c55e':'#f43f5e')+';font-weight:600">'+vp(r.resultado,r.r)+'</td>'+
     '</tr>';
   }).join('');
   document.getElementById('canal-tbody').innerHTML=html;
-
-  // Render sparklines
-  rows.forEach(function(r){
-    var sparkId='spark-'+r.nome.replace(/[^a-z0-9]/gi,'');
-    var cv=document.getElementById(sparkId);if(!cv)return;
-    var dias=Object.keys(r.diario).sort().slice(-14);
-    var vals=dias.map(function(d){return r.diario[d]||0;});
-    new Chart(cv,{type:'line',data:{labels:dias,datasets:[{data:vals,borderColor:r.cor,backgroundColor:r.cor+'25',fill:true,tension:0.4,pointRadius:0,borderWidth:1.5}]},
-      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{enabled:false}},scales:{x:{display:false},y:{display:false}}}});
-  });
 }
 
 // ── HERO STACKED AREA ──
