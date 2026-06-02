@@ -492,7 +492,7 @@ async function buscarTudo(tab,filtro){
   }
   return todos;
 }
-var SEL_PED='id,data_pedido,valor_bruto,canal_nome_raw,origem_conta,status,frete,frete_ml_seller,desconto,valor_liquido,uf,cidade,fee_canal,valor_devolucao,valor_chargeback,metodo_pagamento,parcelas';
+var SEL_PED='id,data_pedido,valor_bruto,canal_nome_raw,origem_conta,status,frete,frete_ml_seller,desconto,valor_liquido,uf,cidade,fee_canal,valor_devolucao,valor_chargeback,devolucao_pipeline,metodo_pagamento,parcelas';
 // Receita inclui frete cliente APENAS pra ML (vb ML = total_amount = só itens, frete fora).
 // Demais canais: vb JÁ INCLUI frete cliente (validado empiricamente 25/05):
 //   - TikTok:   vb = itens + frete (payment.total_amount)
@@ -1341,12 +1341,21 @@ function renderPareto(){
 
 // ── ALERTS ──
 function renderAlerts(){
-  var pedAtivos=STATE.pedidos.filter(function(p){return!p._canc;});
-  var totalPed=STATE.pedidos.length;var cancPed=STATE.pedidos.filter(function(p){return p._canc;}).length;
+  var totalPed=STATE.pedidos.length;var cancPed=STATE.pedidos.filter(function(p){return p._cancelado;}).length;
   var cancRate=totalPed>0?cancPed/totalPed*100:0;
   var alerts=[];
   if(cancRate>=5)alerts.push({level:'red',text:'Taxa de cancelamento alta: '+fmtD(cancRate)+'% ('+fmtN(cancPed)+' pedidos)'});
   else if(cancRate>=2)alerts.push({level:'amber',text:'Taxa de cancelamento: '+fmtD(cancRate)+'%'});
+
+  // Early-warning TikTok: devoluções em PROCESSO (endpoint dedicado) que o statement
+  // settled ainda não capturou. Sinaliza quando o pipeline supera o confirmado.
+  var pp=STATE.pedidosFull||STATE.pedidos;var tkPipe=0,tkSettled=0,tkBruta=0;
+  pp.forEach(function(p){if(p._cancelado)return;if((p._nome||'').indexOf('TikTok')<0)return;
+    tkPipe+=parseFloat(p.devolucao_pipeline||0);tkSettled+=parseFloat(p.valor_devolucao||0);tkBruta+=valorReceita(p);});
+  if(tkBruta>0&&tkPipe>tkSettled*1.3&&(tkPipe-tkSettled)>2000){
+    var pctPipe=tkPipe/tkBruta*100,pctSet=tkSettled/tkBruta*100;
+    alerts.push({level:'amber',text:'TikTok: '+fmt(tkPipe-tkSettled)+' em devoluções em processo ainda não liquidadas — pipeline '+fmtD(pctPipe)+'% vs '+fmtD(pctSet)+'% confirmado (settlement matura ~15d pós-entrega)'});
+  }
 
   // Margem por canal
   var ped=STATE.pedidosFull||STATE.pedidos;
