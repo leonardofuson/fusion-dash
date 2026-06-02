@@ -725,13 +725,10 @@ function renderKPIsImediato(cur,prev){
   html+='<div class="kpi-sub" style="margin-top:6px;font-size:9px;opacity:0.6;">Estimativa rápida · detalhes carregando…</div>';
   html+='</div>';
   html+='<div class="kpi"><div class="kpi-lbl">Pedidos</div><div class="kpi-val">'+fmtN(cur.ped)+'</div><div class="kpi-delta">'+deltaBadge(delta(cur.ped,prev.ped))+'</div></div>';
+  // Qtd. Produtos (estimativa via MV de SKU; render completo sobrescreve com itens)
+  var pecasEst=(STATE.skuGroups||[]).reduce(function(s,g){return s+(g.qtd||0);},0);
+  html+='<div class="kpi"><div class="kpi-lbl">Qtd. Produtos</div><div class="kpi-val">'+(pecasEst>0?fmtN(pecasEst):'—')+'</div><div class="kpi-sub">'+(pecasEst>0?'peças vendidas':'carregando…')+'</div></div>';
   html+='<div class="kpi"><div class="kpi-lbl">Ticket Médio</div><div class="kpi-val">'+fmt(cur.tm)+'</div><div class="kpi-delta">'+deltaBadge(delta(cur.tm,prev.tm))+'</div></div>';
-  // Loja líder via MV
-  var lojasArr=Object.keys(cur.porLoja).map(function(k){return {n:k,fat:cur.porLoja[k].fat};}).sort(function(a,b){return b.fat-a.fat;});
-  if(lojasArr.length){
-    var liderNome=lojasArr[0].n;
-    html+='<div class="kpi"><div class="kpi-lbl">Loja Líder</div><div class="kpi-val" style="font-size:1.15rem;color:'+getCor(liderNome)+'">'+liderNome+'</div><div class="kpi-sub">'+fmt(lojasArr[0].fat)+'</div></div>';
-  }
   document.getElementById('kpis').innerHTML=html;
 }
 
@@ -970,8 +967,8 @@ function renderKPIs(){
   var pedVendMap={};
   if(STATE.vendSel) STATE.pedidos.forEach(function(p){if(p._vend===STATE.vendSel) pedVendMap[p.id]=true;});
 
-  // PA geral a partir dos itens
-  var paGeral=null;
+  // PA geral + Quantidade de Produtos (peças) a partir dos itens
+  var paGeral=null, qtdTotal=null;
   if(STATE.itens.length>0){
     var pedIds={},qtd=0;
     STATE.itens.forEach(function(it){
@@ -983,6 +980,7 @@ function renderKPIs(){
     });
     var nPed=Object.keys(pedIds).length;
     paGeral=nPed>0?qtd/nPed:0;
+    qtdTotal=qtd;
   }
 
   var html='';
@@ -1027,6 +1025,7 @@ function renderKPIs(){
   }
   html+='</div>';
   html+='<div class="kpi" style="position:relative;overflow:hidden"><div class="kpi-lbl">Pedidos</div><div class="kpi-val">'+fmtN(cur.ped)+'</div><div class="kpi-delta">'+deltaBadge(delta(cur.ped,prev.ped))+'</div><canvas class="kpi-spark" id="spark-ped"></canvas></div>';
+  html+='<div class="kpi"><div class="kpi-lbl">Qtd. Produtos</div><div class="kpi-val">'+(qtdTotal!==null?fmtN(qtdTotal):'—')+'</div><div class="kpi-sub">'+(qtdTotal!==null?'peças vendidas':'carregando…')+'</div></div>';
   html+='<div class="kpi" style="position:relative;overflow:hidden"><div class="kpi-lbl">Ticket Médio</div><div class="kpi-val">'+fmt(cur.tm)+'</div><div class="kpi-delta">'+deltaBadge(delta(cur.tm,prev.tm))+'</div><canvas class="kpi-spark" id="spark-tm"></canvas></div>';
   html+='<div class="kpi hero">';
   html+='<div class="kpi-lbl">Peças / Atendimento</div>';
@@ -1035,18 +1034,6 @@ function renderKPIs(){
   html+='<canvas class="kpi-spark" id="spark-pa"></canvas>';
   html+='</div>';
 
-  // Loja líder (5o card na mesma linha)
-  var lojasArr=Object.keys(cur.porLoja).map(function(k){return {n:k,fat:cur.porLoja[k].fat};}).sort(function(a,b){return b.fat-a.fat;});
-  var lider=lojasArr[0]||{n:'—',fat:0};
-  var liderPrev=prev.porLoja&&prev.porLoja[lider.n]?prev.porLoja[lider.n].fat:0;
-  var liderCor=getCor(lider.n);
-  var liderNome=lojaDisplay(lider.n);
-  html+='<div class="kpi kpi-lider" style="border-left:3px solid '+liderCor+'">';
-  html+='<div class="kpi-lbl">Loja Líder</div>';
-  html+='<div class="kpi-val" style="font-size:1.15rem;color:'+liderCor+'">'+liderNome+'</div>';
-  html+='<div style="font-size:1.3rem;font-weight:800;color:var(--txt1);margin-top:6px;font-variant-numeric:tabular-nums;">'+fmt(lider.fat)+'</div>';
-  html+='<div class="kpi-delta">'+deltaBadge(delta(lider.fat,liderPrev))+'</div>';
-  html+='</div>';
 
   document.getElementById('kpis').innerHTML=html;
 
