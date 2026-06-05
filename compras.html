@@ -954,6 +954,18 @@ function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('pt-BR'); 
 function fmtR(n) { return n == null ? '—' : 'R$ ' + Number(n).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
 function fmtR0(n) { return n == null ? '—' : 'R$ ' + Math.round(Number(n)).toLocaleString('pt-BR'); }
 function costuName(id) { var c = STATE.costureiros.find(function(x) { return x.id === id; }); return c ? c.nome : '—'; }
+// Trava de transferência (06/06): OPs ATIVAS cujo tecido está fisicamente no costureiro `local`.
+// Transferir esse tecido pra outro lugar deixaria a(s) OP(s) sem material no costureiro que está produzindo.
+// CD FUSION nunca tem OP (tecido só "em produção" quando está no costureiro) → retorna [].
+function opsComprometidasNoLocal(insumoId, local) {
+  if (!local || local === 'CD FUSION') return [];
+  return (STATE.ops || []).filter(function(o) {
+    return o.insumo_id === insumoId
+      && o.status !== 'Entregue' && o.status !== 'Cancelado'
+      && o.quantidade_tecido_usada
+      && costuName(o.costureiro_id) === local;
+  });
+}
 function statusPill(st) {
   var map = {
     'Entregue': 'pill-ok',
@@ -6910,6 +6922,15 @@ async function submitDrawer() {
         }
       }
 
+      // Trava (06/06): impede mover às cegas tecido que está em produção numa OP aberta no costureiro de origem.
+      var compr = opsComprometidasNoLocal(insumoId, origem);
+      if (compr.length) {
+        var listaC = compr.map(function(o){ return '• OP #'+o.id+' — '+(o.sku_produto||o.produto||'')+' ('+fmt(o.quantidade_tecido_usada||0)+' '+(insumo.unidade||'')+')'; }).join('\n');
+        if (!confirm('⚠️ ATENÇÃO\n\nEste tecido está EM PRODUÇÃO em "'+origem+'" na(s) OP(s):\n'+listaC+'\n\nTransferir vai deixar essa(s) OP(s) SEM o tecido no costureiro que está produzindo. Só prossiga se a produção foi REALMENTE reatribuída pra outro costureiro.\n\nTransferir mesmo assim?')) {
+          btn.textContent='Salvar'; btn.disabled=false; return;
+        }
+      }
+
       // tipo_mov: retorno_cd quando volta pro CD; envio_costureiro pra todo o resto
       var tipoMov = (destino === 'CD FUSION') ? 'retorno_cd' : 'envio_costureiro';
       var observacao = obs || ('Transferência ' + origem + ' → ' + destino);
@@ -6941,6 +6962,7 @@ async function submitDrawer() {
       var movsBatch = [];
       var contaPares = 0;
       var precisaNFRemessaCD = false;
+      var comprNF = []; // OPs em produção que seriam deixadas sem tecido (trava 06/06)
       checkedIds.forEach(function(insId) {
         var ins = (STATE.insumos || []).find(function(x){return x.id === insId;});
         if (!ins) return;
@@ -6955,6 +6977,9 @@ async function submitDrawer() {
           if (origem === destinoNF) return; // skip — já tá lá
           var qty = saldosLoc[origem];
           if (qty <= 0.001) return;
+          opsComprometidasNoLocal(insId, origem).forEach(function(o){
+            comprNF.push('• OP #'+o.id+' — '+(o.sku_produto||o.produto||'')+' em "'+origem+'" ('+fmt(o.quantidade_tecido_usada||0)+' '+(ins.unidade||'')+')');
+          });
           var tm = (destinoNF === 'CD FUSION') ? 'retorno_cd' : 'envio_costureiro';
           var obsBase = obsNF || ('Transferência NF ' + (g.nf || '?') + ' · ' + origem + ' → ' + destinoNF);
           movsBatch.push({ insumo_id: insId, tipo_mov: tm, quantidade: -qty,
@@ -6975,6 +7000,13 @@ async function submitDrawer() {
       if (precisaNFRemessaCD && !nfRemessaNF) {
         alert('NF Fusion Remessa é obrigatória quando há saídas do CD FUSION pra costureiro');
         btn.textContent='Salvar'; btn.disabled=false; return;
+      }
+      // Trava (06/06): "Transferir tudo" é o fluxo que causou o incidente de 02/06 (12 NFs movidas às cegas,
+      // 8 OPs órfãs). Avisa explicitamente quando o lote inclui tecido em produção.
+      if (comprNF.length) {
+        if (!confirm('⚠️ ATENÇÃO — tecido em produção no lote\n\nAlgumas cores estão EM PRODUÇÃO em OPs abertas e seriam deixadas sem tecido no costureiro:\n\n'+comprNF.join('\n')+'\n\nSó prossiga se a produção dessas OPs foi REALMENTE reatribuída. Caso contrário, cancele e desmarque essas cores.\n\nTransferir mesmo assim?')) {
+          btn.textContent='Salvar'; btn.disabled=false; return;
+        }
       }
       if (!confirm('Confirma transferência de ' + contaPares + ' lote(s) pra "' + destinoNF + '"?')) {
         btn.textContent='Salvar'; btn.disabled=false; return;
