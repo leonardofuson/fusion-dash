@@ -5173,7 +5173,7 @@ function buildOPForm() {
       '<input class="form-input" id="f-nova-produto" list="dl-produtos-fab" placeholder="ex: CLAF, calça, duna..." oninput="onProdutoOPChange()" autocomplete="off">' +
     '</div>' +
     '<div class="form-group"><label class="form-label">Costureiro <small style="color:var(--txt3);font-weight:400">(digite pra buscar)</small></label>' +
-      '<input class="form-input" id="f-nova-costureiro" list="dl-costureiros" placeholder="ex: GJ, MF, Deb..." autocomplete="off" oninput="ajustarSecaoGradeMaior(\'nova\')" onblur="validarCostureiroNovaOP()">' +
+      '<input class="form-input" id="f-nova-costureiro" list="dl-costureiros" placeholder="ex: GJ, MF, Deb..." autocomplete="off" oninput="ajustarSecaoGradeMaior(\'nova\');atualizarTodasCoresRows()" onblur="validarCostureiroNovaOP()">' +
       '<div id="f-nova-costureiro-hint" style="margin-top:6px;font-size:11px"></div>' +
     '</div>' +
     '<div id="f-nova-lbl-menor" style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.04em;margin:8px 0 4px">Custo de costura por peça</div>' +
@@ -5230,9 +5230,9 @@ function buildOPCorRow(idx, firstRow) {
       '<div data-field="tecido-info" style="font-size:11px;color:var(--txt3);margin-top:4px;"></div>' +
     '</div>' +
     '<div class="form-row">' +
-      '<div class="form-group"><label class="form-label">Cor / NF <small style="color:var(--txt3);font-weight:400">(só NFs com saldo livre)</small></label>' +
+      '<div class="form-group"><label class="form-label">Cor / NF <small style="color:var(--txt3);font-weight:400">(só NFs com saldo NO COSTUREIRO)</small></label>' +
         '<select class="form-select" data-field="cor" onchange="atualizarSaldoRow('+idx+')"><option value="">Selecione um tecido primeiro</option></select></div>' +
-      '<div class="form-group"><label class="form-label">Metragem livre desta NF</label>' +
+      '<div class="form-group"><label class="form-label">Saldo livre no costureiro</label>' +
         '<input class="form-input" data-field="saldo" type="text" readonly style="background:var(--bg3);color:var(--green);font-weight:700"></div>' +
     '</div>' +
     '<div class="form-group"><label class="form-label">NF do tecido <small style="color:var(--txt3);font-weight:400">(auto — vinculada à opção escolhida)</small></label>' +
@@ -5328,6 +5328,30 @@ function tecidoEmProducaoDoInsumo(insumoId) {
   }).reduce(function(s, o) { return s + (o.quantidade_tecido_usada || 0); }, 0);
 }
 
+// Saldo de tecido LIVRE fisicamente no costureiro selecionado (06/06).
+// = saldo físico naquele costureiro (event-log) − o que já está comprometido em OPs ativas
+//   DESSE costureiro pra esse insumo. Fluxo Fusion: transfere CD→costureiro e DEPOIS abre OP;
+//   a OP só pode consumir o que já está fisicamente com a costureira.
+function saldoLivreNoCostureiro(insumoId, costuNome) {
+  if (!costuNome) return 0;
+  var fisico = ((STATE.saldoLocalIdx || {})[insumoId] || {})[costuNome] || 0;
+  var costuId = costureiroIdPorNome(costuNome);
+  var comprometido = (STATE.ops || []).filter(function(o) {
+    return o.insumo_id === insumoId && o.costureiro_id === costuId
+      && o.quantidade_tecido_usada && o.status !== 'Entregue' && o.status !== 'Cancelado';
+  }).reduce(function(s, o) { return s + (o.quantidade_tecido_usada || 0); }, 0);
+  return fisico - comprometido;
+}
+
+// Recalcula o dropdown de cor/NF de TODAS as linhas — chamado ao trocar o costureiro
+// (o saldo exibido depende do costureiro selecionado).
+function atualizarTodasCoresRows() {
+  document.querySelectorAll('.op-cor-row').forEach(function(row) {
+    var idx = parseInt(row.dataset.idx);
+    if (!isNaN(idx)) atualizarCoresTecidoRow(idx);
+  });
+}
+
 function atualizarCoresTecidoRow(idx) {
   var row = document.getElementById('op-cor-row-'+idx);
   if (!row) return;
@@ -5340,13 +5364,18 @@ function atualizarCoresTecidoRow(idx) {
     atualizarSaldoRow(idx);
     return;
   }
-  // Só NFs com SALDO LIVRE > 0 (Total − tecido já alocado em OPs ativas) — evita superalocar
-  // a mesma NF em duas OPs. Filtro por sku já foi feito no datalist via tecidosPermitidosParaSku;
-  // aqui aceitamos todas as variantes (NFs/cores) do tecido escolhido, independente de skus_pai.
+  // Saldo que aparece = o que está FISICAMENTE no costureiro selecionado (não o total CD+costureiro).
+  // Fluxo Fusion: analista transfere CD→costureiro e DEPOIS abre a OP. A OP só pode usar o que já
+  // está com a costureira. Se o costureiro não tem o tecido, não aparece — força transferir antes.
+  var costuNomeRow = ((document.getElementById('f-nova-costureiro') || {}).value || '').trim();
+  if (!costuNomeRow) {
+    corSel.innerHTML = '<option value="">Selecione o costureiro primeiro (em Dados da OP)</option>';
+    atualizarSaldoRow(idx);
+    return;
+  }
   var disponiveis = (STATE.insumos || []).filter(function(i) {
     if (i.tipo !== 'tecido' || (i.nome||'').trim() !== nomeTecido) return false;
-    var livre = (i.quantidade_atual || 0) - tecidoEmProducaoDoInsumo(i.id);
-    return livre > 0.001;
+    return saldoLivreNoCostureiro(i.id, costuNomeRow) > 0.001;
   });
   // Agrupar por cor pra montar <optgroup> mas cada NF é uma <option> separada
   var porCor = {};
@@ -5372,15 +5401,15 @@ function atualizarCoresTecidoRow(idx) {
         var lista = porCor[c];
         var opts = lista.map(function(v) {
           var nf = v.numero_nf ? String(v.numero_nf).trim() : '(sem NF)';
-          var livre = Math.round(((v.quantidade_atual || 0) - tecidoEmProducaoDoInsumo(v.id)) * 100) / 100;
+          var livre = Math.round(saldoLivreNoCostureiro(v.id, costuNomeRow) * 100) / 100;
           var unidade = v.unidade || '';
           var dataFat = fmtData(v.data_faturamento || '');
-          var label = 'NF ' + nf + ' — livre ' + fmt(livre) + ' ' + unidade + (dataFat ? ' (' + dataFat + ')' : '');
+          var label = 'NF ' + nf + ' — ' + fmt(livre) + ' ' + unidade + ' no costureiro' + (dataFat ? ' (' + dataFat + ')' : '');
           return '<option value="'+v.id+'" data-saldo="'+livre+'" data-unidade="'+unidade+'" data-cor="'+c.replace(/"/g,'&quot;')+'" data-nf="'+(nf||'').replace(/"/g,'&quot;')+'">'+label+'</option>';
         }).join('');
         return '<optgroup label="'+c.replace(/"/g,'&quot;')+'">'+opts+'</optgroup>';
       }).join('')
-    : '<option value="">Nenhuma NF com saldo livre (tudo alocado em OPs ativas)</option>';
+    : '<option value="">Nenhuma NF deste tecido em "'+costuNomeRow.replace(/"/g,'&quot;')+'" — transfira do CD pro costureiro primeiro</option>';
 
   var info = row.querySelector('[data-field="tecido-info"]');
   var cons = ultimoConsumoDoSku(sku);
@@ -6758,14 +6787,13 @@ async function submitDrawer() {
         var tecidoNomeRow = insSelRow ? (insSelRow.nome || '') : '';
         var tipoTecidoRow = (insSelRow && insSelRow.subtipo === 'circular') ? 'circular' : 'plano';
 
-        // Validação: metragem solicitada não pode passar do SALDO LIVRE daquela NF.
-        // Saldo livre = físico − tecido já comprometido em OUTRAS OPs ativas (não só físico total).
-        // É o que impede over-allocação tipo NF 195653 (1200m alocados num físico de 1005m).
+        // Validação: metragem não pode passar do saldo LIVRE da NF NO COSTUREIRO selecionado.
+        // A costureira só produz com o tecido que já foi transferido pra ela (CD→costureiro antes da OP).
         if (insumoId && metragem) {
-          var insSel = insSelRow;
-          var saldoLivreNF = insSel ? ((insSel.quantidade_atual || 0) - tecidoEmProducaoDoInsumo(insumoId)) : 0;
-          if (metragem > saldoLivreNF + 0.01) {
-            if (!confirm('Cor "'+corTexto+'": metragem solicitada ('+fmt(metragem)+') excede o SALDO LIVRE da NF '+(opt.dataset.nf||'')+' ('+fmt(saldoLivreNF)+' = físico '+fmt(insSel ? (insSel.quantidade_atual||0) : 0)+' − já em produção '+fmt(tecidoEmProducaoDoInsumo(insumoId))+').\n\nIsso vai estourar a metragem disponível. Salvar mesmo assim?')) {
+          var costuNomeSave = ((document.getElementById('f-nova-costureiro') || {}).value || '').trim();
+          var saldoCostuNF = saldoLivreNoCostureiro(insumoId, costuNomeSave);
+          if (metragem > saldoCostuNF + 0.01) {
+            if (!confirm('Cor "'+corTexto+'": metragem ('+fmt(metragem)+') excede o saldo livre da NF '+(opt.dataset.nf||'')+' no costureiro '+(costuNomeSave||'?')+' ('+fmt(saldoCostuNF)+').\n\nTransfira mais tecido do CD pra essa costureira antes, ou reduza a metragem. Salvar mesmo assim?')) {
               btn.textContent='Salvar'; btn.disabled=false; return;
             }
           }
