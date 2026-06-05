@@ -383,6 +383,7 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
           <th>Cor</th>
           <th>Costureiro</th>
           <th class="r">Peças</th>
+          <th class="r" title="Metragem de tecido alocada a esta OP (quantidade_tecido_usada)">Tecido</th>
           <th class="r">Entregues</th>
           <th>Recebimento</th>
           <th>Entrega Prev.</th>
@@ -1131,12 +1132,13 @@ function renderOPsLista() {
       '<td class="dim">'+((o.cor||'').trim()||'—')+'</td>' +
       '<td>'+costuName(o.costureiro_id)+'</td>' +
       '<td class="r">'+fmt(Math.round(pecas))+'</td>' +
+      '<td class="r" style="color:var(--indigo);font-weight:600">'+(o.quantidade_tecido_usada ? fmt(Math.round(o.quantidade_tecido_usada))+' '+(o.unidade||'m') : '—')+'</td>' +
       '<td class="r">'+fmt(entregues)+' <span style="color:var(--txt3);font-size:11px">('+pct+'%)</span></td>' +
       '<td class="dim">'+(o.data_envio_tecido?formatDate(o.data_envio_tecido):'—')+'</td>' +
       '<td class="dim">'+(o.data_prevista_entrega?formatDate(o.data_prevista_entrega):'—')+'</td>' +
       '<td>'+statusPill(o.status)+'</td></tr>';
   }).join('');
-  document.getElementById('tbody-ops-lista').innerHTML = html || '<tr><td colspan="8" class="empty">Nenhuma ordem</td></tr>';
+  document.getElementById('tbody-ops-lista').innerHTML = html || '<tr><td colspan="9" class="empty">Nenhuma ordem</td></tr>';
 }
 
 function scrollGantt(dx) {
@@ -6737,7 +6739,17 @@ async function submitDrawer() {
         var insumoId = opt && opt.value ? parseInt(opt.value) : null;
         var metragem = parseFloat(row.querySelector('[data-field="metragem"]').value) || null;
         var pecasFinal = parseInt(row.querySelector('[data-field="pecas-final"]').value) || 0;
-        if (!pecasFinal) continue;
+        // Trava anti-fantasma (06/06): cor com metragem mas 0 peças (grade vazia) criaria OP
+        // que reserva tecido sem produção. Avisa em vez de pular silencioso.
+        if (!pecasFinal) {
+          if (metragem) {
+            var corPf = (opt && opt.dataset.cor) ? opt.dataset.cor : ('linha ' + (r+1));
+            if (confirm('Cor "' + corPf + '": tem metragem (' + fmt(metragem) + ') mas 0 peças (grade vazia).\n\nEssa cor NÃO entra na OP. Voltar pra preencher a grade?\n\nOK = voltar e corrigir · Cancelar = ignorar esta cor')) {
+              btn.textContent='Salvar'; btn.disabled=false; return;
+            }
+          }
+          continue;
+        }
 
         var corTexto = opt && opt.dataset.cor ? opt.dataset.cor : '';
         // Consumo digitado/auto-preenchido na row (editável)
@@ -6746,12 +6758,14 @@ async function submitDrawer() {
         var tecidoNomeRow = insSelRow ? (insSelRow.nome || '') : '';
         var tipoTecidoRow = (insSelRow && insSelRow.subtipo === 'circular') ? 'circular' : 'plano';
 
-        // Validação: metragem solicitada não pode passar do saldo daquela NF
+        // Validação: metragem solicitada não pode passar do SALDO LIVRE daquela NF.
+        // Saldo livre = físico − tecido já comprometido em OUTRAS OPs ativas (não só físico total).
+        // É o que impede over-allocação tipo NF 195653 (1200m alocados num físico de 1005m).
         if (insumoId && metragem) {
           var insSel = insSelRow;
-          var saldoNF = insSel ? (insSel.quantidade_atual || 0) : 0;
-          if (metragem > saldoNF + 0.01) {
-            if (!confirm('Cor "'+corTexto+'": metragem solicitada ('+fmt(metragem)+') excede saldo da NF '+(opt.dataset.nf||'')+' ('+fmt(saldoNF)+').\n\nSalvar mesmo assim?')) {
+          var saldoLivreNF = insSel ? ((insSel.quantidade_atual || 0) - tecidoEmProducaoDoInsumo(insumoId)) : 0;
+          if (metragem > saldoLivreNF + 0.01) {
+            if (!confirm('Cor "'+corTexto+'": metragem solicitada ('+fmt(metragem)+') excede o SALDO LIVRE da NF '+(opt.dataset.nf||'')+' ('+fmt(saldoLivreNF)+' = físico '+fmt(insSel ? (insSel.quantidade_atual||0) : 0)+' − já em produção '+fmt(tecidoEmProducaoDoInsumo(insumoId))+').\n\nIsso vai estourar a metragem disponível. Salvar mesmo assim?')) {
               btn.textContent='Salvar'; btn.disabled=false; return;
             }
           }
