@@ -6414,21 +6414,39 @@ async function submitDrawer() {
           }]);
         } catch (e) { console.warn('Falha ao registrar consumo_op:', e); }
 
-        // Regra de descarte automático (entrega TOTAL): se sobrar resíduo < consumo/peça,
-        // o tecido residual é descartado automaticamente (não dá mais pra fazer nem 1 peça inteira).
-        if (tipoEntrega === 'total' && consumoPorPeca > 0) {
+        // Tratamento da sobra de tecido no costureiro ao fechar a OP (entrega TOTAL).
+        // Objetivo: não deixar saldo residual no costureiro depois de fechar.
+        //   • sobra < 1 peça (< consumo/peça): retalho — descarta automático (sem perguntar).
+        //   • sobra ≥ 1 peça: tecido bom — pergunta o que fazer (devolver CD / manter / descartar).
+        if (tipoEntrega === 'total') {
           var saldoAtualCostu = ((STATE.saldoLocalIdx || {})[op.insumo_id] || {})[costuNome] || 0;
           var residuo = saldoAtualCostu - metrosConsumidos;
-          if (residuo > 0.001 && residuo < consumoPorPeca) {
+          var un = op.unidade || 'M';
+          if (residuo > 0.001 && consumoPorPeca > 0 && residuo < consumoPorPeca) {
+            // Retalho (< 1 peça) — descarte automático, comportamento original
             try {
               await postSupabase('movimentacao_insumos', [{
                 insumo_id: op.insumo_id, tipo_mov: 'consumo_op',
-                quantidade: -residuo, localizacao: costuNome,
-                ordem_producao_id: op.id,
+                quantidade: -residuo, localizacao: costuNome, ordem_producao_id: op.id,
                 nf_remessa: nfRemessaEnt,
-                observacao: 'Resíduo descartado (' + residuo.toFixed(2) + ' ' + (op.unidade||'M') + ' < consumo/peça ' + consumoPorPeca + ')',
+                observacao: 'Resíduo descartado (' + residuo.toFixed(2) + ' ' + un + ' < consumo/peça ' + consumoPorPeca + ')',
               }]);
             } catch (e) { console.warn('Falha ao descartar resíduo:', e); }
+          } else if (residuo > 0.001) {
+            // Sobra ≥ 1 peça — tecido bom; pergunta o destino
+            var pecasResid = consumoPorPeca > 0 ? Math.floor(residuo / consumoPorPeca) : 0;
+            var escolha = prompt('Sobraram ' + residuo.toFixed(2) + ' ' + un + ' (~' + pecasResid + ' peças) de tecido em "' + costuNome + '" após fechar a OP #' + op.id + '.\n\nO que fazer com a sobra?\n  1 = Devolver ao CD FUSION\n  2 = Manter no costureiro (próxima OP)\n  3 = Descartar como retalho', '1');
+            try {
+              if (escolha === '1') {
+                await postSupabase('movimentacao_insumos', [
+                  { insumo_id: op.insumo_id, tipo_mov: 'retorno_cd', quantidade: -residuo, localizacao: costuNome, ordem_producao_id: op.id, nf_remessa: nfRemessaEnt, observacao: 'Sobra OP #' + op.id + ' devolvida ao CD (' + residuo.toFixed(2) + ' ' + un + ')' },
+                  { insumo_id: op.insumo_id, tipo_mov: 'retorno_cd', quantidade: residuo, localizacao: 'CD FUSION', ordem_producao_id: op.id, nf_remessa: nfRemessaEnt, observacao: 'Sobra OP #' + op.id + ' devolvida ao CD (' + residuo.toFixed(2) + ' ' + un + ')' },
+                ]);
+              } else if (escolha === '3') {
+                await postSupabase('movimentacao_insumos', [{ insumo_id: op.insumo_id, tipo_mov: 'consumo_op', quantidade: -residuo, localizacao: costuNome, ordem_producao_id: op.id, nf_remessa: nfRemessaEnt, observacao: 'Sobra OP #' + op.id + ' descartada como retalho (' + residuo.toFixed(2) + ' ' + un + ')' }]);
+              }
+              // escolha '2' ou cancelar → mantém no costureiro (nada a fazer)
+            } catch (e) { console.warn('Falha ao tratar sobra ≥1 peça:', e); }
           }
         }
       }
