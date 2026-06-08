@@ -1550,42 +1550,6 @@ function renderHero(){
     });
   }
 
-  // ---- Trendline (regressão linear sobre o total diário observado) ----
-  if(STATE.stackMode==='abs'){
-    var hojeT=hojeSP();
-    var pts=[];
-    dias.forEach(function(d,i){
-      if(d>hojeT) return;
-      if(!diario[d]) return;
-      var t=0; lojasL.forEach(function(n){t+=diario[d][n]||0;});
-      pts.push({x:i,y:t});
-    });
-    if(pts.length>=2){
-      var n=pts.length,sX=0,sY=0,sXY=0,sXX=0;
-      pts.forEach(function(p){sX+=p.x;sY+=p.y;sXY+=p.x*p.y;sXX+=p.x*p.x;});
-      var denom=(n*sXX-sX*sX);
-      if(denom!==0){
-        var slope=(n*sXY-sX*sY)/denom;
-        var intercept=(sY-slope*sX)/n;
-        var trendVals=dias.map(function(d,i){return d>hojeT?null:(slope*i+intercept);});
-        datasets.push({
-          label:'Tendência',
-          data:trendVals,
-          borderColor:'rgba(255,255,255,0.55)',
-          backgroundColor:'transparent',
-          borderDash:[3,3],
-          fill:false,
-          tension:0,
-          pointRadius:0,
-          pointHoverRadius:0,
-          borderWidth:1.5,
-          stack:null,
-          spanGaps:true
-        });
-      }
-    }
-  }
-
   var labels=dias.map(function(d){return new Date(d+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});});
   if(CHARTS.hero) CHARTS.hero.destroy();
   CHARTS.hero=new Chart(document.getElementById('chart-hero'),{
@@ -1597,7 +1561,7 @@ function renderHero(){
         tooltip:{backgroundColor:'rgba(24,24,27,0.96)',titleColor:'#fafafa',bodyColor:'#fafafa',footerColor:'#22c55e',borderColor:'#2a2a2e',borderWidth:1,padding:14,cornerRadius:10,boxPadding:6,usePointStyle:true,titleFont:{weight:'700',size:12},bodyFont:{weight:'400',size:11,lineHeight:1.7},footerFont:{weight:'800',size:13},footerMarginTop:8,bodySpacing:6,yAlign:'bottom',
           callbacks:{
             label:function(ctx){var v=ctx.parsed.y;return ' '+ctx.dataset.label+': '+(STATE.stackMode==='pct'?fmtD(v)+'%':fmt(v));},
-            footer:function(items){if(STATE.stackMode==='pct')return'';var t=0;items.forEach(function(i){t+=i.parsed.y||0;});return 'Total: '+fmt(t);}
+            footer:function(items){if(STATE.stackMode==='pct')return'';var t=0;items.forEach(function(i){if(i.dataset.label==='Projeção')return;t+=i.parsed.y||0;});return 'Total: '+fmt(t);}
           }}},
       scales:{
         x:{ticks:{color:'#a1a1aa',maxTicksLimit:10,font:{size:11,weight:'400',lineHeight:1.6},padding:6},grid:{color:'rgba(255,255,255,0.03)'}},
