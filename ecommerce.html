@@ -595,6 +595,19 @@ function adsRowsToByCanal(rows){
 async function fetchAdsItem(de,ate){
   return buscarTudo('ads_metrics','select=produto_id,gasto,conta&plataforma=eq.mercado_ads&level=eq.item&produto_id=not.is.null&data=gte.'+de+'&data=lte.'+ate);
 }
+// Devolução ML REAL por produto (claim→item→SKU), coorte por data do pedido. Tabela
+// devolucoes_item. Dá "produtos mais devolvidos" de verdade (sem rateio). Só ML por ora.
+async function fetchDevItem(de,ate){
+  return buscarTudo('devolucoes_item','select=sku_pai,valor_devolucao&plataforma=eq.ml&data_pedido=gte.'+de+'&data_pedido=lte.'+ate);
+}
+function devRowsToBySkuPai(rows){
+  var by={};
+  (rows||[]).forEach(function(r){
+    var sp=r.sku_pai||'?';if(!by[sp])by[sp]={valor:0,cnt:0};
+    by[sp].valor+=parseFloat(r.valor_devolucao||0);by[sp].cnt++;
+  });
+  return by;
+}
 // Soma o ads respeitando o filtro de canais + focusCanal atual (mesma lógica do resto do P&L).
 function adsFiltrado(byCanal){
   if(!byCanal)return 0;
@@ -681,7 +694,7 @@ async function fetchProdutos(){
 
 // ── State ──
 var DE=null,ATE=null;
-var STATE={pedidos:[],pedidosFull:[],anteriores:[],anterioresFull:[],itens:[],itensFocus:[],canais:[],canaisSel:{},stackMode:'abs',focusCanal:null,skuGroups:[],skuSel:null,skuSort:{key:'receita',dir:'desc'},adsByCanal:{},adsByCanalPrev:{},adsBySkuPai:{},adsBySkuPaiCanal:{}};
+var STATE={pedidos:[],pedidosFull:[],anteriores:[],anterioresFull:[],itens:[],itensFocus:[],canais:[],canaisSel:{},stackMode:'abs',focusCanal:null,skuGroups:[],skuSel:null,skuSort:{key:'receita',dir:'desc'},adsByCanal:{},adsByCanalPrev:{},adsBySkuPai:{},adsBySkuPaiCanal:{},devBySkuPai:{}};
 var CHARTS={hero:null,pareto:null,recvWeeks:null};
 var GEO_UF_SEL=null;
 
@@ -733,6 +746,7 @@ async function carregar(){
     // Ads (custo de mídia, só ML hoje) em paralelo — pronto antes do renderAll detalhado.
     var pAds=fetchAds(DE,ATE).then(adsRowsToByCanal).catch(function(){return{};});
     var pAdsPrev=usarComp?fetchAds(ant.de,ant.ate).then(adsRowsToByCanal).catch(function(){return{};}):Promise.resolve({});
+    var pDev=fetchDevItem(DE,ATE).then(devRowsToBySkuPai).catch(function(){return{};});
     // Progressive load: dispara MV em paralelo, renderiza KPIs/Waterfall já quando ela chega.
     var pMV=fetchAgregadoMV(DE,ATE).then(function(mvRows){
       if(!mvRows||!mvRows.length)return null;
@@ -758,7 +772,7 @@ async function carregar(){
 
     // RENDER IMEDIATO — sem itens (waterfall, canais, geo, pagamentos, alertas)
     STATE.itens=[];STATE.itensFocus=[];STATE.adsBySkuPai={};STATE.adsBySkuPaiCanal={};
-    STATE.adsByCanal=await pAds;STATE.adsByCanalPrev=await pAdsPrev;
+    STATE.adsByCanal=await pAds;STATE.adsByCanalPrev=await pAdsPrev;STATE.devBySkuPai=await pDev;
     renderAll();
     document.getElementById('upd').textContent='Carregando produtos...';
 
@@ -1228,6 +1242,7 @@ function renderEcommSkuList(){
     var va,vb;
     if(sk==='nome'){va=(a.nome||a.sku_pai).toLowerCase();vb=(b.nome||b.sku_pai).toLowerCase();return va.localeCompare(vb)*sd;}
     if(sk==='devPct'){va=a.receita>0?a.devolucao/a.receita:0;vb=b.receita>0?b.devolucao/b.receita:0;return (va-vb)*sd;}
+    if(sk==='devml'){va=((STATE.devBySkuPai||{})[a.sku_pai]||{}).valor||0;vb=((STATE.devBySkuPai||{})[b.sku_pai]||{}).valor||0;return (va-vb)*sd;}
     if(sk==='margem'){va=a.receita-a.custoTotal-a.fee-a.devolucao;vb=b.receita-b.custoTotal-b.fee-b.devolucao;return (va-vb)*sd;}
     va=a[sk]||0;vb=b[sk]||0;return (va-vb)*sd;
   });
@@ -1255,7 +1270,7 @@ function renderEcommSkuList(){
     +'<th class="sortable'+arrow('nome')+'" onclick="setEcommSkuSort(\'nome\')">Produto</th>'
     +'<th class="r sortable'+arrow('receita')+'" onclick="setEcommSkuSort(\'receita\')">Receita</th>'
     +'<th class="r sortable'+arrow('qtd')+'" onclick="setEcommSkuSort(\'qtd\')">Qtd</th>'
-    +'<th class="r sortable'+arrow('devPct')+'" onclick="setEcommSkuSort(\'devPct\')">Devol.</th>'
+    +'<th class="r sortable'+arrow('devml')+'" onclick="setEcommSkuSort(\'devml\')">Devol. (ML)</th>'
     +'<th style="min-width:220px;">Distribuição por canal</th>'
     +'</tr>';
   listEl.innerHTML='<table class="tb"><thead>'+th+'</thead><tbody>'
@@ -1270,13 +1285,12 @@ function renderEcommSkuList(){
         bar+='<div style="width:'+pct+'%;background:'+cor+';display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;font-weight:700;text-shadow:0 1px 2px rgba(0,0,0,0.5);" title="'+c+': '+Math.round(pct)+'%">'+label+'</div>';
       });
       bar+='</div>';
-      var devPct=s.receita>0?(s.devolucao/s.receita*100):0;
-      var devColor=devPct>=10?'#ef4444':(devPct>=5?'#eab308':'#a1a1aa');
+      var dv=(STATE.devBySkuPai&&STATE.devBySkuPai[s.sku_pai])||{valor:0,cnt:0};
       return '<tr '+sel+' onclick="selectEcommSku(\''+s.sku_pai.replace(/'/g,"\\'")+'\')">'
         +'<td style="font-weight:600;max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="'+(s.nome||s.sku_pai)+'"><div>'+(s.nome||s.sku_pai)+'</div><div style="font-size:9px;color:var(--txt3);font-family:monospace;">'+s.sku_pai+'</div></td>'
         +'<td class="r val" style="font-weight:700;">'+fmt(s.receita)+'</td>'
         +'<td class="r val">'+fmtN(s.qtd)+'</td>'
-        +'<td class="r val" style="color:'+devColor+';font-weight:700;">'+fmtD(devPct)+'%</td>'
+        +'<td class="r val" style="font-weight:700;" title="devoluções ML reais (anúncio→produto)">'+(dv.cnt>0?fmtN(dv.cnt)+'<span style="color:var(--txt3);font-size:9px;font-weight:600"> · '+fmtK(dv.valor)+'</span>':'<span style="color:var(--txt3)">—</span>')+'</td>'
         +'<td>'+bar+'</td>'
         +'</tr>';
     }).join('')+'</tbody></table>';
@@ -1314,6 +1328,7 @@ function renderEcommSkuDetail(){
   // Ads ML REAL deste SKU (anúncio→produto, sem rateio). Shopee não entra (shop-level).
   var adsSku=(STATE.adsBySkuPai&&STATE.adsBySkuPai[s.sku_pai])||0;
   var adsPct=receita>0?(adsSku/receita*100):0;
+  var dvSku=(STATE.devBySkuPai&&STATE.devBySkuPai[s.sku_pai])||{valor:0,cnt:0};  // devolução ML real (count)
   var margemLiq=receita-s.custoTotal-s.fee-s.devolucao-freteSeller-adsSku;
   var margemPct=receita>0?(margemLiq/receita*100):0;
   // Velocidade
@@ -1364,7 +1379,7 @@ function renderEcommSkuDetail(){
   var adsCls=adsPct<=8?'good':(adsPct<=15?'mid':'bad');
   html+='<div class="dr-kpi-grid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:18px;">';
   html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Comissão real</div><div class="dr-kpi-val">'+fmtD(feePct)+'%</div><div class="dr-kpi-sub"><span class="margem-pill '+feeCls+'">'+fmtK(s.fee)+'</span></div></div>';
-  html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Devolução real</div><div class="dr-kpi-val">'+fmtD(devPct)+'%</div><div class="dr-kpi-sub"><span class="margem-pill '+devCls+'">'+fmtK(s.devolucao)+'</span></div></div>';
+  html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Devolução real</div><div class="dr-kpi-val">'+fmtD(devPct)+'%</div><div class="dr-kpi-sub"><span class="margem-pill '+devCls+'">'+fmtK(s.devolucao)+'</span>'+(dvSku.cnt>0?' · <b>'+fmtN(dvSku.cnt)+'</b> dev. ML':'')+'</div></div>';
   html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Frete (custo seller)</div><div class="dr-kpi-val">'+fmtK(freteSeller)+'</div><div class="dr-kpi-sub"><span class="margem-pill '+fretCls+'">'+fmtD(fretePct)+'%</span> da receita</div></div>';
   html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Ads (ML)</div><div class="dr-kpi-val">'+fmtK(adsSku)+'</div><div class="dr-kpi-sub"><span class="margem-pill '+adsCls+'">'+fmtD(adsPct)+'%</span> da receita</div></div>';
   html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Velocidade</div><div class="dr-kpi-val">'+fmtD(v7d)+' un/d</div><div class="dr-kpi-sub" style="color:'+tendCor+';">'+tendSym+' '+(tendPct>=0?'+':'')+Math.round(tendPct)+'% vs 30d</div></div>';
