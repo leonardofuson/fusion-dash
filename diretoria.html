@@ -19,11 +19,12 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
 .date-range{display:flex;gap:8px;align-items:center;}
 .date-input{background:var(--bg2);border:1px solid var(--bdr);border-radius:8px;padding:7px 12px;font-size:12px;color:var(--txt1);font-family:inherit;outline:none;}
 .btn-filtrar{background:var(--purple);border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;color:#fff;cursor:pointer;}
-.kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:1.5rem;}
+.kpi-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:1.5rem;}
 .kpi{background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;padding:16px;transition:transform 0.2s;}
 .kpi:hover{transform:translateY(-2px);}
+.kpi-anchor{border-color:var(--green);box-shadow:0 0 0 1px var(--green) inset;}
 .kpi-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.07em;color:var(--txt2);margin-bottom:8px;}
-.kpi-value{font-size:1.6rem;font-weight:700;color:var(--txt1);line-height:1;}
+.kpi-value{font-size:1.4rem;font-weight:700;color:var(--txt1);line-height:1;}
 .kpi-sub{font-size:11px;color:var(--txt3);margin-top:5px;}
 .kpi-green .kpi-value{color:var(--green);}
 .kpi-red .kpi-value{color:var(--red);}
@@ -67,6 +68,7 @@ table.tb tr:hover td{background:rgba(255,255,255,0.02);}
 .spin{width:24px;height:24px;border:2px solid var(--bdr);border-top-color:var(--purple);border-radius:50%;animation:spin 0.7s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media(max-width:768px){.kpi-grid{grid-template-columns:repeat(2,1fr);}.grid2,.grid3,.grid4{grid-template-columns:1fr 1fr;}}
+@media(min-width:769px) and (max-width:1100px){.kpi-grid{grid-template-columns:repeat(3,1fr);}}
 
 .btn-back, .btn-logout-tb{
   background:transparent;border:1px solid var(--bdr);color:var(--txt2);
@@ -113,11 +115,11 @@ table.tb tr:hover td{background:rgba(255,255,255,0.02);}
   <div class="grid4" id="grupo-cards"></div>
 
   <div class="grid2">
-    <div class="card"><div class="card-title">Evolução mensal por canal <span style="color:var(--txt3);font-weight:400">· últimos 12 meses</span></div><div class="chart-wrap"><canvas id="chart-mensal"></canvas></div></div>
-    <div class="card"><div class="card-title">Mix de faturamento por canal <span style="color:var(--txt3);font-weight:400">· período selecionado</span></div><div class="chart-wrap"><canvas id="chart-mix"></canvas></div></div>
+    <div class="card"><div class="card-title">Evolução mensal por canal <span style="color:var(--txt3);font-weight:400">· receita líquida · últimos 12 meses</span></div><div class="chart-wrap"><canvas id="chart-mensal"></canvas></div></div>
+    <div class="card"><div class="card-title">Mix de receita líquida por canal <span style="color:var(--txt3);font-weight:400">· período selecionado</span></div><div class="chart-wrap"><canvas id="chart-mix"></canvas></div></div>
   </div>
 
-  <div class="section-title" style="margin-bottom:14px;">Projeção de Receita 2026 <span style="color:var(--txt3);font-weight:400;font-size:11px;">· realizado + forecast sazonal vs meta · ano calendário (independe do filtro)</span></div>
+  <div class="section-title" style="margin-bottom:14px;">Projeção de Receita 2026 <span style="color:var(--txt3);font-weight:400;font-size:11px;">· realizado + forecast sazonal vs meta · valores brutos · ano calendário (independe do filtro)</span></div>
   <div class="grid4" id="proj-kpis"></div>
   <div class="card" style="margin-bottom:16px;">
     <div class="card-title">2026 — realizado, projeção e meta por mês</div>
@@ -126,22 +128,27 @@ table.tb tr:hover td{background:rgba(255,255,255,0.02);}
 
   <div class="section-title" style="margin-bottom:14px;">Marketplaces</div>
   <div class="grid2">
-    <div class="card"><div class="card-title">Faturamento por marketplace</div><div id="mkt-bars"></div></div>
-    <div class="card"><div class="card-title">Evolução diária — Marketplaces</div><div class="chart-wrap"><canvas id="chart-mkt"></canvas></div></div>
+    <div class="card"><div class="card-title">Receita líquida por marketplace</div><div id="mkt-bars"></div></div>
+    <div class="card"><div class="card-title">Evolução diária — Marketplaces <span style="color:var(--txt3);font-weight:400">· líquido</span></div><div class="chart-wrap"><canvas id="chart-mkt"></canvas></div></div>
   </div>
 
   <div class="section-title" style="margin-bottom:14px;">Lojas Físicas</div>
   <div class="grid2">
-    <div class="card"><div class="card-title">Faturamento por loja</div><div id="loja-bars"></div></div>
-    <div class="card"><div class="card-title">Evolução diária — Lojas</div><div class="chart-wrap"><canvas id="chart-lojas"></canvas></div></div>
+    <div class="card"><div class="card-title">Receita líquida por loja</div><div id="loja-bars"></div></div>
+    <div class="card"><div class="card-title">Evolução diária — Lojas <span style="color:var(--txt3);font-weight:400">· líquido</span></div><div class="chart-wrap"><canvas id="chart-lojas"></canvas></div></div>
   </div>
 
   <div class="card" style="margin-bottom:16px;">
     <div class="card-title">Resumo consolidado por canal</div>
     <table class="tb">
-      <thead><tr><th>Canal</th><th class="r">Pedidos</th><th class="r">Faturamento</th><th class="r">Ticket Médio</th><th class="r">Fat/Dia</th><th class="r">% Total</th><th class="r">vs ant.</th></tr></thead>
+      <thead><tr><th>Canal</th><th class="r">Pedidos</th><th class="r">Bruto</th><th class="r">Devolução</th><th class="r">% Dev</th><th class="r">Líquido</th><th class="r">% Total</th><th class="r">vs ant.</th></tr></thead>
       <tbody id="tabela-grupo"></tbody>
     </table>
+    <div style="font-size:11px;color:var(--txt3);margin-top:12px;line-height:1.5;">
+      Receita Líquida = Faturamento Bruto − Devoluções (devolução + chargeback). Cancelados ficam fora de ambos.
+      Devolução é medida pela <b>data do pedido</b> (coorte) — meses recentes ainda estão maturando e tendem a subir.
+      Lojas físicas (KWID) não registram devolução parcial, então aparecem com taxa ~0.
+    </div>
   </div>
 </div><script>
 const SB_URL='https://spulbhnmkomvgohzhfvj.supabase.co';
@@ -220,7 +227,7 @@ function deltaHtml(d){
 }
 
 // localStorage cache TTL 5min — rows da MV (janela = união de 12m fixos + período anterior).
-function cacheKey(de,ate){return 'diretoria_v3_'+de+'_'+ate;}
+function cacheKey(de,ate){return 'diretoria_v4_'+de+'_'+ate;}
 function cacheGet(de,ate){
   try{
     const raw=localStorage.getItem(cacheKey(de,ate));
@@ -355,22 +362,29 @@ async function carregar(){
   cacheSet(DE,ATE,{rows:allRows});
 }
 
+// Régua Net Sales (Gross − Returns), alinhada ao ecommerce.html (02/06):
+//  REC = bruta (inclui devolvido, exclui cancelado) · DEV = valor_devolucao+chargeback
+//  LIQ = receita líquida = bruta − devoluções (NÃO usa valor_liquido, que está
+//        em enriquecimento inconsistente; comissão/frete são custo, não dedução de receita)
 const REC=r=>parseFloat(r.receita_bruta||0);
+const DEV=r=>parseFloat(r.devolucoes||0);
 const PED=r=>(parseInt(r.pedidos||0)-parseInt(r.cancelados||0));
+// helpers de líquido por bucket {fat,dev}
+const liqOf=o=>(o?o.fat-o.dev:0);
 
 // Agrega um conjunto de rows por grande grupo + subgrupo.
 function agrupar(rows){
   const grupos={}, subBy={};
-  let totFat=0,totPed=0;
+  let totFat=0,totPed=0,totDev=0;
   rows.forEach(r=>{
     const {grupo,sub}=classificarGrupo(r);
-    const rec=REC(r), ped=PED(r);
-    totFat+=rec; totPed+=ped;
-    (grupos[grupo]=grupos[grupo]||{fat:0,ped:0}); grupos[grupo].fat+=rec; grupos[grupo].ped+=ped;
+    const rec=REC(r), ped=PED(r), dev=DEV(r);
+    totFat+=rec; totPed+=ped; totDev+=dev;
+    (grupos[grupo]=grupos[grupo]||{fat:0,ped:0,dev:0}); grupos[grupo].fat+=rec; grupos[grupo].ped+=ped; grupos[grupo].dev+=dev;
     (subBy[grupo]=subBy[grupo]||{});
-    (subBy[grupo][sub]=subBy[grupo][sub]||{fat:0,ped:0}); subBy[grupo][sub].fat+=rec; subBy[grupo][sub].ped+=ped;
+    (subBy[grupo][sub]=subBy[grupo][sub]||{fat:0,ped:0,dev:0}); subBy[grupo][sub].fat+=rec; subBy[grupo][sub].ped+=ped; subBy[grupo][sub].dev+=dev;
   });
-  return {grupos,subBy,totFat,totPed};
+  return {grupos,subBy,totFat,totPed,totDev};
 }
 
 // Renderização completa a partir de allRows (janela 12m+anterior) da mvw_diretoria_dia.
@@ -384,66 +398,72 @@ function renderTudo(allRows,pDE,pATE,wDe){
   const fatTotal=A.totFat, pedTotal=A.totPed;
   const temPrev=prev.length>0;
 
-  // ── KPIs (com Δ% vs período anterior) ──
-  const tmCur=pedTotal>0?fatTotal/pedTotal:0;
-  const tmPrev=P.totPed>0?P.totFat/P.totPed:0;
-  const fatDiaCur=fatTotal/diasP;
+  // ── KPIs (régua Net Sales · âncora = Receita Líquida · Δ% vs período anterior) ──
+  const devTotal=A.totDev, devPrev=P.totDev;
+  const liqTotal=fatTotal-devTotal, liqPrev=P.totFat-devPrev;
+  const taxaDev=fatTotal>0?devTotal/fatTotal*100:0;
+  const tmCur=pedTotal>0?liqTotal/pedTotal:0;
+  const tmPrev=P.totPed>0?liqPrev/P.totPed:0;
+  const fatDiaCur=liqTotal/diasP;
   const diasPrev=Math.max(1,Math.round((new Date(pATE)-new Date(pDE))/86400000)+1);
-  const fatDiaPrev=P.totFat/diasPrev;
+  const fatDiaPrev=liqPrev/diasPrev;
   const subKPI=(d)=> temPrev?('vs ant. '+deltaHtml(d)):'no período';
   document.getElementById('kpis').innerHTML=`
-    <div class="kpi"><div class="kpi-label">Faturamento Total</div><div class="kpi-value">${fmt(fatTotal)}</div><div class="kpi-sub">${subKPI(delta(fatTotal,P.totFat))}</div></div>
+    <div class="kpi"><div class="kpi-label">Faturamento Bruto</div><div class="kpi-value">${fmt(fatTotal)}</div><div class="kpi-sub">${subKPI(delta(fatTotal,P.totFat))}</div></div>
+    <div class="kpi kpi-red"><div class="kpi-label">Devoluções</div><div class="kpi-value">${fmt(devTotal)}</div><div class="kpi-sub">${fmtPct(taxaDev)} do bruto</div></div>
+    <div class="kpi kpi-green kpi-anchor"><div class="kpi-label">Receita Líquida</div><div class="kpi-value">${fmt(liqTotal)}</div><div class="kpi-sub">${subKPI(delta(liqTotal,liqPrev))}</div></div>
     <div class="kpi kpi-blue"><div class="kpi-label">Total Pedidos</div><div class="kpi-value">${fmtN(pedTotal)}</div><div class="kpi-sub">${subKPI(delta(pedTotal,P.totPed))}</div></div>
-    <div class="kpi kpi-green"><div class="kpi-label">Ticket Médio</div><div class="kpi-value">${fmt(tmCur)}</div><div class="kpi-sub">${subKPI(delta(tmCur,tmPrev))}</div></div>
-    <div class="kpi kpi-amber"><div class="kpi-label">Fat/Dia</div><div class="kpi-value">${fmt(fatDiaCur)}</div><div class="kpi-sub">${subKPI(delta(fatDiaCur,fatDiaPrev))}</div></div>
-    <div class="kpi kpi-purple"><div class="kpi-label">Canais Ativos</div><div class="kpi-value">${Object.keys(A.grupos).length}</div><div class="kpi-sub">grandes grupos</div></div>
+    <div class="kpi"><div class="kpi-label">Ticket Médio (líq)</div><div class="kpi-value">${fmt(tmCur)}</div><div class="kpi-sub">${subKPI(delta(tmCur,tmPrev))}</div></div>
+    <div class="kpi kpi-amber"><div class="kpi-label">Fat/Dia (líq)</div><div class="kpi-value">${fmt(fatDiaCur)}</div><div class="kpi-sub">${subKPI(delta(fatDiaCur,fatDiaPrev))}</div></div>
   `;
 
   // ── Cards por grande grupo ──
   const gruposOrd=GRUPO_ORDER.filter(g=>A.grupos[g]);
   document.getElementById('grupo-cards').innerHTML=gruposOrd.map(g=>{
     const o=A.grupos[g], cor=GRUPO_CORES[g];
-    const d=temPrev?delta(o.fat, P.grupos[g]?.fat ?? 0):null;
+    const liq=liqOf(o), liqPrevG=liqOf(P.grupos[g]);
+    const d=temPrev?delta(liq, liqPrevG):null;
+    const taxa=o.fat>0?o.dev/o.fat*100:0;
     return `<div class="origem-card" style="border-left-color:${cor}">
       <div class="origem-nome" style="color:${cor}">${g}</div>
-      <div class="origem-fat" style="color:${cor}">${fmt(o.fat)}</div>
-      <div class="origem-info">${fmtN(o.ped)} pedidos &bull; TM ${fmt(o.ped>0?o.fat/o.ped:0)} &bull; ${fmtPct(fatTotal>0?o.fat/fatTotal*100:0)}</div>
-      ${temPrev?`<div class="origem-info" style="margin-top:4px;">vs ant. ${deltaHtml(d)}</div>`:''}
+      <div class="origem-fat" style="color:${cor}">${fmt(liq)}</div>
+      <div class="origem-info">${fmtN(o.ped)} pedidos &bull; TM ${fmt(o.ped>0?liq/o.ped:0)} &bull; ${fmtPct(liqTotal>0?liq/liqTotal*100:0)} do líq</div>
+      <div class="origem-info" style="margin-top:4px;">dev ${fmt(o.dev)} (${fmtPct(taxa)})${temPrev?` &bull; vs ant. ${deltaHtml(d)}`:''}</div>
     </div>`;
   }).join('');
 
   // ── Tabela consolidada: grande grupo (bold) → subgrupos ──
   let tbody='';
-  gruposOrd.forEach(g=>{
-    const o=A.grupos[g];
-    const dG=temPrev?delta(o.fat,P.grupos[g]?.fat ?? 0):null;
-    tbody+=`<tr class="grupo-row">
-      <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${GRUPO_CORES[g]};margin-right:8px;"></span>${g}</td>
-      <td class="val">${fmtN(o.ped)}</td><td class="val">${fmt(o.fat)}</td>
-      <td class="val">${fmt(o.ped>0?o.fat/o.ped:0)}</td>
-      <td class="r">${fmt(o.fat/diasP)}</td>
-      <td class="r">${fmtPct(fatTotal>0?o.fat/fatTotal*100:0)}</td>
+  const linha=(nome,o,prevO,isGrupo)=>{
+    const liq=liqOf(o), liqPrev=liqOf(prevO);
+    const dG=temPrev?delta(liq,liqPrev):null;
+    const taxa=o.fat>0?o.dev/o.fat*100:0;
+    const nomeCel=isGrupo
+      ? `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${GRUPO_CORES[nome]};margin-right:8px;"></span>${nome}`
+      : nome;
+    return `<tr class="${isGrupo?'grupo-row':'sub-row'}">
+      <td>${nomeCel}</td>
+      <td class="val">${fmtN(o.ped)}</td>
+      <td class="val">${fmt(o.fat)}</td>
+      <td class="r">${o.dev>0?fmt(o.dev):'—'}</td>
+      <td class="r">${o.dev>0?fmtPct(taxa):'—'}</td>
+      <td class="val">${fmt(liq)}</td>
+      <td class="r">${fmtPct(liqTotal>0?liq/liqTotal*100:0)}</td>
       <td class="r">${temPrev?deltaHtml(dG):'—'}</td></tr>`;
-    const subs=Object.entries(A.subBy[g]||{}).sort((a,b)=>b[1].fat-a[1].fat);
-    subs.forEach(([sub,s])=>{
-      const dS=temPrev?delta(s.fat, P.subBy[g]?.[sub]?.fat ?? 0):null;
-      tbody+=`<tr class="sub-row">
-        <td>${sub}</td>
-        <td class="val">${fmtN(s.ped)}</td><td class="val">${fmt(s.fat)}</td>
-        <td class="val">${fmt(s.ped>0?s.fat/s.ped:0)}</td>
-        <td class="r">${fmt(s.fat/diasP)}</td>
-        <td class="r">${fmtPct(fatTotal>0?s.fat/fatTotal*100:0)}</td>
-        <td class="r">${temPrev?deltaHtml(dS):'—'}</td></tr>`;
-    });
+  };
+  gruposOrd.forEach(g=>{
+    tbody+=linha(g, A.grupos[g], P.grupos[g], true);
+    const subs=Object.entries(A.subBy[g]||{}).sort((a,b)=>liqOf(b[1])-liqOf(a[1]));
+    subs.forEach(([sub,s])=> tbody+=linha(sub, s, P.subBy[g]?.[sub], false));
   });
   document.getElementById('tabela-grupo').innerHTML=tbody;
 
   // ── Chart mensal empilhado por grande grupo — SEMPRE últimos 12 meses ──
-  const porMes={}; // {mes:{grupo:fat}}
+  const porMes={}; // {mes:{grupo:liquido}}
   mensalRows.forEach(r=>{
     const m=r.data_pedido?.substring(0,7); if(!m) return;
     const {grupo}=classificarGrupo(r);
-    (porMes[m]=porMes[m]||{}); porMes[m][grupo]=(porMes[m][grupo]||0)+REC(r);
+    (porMes[m]=porMes[m]||{}); porMes[m][grupo]=(porMes[m][grupo]||0)+(REC(r)-DEV(r));
   });
   const meses=Object.keys(porMes).sort().slice(-12);
   const labMes=meses.map(m=>{ const [y,mo]=m.split('-'); return mo+'/'+y.slice(2); });
@@ -458,7 +478,7 @@ function renderTudo(allRows,pDE,pATE,wDe){
   destroyChart('mix');
   charts['mix']=new Chart(document.getElementById('chart-mix'),{
     type:'doughnut',
-    data:{labels:gruposOrd,datasets:[{data:gruposOrd.map(g=>A.grupos[g].fat),backgroundColor:gruposOrd.map(g=>GRUPO_CORES[g]+'CC'),borderColor:gruposOrd.map(g=>GRUPO_CORES[g]),borderWidth:2}]},
+    data:{labels:gruposOrd,datasets:[{data:gruposOrd.map(g=>liqOf(A.grupos[g])),backgroundColor:gruposOrd.map(g=>GRUPO_CORES[g]+'CC'),borderColor:gruposOrd.map(g=>GRUPO_CORES[g]),borderWidth:2}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{
       legend:{position:'right',labels:{color:'#a1a1aa',font:{size:11},padding:12}},
       datalabels:{
@@ -471,17 +491,18 @@ function renderTudo(allRows,pDE,pATE,wDe){
   });
 
   // ── Marketplaces: barras por subgrupo + Δ ──
-  const mkt=Object.entries(A.subBy['Marketplaces']||{}).sort((a,b)=>b[1].fat-a[1].fat);
-  const maxMkt=Math.max(...mkt.map(m=>m[1].fat),1);
+  const mkt=Object.entries(A.subBy['Marketplaces']||{}).sort((a,b)=>liqOf(b[1])-liqOf(a[1]));
+  const maxMkt=Math.max(...mkt.map(m=>liqOf(m[1])),1);
   document.getElementById('mkt-bars').innerHTML=mkt.length?mkt.map(([nome,m])=>{
-    const dS=temPrev?delta(m.fat, P.subBy['Marketplaces']?.[nome]?.fat ?? 0):null;
-    return `<div class="bar-row"><div class="bar-label"><span style="color:var(--txt1);font-weight:500">${nome}</span><span class="bl-val">${fmt(m.fat)} ${temPrev?deltaHtml(dS):''}</span></div>
-    <div class="bar-track"><div class="bar-fill" style="width:${Math.round(m.fat/maxMkt*100)}%;background:${corSub('Marketplaces',nome)}"></div></div></div>`;
+    const liq=liqOf(m);
+    const dS=temPrev?delta(liq, liqOf(P.subBy['Marketplaces']?.[nome])):null;
+    return `<div class="bar-row"><div class="bar-label"><span style="color:var(--txt1);font-weight:500">${nome}</span><span class="bl-val">${fmt(liq)} ${temPrev?deltaHtml(dS):''}</span></div>
+    <div class="bar-track"><div class="bar-fill" style="width:${Math.round(liq/maxMkt*100)}%;background:${corSub('Marketplaces',nome)}"></div></div></div>`;
   }).join(''):'<div style="color:var(--txt3);font-size:12px;">Sem vendas no período</div>';
 
-  // Marketplaces diário
+  // Marketplaces diário (líquido)
   const mDia={};
-  cur.forEach(r=>{ if(classificarGrupo(r).grupo!=='Marketplaces') return; mDia[r.data_pedido]=(mDia[r.data_pedido]||0)+REC(r); });
+  cur.forEach(r=>{ if(classificarGrupo(r).grupo!=='Marketplaces') return; mDia[r.data_pedido]=(mDia[r.data_pedido]||0)+(REC(r)-DEV(r)); });
   const mDl=Object.keys(mDia).sort();
   destroyChart('mkt');
   charts['mkt']=new Chart(document.getElementById('chart-mkt'),{
@@ -490,17 +511,18 @@ function renderTudo(allRows,pDE,pATE,wDe){
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#71717a',maxTicksLimit:8,font:{size:10}},grid:{color:'rgba(255,255,255,0.04)'}},y:{ticks:{color:'#71717a',font:{size:10},callback:function(v){return 'R$'+Math.round(v/1000)+'k';}},grid:{color:'rgba(255,255,255,0.04)'}}}}});
 
   // ── Lojas Físicas: barras por loja + Δ ──
-  const lojas=Object.entries(A.subBy['Lojas']||{}).sort((a,b)=>b[1].fat-a[1].fat);
-  const maxLF=Math.max(...lojas.map(l=>l[1].fat),1);
+  const lojas=Object.entries(A.subBy['Lojas']||{}).sort((a,b)=>liqOf(b[1])-liqOf(a[1]));
+  const maxLF=Math.max(...lojas.map(l=>liqOf(l[1])),1);
   document.getElementById('loja-bars').innerHTML=lojas.length?lojas.map(([nome,l])=>{
-    const dS=temPrev?delta(l.fat, P.subBy['Lojas']?.[nome]?.fat ?? 0):null;
-    return `<div class="bar-row"><div class="bar-label"><span style="color:var(--txt1);font-weight:500">${nome}</span><span class="bl-val">${fmt(l.fat)} ${temPrev?deltaHtml(dS):''}</span></div>
-    <div class="bar-track"><div class="bar-fill" style="width:${Math.round(l.fat/maxLF*100)}%;background:${corSub('Lojas',nome)}"></div></div></div>`;
+    const liq=liqOf(l);
+    const dS=temPrev?delta(liq, liqOf(P.subBy['Lojas']?.[nome])):null;
+    return `<div class="bar-row"><div class="bar-label"><span style="color:var(--txt1);font-weight:500">${nome}</span><span class="bl-val">${fmt(liq)} ${temPrev?deltaHtml(dS):''}</span></div>
+    <div class="bar-track"><div class="bar-fill" style="width:${Math.round(liq/maxLF*100)}%;background:${corSub('Lojas',nome)}"></div></div></div>`;
   }).join(''):'<div style="color:var(--txt3);font-size:12px;">Sem vendas no período</div>';
 
-  // Lojas diário
+  // Lojas diário (líquido)
   const lDia={};
-  cur.forEach(r=>{ if(classificarGrupo(r).grupo!=='Lojas') return; lDia[r.data_pedido]=(lDia[r.data_pedido]||0)+REC(r); });
+  cur.forEach(r=>{ if(classificarGrupo(r).grupo!=='Lojas') return; lDia[r.data_pedido]=(lDia[r.data_pedido]||0)+(REC(r)-DEV(r)); });
   const lDl=Object.keys(lDia).sort();
   destroyChart('lojas');
   charts['lojas']=new Chart(document.getElementById('chart-lojas'),{
