@@ -595,10 +595,11 @@ function adsRowsToByCanal(rows){
 async function fetchAdsItem(de,ate){
   return buscarTudo('ads_metrics','select=produto_id,gasto,conta&plataforma=eq.mercado_ads&level=eq.item&produto_id=not.is.null&data=gte.'+de+'&data=lte.'+ate);
 }
-// Devolução ML REAL por produto (claim→item→SKU), coorte por data do pedido. Tabela
-// devolucoes_item. Dá "produtos mais devolvidos" de verdade (sem rateio). Só ML por ora.
+// Devolução REAL por produto (claim→item→SKU), coorte por data do pedido. Tabela
+// devolucoes_item, todos os canais com item-level (ML+Site+TikTok+Shopee; Shein sem API).
+// Dá "produtos mais devolvidos" de verdade, sem rateio.
 async function fetchDevItem(de,ate){
-  return buscarTudo('devolucoes_item','select=sku_pai,valor_devolucao&plataforma=eq.ml&data_pedido=gte.'+de+'&data_pedido=lte.'+ate);
+  return buscarTudo('devolucoes_item','select=sku_pai,valor_devolucao&data_pedido=gte.'+de+'&data_pedido=lte.'+ate);
 }
 function devRowsToBySkuPai(rows){
   var by={};
@@ -1270,7 +1271,7 @@ function renderEcommSkuList(){
     +'<th class="sortable'+arrow('nome')+'" onclick="setEcommSkuSort(\'nome\')">Produto</th>'
     +'<th class="r sortable'+arrow('receita')+'" onclick="setEcommSkuSort(\'receita\')">Receita</th>'
     +'<th class="r sortable'+arrow('qtd')+'" onclick="setEcommSkuSort(\'qtd\')">Qtd</th>'
-    +'<th class="r sortable'+arrow('devml')+'" onclick="setEcommSkuSort(\'devml\')">Devol. (ML)</th>'
+    +'<th class="r sortable'+arrow('devml')+'" onclick="setEcommSkuSort(\'devml\')">Devol. (un·R$)</th>'
     +'<th style="min-width:220px;">Distribuição por canal</th>'
     +'</tr>';
   listEl.innerHTML='<table class="tb"><thead>'+th+'</thead><tbody>'
@@ -1290,7 +1291,7 @@ function renderEcommSkuList(){
         +'<td style="font-weight:600;max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="'+(s.nome||s.sku_pai)+'"><div>'+(s.nome||s.sku_pai)+'</div><div style="font-size:9px;color:var(--txt3);font-family:monospace;">'+s.sku_pai+'</div></td>'
         +'<td class="r val" style="font-weight:700;">'+fmt(s.receita)+'</td>'
         +'<td class="r val">'+fmtN(s.qtd)+'</td>'
-        +'<td class="r val" style="font-weight:700;" title="devoluções ML reais (anúncio→produto)">'+(dv.cnt>0?fmtN(dv.cnt)+'<span style="color:var(--txt3);font-size:9px;font-weight:600"> · '+fmtK(dv.valor)+'</span>':'<span style="color:var(--txt3)">—</span>')+'</td>'
+        +'<td class="r val" style="font-weight:700;" title="devoluções reais por produto (ML+Site+TikTok+Shopee)">'+(dv.cnt>0?fmtN(dv.cnt)+'<span style="color:var(--txt3);font-size:9px;font-weight:600"> · '+fmtK(dv.valor)+'</span>':'<span style="color:var(--txt3)">—</span>')+'</td>'
         +'<td>'+bar+'</td>'
         +'</tr>';
     }).join('')+'</tbody></table>';
@@ -1328,7 +1329,7 @@ function renderEcommSkuDetail(){
   // Ads ML REAL deste SKU (anúncio→produto, sem rateio). Shopee não entra (shop-level).
   var adsSku=(STATE.adsBySkuPai&&STATE.adsBySkuPai[s.sku_pai])||0;
   var adsPct=receita>0?(adsSku/receita*100):0;
-  var dvSku=(STATE.devBySkuPai&&STATE.devBySkuPai[s.sku_pai])||{valor:0,cnt:0};  // devolução ML real (count)
+  var dvSku=(STATE.devBySkuPai&&STATE.devBySkuPai[s.sku_pai])||{valor:0,cnt:0};  // devolução real por produto (todos canais)
   var margemLiq=receita-s.custoTotal-s.fee-s.devolucao-freteSeller-adsSku;
   var margemPct=receita>0?(margemLiq/receita*100):0;
   // Velocidade
@@ -1379,7 +1380,7 @@ function renderEcommSkuDetail(){
   var adsCls=adsPct<=8?'good':(adsPct<=15?'mid':'bad');
   html+='<div class="dr-kpi-grid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:18px;">';
   html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Comissão real</div><div class="dr-kpi-val">'+fmtD(feePct)+'%</div><div class="dr-kpi-sub"><span class="margem-pill '+feeCls+'">'+fmtK(s.fee)+'</span></div></div>';
-  html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Devolução real</div><div class="dr-kpi-val">'+fmtD(devPct)+'%</div><div class="dr-kpi-sub"><span class="margem-pill '+devCls+'">'+fmtK(s.devolucao)+'</span>'+(dvSku.cnt>0?' · <b>'+fmtN(dvSku.cnt)+'</b> dev. ML':'')+'</div></div>';
+  html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Devolução real</div><div class="dr-kpi-val">'+fmtD(devPct)+'%</div><div class="dr-kpi-sub"><span class="margem-pill '+devCls+'">'+fmtK(s.devolucao)+'</span>'+(dvSku.cnt>0?' · <b>'+fmtN(dvSku.cnt)+'</b> devoluções':'')+'</div></div>';
   html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Frete (custo seller)</div><div class="dr-kpi-val">'+fmtK(freteSeller)+'</div><div class="dr-kpi-sub"><span class="margem-pill '+fretCls+'">'+fmtD(fretePct)+'%</span> da receita</div></div>';
   html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Ads (ML)</div><div class="dr-kpi-val">'+fmtK(adsSku)+'</div><div class="dr-kpi-sub"><span class="margem-pill '+adsCls+'">'+fmtD(adsPct)+'%</span> da receita</div></div>';
   html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Velocidade</div><div class="dr-kpi-val">'+fmtD(v7d)+' un/d</div><div class="dr-kpi-sub" style="color:'+tendCor+';">'+tendSym+' '+(tendPct>=0?'+':'')+Math.round(tendPct)+'% vs 30d</div></div>';
