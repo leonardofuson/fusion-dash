@@ -590,6 +590,11 @@ function adsRowsToByCanal(rows){
   });
   return by;
 }
+// Ads ML por ANÚNCIO→produto (level=item, produto_id resolvido no sync). Atribuição REAL por
+// SKU (sem rateio). Shopee não entra aqui (é shop-level, sem produto).
+async function fetchAdsItem(de,ate){
+  return buscarTudo('ads_metrics','select=produto_id,gasto,conta&plataforma=eq.mercado_ads&level=eq.item&produto_id=not.is.null&data=gte.'+de+'&data=lte.'+ate);
+}
 // Soma o ads respeitando o filtro de canais + focusCanal atual (mesma lógica do resto do P&L).
 function adsFiltrado(byCanal){
   if(!byCanal)return 0;
@@ -676,7 +681,7 @@ async function fetchProdutos(){
 
 // ── State ──
 var DE=null,ATE=null;
-var STATE={pedidos:[],pedidosFull:[],anteriores:[],anterioresFull:[],itens:[],itensFocus:[],canais:[],canaisSel:{},stackMode:'abs',focusCanal:null,skuGroups:[],skuSel:null,skuSort:{key:'receita',dir:'desc'},adsByCanal:{},adsByCanalPrev:{}};
+var STATE={pedidos:[],pedidosFull:[],anteriores:[],anterioresFull:[],itens:[],itensFocus:[],canais:[],canaisSel:{},stackMode:'abs',focusCanal:null,skuGroups:[],skuSel:null,skuSort:{key:'receita',dir:'desc'},adsByCanal:{},adsByCanalPrev:{},adsBySkuPai:{},adsBySkuPaiCanal:{}};
 var CHARTS={hero:null,pareto:null,recvWeeks:null};
 var GEO_UF_SEL=null;
 
@@ -752,7 +757,7 @@ async function carregar(){
     if(STATE.canais.length===0){var seen={};STATE.pedidosRaw.forEach(function(p){if(shouldDedup(p))return;var n=getNome(p.canal_nome_raw,p.origem_conta);if(!seen[n]){seen[n]=true;STATE.canaisSel[n]=true;}});STATE.canais=Object.keys(seen).sort();renderCanalChips();}
 
     // RENDER IMEDIATO — sem itens (waterfall, canais, geo, pagamentos, alertas)
-    STATE.itens=[];STATE.itensFocus=[];
+    STATE.itens=[];STATE.itensFocus=[];STATE.adsBySkuPai={};STATE.adsBySkuPaiCanal={};
     STATE.adsByCanal=await pAds;STATE.adsByCanalPrev=await pAdsPrev;
     renderAll();
     document.getElementById('upd').textContent='Carregando produtos...';
@@ -766,6 +771,19 @@ async function carregar(){
       var itensTab=useTeste?'itens_pedido_ml_teste':'itens_pedido';
       var itens=await fetchItensForIds(ids,itensTab);var prods=await fetchProdutos();
       if(seq!==LOAD_SEQ)return;   // período mudou durante a carga de itens — aborta
+      // Ads ML REAL por SKU (anúncio→produto). Mapeia produto_id→sku_pai via produtos.
+      try{
+        var adsItemRows=await fetchAdsItem(DE,ATE);
+        STATE.adsBySkuPai={};STATE.adsBySkuPaiCanal={};
+        adsItemRows.forEach(function(r){
+          var prod=prods.byId[r.produto_id];if(!prod)return;
+          var sp=prod.sku_pai||prod.sku;var g=parseFloat(r.gasto||0);
+          var canal=r.conta==='confeccoes'?getNome('Mercado Livre Confecções','confeccoes'):getNome('Mercado Livre FIO','fio_e_trama');
+          STATE.adsBySkuPai[sp]=(STATE.adsBySkuPai[sp]||0)+g;
+          if(!STATE.adsBySkuPaiCanal[sp])STATE.adsBySkuPaiCanal[sp]={};
+          STATE.adsBySkuPaiCanal[sp][canal]=(STATE.adsBySkuPaiCanal[sp][canal]||0)+g;
+        });
+      }catch(e){console.warn('adsItem:',e);}
       var pedById={};recentes.forEach(function(p){pedById[p.id]=p;});
       itens.forEach(function(it){var ped=pedById[it.pedido_id];if(!ped)return;var prod=prods.byId[it.produto_id];if(!prod)return;
         var skuPai=prod.sku_pai;var pai;
@@ -1293,7 +1311,10 @@ function renderEcommSkuDetail(){
   // (Antes era "frete líquido" = cliente−seller, que dava positivo/verde e confundia.)
   var freteSeller=s.freteSeller;
   var fretePct=receita>0?(freteSeller/receita*100):0;
-  var margemLiq=receita-s.custoTotal-s.fee-s.devolucao-freteSeller;
+  // Ads ML REAL deste SKU (anúncio→produto, sem rateio). Shopee não entra (shop-level).
+  var adsSku=(STATE.adsBySkuPai&&STATE.adsBySkuPai[s.sku_pai])||0;
+  var adsPct=receita>0?(adsSku/receita*100):0;
+  var margemLiq=receita-s.custoTotal-s.fee-s.devolucao-freteSeller-adsSku;
   var margemPct=receita>0?(margemLiq/receita*100):0;
   // Velocidade
   var datas=Object.keys(s.datas||{}).sort();
@@ -1340,10 +1361,12 @@ function renderEcommSkuDetail(){
   var fretCls=fretePct<=8?'good':(fretePct<=15?'mid':'bad');  // custo de frete sobre receita (menor = melhor)
   var tendSym=tendPct>=5?'▲':(tendPct<=-5?'▼':'→');
   var tendCor=tendPct>=5?'#22c55e':(tendPct<=-5?'#ef4444':'#a1a1aa');
-  html+='<div class="dr-kpi-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:18px;">';
+  var adsCls=adsPct<=8?'good':(adsPct<=15?'mid':'bad');
+  html+='<div class="dr-kpi-grid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:18px;">';
   html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Comissão real</div><div class="dr-kpi-val">'+fmtD(feePct)+'%</div><div class="dr-kpi-sub"><span class="margem-pill '+feeCls+'">'+fmtK(s.fee)+'</span></div></div>';
   html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Devolução real</div><div class="dr-kpi-val">'+fmtD(devPct)+'%</div><div class="dr-kpi-sub"><span class="margem-pill '+devCls+'">'+fmtK(s.devolucao)+'</span></div></div>';
   html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Frete (custo seller)</div><div class="dr-kpi-val">'+fmtK(freteSeller)+'</div><div class="dr-kpi-sub"><span class="margem-pill '+fretCls+'">'+fmtD(fretePct)+'%</span> da receita</div></div>';
+  html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Ads (ML)</div><div class="dr-kpi-val">'+fmtK(adsSku)+'</div><div class="dr-kpi-sub"><span class="margem-pill '+adsCls+'">'+fmtD(adsPct)+'%</span> da receita</div></div>';
   html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Velocidade</div><div class="dr-kpi-val">'+fmtD(v7d)+' un/d</div><div class="dr-kpi-sub" style="color:'+tendCor+';">'+tendSym+' '+(tendPct>=0?'+':'')+Math.round(tendPct)+'% vs 30d</div></div>';
   html+='</div>';
 
@@ -1354,14 +1377,15 @@ function renderEcommSkuDetail(){
     var dc=p.receita>0?(p.devolucao/p.receita*100):0;
     var fr=p.freteSeller;   // custo de frete do seller (dedução), igual ao P&L
     var custo=p.custoTotal;
-    var marg=p.receita-custo-p.fee-p.devolucao-fr;
+    var adsC=((STATE.adsBySkuPaiCanal[s.sku_pai]||{})[c])||0;  // ads ML real do SKU nesse canal
+    var marg=p.receita-custo-p.fee-p.devolucao-fr-adsC;
     var mp=p.receita>0?(marg/p.receita*100):0;
-    return {nome:c,cor:getCor(c),qtd:p.qtd,receita:p.receita,fee:p.fee,feePct:fc,devolucao:p.devolucao,devPct:dc,frete:fr,margem:marg,margemPct:mp};
+    return {nome:c,cor:getCor(c),qtd:p.qtd,receita:p.receita,fee:p.fee,feePct:fc,devolucao:p.devolucao,devPct:dc,frete:fr,ads:adsC,margem:marg,margemPct:mp};
   }).sort(function(a,b){return b.receita-a.receita;});
 
   html+='<div class="drawer-section" style="margin-bottom:18px;"><div class="drawer-section-title">Comparativo cross-canal</div>';
   html+=  '<div style="overflow-x:auto;"><table class="dr-tbl" style="width:100%;font-size:11px;">';
-  html+=    '<thead><tr><th style="text-align:left;">Canal</th><th class="r">Qtd</th><th class="r">Receita</th><th class="r">Comissão</th><th class="r">Devol.</th><th class="r">Frete</th><th class="r">Margem</th><th class="r">Margem %</th></tr></thead><tbody>';
+  html+=    '<thead><tr><th style="text-align:left;">Canal</th><th class="r">Qtd</th><th class="r">Receita</th><th class="r">Comissão</th><th class="r">Devol.</th><th class="r">Frete</th><th class="r">Ads</th><th class="r">Margem</th><th class="r">Margem %</th></tr></thead><tbody>';
   canaisRows.forEach(function(c){
     var mc=c.margemPct>=40?'good':(c.margemPct>=20?'mid':'bad');
     html+='<tr>'
@@ -1371,6 +1395,7 @@ function renderEcommSkuDetail(){
       +'<td class="r"><span style="color:var(--txt2)">'+fmtD(c.feePct)+'%</span> <span style="color:var(--txt3);font-size:10px">('+fmtK(c.fee)+')</span></td>'
       +'<td class="r"><span style="color:'+(c.devPct>=10?'#ef4444':(c.devPct>=5?'#eab308':'var(--txt2)'))+'">'+fmtD(c.devPct)+'%</span></td>'
       +'<td class="r"><span style="color:var(--txt2)">'+fmtK(c.frete)+'</span></td>'
+      +'<td class="r"><span style="color:var(--txt2)">'+fmtK(c.ads)+'</span></td>'
       +'<td class="r" style="font-weight:700">'+fmtK(c.margem)+'</td>'
       +'<td class="r"><span class="margem-pill '+mc+'">'+Math.round(c.margemPct)+'%</span></td>'
       +'</tr>';
