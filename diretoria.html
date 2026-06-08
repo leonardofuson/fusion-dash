@@ -41,8 +41,14 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
 .chart-wrap-sm{position:relative;height:180px;}
 .origem-card{background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;padding:16px;border-left:3px solid;}
 .origem-nome{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;}
-.origem-fat{font-size:1.3rem;font-weight:700;margin-bottom:4px;}
+.origem-fat{font-size:1.6rem;font-weight:700;margin-bottom:2px;line-height:1.1;}
 .origem-info{font-size:11px;color:var(--txt2);}
+.origem-prev{font-size:11px;color:var(--txt2);margin-top:5px;}
+.origem-prev b{color:var(--txt1);}
+.origem-metrics{display:flex;gap:16px;margin-top:12px;padding-top:10px;border-top:1px solid var(--bdr);flex-wrap:wrap;}
+.origem-metric{display:flex;flex-direction:column;gap:2px;}
+.origem-metric .mv{font-size:14px;font-weight:700;color:var(--txt1);line-height:1;}
+.origem-metric .ml{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--txt2);}
 .delta{font-weight:600;}
 .delta-up{color:var(--green);}
 .delta-down{color:var(--red);}
@@ -136,6 +142,12 @@ table.tb tr:hover td{background:rgba(255,255,255,0.02);}
   <div class="grid2">
     <div class="card"><div class="card-title">Receita líquida por loja</div><div id="loja-bars"></div></div>
     <div class="card"><div class="card-title">Evolução diária — Lojas <span style="color:var(--txt3);font-weight:400">· líquido</span></div><div class="chart-wrap"><canvas id="chart-lojas"></canvas></div></div>
+  </div>
+
+  <div class="section-title" style="margin-bottom:14px;">Atacado</div>
+  <div class="grid2">
+    <div class="card"><div class="card-title">Receita líquida por canal de atacado</div><div id="atacado-bars"></div></div>
+    <div class="card"><div class="card-title">Evolução diária — Atacado <span style="color:var(--txt3);font-weight:400">· líquido</span></div><div class="chart-wrap"><canvas id="chart-atacado"></canvas></div></div>
   </div>
 
   <div class="card" style="margin-bottom:16px;">
@@ -387,6 +399,44 @@ function agrupar(rows){
   return {grupos,subBy,totFat,totPed,totDev};
 }
 
+// Previsão de fechamento do MÊS CORRENTE (líquido) por grupo — média por dia-da-semana
+// (DOW) dos dias observados × dias do mês (mesmo método do lojas.html, mais robusto que
+// extrapolação linear pra início de mês). Fallback: média diária geral do grupo.
+function preverMesPorGrupo(allRows){
+  const h=new Date(), y=h.getFullYear(), mo=h.getMonth();
+  const mesIni=new Date(y,mo,1).toISOString().split('T')[0];
+  const hojeStr=h.toISOString().split('T')[0];
+  const diasMes=new Date(y,mo+1,0).getDate();
+  const porDiaGrupo={};
+  allRows.forEach(r=>{
+    if(!r.data_pedido || r.data_pedido<mesIni || r.data_pedido>hojeStr) return;
+    const {grupo}=classificarGrupo(r);
+    (porDiaGrupo[r.data_pedido]=porDiaGrupo[r.data_pedido]||{});
+    porDiaGrupo[r.data_pedido][grupo]=(porDiaGrupo[r.data_pedido][grupo]||0)+(REC(r)-DEV(r));
+  });
+  const dias=Object.keys(porDiaGrupo);
+  const somaDow={}, cntDow={};
+  dias.forEach(d=>{
+    const dow=new Date(d+'T12:00:00').getDay();
+    cntDow[dow]=(cntDow[dow]||0)+1;
+    somaDow[dow]=somaDow[dow]||{};
+    GRUPO_ORDER.forEach(g=> somaDow[dow][g]=(somaDow[dow][g]||0)+(porDiaGrupo[d][g]||0));
+  });
+  const prev={}; GRUPO_ORDER.forEach(g=>prev[g]=0);
+  const totG={}, diasDecorr=Math.max(1,dias.length);
+  GRUPO_ORDER.forEach(g=> totG[g]=dias.reduce((s,d)=>s+(porDiaGrupo[d][g]||0),0));
+  for(let dia=1;dia<=diasMes;dia++){
+    const dow=new Date(y,mo,dia).getDay();
+    GRUPO_ORDER.forEach(g=>{
+      prev[g]+= cntDow[dow] ? (somaDow[dow][g]||0)/cntDow[dow]   // média do DOW observado
+                            : totG[g]/diasDecorr;                 // fallback: média diária
+    });
+  }
+  prev._total=GRUPO_ORDER.reduce((s,g)=>s+prev[g],0);
+  prev._mesLabel=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][mo];
+  return prev;
+}
+
 // Renderização completa a partir de allRows (janela 12m+anterior) da mvw_diretoria_dia.
 // Fatia client-side: cur=período selecionado, prev=período anterior, mensal=12m fixos.
 function renderTudo(allRows,pDE,pATE,wDe){
@@ -398,7 +448,13 @@ function renderTudo(allRows,pDE,pATE,wDe){
   const fatTotal=A.totFat, pedTotal=A.totPed;
   const temPrev=prev.length>0;
 
-  // ── KPIs (régua Net Sales · âncora = Receita Líquida · Δ% vs período anterior) ──
+  // ── Previsão de fechamento do MÊS CORRENTE (líquido) — por DOW, independe do filtro ──
+  const PREV=preverMesPorGrupo(allRows);
+  const prevMes=g=> PREV[g]||0;
+  const prevMesTotal=PREV._total;
+  const _mesLabel=PREV._mesLabel;
+
+  // ── KPIs do topo (régua Net Sales · âncora = Receita Líquida) ──
   const devTotal=A.totDev, devPrev=P.totDev;
   const liqTotal=fatTotal-devTotal, liqPrev=P.totFat-devPrev;
   const taxaDev=fatTotal>0?devTotal/fatTotal*100:0;
@@ -409,26 +465,31 @@ function renderTudo(allRows,pDE,pATE,wDe){
   const fatDiaPrev=liqPrev/diasPrev;
   const subKPI=(d)=> temPrev?('vs ant. '+deltaHtml(d)):'no período';
   document.getElementById('kpis').innerHTML=`
-    <div class="kpi"><div class="kpi-label">Faturamento Bruto</div><div class="kpi-value">${fmt(fatTotal)}</div><div class="kpi-sub">${subKPI(delta(fatTotal,P.totFat))}</div></div>
-    <div class="kpi kpi-red"><div class="kpi-label">Devoluções</div><div class="kpi-value">${fmt(devTotal)}</div><div class="kpi-sub">${fmtPct(taxaDev)} do bruto</div></div>
-    <div class="kpi kpi-green kpi-anchor"><div class="kpi-label">Receita Líquida</div><div class="kpi-value">${fmt(liqTotal)}</div><div class="kpi-sub">${subKPI(delta(liqTotal,liqPrev))}</div></div>
+    <div class="kpi"><div class="kpi-label">Receita Bruta</div><div class="kpi-value">${fmt(fatTotal)}</div><div class="kpi-sub">${subKPI(delta(fatTotal,P.totFat))}</div></div>
+    <div class="kpi kpi-green kpi-anchor"><div class="kpi-label">Receita Líquida</div><div class="kpi-value">${fmt(liqTotal)}</div><div class="kpi-sub">${subKPI(delta(liqTotal,liqPrev))} · dev ${fmt(devTotal)} (${fmtPct(taxaDev)})</div></div>
+    <div class="kpi kpi-purple"><div class="kpi-label">Previsão ${_mesLabel}</div><div class="kpi-value">${fmt(prevMesTotal)}</div><div class="kpi-sub">fechamento do mês · líq</div></div>
     <div class="kpi kpi-blue"><div class="kpi-label">Total Pedidos</div><div class="kpi-value">${fmtN(pedTotal)}</div><div class="kpi-sub">${subKPI(delta(pedTotal,P.totPed))}</div></div>
-    <div class="kpi"><div class="kpi-label">Ticket Médio (líq)</div><div class="kpi-value">${fmt(tmCur)}</div><div class="kpi-sub">${subKPI(delta(tmCur,tmPrev))}</div></div>
+    <div class="kpi"><div class="kpi-label">Ticket Médio</div><div class="kpi-value">${fmt(tmCur)}</div><div class="kpi-sub">${subKPI(delta(tmCur,tmPrev))}</div></div>
     <div class="kpi kpi-amber"><div class="kpi-label">Fat/Dia (líq)</div><div class="kpi-value">${fmt(fatDiaCur)}</div><div class="kpi-sub">${subKPI(delta(fatDiaCur,fatDiaPrev))}</div></div>
   `;
 
-  // ── Cards por grande grupo ──
+  // ── Cards por grande grupo: Faturamento (destaque) + Pedidos/Ticket/Fat-dia + Previsão do mês ──
   const gruposOrd=GRUPO_ORDER.filter(g=>A.grupos[g]);
   document.getElementById('grupo-cards').innerHTML=gruposOrd.map(g=>{
     const o=A.grupos[g], cor=GRUPO_CORES[g];
     const liq=liqOf(o), liqPrevG=liqOf(P.grupos[g]);
     const d=temPrev?delta(liq, liqPrevG):null;
-    const taxa=o.fat>0?o.dev/o.fat*100:0;
+    const tkt=o.ped>0?liq/o.ped:0, fatDia=liq/diasP, prev=prevMes(g);
     return `<div class="origem-card" style="border-left-color:${cor}">
       <div class="origem-nome" style="color:${cor}">${g}</div>
       <div class="origem-fat" style="color:${cor}">${fmt(liq)}</div>
-      <div class="origem-info">${fmtN(o.ped)} pedidos &bull; TM ${fmt(o.ped>0?liq/o.ped:0)} &bull; ${fmtPct(liqTotal>0?liq/liqTotal*100:0)} do líq</div>
-      <div class="origem-info" style="margin-top:4px;">dev ${fmt(o.dev)} (${fmtPct(taxa)})${temPrev?` &bull; vs ant. ${deltaHtml(d)}`:''}</div>
+      <div class="origem-info">${temPrev?`vs ant. ${deltaHtml(d)}`:'no período'}</div>
+      <div class="origem-prev">Prev. ${_mesLabel}: <b>${fmt(prev)}</b></div>
+      <div class="origem-metrics">
+        <div class="origem-metric"><span class="mv">${fmtN(o.ped)}</span><span class="ml">Pedidos</span></div>
+        <div class="origem-metric"><span class="mv">${fmt(tkt)}</span><span class="ml">Ticket Médio</span></div>
+        <div class="origem-metric"><span class="mv">${fmt(fatDia)}</span><span class="ml">Fat/Dia</span></div>
+      </div>
     </div>`;
   }).join('');
 
@@ -528,6 +589,27 @@ function renderTudo(allRows,pDE,pATE,wDe){
   charts['lojas']=new Chart(document.getElementById('chart-lojas'),{
     type:'line',
     data:{labels:lDl.map(d=>new Date(d+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})),datasets:[{label:'Lojas',data:lDl.map(d=>lDia[d]||0),borderColor:'#10b981',backgroundColor:'rgba(16,185,129,0.08)',fill:true,tension:0.4,pointRadius:2,borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#71717a',maxTicksLimit:8,font:{size:10}},grid:{color:'rgba(255,255,255,0.04)'}},y:{ticks:{color:'#71717a',font:{size:10},callback:function(v){return 'R$'+Math.round(v/1000)+'k';}},grid:{color:'rgba(255,255,255,0.04)'}}}}});
+
+  // ── Atacado: barras por canal (Flecha / Atacado WhatsApp) + Δ ──
+  const ATAC_CORES={'Flecha':'#06B6D4','Atacado WhatsApp (KWID)':'#0EA5E9'};
+  const atac=Object.entries(A.subBy['Atacado']||{}).sort((a,b)=>liqOf(b[1])-liqOf(a[1]));
+  const maxAt=Math.max(...atac.map(a=>liqOf(a[1])),1);
+  document.getElementById('atacado-bars').innerHTML=atac.length?atac.map(([nome,a])=>{
+    const liq=liqOf(a);
+    const dS=temPrev?delta(liq, liqOf(P.subBy['Atacado']?.[nome])):null;
+    return `<div class="bar-row"><div class="bar-label"><span style="color:var(--txt1);font-weight:500">${nome}</span><span class="bl-val">${fmt(liq)} ${temPrev?deltaHtml(dS):''}</span></div>
+    <div class="bar-track"><div class="bar-fill" style="width:${Math.round(liq/maxAt*100)}%;background:${ATAC_CORES[nome]||GRUPO_CORES['Atacado']}"></div></div></div>`;
+  }).join(''):'<div style="color:var(--txt3);font-size:12px;">Sem vendas no período</div>';
+
+  // Atacado diário (líquido)
+  const aDia={};
+  cur.forEach(r=>{ if(classificarGrupo(r).grupo!=='Atacado') return; aDia[r.data_pedido]=(aDia[r.data_pedido]||0)+(REC(r)-DEV(r)); });
+  const aDl=Object.keys(aDia).sort();
+  destroyChart('atacado');
+  charts['atacado']=new Chart(document.getElementById('chart-atacado'),{
+    type:'line',
+    data:{labels:aDl.map(d=>new Date(d+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})),datasets:[{label:'Atacado',data:aDl.map(d=>aDia[d]||0),borderColor:'#06b6d4',backgroundColor:'rgba(6,182,212,0.08)',fill:true,tension:0.4,pointRadius:2,borderWidth:2}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#71717a',maxTicksLimit:8,font:{size:10}},grid:{color:'rgba(255,255,255,0.04)'}},y:{ticks:{color:'#71717a',font:{size:10},callback:function(v){return 'R$'+Math.round(v/1000)+'k';}},grid:{color:'rgba(255,255,255,0.04)'}}}}});
 
   renderProjecao(allRows);
