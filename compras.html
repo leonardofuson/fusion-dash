@@ -350,7 +350,7 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
         <div style="padding:12px;">
           <div class="gantt-filters" style="margin-bottom:12px">
             <input type="text" id="flt-busca-pipeline" class="dinput" placeholder="Buscar produto, costureiro, NF, tecido, cor, OP..." style="min-width:280px" oninput="renderGantt();renderOPsLista()">
-            <select id="flt-categoria-gantt" class="dselect" onchange="renderGantt();renderOPsLista()"><option value="">Todas categorias</option></select>
+            <select id="flt-categoria-gantt" class="dselect" onchange="popularProdutosPorCategoria();renderGantt();renderOPsLista()"><option value="">Todas categorias</option></select>
             <select id="flt-produto-gantt" class="dselect" onchange="renderGantt();renderOPsLista()"><option value="">Todos produtos</option></select>
             <select id="flt-costureiro-gantt" class="dselect" onchange="renderGantt();renderOPsLista()"><option value="">Todos costureiros</option></select>
             <select id="flt-status-op" class="dselect" onchange="renderGantt();renderOPsLista()"><option value="">Todos status</option></select>
@@ -375,7 +375,7 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
     <div class="card">
       <div class="card-header">
         <span class="card-title">Lista de Ordens<small id="op-list-count"></small></span>
-        <input type="text" id="flt-busca-op" class="dinput" placeholder="Buscar produto, costureiro, cor..." style="min-width:240px" oninput="renderOPsLista()">
+        <input type="text" id="flt-busca-op" class="dinput" placeholder="Buscar produto, costureiro, cor..." style="min-width:240px" oninput="renderGantt();renderOPsLista()">
       </div>
       <div class="tb-wrap tb-wrap-scroll">
         <table class="tb"><thead><tr>
@@ -1094,8 +1094,8 @@ function renderOPsLista() {
   var fCost = document.getElementById('flt-costureiro-gantt').value;
   var fCat = ((document.getElementById('flt-categoria-gantt') || {}).value || '');
   // Busca: prioriza input principal do Pipeline; cai pro antigo busca-op se existir
-  var qPrincipal = ((document.getElementById('flt-busca-pipeline') || {}).value || '').trim().toLowerCase();
-  var qLocal = ((document.getElementById('flt-busca-op') || {}).value || '').trim().toLowerCase();
+  var qPrincipal = semAcento(((document.getElementById('flt-busca-pipeline') || {}).value || '').trim());
+  var qLocal = semAcento(((document.getElementById('flt-busca-op') || {}).value || '').trim());
   var q = qPrincipal || qLocal;
 
   if (fSt) ops = ops.filter(function(o) { return o.status === fSt; });
@@ -1203,9 +1203,14 @@ function colapsarTodosGantt() {
 }
 
 // Blob de busca pra OP — usado pelo input "Buscar..." do Pipeline
+// Normaliza pra busca: minúsculas + sem acento (NFD remove diacríticos).
+// Garante que "passa facil" case com "Passa Fácil" e vice-versa.
+function semAcento(s) {
+  return String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
 function buscaBlobOP(o) {
   var insumo = o.insumo_id ? (STATE.insumos || []).find(function(i){return i.id === o.insumo_id;}) : null;
-  return [
+  return semAcento([
     (o.produto || ''),
     nomeProduto(o.sku_produto) || '',
     (o.sku_produto || ''),
@@ -1215,7 +1220,7 @@ function buscaBlobOP(o) {
     insumo ? (insumo.nome || '') : '',
     insumo ? (insumo.numero_nf || '') : '',
     'op #' + o.id, 'op' + o.id, '#' + o.id, String(o.id),
-  ].join(' ').toLowerCase();
+  ].join(' '));
 }
 
 function renderGantt() {
@@ -1226,7 +1231,9 @@ function renderGantt() {
   var fProd = document.getElementById('flt-produto-gantt').value;
   var fCost = document.getElementById('flt-costureiro-gantt').value;
   var fCat = ((document.getElementById('flt-categoria-gantt') || {}).value || '');
-  var qBusca = ((document.getElementById('flt-busca-pipeline') || {}).value || '').trim().toLowerCase();
+  // Lê os DOIS campos de busca (o principal acima do Gantt e o da lista) — qualquer um filtra ambas as views.
+  var qBusca = semAcento(((document.getElementById('flt-busca-pipeline') || {}).value || '').trim())
+            || semAcento(((document.getElementById('flt-busca-op') || {}).value || '').trim());
   if (fSt) ops = ops.filter(function(o) { return o.status === fSt; });
   if (fCat) ops = ops.filter(function(o){ return categoriaProduto(o.sku_produto) === fCat; });
   if (fProd) ops = ops.filter(function(o) { return nomeProduto(o.sku_produto) === fProd || (o.produto||'').trim() === fProd || o.sku_produto === fProd; });
@@ -4572,18 +4579,32 @@ function populateFilters() {
   var selCat = document.getElementById('flt-categoria-gantt');
   if (selCat) selCat.innerHTML = '<option value="">Todas categorias</option>' + Object.keys(cats).sort().map(function(c){ return '<option value="' + c + '">' + c + '</option>'; }).join('');
 
-  // Produto filter (Gantt) — agrupa pelo NOME DO PAI (nomeProduto), nunca pela variante longa
-  var produtos = {};
-  STATE.ops.forEach(function(o) {
-    var nome = nomeProduto(o.sku_produto) || (o.produto || '').trim();
-    if (nome && nome !== '—') produtos[nome] = 1;
-  });
-  var selP = document.getElementById('flt-produto-gantt');
-  if (selP) selP.innerHTML = '<option value="">Todos produtos</option>' + Object.keys(produtos).sort().map(function(p) { return '<option value="' + p + '">' + p + '</option>'; }).join('');
+  // Produto filter (Gantt) — só os produtos da categoria selecionada (cascata categoria→produto)
+  popularProdutosPorCategoria();
 
   // Costureiro filter (Gantt)
   var selC = document.getElementById('flt-costureiro-gantt');
   if (selC) selC.innerHTML = '<option value="">Todos costureiros</option>' + STATE.costureiros.map(function(c) { return '<option value="' + c.id + '">' + c.nome + '</option>'; }).join('');
+}
+
+// Popula o dropdown de produto do Pipeline com APENAS os produtos da categoria selecionada
+// (agrupados pelo NOME DO PAI). Preserva a seleção atual se ainda válida, senão reseta pra "Todos".
+// Chamado no load e toda vez que a categoria muda.
+function popularProdutosPorCategoria() {
+  var selP = document.getElementById('flt-produto-gantt');
+  if (!selP) return;
+  var fCat = ((document.getElementById('flt-categoria-gantt') || {}).value || '');
+  var atual = selP.value;
+  var produtos = {};
+  (STATE.ops || []).forEach(function(o) {
+    if (fCat && categoriaProduto(o.sku_produto) !== fCat) return;
+    var nome = nomeProduto(o.sku_produto) || (o.produto || '').trim();
+    if (nome && nome !== '—') produtos[nome] = 1;
+  });
+  var nomes = Object.keys(produtos).sort();
+  selP.innerHTML = '<option value="">Todos produtos</option>' +
+    nomes.map(function(p) { return '<option value="' + p.replace(/"/g,'&quot;') + '">' + p + '</option>'; }).join('');
+  selP.value = (atual && nomes.indexOf(atual) >= 0) ? atual : '';
 }
 
 // ═══════════════ TAB: PAGAMENTOS (Sprint 5) ═══════════════
