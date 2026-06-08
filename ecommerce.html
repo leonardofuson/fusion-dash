@@ -319,6 +319,7 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
           <th class="r">Devoluções</th>
           <th class="r">Frete</th>
           <th class="r">Receita Líquida</th>
+          <th class="r">Ads</th>
           <th class="r">CMV</th>
           <th class="r">Resultado</th>
         </tr></thead>
@@ -332,6 +333,7 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
       <b>Devoluções</b> = reembolso real por canal (ML <i>claims</i>, Shopee <i>returns</i>, TikTok <i>statement</i>, Site <i>Shopify refunds</i>) + <i>chargeback</i> Pagar.me (só Site). Troca/vale-crédito do site (Troque) NÃO entra aqui (não é perda de caixa). ·
       <b>Frete</b> = custo do seller via API (ML/TikTok <i>shipments</i>). ·
       <b>Receita Líquida</b> = Bruta − Comissão − Devoluções − Frete. ·
+      <b>Ads</b> = custo de mídia, <b>hoje só Mercado Ads (ML)</b> — Meta/Google/TikTok/Shopee pendentes de credenciais (linha parcial; demais canais aparecem com Ads R$0). ·
       <b>CMV</b> = custo real (item × custo do produto / WAC dos costureiros) nos meses recentes; proporção real por canal nos meses antigos. ·
       <b>Resultado</b> = Líquida − CMV.
     </div>
@@ -570,6 +572,30 @@ async function fetchTroqueSite(de,ate){
         '&dia=gte.'+de+'&dia=lte.'+ate+'&order=dia.asc';
   return buscarTudo('vw_devolucao_site_dia',f);
 }
+// Ads (custo de mídia). HOJE só Mercado Ads (ML) — Meta/Google/TikTok/Shopee pendentes de
+// credenciais. Soma só level=campaign (item duplica exatamente o mesmo gasto). Coorte por data.
+async function fetchAds(de,ate){
+  return buscarTudo('ads_metrics','select=conta,gasto&plataforma=eq.mercado_ads&level=eq.campaign&data=gte.'+de+'&data=lte.'+ate);
+}
+function adsRowsToByCanal(rows){
+  var by={};
+  (rows||[]).forEach(function(r){
+    var nome=r.conta==='confeccoes'?getNome('Mercado Livre Confecções','confeccoes'):getNome('Mercado Livre FIO','fio_e_trama');
+    by[nome]=(by[nome]||0)+parseFloat(r.gasto||0);
+  });
+  return by;
+}
+// Soma o ads respeitando o filtro de canais + focusCanal atual (mesma lógica do resto do P&L).
+function adsFiltrado(byCanal){
+  if(!byCanal)return 0;
+  var sel=STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0;var tot=0;
+  Object.keys(byCanal).forEach(function(n){
+    if(STATE.focusCanal&&n!==STATE.focusCanal)return;
+    if(sel&&!STATE.canaisSel[n])return;
+    tot+=byCanal[n];
+  });
+  return tot;
+}
 
 // localStorage cache (TTL 5min) — só MV rows agregados (~200KB cabe folgado).
 // Pedidos detalhados continuam vindo do servidor.
@@ -588,8 +614,9 @@ function cacheSet(de,ate,data){
 }
 // Defer renders pesados (charts/heatmaps) pra não bloquear first paint.
 var idle = window.requestIdleCallback || function(fn){return setTimeout(fn,0);};
-function calcPnLFromMV(rows){
-  if(!rows||!rows.length)return{receita:0,devolucoes:0,frete:0,comissao:0,cmv:0,liquida:0,lucro:0,pedidos:0};
+function calcPnLFromMV(rows,adsVal){
+  adsVal=adsVal||0;
+  if(!rows||!rows.length)return{receita:0,devolucoes:0,frete:0,comissao:0,cmv:0,ads:0,liquida:0,lucro:0,pedidos:0};
   var receita=0,dev=0,frete=0,com=0,liquida=0,ped=0,cmv=0;
   rows.forEach(function(r){
     var n=r.canal_nome_raw, _nome=getNome(n,r.origem_conta);
@@ -603,7 +630,7 @@ function calcPnLFromMV(rows){
     ped+=parseInt(r.pedidos||0)-parseInt(r.cancelados||0);
   });
   liquida=receita-com-dev-frete;
-  return{receita:receita,devolucoes:dev,frete:frete,comissao:com,cmv:cmv,liquida:liquida,lucro:liquida-cmv,pedidos:ped};
+  return{receita:receita,devolucoes:dev,frete:frete,comissao:com,cmv:cmv,ads:adsVal,liquida:liquida,lucro:liquida-adsVal-cmv,pedidos:ped};
 }
 async function fetchItensForIds(ids,tabela){
   if(!ids.length)return[];
@@ -644,7 +671,7 @@ async function fetchProdutos(){
 
 // ── State ──
 var DE=null,ATE=null;
-var STATE={pedidos:[],pedidosFull:[],anteriores:[],anterioresFull:[],itens:[],itensFocus:[],canais:[],canaisSel:{},stackMode:'abs',focusCanal:null,skuGroups:[],skuSel:null,skuSort:{key:'receita',dir:'desc'}};
+var STATE={pedidos:[],pedidosFull:[],anteriores:[],anterioresFull:[],itens:[],itensFocus:[],canais:[],canaisSel:{},stackMode:'abs',focusCanal:null,skuGroups:[],skuSel:null,skuSort:{key:'receita',dir:'desc'},adsByCanal:{},adsByCanalPrev:{}};
 var CHARTS={hero:null,pareto:null,recvWeeks:null};
 var GEO_UF_SEL=null;
 
@@ -681,8 +708,8 @@ async function carregar(){
   if(cached && cached.mv){
     try{
       STATE.mvRows=cached.mv;
-      var c=calcPnLFromMV(cached.mv);
-      var p=cached.mvPrev?calcPnLFromMV(cached.mvPrev):{receita:0,liquida:0,lucro:0,comissao:0,devolucoes:0,frete:0,cmv:0,pedidos:0};
+      var c=calcPnLFromMV(cached.mv,adsFiltrado(STATE.adsByCanal));
+      var p=cached.mvPrev?calcPnLFromMV(cached.mvPrev,adsFiltrado(STATE.adsByCanalPrev)):{receita:0,liquida:0,lucro:0,comissao:0,devolucoes:0,frete:0,cmv:0,ads:0,pedidos:0};
       renderKPIsImediato(c,p);
       renderWaterfallImediato(c,p);
       renderCanalTableFromMV(cached.mv);
@@ -693,14 +720,17 @@ async function carregar(){
   }
   try{
     var usarComp=document.getElementById('chk-compare').checked;var ant=periodoAnterior(DE,ATE);
+    // Ads (custo de mídia, só ML hoje) em paralelo — pronto antes do renderAll detalhado.
+    var pAds=fetchAds(DE,ATE).then(adsRowsToByCanal).catch(function(){return{};});
+    var pAdsPrev=usarComp?fetchAds(ant.de,ant.ate).then(adsRowsToByCanal).catch(function(){return{};}):Promise.resolve({});
     // Progressive load: dispara MV em paralelo, renderiza KPIs/Waterfall já quando ela chega.
     var pMV=fetchAgregadoMV(DE,ATE).then(function(mvRows){
       if(!mvRows||!mvRows.length)return null;
       if(seq!==LOAD_SEQ)return mvRows;   // load mais novo já assumiu — não pintar por cima
       STATE.mvRows=mvRows;
       var mvPrev=usarComp?STATE.mvRowsPrev:null;
-      var cur=calcPnLFromMV(mvRows);
-      var prev=mvPrev?calcPnLFromMV(mvPrev):{receita:0,liquida:0,lucro:0,comissao:0,devolucoes:0,frete:0,cmv:0,pedidos:0};
+      var cur=calcPnLFromMV(mvRows,adsFiltrado(STATE.adsByCanal));
+      var prev=mvPrev?calcPnLFromMV(mvPrev,adsFiltrado(STATE.adsByCanalPrev)):{receita:0,liquida:0,lucro:0,comissao:0,devolucoes:0,frete:0,cmv:0,ads:0,pedidos:0};
       try{
         renderKPIsImediato(cur,prev);
         renderWaterfallImediato(cur,prev);
@@ -718,6 +748,7 @@ async function carregar(){
 
     // RENDER IMEDIATO — sem itens (waterfall, canais, geo, pagamentos, alertas)
     STATE.itens=[];STATE.itensFocus=[];
+    STATE.adsByCanal=await pAds;STATE.adsByCanalPrev=await pAdsPrev;
     renderAll();
     document.getElementById('upd').textContent='Carregando produtos...';
 
@@ -820,6 +851,7 @@ function renderWaterfallImediato(cur,prev){
     {lbl:'− Devoluções',val:-cur.devolucoes,color:'#f43f5e',prev:-prev.devolucoes},
     {lbl:'− Frete',val:-cur.frete,color:'#8b5cf6',prev:-prev.frete},
     {lbl:'= Receita Líquida',val:cur.liquida,color:cur.liquida>=0?'#06b6d4':'#f43f5e',prev:prev.liquida},
+    {lbl:'− Ads (ML)',val:-cur.ads,color:'#eab308',prev:-prev.ads},
     {lbl:'− CMV (estim)',val:-cur.cmv,color:'#ec4899',prev:-prev.cmv},
     {lbl:'= Resultado',val:cur.lucro,color:cur.lucro>=0?'#22c55e':'#f43f5e',prev:prev.lucro}
   ];
@@ -835,8 +867,8 @@ function renderWaterfallImediato(cur,prev){
 
 // ── P&L WATERFALL (full, com itens detalhados) ──
 function renderWaterfall(){
-  var cur=calcPnL(STATE.pedidos,STATE.itensFocus);
-  var prev=calcPnL(STATE.anteriores,[]);
+  var cur=calcPnL(STATE.pedidos,STATE.itensFocus,adsFiltrado(STATE.adsByCanal));
+  var prev=calcPnL(STATE.anteriores,[],adsFiltrado(STATE.adsByCanalPrev));
   var liquida=cur.receita-cur.devolucoes-cur.comissao-cur.frete;
   var liquidaPrev=prev.receita-prev.devolucoes-prev.comissao-prev.frete;
   var items=[
@@ -845,6 +877,7 @@ function renderWaterfall(){
     {lbl:'− Devoluções',val:-cur.devolucoes,color:'#f43f5e',prev:-prev.devolucoes},
     {lbl:'− Frete',val:-cur.frete,color:'#8b5cf6',prev:-prev.frete},
     {lbl:'= Receita Líquida',val:liquida,color:liquida>=0?'#06b6d4':'#f43f5e',prev:liquidaPrev},
+    {lbl:'− Ads (ML)',val:-cur.ads,color:'#eab308',prev:-prev.ads},
     {lbl:'− CMV',val:-cur.cmv,color:'#ec4899',prev:-prev.cmv},
     {lbl:'= Resultado',val:cur.lucro,color:cur.lucro>=0?'#22c55e':'#f43f5e',prev:prev.lucro}
   ];
@@ -862,7 +895,8 @@ function renderWaterfall(){
   }).join('');
   document.getElementById('waterfall').innerHTML=html;
 }
-function calcPnL(pedidos,itens){
+function calcPnL(pedidos,itens,adsVal){
+  adsVal=adsVal||0;
   // Fase 7 P&L (31/05): usa valor_devolucao REAL de API (Fase 5) em vez de
   // "valor de cancelados". Cancelados ficam fora da receita (filtro _canc).
   // fee_canal real de API (Fase 1-4); fallback custoPct só pra pedidos onde a
@@ -891,8 +925,8 @@ function calcPnL(pedidos,itens){
   pedidos.forEach(function(p){if(p._cancelado)return;if((p.data_pedido||'')>=iniItens)return;cmv+=valorReceita(p)*cmvPct(p._nome);});
   // P&L: Bruta − Comissão − Devoluções − Frete = Líquida; − CMV = Resultado
   var liquida=receita-comissao-devolucoes-frete;
-  var lucro=liquida-cmv;
-  return{receita:receita,devolucoes:devolucoes,comissao:comissao,cmv:cmv,frete:frete,liquida:liquida,lucro:lucro};
+  var lucro=liquida-adsVal-cmv;
+  return{receita:receita,devolucoes:devolucoes,comissao:comissao,cmv:cmv,frete:frete,ads:adsVal,liquida:liquida,lucro:lucro};
 }
 
 // ── KPIs ──
@@ -910,8 +944,8 @@ function projecaoMes(receita){
   }catch(e){return null;}
 }
 function renderKPIs(){
-  var cur=calcPnL(STATE.pedidos,STATE.itensFocus);
-  var prev=calcPnL(STATE.anteriores,[]);
+  var cur=calcPnL(STATE.pedidos,STATE.itensFocus,adsFiltrado(STATE.adsByCanal));
+  var prev=calcPnL(STATE.anteriores,[],adsFiltrado(STATE.adsByCanalPrev));
   var pedAtivos=STATE.pedidos.filter(function(p){return!p._canc;});
   var pedAntAtivos=STATE.anteriores.filter(function(p){return!p._canc;});
   var tm=pedAtivos.length>0?cur.receita/pedAtivos.length:0;
@@ -937,9 +971,10 @@ function _canalRowsArr(byCanal,cmvByCanal){
   var totalR=Object.values(byCanal).reduce(function(s,c){return s+c.r;},0);
   return Object.keys(byCanal).map(function(n){
     var c=byCanal[n];var cmv=(cmvByCanal&&cmvByCanal[n])||c.r*cmvPct(n);
-    var liquida=c.r-c.fee-c.dev-c.frete;var resultado=liquida-cmv;
+    var ads=(STATE.adsByCanal&&STATE.adsByCanal[n])||0;
+    var liquida=c.r-c.fee-c.dev-c.frete;var resultado=liquida-ads-cmv;
     return{nome:n,cor:c.cor||getCor(n),r:c.r,ped:c.ped,fee:c.fee,dev:c.dev,frete:c.frete,
-      liquida:liquida,cmv:cmv,resultado:resultado,share:totalR>0?c.r/totalR*100:0};
+      liquida:liquida,ads:ads,cmv:cmv,resultado:resultado,share:totalR>0?c.r/totalR*100:0};
   }).sort(function(a,b){return b.r-a.r;});
 }
 function _canalTbodyHTML(rows){
@@ -956,6 +991,7 @@ function _canalTbodyHTML(rows){
       '<td class="r">'+vp(r.dev,r.r)+'</td>'+
       '<td class="r">'+vp(r.frete,r.r)+'</td>'+
       '<td class="r">'+vp(r.liquida,r.r)+'</td>'+
+      '<td class="r">'+vp(r.ads,r.r)+'</td>'+
       '<td class="r">'+vp(r.cmv,r.r)+'</td>'+
       '<td class="r" style="color:'+(r.resultado>=0?'#22c55e':'#f43f5e')+';font-weight:600">'+vp(r.resultado,r.r)+'</td>'+
     '</tr>';
@@ -992,7 +1028,7 @@ function renderCanalTable(){
     var v=valorReceita(p);
     byCanal[n].r+=v;byCanal[n].ped++;
     byCanal[n].dev+=parseFloat(p.valor_devolucao||0)+parseFloat(p.valor_chargeback||0);
-    var fSel=parseFloat(p.frete_ml_seller||0);byCanal[n].frete+=(fSel>0?fSel:parseFloat(p.frete||0));
+    var fSel=parseFloat(p.frete_ml_seller||0);var ehSh=(n||'').indexOf('Shopee')>=0;byCanal[n].frete+=(fSel>0?fSel:(ehSh?0:parseFloat(p.frete||0)));
     var f=parseFloat(p.fee_canal||0);byCanal[n].fee+=f>0?f:v*custoPct(n);
   });
   // CMV por canal dos itens carregados; fallback proporção real por canal (cmvPct).
