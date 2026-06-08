@@ -748,6 +748,7 @@ async function carregar(){
     var pAds=fetchAds(DE,ATE).then(adsRowsToByCanal).catch(function(){return{};});
     var pAdsPrev=usarComp?fetchAds(ant.de,ant.ate).then(adsRowsToByCanal).catch(function(){return{};}):Promise.resolve({});
     var pDev=fetchDevItem(DE,ATE).then(devRowsToBySkuPai).catch(function(){return{};});
+    var pAdsItem=fetchAdsItem(DE,ATE).catch(function(){return[];});  // PERF: em paralelo (era serial após itens)
     // Progressive load: dispara MV em paralelo, renderiza KPIs/Waterfall já quando ela chega.
     var pMV=fetchAgregadoMV(DE,ATE).then(function(mvRows){
       if(!mvRows||!mvRows.length)return null;
@@ -763,17 +764,19 @@ async function carregar(){
       }catch(e){console.warn('render imediato MV:',e);}
       return mvRows;
     }).catch(function(e){console.warn('MV falhou (vai cair em pedidos detalhados):',e);return null;});
-    if(usarComp){fetchAgregadoMV(ant.de,ant.ate).then(function(r){STATE.mvRowsPrev=r;}).catch(function(){});}
-    var fetches=[fetchPedidos(DE,ATE)];if(usarComp)fetches.push(fetchPedidos(ant.de,ant.ate));
+    var pMVprev=usarComp?fetchAgregadoMV(ant.de,ant.ate).catch(function(){return null;}):Promise.resolve(null);
+    // PERF (08/06): NÃO busca os pedidos detalhados do período anterior (fetch mais pesado, duplicado).
+    // Os Δ% vêm da MV anterior (mvRowsPrev, ~centenas de linhas vs 10-115k). Corta o load ~pela metade.
+    var fetches=[fetchPedidos(DE,ATE)];
     var res=await Promise.all(fetches);
     if(seq!==LOAD_SEQ)return;   // período mudou durante o fetch — aborta este load
-    STATE.pedidosRaw=res[0];STATE.anterioresRaw=usarComp?res[1]:[];
+    STATE.pedidosRaw=res[0];STATE.anterioresRaw=[];
     fetchTroqueSite(DE,ATE).then(function(rows){STATE.troqueSite=rows;try{renderAlerts();}catch(e){}}).catch(function(){STATE.troqueSite=null;});
     if(STATE.canais.length===0){var seen={};STATE.pedidosRaw.forEach(function(p){if(shouldDedup(p))return;var n=getNome(p.canal_nome_raw,p.origem_conta);if(!seen[n]){seen[n]=true;STATE.canaisSel[n]=true;}});STATE.canais=Object.keys(seen).sort();renderCanalChips();}
 
     // RENDER IMEDIATO — sem itens (waterfall, canais, geo, pagamentos, alertas)
     STATE.itens=[];STATE.itensFocus=[];STATE.adsBySkuPai={};STATE.adsBySkuPaiCanal={};
-    STATE.adsByCanal=await pAds;STATE.adsByCanalPrev=await pAdsPrev;STATE.devBySkuPai=await pDev;
+    STATE.adsByCanal=await pAds;STATE.adsByCanalPrev=await pAdsPrev;STATE.devBySkuPai=await pDev;STATE.mvRowsPrev=await pMVprev;
     renderAll();
     document.getElementById('upd').textContent='Carregando produtos...';
 
@@ -788,7 +791,7 @@ async function carregar(){
       if(seq!==LOAD_SEQ)return;   // período mudou durante a carga de itens — aborta
       // Ads ML REAL por SKU (anúncio→produto). Mapeia produto_id→sku_pai via produtos.
       try{
-        var adsItemRows=await fetchAdsItem(DE,ATE);
+        var adsItemRows=await pAdsItem;
         STATE.adsBySkuPai={};STATE.adsBySkuPaiCanal={};
         adsItemRows.forEach(function(r){
           var prod=prods.byId[r.produto_id];if(!prod)return;
@@ -906,7 +909,7 @@ function renderWaterfallImediato(cur,prev){
 // ── P&L WATERFALL (full, com itens detalhados) ──
 function renderWaterfall(){
   var cur=calcPnL(STATE.pedidos,STATE.itensFocus,adsFiltrado(STATE.adsByCanal));
-  var prev=calcPnL(STATE.anteriores,[],adsFiltrado(STATE.adsByCanalPrev));
+  var prev=calcPnLFromMV(STATE.mvRowsPrev||[],adsFiltrado(STATE.adsByCanalPrev));
   var liquida=cur.receita-cur.devolucoes-cur.comissao-cur.frete;
   var liquidaPrev=prev.receita-prev.devolucoes-prev.comissao-prev.frete;
   var items=[
@@ -983,17 +986,17 @@ function projecaoMes(receita){
 }
 function renderKPIs(){
   var cur=calcPnL(STATE.pedidos,STATE.itensFocus,adsFiltrado(STATE.adsByCanal));
-  var prev=calcPnL(STATE.anteriores,[],adsFiltrado(STATE.adsByCanalPrev));
+  var prev=calcPnLFromMV(STATE.mvRowsPrev||[],adsFiltrado(STATE.adsByCanalPrev));
   var pedAtivos=STATE.pedidos.filter(function(p){return!p._canc;});
-  var pedAntAtivos=STATE.anteriores.filter(function(p){return!p._canc;});
+  var pedAntN=prev.pedidos||0;   // prev vem da MV (sem fetch detalhado anterior)
   var tm=pedAtivos.length>0?cur.receita/pedAtivos.length:0;
-  var tmAnt=pedAntAtivos.length>0?prev.receita/pedAntAtivos.length:0;
+  var tmAnt=pedAntN>0?prev.receita/pedAntN:0;
   var mp=cur.receita>0?cur.lucro/cur.receita*100:0;
   var html='';
   html+='<div class="kpi" style="--kpi-accent:'+(cur.lucro>=0?'#22c55e':'#f43f5e')+'"><div class="kpi-lbl">Lucro Operacional</div><div class="kpi-val" style="color:'+(cur.lucro>=0?'#22c55e':'#f43f5e')+'">'+fmt(cur.lucro)+'</div><div class="kpi-sub">margem '+fmtD(mp)+'%</div><div class="kpi-delta">'+deltaBadge(delta(cur.lucro,prev.lucro))+'</div></div>';
   var proj=projecaoMes(cur.receita);
   html+='<div class="kpi" style="--kpi-accent:#6366f1"><div class="kpi-lbl">Receita Bruta</div><div class="kpi-val">'+fmt(cur.receita)+'</div>'+(proj?'<div class="kpi-sub">proj. mês: '+fmt(proj)+'</div>':'')+'<div class="kpi-delta">'+deltaBadge(delta(cur.receita,prev.receita))+'</div></div>';
-  html+='<div class="kpi" style="--kpi-accent:#22c55e"><div class="kpi-lbl">Pedidos</div><div class="kpi-val">'+fmtN(pedAtivos.length)+'</div><div class="kpi-delta">'+deltaBadge(delta(pedAtivos.length,pedAntAtivos.length))+'</div></div>';
+  html+='<div class="kpi" style="--kpi-accent:#22c55e"><div class="kpi-lbl">Pedidos</div><div class="kpi-val">'+fmtN(pedAtivos.length)+'</div><div class="kpi-delta">'+deltaBadge(delta(pedAtivos.length,pedAntN))+'</div></div>';
   html+='<div class="kpi" style="--kpi-accent:#06b6d4"><div class="kpi-lbl">Ticket Médio</div><div class="kpi-val">'+fmt(tm)+'</div><div class="kpi-delta">'+deltaBadge(delta(tm,tmAnt))+'</div></div>';
   var devPct=cur.receita>0?cur.devolucoes/cur.receita*100:0;
   html+='<div class="kpi" style="--kpi-accent:#06b6d4"><div class="kpi-lbl">Receita Líquida</div><div class="kpi-val">'+fmt(cur.liquida)+'</div><div class="kpi-sub">−'+fmtD(cur.devolucoes/cur.receita*100||0)+'% dev real</div><div class="kpi-delta">'+deltaBadge(delta(cur.liquida,prev.liquida))+'</div></div>';
