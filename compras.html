@@ -507,6 +507,11 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
   <!-- ═══════════════ TAB: HISTÓRICO ═══════════════ -->
   <div class="tab-panel" id="panel-historico">
     <div class="kpi-grid" id="kpis-historico"></div>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button class="btnf" id="hist-view-crono" onclick="setHistView('crono')">Cronológico</button>
+      <button class="btnf ghost" id="hist-view-consol" onclick="setHistView('consol')">Consolidado por costureiro</button>
+    </div>
+    <div id="hist-crono-wrap">
     <div class="filtros">
       <select id="flt-hist-status" class="dselect" onchange="renderHistorico()">
         <option value="">Todos status</option>
@@ -550,6 +555,25 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
           <th class="r" title="Rateio do valor da NF de compra proporcional ao que esta entrega representa do total entregue da OP">Valor NF (rateado)</th>
           <th>Status OP</th>
         </tr></thead><tbody id="tbody-historico"></tbody></table>
+      </div>
+    </div>
+    </div><!-- /hist-crono-wrap -->
+
+    <!-- Consolidado por costureiro × produto × cor (só OPs com ≥1 entrega) -->
+    <div id="hist-consol-wrap" style="display:none">
+      <div class="filtros">
+        <select id="flt-consol-categoria" class="dselect" onchange="onConsolCategoria()"><option value="">Todas categorias</option></select>
+        <select id="flt-consol-produto" class="dselect" onchange="renderHistoricoConsolidado()"><option value="">Todos produtos</option></select>
+        <select id="flt-consol-costureiro" class="dselect" onchange="renderHistoricoConsolidado()"><option value="">Todos costureiros</option></select>
+        <input type="text" id="flt-consol-busca" class="dinput" placeholder="Buscar produto, cor, costureiro..." style="min-width:220px" oninput="renderHistoricoConsolidado()">
+        <button class="btnf ghost" onclick="limparFiltrosConsol()">Limpar</button>
+      </div>
+      <div class="card" style="overflow:visible">
+        <div class="card-header">
+          <span class="card-title">Consolidado por Costureiro<small id="consol-count"></small></span>
+          <small style="color:var(--txt3)">só OPs com ≥1 entrega · grade proj/entr por cor · expanda a cor pra ver as OPs</small>
+        </div>
+        <div id="consol-tree" style="padding:6px 2px"></div>
       </div>
     </div>
   </div>
@@ -4027,6 +4051,196 @@ function limparFiltrosHist() {
     var el = document.getElementById(id); if (el) el.value = '';
   });
   renderHistorico();
+}
+
+// ═══ Histórico — visão Consolidada por Costureiro × Produto × Cor ═══
+// Só OPs com >=1 entrega (status != Cancelado). Grade entregue = real (soma das entregas);
+// grade projetada por tamanho = template de proporção escalado pela qtde_pecas (estimado).
+function setHistView(v) {
+  var crono = document.getElementById('hist-crono-wrap');
+  var consol = document.getElementById('hist-consol-wrap');
+  var bC = document.getElementById('hist-view-crono');
+  var bX = document.getElementById('hist-view-consol');
+  if (v === 'consol') {
+    if (crono) crono.style.display = 'none';
+    if (consol) consol.style.display = 'block';
+    if (bC) bC.classList.add('ghost');
+    if (bX) bX.classList.remove('ghost');
+    popularFiltrosConsol();
+    renderHistoricoConsolidado();
+  } else {
+    if (crono) crono.style.display = 'block';
+    if (consol) consol.style.display = 'none';
+    if (bX) bX.classList.add('ghost');
+    if (bC) bC.classList.remove('ghost');
+  }
+}
+
+var _ORDEM_TAM_CONSOL = ['PP','P','M','G','GG','G1','G2','G3','XG','XGG','XXG'];
+function _rankTamConsol(t) {
+  var s = String(t == null ? '' : t).trim().toUpperCase();
+  var i = _ORDEM_TAM_CONSOL.indexOf(s);
+  if (i >= 0) return i;
+  var n = parseInt(s, 10);
+  if (!isNaN(n)) return 100 + n;
+  return 999;
+}
+function _ordTamConsol(keys) {
+  return keys.slice().sort(function(a, b) { return _rankTamConsol(a) - _rankTamConsol(b); });
+}
+
+function popularFiltrosConsol() {
+  var opsEnt = (STATE.ops || []).filter(function(o){ return o.status !== 'Cancelado' && (o.qtde_pecas_entregues || 0) > 0; });
+  var cats = {}, costu = {};
+  opsEnt.forEach(function(o){ var c = categoriaProduto(o.sku_produto); if (c) cats[c] = 1; costu[o.costureiro_id] = costuName(o.costureiro_id); });
+  var selCat = document.getElementById('flt-consol-categoria');
+  if (selCat) { var cur = selCat.value; selCat.innerHTML = '<option value="">Todas categorias</option>' + Object.keys(cats).sort().map(function(c){ return '<option value="'+c+'">'+c+'</option>'; }).join(''); selCat.value = cur; }
+  var selC = document.getElementById('flt-consol-costureiro');
+  if (selC) { var cur2 = selC.value; selC.innerHTML = '<option value="">Todos costureiros</option>' + Object.keys(costu).sort(function(a,b){ return (costu[a]||'').localeCompare(costu[b]||''); }).map(function(id){ return '<option value="'+id+'">'+costu[id]+'</option>'; }).join(''); selC.value = cur2; }
+  popularProdutosConsol();
+}
+function popularProdutosConsol() {
+  var fCat = (document.getElementById('flt-consol-categoria') || {}).value || '';
+  var selP = document.getElementById('flt-consol-produto'); if (!selP) return;
+  var cur = selP.value;
+  var prods = {};
+  (STATE.ops || []).forEach(function(o){
+    if (o.status === 'Cancelado' || !((o.qtde_pecas_entregues || 0) > 0)) return;
+    if (fCat && categoriaProduto(o.sku_produto) !== fCat) return;
+    var n = nomeProduto(o.sku_produto) || (o.produto || '').trim(); if (n && n !== '—') prods[n] = 1;
+  });
+  var nomes = Object.keys(prods).sort();
+  selP.innerHTML = '<option value="">Todos produtos</option>' + nomes.map(function(p){ return '<option value="'+p.replace(/"/g,'&quot;')+'">'+p+'</option>'; }).join('');
+  selP.value = (cur && nomes.indexOf(cur) >= 0) ? cur : '';
+}
+function onConsolCategoria() { popularProdutosConsol(); renderHistoricoConsolidado(); }
+function limparFiltrosConsol() {
+  ['flt-consol-categoria','flt-consol-produto','flt-consol-costureiro','flt-consol-busca'].forEach(function(id){ var el = document.getElementById(id); if (el) el.value = ''; });
+  popularProdutosConsol(); renderHistoricoConsolidado();
+}
+function toggleConsol(id) {
+  var b = document.getElementById('body-'+id);
+  var a = document.getElementById('arr-'+id);
+  if (!b) return;
+  var show = b.style.display === 'none';
+  b.style.display = show ? 'block' : 'none';
+  if (a) a.textContent = show ? '▼' : '▸';
+}
+
+function renderHistoricoConsolidado() {
+  var tree = document.getElementById('consol-tree');
+  if (!tree) return;
+  var fCat = (document.getElementById('flt-consol-categoria') || {}).value || '';
+  var fProd = (document.getElementById('flt-consol-produto') || {}).value || '';
+  var fCost = (document.getElementById('flt-consol-costureiro') || {}).value || '';
+  var q = semAcento(((document.getElementById('flt-consol-busca') || {}).value || '').trim());
+
+  var entregasPorOp = {};
+  (STATE.entregas || []).forEach(function(e){ (entregasPorOp[e.ordem_producao_id] = entregasPorOp[e.ordem_producao_id] || []).push(e); });
+
+  var ops = (STATE.ops || []).filter(function(o){
+    if (o.status === 'Cancelado') return false;
+    if (!((o.qtde_pecas_entregues || 0) > 0)) return false;
+    if (fCost && String(o.costureiro_id) !== String(fCost)) return false;
+    var nome = nomeProduto(o.sku_produto) || (o.produto || '').trim();
+    if (fProd && nome !== fProd) return false;
+    if (fCat && categoriaProduto(o.sku_produto) !== fCat) return false;
+    if (q) {
+      var blob = semAcento([nome, (o.cor||''), costuName(o.costureiro_id), (o.sku_produto||''), 'op'+o.id].join(' '));
+      if (blob.indexOf(q) < 0) return false;
+    }
+    return true;
+  });
+
+  var byCostu = {};
+  ops.forEach(function(o){
+    var cid = o.costureiro_id;
+    var pNome = nomeProduto(o.sku_produto) || (o.produto || '').trim() || '—';
+    var cor = ((o.cor||'').trim()) || '—';
+    var C = byCostu[cid] = byCostu[cid] || { nome: costuName(cid), proj:0, entr:0, nOps:0, produtos:{} };
+    var P = C.produtos[pNome] = C.produtos[pNome] || { proj:0, entr:0, nOps:0, cores:{} };
+    var K = P.cores[cor] = P.cores[cor] || { proj:0, entr:0, nOps:0, gradeProj:{}, gradeEntr:{}, ops:[] };
+    var proj = o.qtde_pecas || 0, entr = o.qtde_pecas_entregues || 0;
+    C.proj += proj; C.entr += entr; C.nOps++;
+    P.proj += proj; P.entr += entr; P.nOps++;
+    K.proj += proj; K.entr += entr; K.nOps++;
+    var gp = o.grade_projetada;
+    if (gp && typeof gp === 'object') {
+      var soma = 0; Object.keys(gp).forEach(function(k){ soma += parseFloat(gp[k]) || 0; });
+      if (soma > 0) Object.keys(gp).forEach(function(t){ K.gradeProj[t] = (K.gradeProj[t]||0) + proj * (parseFloat(gp[t])||0)/soma; });
+    }
+    (entregasPorOp[o.id] || []).forEach(function(e){
+      var ge = e.grade_entregue;
+      if (ge && typeof ge === 'object') Object.keys(ge).forEach(function(t){ K.gradeEntr[t] = (K.gradeEntr[t]||0) + (parseFloat(ge[t])||0); });
+    });
+    K.ops.push(o);
+  });
+
+  var costuIds = Object.keys(byCostu).sort(function(a,b){ return (byCostu[a].nome||'').localeCompare(byCostu[b].nome||''); });
+  var elCount = document.getElementById('consol-count');
+  if (elCount) elCount.textContent = ' — ' + costuIds.length + ' costureiro(s) · ' + ops.length + ' OPs';
+  if (!ops.length) { tree.innerHTML = '<div class="empty" style="padding:24px;text-align:center;color:var(--txt3)">Nenhuma OP com entrega encontrada (ajuste os filtros)</div>'; return; }
+
+  function pct(entr,proj){ return (proj>0?Math.round(entr/proj*100):0)+'%'; }
+  function gradeInline(K) {
+    var tams = _ordTamConsol(Object.keys(K.gradeProj).concat(Object.keys(K.gradeEntr)).filter(function(v,i,a){ return a.indexOf(v)===i; }));
+    return tams.map(function(t){
+      var pj = Math.round(K.gradeProj[t]||0), en = Math.round(K.gradeEntr[t]||0);
+      var cor = en >= pj ? 'var(--green)' : 'var(--txt2)';
+      return '<span style="margin-right:10px;font-size:11px;white-space:nowrap"><strong>'+t+'</strong> <span style="color:'+cor+'">'+en+'</span>/'+pj+'</span>';
+    }).join('');
+  }
+
+  var html = costuIds.map(function(cid){
+    var C = byCostu[cid];
+    var idC = 'cns-'+cid;
+    var prodHtml = Object.keys(C.produtos).sort().map(function(pn, pi){
+      var P = C.produtos[pn];
+      var idP = idC+'-p'+pi;
+      var corHtml = Object.keys(P.cores).sort().map(function(cn, ci){
+        var K = P.cores[cn];
+        var idK = idP+'-c'+ci;
+        var opsHtml = K.ops.slice().sort(function(a,b){ return (b.data_envio_tecido||'').localeCompare(a.data_envio_tecido||''); }).map(function(o){
+          var ents = (entregasPorOp[o.id] || []).slice().sort(function(a,b){ return (a.data_entrega||'').localeCompare(b.data_entrega||''); });
+          var entsTxt = ents.length ? ents.map(function(e){
+            var ge = e.grade_entregue;
+            var g = (ge && typeof ge === 'object') ? _ordTamConsol(Object.keys(ge)).map(function(t){ return t+':'+(parseInt(ge[t])||0); }).join(' ') : '';
+            return '<span style="margin-right:12px">'+formatDate(e.data_entrega)+' → '+(e.quantidade||0)+'pç'+(g?' ('+g+')':'')+'</span>';
+          }).join('') : '<span style="color:var(--txt3)">fechamento direto (sem entregas parciais)</span>';
+          return '<div style="padding:6px 8px;border-top:1px solid var(--bdr);font-size:12px">'+
+            '<div><strong>OP #'+o.id+'</strong> · env '+(o.data_envio_tecido?formatDate(o.data_envio_tecido):'—')+' · '+statusPill(o.status)+' · '+(o.qtde_pecas_entregues||0)+'/'+(o.qtde_pecas||0)+' pç</div>'+
+            '<div style="color:var(--txt2);margin-top:3px">'+entsTxt+'</div>'+
+          '</div>';
+        }).join('');
+        return '<div style="margin:2px 0">'+
+          '<div onclick="toggleConsol(\''+idK+'\')" style="cursor:pointer;padding:5px 8px;border-radius:6px;background:var(--bg);display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+
+            '<span id="arr-'+idK+'" style="color:var(--txt3)">▸</span>'+
+            '<strong style="min-width:90px">'+cn+'</strong>'+
+            '<span style="color:var(--txt2);font-size:12px">'+K.nOps+' OP · <strong style="color:var(--green)">'+K.entr+'</strong>/'+K.proj+' ('+pct(K.entr,K.proj)+')</span>'+
+            '<span style="margin-left:auto">'+gradeInline(K)+'</span>'+
+          '</div>'+
+          '<div id="body-'+idK+'" style="display:none;padding-left:14px;margin-bottom:4px">'+opsHtml+'</div>'+
+        '</div>';
+      }).join('');
+      return '<div style="margin:3px 0 3px 4px">'+
+        '<div onclick="toggleConsol(\''+idP+'\')" style="cursor:pointer;padding:6px 8px;border-radius:6px;display:flex;align-items:center;gap:8px">'+
+          '<span id="arr-'+idP+'" style="color:var(--indigo)">▼</span>'+
+          '<strong>'+pn+'</strong>'+
+          '<span style="color:var(--txt2);font-size:12px;margin-left:auto">'+P.nOps+' OPs · <strong style="color:var(--green)">'+P.entr+'</strong>/'+P.proj+' ('+pct(P.entr,P.proj)+')</span>'+
+        '</div>'+
+        '<div id="body-'+idP+'" style="display:block;padding-left:12px">'+corHtml+'</div>'+
+      '</div>';
+    }).join('');
+    return '<div style="margin-bottom:10px;border:1px solid var(--bdr);border-radius:10px;padding:6px">'+
+      '<div onclick="toggleConsol(\''+idC+'\')" style="cursor:pointer;padding:8px 10px;border-radius:8px;display:flex;align-items:center;gap:10px">'+
+        '<span id="arr-'+idC+'" style="color:var(--indigo);font-weight:700">▼</span>'+
+        '<strong style="font-size:15px">'+C.nome+'</strong>'+
+        '<span style="color:var(--txt2);font-size:12px;margin-left:auto">'+Object.keys(C.produtos).length+' produto(s) · '+C.nOps+' OPs · <strong style="color:var(--green)">'+C.entr+'</strong>/'+C.proj+' ('+pct(C.entr,C.proj)+')</span>'+
+      '</div>'+
+      '<div id="body-'+idC+'" style="display:block;padding-left:8px">'+prodHtml+'</div>'+
+    '</div>';
+  }).join('');
+  tree.innerHTML = html;
 }
 
 function exportHistoricoCSV() {
