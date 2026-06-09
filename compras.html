@@ -4160,7 +4160,7 @@ function renderHistoricoConsolidado() {
     var C = byCostu[cid] = byCostu[cid] || { nome: costuName(cid), proj:0, entr:0, nOps:0, produtos:{} };
     var P = C.produtos[pNome] = C.produtos[pNome] || { proj:0, entr:0, nOps:0, cores:{} };
     var K = P.cores[cor] = P.cores[cor] || { proj:0, entr:0, nOps:0, gradeProj:{}, gradeEntr:{}, ops:[] };
-    var proj = o.qtde_pecas || 0, entr = o.qtde_pecas_entregues || 0;
+    var proj = Math.round(o.qtde_pecas || 0), entr = Math.round(o.qtde_pecas_entregues || 0);
     C.proj += proj; C.entr += entr; C.nOps++;
     P.proj += proj; P.entr += entr; P.nOps++;
     K.proj += proj; K.entr += entr; K.nOps++;
@@ -4205,10 +4205,10 @@ function renderHistoricoConsolidado() {
           var entsTxt = ents.length ? ents.map(function(e){
             var ge = e.grade_entregue;
             var g = (ge && typeof ge === 'object') ? _ordTamConsol(Object.keys(ge)).map(function(t){ return t+':'+(parseInt(ge[t])||0); }).join(' ') : '';
-            return '<span style="margin-right:12px">'+formatDate(e.data_entrega)+' → '+(e.quantidade||0)+'pç'+(g?' ('+g+')':'')+'</span>';
+            return '<span style="margin-right:12px">'+formatDate(e.data_entrega)+' → '+Math.round(e.quantidade||0)+'pç'+(g?' ('+g+')':'')+'</span>';
           }).join('') : '<span style="color:var(--txt3)">fechamento direto (sem entregas parciais)</span>';
           return '<div style="padding:6px 8px;border-top:1px solid var(--bdr);font-size:12px">'+
-            '<div><strong>OP #'+o.id+'</strong> · env '+(o.data_envio_tecido?formatDate(o.data_envio_tecido):'—')+' · '+statusPill(o.status)+' · '+(o.qtde_pecas_entregues||0)+'/'+(o.qtde_pecas||0)+' pç</div>'+
+            '<div><strong>OP #'+o.id+'</strong> · env '+(o.data_envio_tecido?formatDate(o.data_envio_tecido):'—')+' · '+statusPill(o.status)+' · '+Math.round(o.qtde_pecas_entregues||0)+'/'+Math.round(o.qtde_pecas||0)+' pç</div>'+
             '<div style="color:var(--txt2);margin-top:3px">'+entsTxt+'</div>'+
           '</div>';
         }).join('');
