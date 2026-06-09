@@ -571,7 +571,7 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
       <div class="card" style="overflow:visible">
         <div class="card-header">
           <span class="card-title">Consolidado por Costureiro<small id="consol-count"></small></span>
-          <small style="color:var(--txt3)">só OPs com ≥1 entrega · grade proj/entr por cor · expanda a cor pra ver as OPs</small>
+          <small style="color:var(--txt3)">só OPs com ≥1 entrega · grade = entregue por tamanho · expanda a cor pra ver as OPs</small>
         </div>
         <div id="consol-tree" style="padding:6px 2px"></div>
       </div>
@@ -4182,12 +4182,14 @@ function renderHistoricoConsolidado() {
   if (!ops.length) { tree.innerHTML = '<div class="empty" style="padding:24px;text-align:center;color:var(--txt3)">Nenhuma OP com entrega encontrada (ajuste os filtros)</div>'; return; }
 
   function pct(entr,proj){ return (proj>0?Math.round(entr/proj*100):0)+'%'; }
+  // Grade = ENTREGUE por tamanho (real). Não mostra projetado por tamanho porque ~92% das OPs
+  // têm grade_projetada nula (a grade só é preenchida na entrega) — o "/0" não era informação.
+  // O comparativo projetado×entregue fica no TOTAL (cabeçalho da cor/produto/costureiro).
   function gradeInline(K) {
-    var tams = _ordTamConsol(Object.keys(K.gradeProj).concat(Object.keys(K.gradeEntr)).filter(function(v,i,a){ return a.indexOf(v)===i; }));
+    var tams = _ordTamConsol(Object.keys(K.gradeEntr).filter(function(t){ return (K.gradeEntr[t]||0) > 0.001; }));
+    if (!tams.length) return '';
     return tams.map(function(t){
-      var pj = Math.round(K.gradeProj[t]||0), en = Math.round(K.gradeEntr[t]||0);
-      var cor = en >= pj ? 'var(--green)' : 'var(--txt2)';
-      return '<span style="margin-right:10px;font-size:11px;white-space:nowrap"><strong>'+t+'</strong> <span style="color:'+cor+'">'+en+'</span>/'+pj+'</span>';
+      return '<span style="margin-right:10px;font-size:11px;white-space:nowrap"><strong>'+t+'</strong> <span style="color:var(--green)">'+Math.round(K.gradeEntr[t]||0)+'</span></span>';
     }).join('');
   }
 
