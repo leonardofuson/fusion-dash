@@ -356,7 +356,7 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
       <span id="ecomm-sku-count" style="font-size:10px;color:var(--txt3);font-variant-numeric:tabular-nums;"></span>
     </div>
     <div id="ecomm-sku-legend" style="margin-bottom:10px;"></div>
-    <div id="ecomm-sku-list" style="max-height:380px;overflow:auto;margin-bottom:14px;"></div>
+    <div id="ecomm-sku-list" style="max-height:380px;overflow:auto;margin-bottom:18px;"></div>
     <div id="ecomm-sku-detail" style="padding:32px 20px;text-align:center;color:var(--txt3);font-size:12px;border:1px dashed var(--bdr);border-radius:10px;">
       Selecione um produto acima pra ver KPIs ecommerce (comissão real, devolução %, frete líquido, velocidade) + distribuição cross-canal.
     </div>
@@ -1383,19 +1383,25 @@ function renderEcommSkuDetail(){
   var wrap=document.getElementById('ecomm-sku-detail');
   if(!wrap)return;
   if(!STATE.skuSel){
-    wrap.style.padding='32px 20px';wrap.style.textAlign='center';wrap.style.border='1px dashed var(--bdr)';
+    wrap.style.cssText='margin-top:18px;padding:32px 20px;text-align:center;border:1px dashed var(--bdr);border-radius:10px;color:var(--txt3);font-size:12px;';
     wrap.innerHTML='Selecione um produto acima pra ver KPIs ecommerce + distribuição cross-canal.';
     if(CHARTS.prodTrend){CHARTS.prodTrend.destroy();CHARTS.prodTrend=null;}
     return;
   }
   var s=(STATE.skuGroups||[]).find(function(x){return x.sku_pai===STATE.skuSel;});
   if(!s){
-    wrap.style.padding='32px 20px';wrap.style.textAlign='center';wrap.style.border='1px dashed var(--bdr)';
+    wrap.style.cssText='margin-top:18px;padding:32px 20px;text-align:center;border:1px dashed var(--bdr);border-radius:10px;color:var(--txt3);font-size:12px;';
     wrap.innerHTML='Produto não encontrado no período/filtros atuais.';
     if(CHARTS.prodTrend){CHARTS.prodTrend.destroy();CHARTS.prodTrend=null;}
     return;
   }
-  wrap.style.padding='';wrap.style.textAlign='';wrap.style.border='';wrap.style.background='';
+  // Participação por canal (receita) — ordena canais e define a cor de destaque do painel.
+  var canaisOrd=Object.keys(s.porCanal||{}).map(function(c){return {nome:c,receita:s.porCanal[c].receita||0};})
+    .filter(function(c){return c.receita>0;}).sort(function(a,b){return b.receita-a.receita;});
+  var corDom=canaisOrd.length?getCor(canaisOrd[0].nome):'var(--accent)';
+  // Painel destacado: top-border na cor do canal dominante + fundo próprio + respiro maior,
+  // separando visualmente a lista de produtos do início da análise (pedido do Leo 10/06).
+  wrap.style.cssText='margin-top:22px;padding:18px;background:var(--bg3);border:1px solid var(--bdr);border-top:3px solid '+corDom+';border-radius:12px;';
   // Itens deste SKU (no escopo)
   var itens=(STATE.itensFocus||[]).filter(function(it){return it._sku_pai===STATE.skuSel;});
   var nPedidos=Object.keys(s.pedidoIds||{}).length;
@@ -1441,6 +1447,23 @@ function renderEcommSkuDetail(){
   html+=  '</div>';
   html+=  '<button onclick="selectEcommSku(\''+s.sku_pai.replace(/'/g,"\\'")+'\')" style="background:transparent;border:1px solid var(--bdr);color:var(--txt2);padding:6px 12px;border-radius:6px;font-size:11px;cursor:pointer;font-family:inherit;">✕ fechar</button>';
   html+='</div>';
+
+  // Participação por canal — barra 100% stacked (mesmo padrão visual do dash de Lojas).
+  if(canaisOrd.length){
+    html+='<div class="drawer-section" style="margin-bottom:16px;"><div class="drawer-section-title">Participação por canal nas vendas deste produto</div>';
+    html+=  '<div style="display:flex;height:26px;border-radius:6px;overflow:hidden;margin-top:8px;background:var(--bg);">';
+    canaisOrd.forEach(function(c){
+      var pct=s.receita>0?c.receita/s.receita*100:0;var cor=getCor(c.nome);
+      if(pct>=4){html+='<div style="width:'+pct+'%;background:'+cor+';display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700;text-shadow:0 1px 2px rgba(0,0,0,0.5);" title="'+c.nome+': '+pct.toFixed(1)+'%">'+Math.round(pct)+'%</div>';}
+      else{html+='<div style="width:'+pct+'%;background:'+cor+';" title="'+c.nome+': '+pct.toFixed(1)+'%"></div>';}
+    });
+    html+=  '</div>';
+    html+=  '<div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:10px;font-size:10px;">';
+    canaisOrd.forEach(function(c){var pct=s.receita>0?c.receita/s.receita*100:0;
+      html+='<span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:50%;background:'+getCor(c.nome)+';"></span>'+c.nome+' <b style="color:var(--txt2);">'+pct.toFixed(1)+'%</b></span>';
+    });
+    html+=  '</div></div>';
+  }
 
   // KPIs row 1 — receita/pedidos/unidades/margem
   var mcls=margemPct>=40?'good':(margemPct>=20?'mid':'bad');
