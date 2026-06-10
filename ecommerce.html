@@ -1395,9 +1395,9 @@ function renderEcommSkuDetail(){
     if(CHARTS.prodTrend){CHARTS.prodTrend.destroy();CHARTS.prodTrend=null;}
     return;
   }
-  // Participação por canal (receita) — ordena canais e define a cor de destaque do painel.
-  var canaisOrd=Object.keys(s.porCanal||{}).map(function(c){return {nome:c,receita:s.porCanal[c].receita||0};})
-    .filter(function(c){return c.receita>0;}).sort(function(a,b){return b.receita-a.receita;});
+  // Participação por canal (UNIDADES) — ordena canais e define a cor de destaque do painel.
+  var canaisOrd=Object.keys(s.porCanal||{}).map(function(c){return {nome:c,qtd:s.porCanal[c].qtd||0};})
+    .filter(function(c){return c.qtd>0;}).sort(function(a,b){return b.qtd-a.qtd;});
   var corDom=canaisOrd.length?getCor(canaisOrd[0].nome):'var(--accent)';
   // Painel destacado: top-border na cor do canal dominante + fundo próprio + respiro maior,
   // separando visualmente a lista de produtos do início da análise (pedido do Leo 10/06).
@@ -1450,17 +1450,17 @@ function renderEcommSkuDetail(){
 
   // Participação por canal — barra 100% stacked (mesmo padrão visual do dash de Lojas).
   if(canaisOrd.length){
-    html+='<div class="drawer-section" style="margin-bottom:16px;"><div class="drawer-section-title">Participação por canal nas vendas deste produto</div>';
+    html+='<div class="drawer-section" style="margin-bottom:16px;"><div class="drawer-section-title">Participação por canal nas vendas deste produto (unidades)</div>';
     html+=  '<div style="display:flex;height:26px;border-radius:6px;overflow:hidden;margin-top:8px;background:var(--bg);">';
     canaisOrd.forEach(function(c){
-      var pct=s.receita>0?c.receita/s.receita*100:0;var cor=getCor(c.nome);
+      var pct=s.qtd>0?c.qtd/s.qtd*100:0;var cor=getCor(c.nome);
       if(pct>=4){html+='<div style="width:'+pct+'%;background:'+cor+';display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700;text-shadow:0 1px 2px rgba(0,0,0,0.5);" title="'+c.nome+': '+pct.toFixed(1)+'%">'+Math.round(pct)+'%</div>';}
       else{html+='<div style="width:'+pct+'%;background:'+cor+';" title="'+c.nome+': '+pct.toFixed(1)+'%"></div>';}
     });
     html+=  '</div>';
     html+=  '<div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:10px;font-size:10px;">';
-    canaisOrd.forEach(function(c){var pct=s.receita>0?c.receita/s.receita*100:0;
-      html+='<span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:50%;background:'+getCor(c.nome)+';"></span>'+c.nome+' <b style="color:var(--txt2);">'+pct.toFixed(1)+'%</b></span>';
+    canaisOrd.forEach(function(c){var pct=s.qtd>0?c.qtd/s.qtd*100:0;
+      html+='<span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:50%;background:'+getCor(c.nome)+';"></span>'+c.nome+' <b style="color:var(--txt2);">'+pct.toFixed(1)+'%</b> <span style="color:var(--txt3);">('+fmtN(c.qtd)+' un)</span></span>';
     });
     html+=  '</div></div>';
   }
