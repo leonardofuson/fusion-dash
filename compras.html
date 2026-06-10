@@ -783,6 +783,32 @@ async function carregar() {
   }
 }
 
+// Atualiza STATE.saldoLocalIdx localmente a partir das movs recém-postadas — feedback INSTANTÂNEO
+// na tela sem esperar o carregar() pesado (14 fetches). Usado nas transferências de tecido.
+function aplicarDeltaSaldoLocal(movs) {
+  if (!STATE.saldoLocalIdx) STATE.saldoLocalIdx = {};
+  (movs || []).forEach(function(m) {
+    if (!m || m.insumo_id == null || !m.localizacao) return;
+    if (!STATE.saldoLocalIdx[m.insumo_id]) STATE.saldoLocalIdx[m.insumo_id] = {};
+    var atual = STATE.saldoLocalIdx[m.insumo_id][m.localizacao] || 0;
+    STATE.saldoLocalIdx[m.insumo_id][m.localizacao] = atual + (parseFloat(m.quantidade) || 0);
+  });
+}
+
+// Refresh LEVE: refetcha só o saldo por local (1 query) e re-renderiza Insumos. Reconcilia o
+// update otimista com o servidor. Muito mais rápido que carregar().
+async function refrescarSaldoInsumos() {
+  try {
+    STATE.saldoLocal = await buscarTudo('vw_insumo_saldo_local', 'select=*');
+    STATE.saldoLocalIdx = {};
+    STATE.saldoLocal.forEach(function(r) {
+      if (!STATE.saldoLocalIdx[r.insumo_id]) STATE.saldoLocalIdx[r.insumo_id] = {};
+      STATE.saldoLocalIdx[r.insumo_id][r.localizacao] = parseFloat(r.saldo) || 0;
+    });
+    renderInsumos();
+  } catch (e) { console.warn('refrescarSaldoInsumos falhou:', e); }
+}
+
 // ═══════════════ RENDER ALL ═══════════════
 function renderAll() {
   renderPipeline();
@@ -7242,15 +7268,23 @@ async function submitDrawer() {
       // tipo_mov: retorno_cd quando volta pro CD; envio_costureiro pra todo o resto
       var tipoMov = (destino === 'CD FUSION') ? 'retorno_cd' : 'envio_costureiro';
       var observacao = obs || ('Transferência ' + origem + ' → ' + destino);
-      await postSupabase('movimentacao_insumos', [
+      var movsTrf = [
         { insumo_id: insumoId, tipo_mov: tipoMov, quantidade: -qtde,
           localizacao: origem, ordem_producao_id: null, observacao: observacao,
           nf_remessa: nfRemessa || null },
         { insumo_id: insumoId, tipo_mov: tipoMov, quantidade: qtde,
           localizacao: destino, ordem_producao_id: null, observacao: observacao,
           nf_remessa: nfRemessa || null },
-      ]);
+      ];
+      await postSupabase('movimentacao_insumos', movsTrf);
       STATE.transferindoInsumoId = null;
+      // Caminho rápido: atualiza o saldo na hora (otimista) + render instantâneo; reconcilia em
+      // background. Evita o carregar() pesado (14 fetches) que fazia a tela demorar pra atualizar.
+      aplicarDeltaSaldoLocal(movsTrf);
+      closeDrawer();
+      renderInsumos();
+      refrescarSaldoInsumos();
+      return;
     } else if (type === 'transferir-nf') {
       var grupos = gruposInsumosCache();
       var g = grupos[STATE.transferindoNFKey];
@@ -7321,6 +7355,12 @@ async function submitDrawer() {
       }
       await postSupabase('movimentacao_insumos', movsBatch);
       STATE.transferindoNFKey = null;
+      // Caminho rápido (igual transferir-tecido): saldo otimista + render instantâneo + reconcilia bg.
+      aplicarDeltaSaldoLocal(movsBatch);
+      closeDrawer();
+      renderInsumos();
+      refrescarSaldoInsumos();
+      return;
     } else if (type === 'edit-produto') {
       var nomeProd = (document.getElementById('f-prod-nome').value || '').trim();
       var skuProd = (document.getElementById('f-prod-sku').value || '').trim().toUpperCase();
