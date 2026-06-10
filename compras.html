@@ -3149,9 +3149,11 @@ function renderInsumos() {
   // Calcular "em produção" (soma de tecido das OPs ativas com insumo_id = este)
   // Só conta OPs com status ativo (Em Produção / Devolvido Fornecedor) — Entregue/Cancelado não conta
   var emProducaoPorInsumo = {};
+  var consumoPorInsumo = {}; // consumo/peça da(s) OP(s) ativa(s) — usado pra detectar "resto" (< 1 peça)
   (STATE.ops || []).forEach(function(op) {
     if (op.insumo_id && op.quantidade_tecido_usada && op.status !== 'Entregue' && op.status !== 'Cancelado') {
       emProducaoPorInsumo[op.insumo_id] = (emProducaoPorInsumo[op.insumo_id] || 0) + (op.quantidade_tecido_usada || 0);
+      if (op.consumo_por_peca > 0) consumoPorInsumo[op.insumo_id] = parseFloat(op.consumo_por_peca);
     }
   });
 
@@ -3185,10 +3187,15 @@ function renderInsumos() {
     var total_v = totalEscopoInsumo(i);
     var em_producao = emProdEscopoInsumo(i);
     var saldo_livre = total_v - em_producao;
-    g.variantes.push({ item: i, em_producao: em_producao, saldo_livre: saldo_livre, total: total_v });
+    // "Resto" = saldo livre positivo, mas menor que 1 peça (< consumo/peça da OP ativa). Não dá pra
+    // produzir nem 1 peça → não conta como saldo livre usável (espelha o descarte no fechamento da OP).
+    var consumoRef = consumoPorInsumo[i.id] || 0;
+    var isResto = saldo_livre > 0.001 && consumoRef > 0 && saldo_livre < consumoRef;
+    var saldo_usavel = isResto ? 0 : saldo_livre;
+    g.variantes.push({ item: i, em_producao: em_producao, saldo_livre: saldo_usavel, resto: isResto ? saldo_livre : 0, total: total_v });
     g.total += total_v;
     g.em_producao += em_producao;
-    g.saldo_livre += saldo_livre;
+    g.saldo_livre += saldo_usavel;
     // Coleta cross-NF: SKUs pai vinculados, lista de NFs distintas, data mais recente, fornecedor mais usado
     (i.skus_pai || []).forEach(function(s){ if (s) g.skus_pai_set[s] = 1; });
     if (i.numero_nf) g.nfs_set[String(i.numero_nf).trim()] = 1;
@@ -3298,7 +3305,9 @@ function renderInsumos() {
       '</td>' +
       '<td class="r" style="font-weight:700">' + fmt(g.total) + '</td>' +
       '<td class="r" style="color:var(--amber);font-weight:700" title="Tecido em OPs ativas (status Em Produção / Devolvido Fornecedor)">' + fmt(g.em_producao) + '</td>' +
-      '<td class="r" style="color:'+corTotal+';font-weight:800;font-size:14px">' + fmt(g.saldo_livre) + '</td>' +
+      '<td class="r" style="color:'+corTotal+';font-weight:800;font-size:14px">' + fmt(g.saldo_livre) +
+        (function(){ var gr = g.variantes.reduce(function(s,v){return s+(v.resto||0);},0); return gr > 0.001 ? '<div style="color:var(--txt4);font-weight:500;font-size:10px;margin-top:1px" title="Sobra < 1 peça (não usável)">+ resto '+fmt(Math.round(gr*100)/100)+'</div>' : ''; })() +
+      '</td>' +
       '<td style="line-height:1.5">' + locGrupoHtml + '</td>' +
       '<td>' + (g.unidade || '') + '</td>' +
       '<td>' + skusHtml + '</td>' +
@@ -3311,7 +3320,10 @@ function renderInsumos() {
       g.variantes.sort(function(a,b){return (b.saldo_livre||0) - (a.saldo_livre||0);});
       g.variantes.forEach(function(v) {
         var i = v.item;
-        var corSaldo = v.saldo_livre <= 0 ? 'var(--red)' : v.saldo_livre < 50 ? 'var(--orange)' : 'var(--txt2)';
+        var corSaldo = v.resto > 0 ? 'var(--txt4)' : v.saldo_livre <= 0 ? 'var(--red)' : v.saldo_livre < 50 ? 'var(--orange)' : 'var(--txt2)';
+        var saldoCelula = v.resto > 0
+          ? '<span style="color:var(--txt4);font-weight:500;font-size:11px" title="Resto < 1 peça — não dá pra produzir">resto: '+fmt(Math.round(v.resto*100)/100)+'</span>'
+          : fmt(v.saldo_livre);
         // Localização da variante
         var saldoPorLoc = (STATE.saldoLocalIdx || {})[i.id] || {};
         var locParts = Object.keys(saldoPorLoc).filter(function(l){
@@ -3341,7 +3353,7 @@ function renderInsumos() {
           '<td style="padding-left:24px" class="dim">↳ ' + ((i.cor || '—').trim()) + nfLote + '<span style="color:var(--txt4);font-size:10px;margin-left:6px">(editar)</span></td>' +
           '<td class="r">' + fmt(v.total) + '</td>' +
           '<td class="r" style="color:var(--amber)">' + fmt(v.em_producao) + '</td>' +
-          '<td class="r" style="color:'+corSaldo+';font-weight:600">' + fmt(v.saldo_livre) + '</td>' +
+          '<td class="r" style="color:'+corSaldo+';font-weight:600">' + saldoCelula + '</td>' +
           '<td style="line-height:1.5">' + locVarHtml + '</td>' +
           '<td class="dim">' + (i.unidade || '') + '</td>' +
           '<td></td>' +
