@@ -1473,15 +1473,16 @@ function renderEcommSkuDetail(){
     var dc=p.receita>0?(p.devolucao/p.receita*100):0;
     var fr=p.freteSeller;   // custo de frete do seller (dedução), igual ao P&L
     var custo=p.custoTotal;
+    var cmvPct=p.receita>0?(custo/p.receita*100):0;
     var adsC=((STATE.adsBySkuPaiCanal[s.sku_pai]||{})[c])||0;  // ads ML real do SKU nesse canal
     var marg=p.receita-custo-p.fee-p.devolucao-fr-adsC;
     var mp=p.receita>0?(marg/p.receita*100):0;
-    return {nome:c,cor:getCor(c),qtd:p.qtd,receita:p.receita,fee:p.fee,feePct:fc,devolucao:p.devolucao,devPct:dc,frete:fr,ads:adsC,margem:marg,margemPct:mp};
+    return {nome:c,cor:getCor(c),qtd:p.qtd,receita:p.receita,fee:p.fee,feePct:fc,devolucao:p.devolucao,devPct:dc,frete:fr,ads:adsC,cmv:custo,cmvPct:cmvPct,margem:marg,margemPct:mp};
   }).sort(function(a,b){return b.receita-a.receita;});
 
   html+='<div class="drawer-section" style="margin-bottom:18px;"><div class="drawer-section-title">Comparativo cross-canal</div>';
   html+=  '<div style="overflow-x:auto;"><table class="dr-tbl" style="width:100%;font-size:11px;">';
-  html+=    '<thead><tr><th style="text-align:left;">Canal</th><th class="r">Qtd</th><th class="r">Receita</th><th class="r">Comissão</th><th class="r">Devol.</th><th class="r">Frete</th><th class="r">Ads</th><th class="r">Margem</th><th class="r">Margem %</th></tr></thead><tbody>';
+  html+=    '<thead><tr><th style="text-align:left;">Canal</th><th class="r">Qtd</th><th class="r">Receita</th><th class="r">Comissão</th><th class="r">Devol.</th><th class="r">Frete</th><th class="r">Ads</th><th class="r">CMV</th><th class="r">Margem</th><th class="r">Margem %</th></tr></thead><tbody>';
   canaisRows.forEach(function(c){
     var mc=c.margemPct>=40?'good':(c.margemPct>=20?'mid':'bad');
     html+='<tr>'
@@ -1492,6 +1493,7 @@ function renderEcommSkuDetail(){
       +'<td class="r"><span style="color:'+(c.devPct>=10?'#ef4444':(c.devPct>=5?'#eab308':'var(--txt2)'))+'">'+fmtD(c.devPct)+'%</span></td>'
       +'<td class="r"><span style="color:var(--txt2)">'+fmtK(c.frete)+'</span></td>'
       +'<td class="r"><span style="color:var(--txt2)">'+fmtK(c.ads)+'</span></td>'
+      +'<td class="r"><span style="color:var(--txt2)">'+fmtD(c.cmvPct)+'%</span> <span style="color:var(--txt3);font-size:10px">('+fmtK(c.cmv)+')</span></td>'
       +'<td class="r" style="font-weight:700">'+fmtK(c.margem)+'</td>'
       +'<td class="r"><span class="margem-pill '+mc+'">'+Math.round(c.margemPct)+'%</span></td>'
       +'</tr>';
