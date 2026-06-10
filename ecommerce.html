@@ -1533,22 +1533,8 @@ function renderEcommSkuDetail(){
     html+='<div class="drawer-section" style="margin-bottom:18px;"><div class="drawer-section-title">Receita diária no período</div><div class="dr-chart" style="position:relative;height:200px;"><canvas id="prod-trend-chart"></canvas></div></div>';
   }
 
-  // Detalhamento por variante (top 20)
-  var byVar={};itens.forEach(function(it){
-    var k=(it.sku_raw||'-')+'__'+(it._canal||'-');if(!byVar[k])byVar[k]={sku:it.sku_raw||'-',canal:it._canal||'-',cor:it._cor||'-',tam:it._tam||'-',qtd:0,receita:0};
-    byVar[k].qtd+=it._qtd||0;byVar[k].receita+=it._receita||0;
-  });
-  var vars_=Object.values(byVar).sort(function(a,b){return b.receita-a.receita;}).slice(0,20);
-  if(vars_.length>0){
-    html+='<div class="drawer-section"><div class="drawer-section-title">Detalhamento por variante (top 20)</div>';
-    html+=  '<div style="overflow-x:auto;"><table class="dr-tbl" style="width:100%;"><thead><tr><th>SKU</th><th>Cor</th><th>Tam</th><th>Canal</th><th class="r">Qtd</th><th class="r">Receita</th></tr></thead><tbody>';
-    vars_.forEach(function(v){
-      var corOut=v.cor==='-'?'<span style="color:var(--txt3)">—</span>':v.cor;
-      var tamOut=v.tam==='-'?'<span style="color:var(--txt3)">—</span>':v.tam;
-      html+='<tr><td style="font-family:monospace;font-size:10px;">'+v.sku+'</td><td>'+corOut+'</td><td>'+tamOut+'</td><td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:'+getCor(v.canal)+';margin-right:6px;vertical-align:middle;"></span>'+v.canal+'</td><td class="r">'+fmtN(v.qtd)+'</td><td class="r" style="color:var(--txt1);font-weight:700;">'+fmt(v.receita)+'</td></tr>';
-    });
-    html+=  '</tbody></table></div></div>';
-  }
+  // (Detalhamento por variante removido 10/06/2026 — redundante com o heatmap
+  //  Grade × Cor acima, que já mostra qual cor/grade mais vende em unidades.)
 
   wrap.innerHTML=html;
 
