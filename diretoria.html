@@ -474,9 +474,11 @@ function renderTudo(allRows,pDE,pATE,wDe){
   `;
 
   // ── Cards por grande grupo: Faturamento (destaque) + Pedidos/Ticket/Fat-dia + Previsão do mês ──
+  // gruposOrd (só com venda) alimenta tabela/mix; os CARDS mostram SEMPRE os 4 grupos fixos
+  // (Atacado aparece zerado quando não vendeu no período — ex: MTD sem atacado).
   const gruposOrd=GRUPO_ORDER.filter(g=>A.grupos[g]);
-  document.getElementById('grupo-cards').innerHTML=gruposOrd.map(g=>{
-    const o=A.grupos[g], cor=GRUPO_CORES[g];
+  document.getElementById('grupo-cards').innerHTML=GRUPO_ORDER.map(g=>{
+    const o=A.grupos[g]||{fat:0,ped:0,dev:0}, cor=GRUPO_CORES[g];
     const liq=liqOf(o), liqPrevG=liqOf(P.grupos[g]);
     const d=temPrev?delta(liq, liqPrevG):null;
     const tkt=o.ped>0?liq/o.ped:0, fatDia=liq/diasP, prev=prevMes(g);
