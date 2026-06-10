@@ -451,7 +451,7 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
       <select id="flt-pag-costureiro" class="dselect" onchange="renderReguaPagamentos()">
         <option value="">Todos costureiros</option>
       </select>
-      <button class="chip alert" id="chip-pag-sem-data" onclick="togglePagSemDataChip()">SEM DATA — não projeta</button>
+      <button class="chip alert" id="chip-pag-sem-data" onclick="togglePagSemDataChip()">SEM PREVISÃO ENTREGA</button>
     </div>
     <div class="card">
       <div class="card-header"><span class="card-title">Régua de Pagamentos<small id="regua-pag-count" style="margin-left:6px;color:var(--txt3)"></small></span></div>
@@ -4917,6 +4917,9 @@ function renderReguaPagamentos() {
   var verPassado = STATE.pagVerPassado === true;
 
   var filtered = todos.filter(function(p) {
+    // Chip "SEM PREVISÃO ENTREGA" ativo → mostra SÓ as OPs sem data de entrega (real/prevista),
+    // que não dá pra projetar pagamento. (sem_data = !COALESCE(data_entrega_real, data_prevista_entrega))
+    if (STATE.pagSemDataFilt && !p.sem_data) return false;
     // OPs sem data: SEMPRE aparecem (não dá pra projetar mas precisam de atenção)
     if (!p.sem_data) {
       var d = new Date(p.data); d.setHours(0,0,0,0);
@@ -4937,14 +4940,16 @@ function renderReguaPagamentos() {
   var totalDentro30 = todos.filter(function(p){ return p.tipo==='dentro' && dataNoIntervalo(p, hoje, corte30); }).reduce(function(s,p){return s+p.valor_total;},0);
   var totalFora30 = todos.filter(function(p){ return p.tipo==='fora' && dataNoIntervalo(p, hoje, corte30); }).reduce(function(s,p){return s+p.valor_total;},0);
   var totalGeral = filtered.reduce(function(s,p){return s+p.valor_total;},0);
-  var opsSemData = (STATE.ops || []).filter(function(o){ return ['Cancelado','Devolvido Fornecedor','Entregue'].indexOf(o.status)<0 && !o.data_envio_tecido && !o.data_prevista_entrega && !o.data_entrega_real; }).length;
+  // Sem previsão de entrega = sem data pra ancorar a projeção de pagamento (D+15/D+30).
+  // Critério idêntico ao sem_data da régua: !(data_entrega_real || data_prevista_entrega). Envio não conta.
+  var opsSemData = (STATE.ops || []).filter(function(o){ return ['Cancelado','Devolvido Fornecedor','Entregue'].indexOf(o.status)<0 && !o.data_prevista_entrega && !o.data_entrega_real; }).length;
   var opsSemCusto = (STATE.ops || []).filter(function(o){ return ['Cancelado','Devolvido Fornecedor'].indexOf(o.status)<0 && !o.valor_costura_dentro && !o.valor_costura_fora && !o.valor_unitario; }).length;
 
   document.getElementById('kpis-regua-pagamentos').innerHTML = [
     kpiHtml('A pagar (período)', fmtR(totalGeral), 'no filtro selecionado', '--kpi-accent:var(--indigo)'),
     kpiHtml('Por dentro · 30d', fmtR(totalDentro30), 'com NF — D+15', '--kpi-accent:var(--green)'),
     kpiHtml('Por fora · 30d', fmtR(totalFora30), 'sem NF — D+30', '--kpi-accent:var(--purple)'),
-    kpiHtml('OPs sem data', opsSemData, opsSemData > 0 ? 'não projetadas' : 'todas com data', '--kpi-accent:' + (opsSemData > 0 ? 'var(--orange)' : 'var(--green)')),
+    kpiHtml('Sem previsão entrega', opsSemData, opsSemData > 0 ? 'não projetáveis' : 'todas com previsão', '--kpi-accent:' + (opsSemData > 0 ? 'var(--orange)' : 'var(--green)')),
     kpiHtml('OPs sem custo', opsSemCusto, opsSemCusto > 0 ? 'preencher dentro/fora' : 'todas com custo', '--kpi-accent:' + (opsSemCusto > 0 ? 'var(--red)' : 'var(--green)')),
   ].join('');
 
@@ -4977,10 +4982,10 @@ function renderReguaPagamentos() {
   }).join('');
   document.getElementById('tbody-regua-pagamentos').innerHTML = html || '<tr><td colspan="9" class="empty">Nenhum pagamento previsto no filtro</td></tr>';
 
-  // Atualiza chip "SEM DATA" da tab pagamentos (info only, nao filtra a lista)
+  // Atualiza chip "SEM PREVISÃO ENTREGA" (clicável: filtra a lista pras OPs sem data de entrega → não projetáveis)
   var elChip = document.getElementById('chip-pag-sem-data');
   if (elChip) {
-    elChip.innerHTML = 'SEM DATA — não projeta <span style="opacity:0.6;font-weight:500">'+opsSemData+'</span>';
+    elChip.innerHTML = 'SEM PREVISÃO ENTREGA <span style="opacity:0.6;font-weight:500">'+opsSemData+'</span>';
     if (STATE.pagSemDataFilt) elChip.classList.add('on'); else elChip.classList.remove('on');
   }
 }
