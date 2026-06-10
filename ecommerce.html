@@ -698,7 +698,7 @@ async function fetchProdutos(){
 
 // ── State ──
 var DE=null,ATE=null;
-var STATE={pedidos:[],pedidosFull:[],itens:[],itensFocus:[],canais:[],canaisSel:{},stackMode:'abs',focusCanal:null,skuGroups:[],skuSel:null,skuSort:{key:'receita',dir:'desc'},adsByCanal:{},adsByCanalPrev:{},adsBySkuPai:{},adsBySkuPaiCanal:{},devBySkuPai:{}};
+var STATE={pedidos:[],pedidosFull:[],itens:[],itensFocus:[],canais:[],canaisSel:{},stackMode:'abs',focusCanal:null,skuGroups:[],skuSel:null,skuSort:{key:'receita',dir:'desc'},adsByCanal:{},adsByCanalPrev:{},adsBySkuPai:{},adsBySkuPaiCanal:{},devBySkuPai:{},skuMVRows:[]};
 var CHARTS={hero:null,pareto:null};
 var GEO_UF_SEL=null;
 
@@ -751,6 +751,7 @@ async function carregar(){
     var pAds=fetchAds(DE,ATE).then(adsRowsToByCanal).catch(function(){return{};});
     var pAdsPrev=usarComp?fetchAds(ant.de,ant.ate).then(adsRowsToByCanal).catch(function(){return{};}):Promise.resolve({});
     var pDev=fetchDevItem(DE,ATE).then(devRowsToBySkuPai).catch(function(){return{};});
+    var pSkuMV=fetchSkuMV(DE,ATE).catch(function(){return[];});      // PERF: lista de produtos no paint imediato
     var pAdsItem=fetchAdsItem(DE,ATE).catch(function(){return[];});  // PERF: em paralelo (era serial após itens)
     // Progressive load: dispara MV em paralelo, renderiza KPIs/Waterfall já quando ela chega.
     var pMV=fetchAgregadoMV(DE,ATE).then(function(mvRows){
@@ -779,9 +780,9 @@ async function carregar(){
 
     // RENDER IMEDIATO — sem itens (waterfall, canais, geo, pagamentos, alertas)
     STATE.itens=[];STATE.itensFocus=[];STATE.adsBySkuPai={};STATE.adsBySkuPaiCanal={};
-    STATE.adsByCanal=await pAds;STATE.adsByCanalPrev=await pAdsPrev;STATE.devBySkuPai=await pDev;STATE.mvRowsPrev=await pMVprev;
+    STATE.adsByCanal=await pAds;STATE.adsByCanalPrev=await pAdsPrev;STATE.devBySkuPai=await pDev;STATE.mvRowsPrev=await pMVprev;STATE.skuMVRows=await pSkuMV;
     renderAll();
-    document.getElementById('upd').textContent='Carregando produtos...';
+    document.getElementById('upd').textContent='Atualizado '+new Date().toLocaleTimeString('pt-BR')+' · detalhe…';
 
     // BACKGROUND — itens + produtos (pra rankings)
     var inicio=janelaItens(DE);var skuDisponivel=(DE>=inicio)||(ATE>=inicio);
@@ -854,7 +855,7 @@ function renderAll(){
     STATE.pedidos=STATE.pedidos.filter(function(p){return p._nome===STATE.focusCanal;});
     STATE.itensFocus=STATE.itens.filter(function(it){return it._canal===STATE.focusCanal;});
   }else{STATE.itensFocus=STATE.itens;}
-  agruparSkus(STATE.itensFocus);
+  montarSkuGroups();
   // Critical render path — visualmente prioritário (KPIs + tabela canais + Top Produtos)
   var criticos=[renderWaterfall,renderKPIs,renderCanalTable,renderTopProdutos];
   criticos.forEach(function(fn){try{fn();}catch(e){console.error(fn.name+':',e);}});
@@ -974,7 +975,7 @@ function calcPnL(pedidos,itens,adsVal){
 
 // ── KPIs ──
 // Unidades (itens vendidos) do escopo atual — só disponível quando itens carregaram (período recente).
-function totUnidades(){return (STATE.itensFocus||[]).reduce(function(s,it){return s+(it._qtd||0);},0);}
+function totUnidades(){return (STATE.skuGroups||[]).reduce(function(s,g){return s+(g.qtd||0);},0);}
 // Projeção de fechamento do mês por run-rate — só quando o período = mês corrente (MTD) incluindo hoje.
 function projecaoMes(receita){
   try{
@@ -1178,6 +1179,33 @@ function renderDowHeat(){
 
 // ── TOP PRODUTOS (dual ranking) ──
 // ── ANÁLISE POR PRODUTO — lista pesquisável + detalhe inline cross-canal ──
+// PERF (09/06): lista de produtos + Unidades vêm da MV mvw_ecommerce_sku_dia (centenas de
+// linhas) no paint imediato — antes esperavam o fetch de TODOS os itens (13k×, ~6s). Os itens
+// continuam carregando em background pra enriquecer o drawer (variantes/fee/dev/frete) e o CMV real.
+async function fetchSkuMV(de,ate){
+  return buscarTudo('mvw_ecommerce_sku_dia','select=sku_pai,nome,cat,canal_nome_raw,origem_conta,receita,qtd,cmv&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc');
+}
+function agruparSkusMV(rows){
+  var map={};
+  (rows||[]).forEach(function(r){
+    var k=r.sku_pai;var canal=getNome(r.canal_nome_raw,r.origem_conta);
+    if(STATE.focusCanal&&canal!==STATE.focusCanal)return;
+    if(!map[k])map[k]={sku_pai:k,nome:r.nome||k,cat:r.cat||'OUTROS',custoUn:0,
+      receita:0,qtd:0,custoTotal:0,fee:0,devolucao:0,freteSeller:0,
+      porCanal:{},pedidoIds:{},datas:{}};
+    var g=map[k];var rec=parseFloat(r.receita||0),q=parseFloat(r.qtd||0),cm=parseFloat(r.cmv||0);
+    g.receita+=rec;g.qtd+=q;g.custoTotal+=cm;
+    if(!g.porCanal[canal])g.porCanal[canal]={qtd:0,receita:0,fee:0,devolucao:0,freteSeller:0,custoTotal:0};
+    var pc=g.porCanal[canal];pc.receita+=rec;pc.qtd+=q;pc.custoTotal+=cm;
+  });
+  STATE.skuGroups=Object.values(map).sort(function(a,b){return b.receita-a.receita;});
+}
+// Itens carregados → fonte completa (variantes + fee/dev/frete rateado); senão → MV (lista rápida).
+function montarSkuGroups(){
+  if((STATE.itens||[]).length>0) agruparSkus(STATE.itensFocus);
+  else if((STATE.skuMVRows||[]).length>0) agruparSkusMV(STATE.skuMVRows);
+  else agruparSkus(STATE.itensFocus);
+}
 function agruparSkus(itens){
   var map={};
   (itens||STATE.itens).forEach(function(it){
