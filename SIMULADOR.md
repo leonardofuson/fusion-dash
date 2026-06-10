@@ -231,7 +231,7 @@ Após promoção pra pai, sobraram **3 drifts pendentes** (de 60 brutos):
 
 `backfill_ads.py` permite puxar histórico retroativo via `DATE_FROM/DATE_TO`. **Cap real da API ML: 90 dias retroativos** — não 13 meses como esperado. Tentar `date_from < D-90` retorna `400 "You cannot request metrics with a date greater than 90 days"`. Pra histórico longo, deixar o cron diário rodando e acumular.
 
-Memória: [`feedback_ml_ads_api_cap.md`](~/.claude/projects/-Users-leogusukuma-Documents-PROJETO-MAX/memory/feedback_ml_ads_api_cap.md)
+Memória: [`feedback_ml_ads_api_cap.md`](~/.claude/projects/-Users-leonardogusukuma-Documents-PROJETO-MAX/memory/feedback_ml_ads_api_cap.md)
 
 ## Limitações conhecidas
 
