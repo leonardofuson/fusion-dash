@@ -3213,6 +3213,15 @@ function renderInsumos() {
         saldoSemMovsGrupo += v.total;
       }
     });
+    // Filtro de localização ativo → a coluna Localização mostra SÓ o local filtrado
+    // (chip CD FUSION, chip Costureiros = todos menos CD, ou um costureiro específico do dropdown).
+    if (locFiltVal) {
+      var manter = function(l) {
+        return locFiltVal === '__costureiros__' ? l !== 'CD FUSION' : l === locFiltVal;
+      };
+      Object.keys(saldoLocGrupo).forEach(function(l){ if (!manter(l)) delete saldoLocGrupo[l]; });
+      Object.keys(locsDefaultGrupo).forEach(function(l){ if (!manter(l)) { saldoSemMovsGrupo -= locsDefaultGrupo[l]; delete locsDefaultGrupo[l]; } });
+    }
     var locsGrupoSorted = Object.keys(saldoLocGrupo).sort(function(a,b){
       if (a==='CD FUSION') return -1; if (b==='CD FUSION') return 1;
       return saldoLocGrupo[b] - saldoLocGrupo[a];
@@ -3277,7 +3286,11 @@ function renderInsumos() {
         var corSaldo = v.saldo_livre <= 0 ? 'var(--red)' : v.saldo_livre < 50 ? 'var(--orange)' : 'var(--txt2)';
         // Localização da variante
         var saldoPorLoc = (STATE.saldoLocalIdx || {})[i.id] || {};
-        var locParts = Object.keys(saldoPorLoc).filter(function(l){return saldoPorLoc[l] > 0;}).sort(function(a,b){
+        var locParts = Object.keys(saldoPorLoc).filter(function(l){
+          if (!(saldoPorLoc[l] > 0)) return false;
+          if (locFiltVal) return locFiltVal === '__costureiros__' ? l !== 'CD FUSION' : l === locFiltVal;
+          return true;
+        }).sort(function(a,b){
           if (a==='CD FUSION') return -1; if (b==='CD FUSION') return 1; return saldoPorLoc[b]-saldoPorLoc[a];
         });
         var locVarHtml;
