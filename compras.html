@@ -4526,23 +4526,28 @@ function memoriaCalculoCusto(c) {
   var linhasTecido = opsTrim.map(function(o){
     var qtd = parseFloat(o.qtde_pecas) || 0;
     var oc = o.ordem_compra_id ? comprasMap[o.ordem_compra_id] : null;
+    var insumo = o.insumo_id ? (STATE.insumos || []).find(function(i){ return i.id === o.insumo_id; }) : null;
     var prefix = '<td style="padding:2px 6px">#'+o.id+'</td><td style="padding:2px 6px">'+fmtData(o.data_envio_tecido)+'</td>';
-    if (!oc) {
-      semTecido.push({op:o, motivo:'sem compra vinculada'});
-      return '<tr style="color:var(--txt4)">'+prefix +
-        '<td style="padding:2px 6px" colspan="4">— sem compra vinculada (não conta)</td></tr>';
-    }
-    var vm = parseFloat(oc.valor_metro_kg) || 0;
-    var cons = parseFloat(o.consumo_por_peca) || parseFloat(oc.consumo_por_peca) || 0;
-    var tecidoNome = (oc.tecido || '?') + (oc.cor ? ' '+oc.cor : '');
+    // Preço-metro: OC (lote real da compra) → fallback preço de referência do insumo (valor que a
+    // analista cadastra no insumo). Espelha a RPC v7 — OPs sem OC usam o cadastro do insumo.
+    var vmOC = oc ? (parseFloat(oc.valor_metro_kg) || 0) : 0;
+    var vmIns = insumo ? (parseFloat(insumo.valor_unitario_referencia) || 0) : 0;
+    var vm = vmOC > 0 ? vmOC : vmIns;
+    var fonte = vmOC > 0 ? 'OC' : (vmIns > 0 ? 'cadastro' : '—');
+    var cons = parseFloat(o.consumo_por_peca) || (oc ? parseFloat(oc.consumo_por_peca) : 0) || 0;
+    var tecidoNome = (oc && oc.tecido ? (oc.tecido + (oc.cor ? ' '+oc.cor : '')) : '')
+                  || (insumo ? ((insumo.nome||'') + (insumo.cor ? ' '+insumo.cor : '')) : '')
+                  || (o.tecido || '?');
     if (vm <= 0 || cons <= 0) {
-      semTecido.push({op:o, motivo:'valor_metro='+fmtR(vm)+' / consumo='+cons.toFixed(2)});
-      return '<tr style="color:var(--txt4)">'+prefix +
+      var motivo = vm <= 0 ? 'sem preço de tecido — cadastrar valor/metro no insumo' : 'consumo/peça zerado';
+      semTecido.push({op:o, motivo:motivo});
+      return '<tr style="color:var(--orange)">'+prefix +
         '<td style="padding:2px 6px">'+tecidoNome+'</td>' +
         '<td class="r" style="padding:2px 6px">'+fmt(qtd)+'</td>' +
-        '<td style="padding:2px 6px" colspan="2">consumo/valor zerado (não conta)</td></tr>';
+        '<td style="padding:2px 6px" colspan="2">⚠ '+motivo+'</td></tr>';
     }
     var custoTecPeca = vm * cons;
+    var metragemOP = qtd * cons;
     var gasto = qtd * custoTecPeca;
     totalPecasTec += qtd;
     totalGastoTec += gasto;
@@ -4550,8 +4555,8 @@ function memoriaCalculoCusto(c) {
       prefix +
       '<td style="padding:2px 6px">'+tecidoNome+'</td>' +
       '<td class="r" style="padding:2px 6px">'+fmt(qtd)+'</td>' +
-      '<td class="r" style="padding:2px 6px">'+cons.toFixed(2)+'m × '+fmtR(vm)+'/m = '+fmtR(custoTecPeca)+'/pç</td>' +
-      '<td class="r" style="padding:2px 6px;color:var(--txt3)">'+fmtR(gasto)+'</td>' +
+      '<td class="r" style="padding:2px 6px">'+cons.toFixed(2)+'m × '+fmtR(vm)+'/m = '+fmtR(custoTecPeca)+'/pç <span style="color:var(--txt4);font-size:9px">('+fonte+')</span></td>' +
+      '<td class="r" style="padding:2px 6px;color:var(--txt3)">'+fmt(Math.round(metragemOP))+'m · '+fmtR(gasto)+'</td>' +
     '</tr>';
   }).join('');
   var custoTecido = totalPecasTec > 0 ? totalGastoTec / totalPecasTec : 0;
@@ -4606,7 +4611,7 @@ function memoriaCalculoCusto(c) {
     '<div style="' + headerStyle + 'margin-top:14px">Tecido — gasto total / peças com tecido válido</div>' +
     '<table style="'+tableStyle+'"><thead><tr>' +
       '<th style="'+thStyle+'">OP</th><th style="'+thStyle+'">Data</th><th style="'+thStyle+'">Tecido</th>' +
-      '<th style="'+thRStyle+'">Qtd</th><th style="'+thRStyle+'">Custo/peça</th><th style="'+thRStyle+'">Gasto</th>' +
+      '<th style="'+thRStyle+'">Qtd</th><th style="'+thRStyle+'">Consumo × R$/m</th><th style="'+thRStyle+'">Metragem · Gasto</th>' +
     '</tr></thead><tbody>' + linhasTecido + '</tbody></table>' +
     '<div style="font-size:11px;color:var(--txt2);margin-top:6px;text-align:right">' +
       'WAC tecido = '+fmtR(totalGastoTec)+' / '+fmt(totalPecasTec)+' pç = <strong>'+fmtR(custoTecido)+'/pç</strong>' +
