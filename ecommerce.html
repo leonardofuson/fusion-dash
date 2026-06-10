@@ -529,7 +529,7 @@ async function buscarTudo(tab,filtro){
   }
   return todos;
 }
-var SEL_PED='id,data_pedido,valor_bruto,canal_nome_raw,origem_conta,status,frete,frete_ml_seller,desconto,uf,cidade,fee_canal,valor_devolucao,valor_chargeback,devolucao_pipeline,metodo_pagamento,parcelas';
+var SEL_PED='id,data_pedido,valor_bruto,canal_nome_raw,origem_conta,status,frete,frete_ml_seller,uf,cidade,fee_canal,valor_devolucao,valor_chargeback,devolucao_pipeline,metodo_pagamento,parcelas';
 // Receita inclui frete cliente APENAS pra ML (vb ML = total_amount = só itens, frete fora).
 // Demais canais: vb JÁ INCLUI frete cliente (validado empiricamente 25/05):
 //   - TikTok:   vb = itens + frete (payment.total_amount)
@@ -718,7 +718,7 @@ function filtrarPedidos(lista){
     // fora dos gráficos/rankings operacionais (comportamento inalterado lá).
     if(isCancelado&&!incCanc)return;
     p._nome=getNome(p.canal_nome_raw,p.origem_conta);p._cor=getCor(p._nome);
-    p._cancelado=isCancelado;p._devolvido=isDevolvido;p._canc=(isCancelado||isDevolvido);
+    p._cancelado=isCancelado;p._canc=(isCancelado||isDevolvido);
     if(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[p._nome])return;ativos.push(p);});
   return ativos;
 }
@@ -816,7 +816,6 @@ async function carregar(){
         it._fee=(parseFloat(ped.fee_canal)||0)*share;
         it._devolucao=(parseFloat(ped.valor_devolucao)||0)*share;
         it._freteSeller=(parseFloat(ped.frete_ml_seller)||0)*share;
-        it._freteCliente=(parseFloat(ped.frete)||0)*share;
       });
       STATE.itens=itens.filter(function(it){return it._sku_pai&&(!['cancelado','devolvido'].includes(it._canc));});
     }else{STATE.itens=[];}
@@ -907,14 +906,12 @@ function renderWaterfallImediato(cur,prev){
 function renderWaterfall(){
   var cur=calcPnL(STATE.pedidos,STATE.itensFocus,adsFiltrado(STATE.adsByCanal));
   var prev=calcPnLFromMV(STATE.mvRowsPrev||[],adsFiltrado(STATE.adsByCanalPrev));
-  var liquida=cur.receita-cur.devolucoes-cur.comissao-cur.frete;
-  var liquidaPrev=prev.receita-prev.devolucoes-prev.comissao-prev.frete;
   var items=[
     {lbl:'Receita Bruta',val:cur.receita,color:'#22c55e',prev:prev.receita},
     {lbl:'− Comissão',val:-cur.comissao,color:'#f97316',prev:-prev.comissao},
     {lbl:'− Devoluções',val:-cur.devolucoes,color:'#f43f5e',prev:-prev.devolucoes},
     {lbl:'− Frete',val:-cur.frete,color:'#8b5cf6',prev:-prev.frete},
-    {lbl:'= Receita Líquida',val:liquida,color:liquida>=0?'#06b6d4':'#f43f5e',prev:liquidaPrev},
+    {lbl:'= Receita Líquida',val:cur.liquida,color:cur.liquida>=0?'#06b6d4':'#f43f5e',prev:prev.liquida},
     {lbl:'− Ads (ML)',val:-cur.ads,color:'#eab308',prev:-prev.ads},
     {lbl:'− CMV',val:-cur.cmv,color:'#ec4899',prev:-prev.cmv},
     {lbl:'= Resultado',val:cur.lucro,color:cur.lucro>=0?'#22c55e':'#f43f5e',prev:prev.lucro}
@@ -933,8 +930,10 @@ function renderWaterfall(){
   }).join('');
   document.getElementById('waterfall').innerHTML=html;
 }
+var _pnlMemo=null;  // PERF: evita recomputar calcPnL 2x no mesmo tick (renderWaterfall + renderKPIs)
 function calcPnL(pedidos,itens,adsVal){
   adsVal=adsVal||0;
+  if(_pnlMemo&&_pnlMemo.p===pedidos&&_pnlMemo.i===itens&&_pnlMemo.a===adsVal)return _pnlMemo.r;
   // Fase 7 P&L (31/05): usa valor_devolucao REAL de API (Fase 5) em vez de
   // "valor de cancelados". Cancelados ficam fora da receita (filtro _canc).
   // fee_canal real de API (Fase 1-4); fallback custoPct só pra pedidos onde a
@@ -964,7 +963,9 @@ function calcPnL(pedidos,itens,adsVal){
   // P&L: Bruta − Comissão − Devoluções − Frete = Líquida; − CMV = Resultado
   var liquida=receita-comissao-devolucoes-frete;
   var lucro=liquida-adsVal-cmv;
-  return{receita:receita,devolucoes:devolucoes,comissao:comissao,cmv:cmv,frete:frete,ads:adsVal,liquida:liquida,lucro:lucro};
+  var _r={receita:receita,devolucoes:devolucoes,comissao:comissao,cmv:cmv,frete:frete,ads:adsVal,liquida:liquida,lucro:lucro};
+  _pnlMemo={p:pedidos,i:itens,a:adsVal,r:_r};
+  return _r;
 }
 
 // ── KPIs ──
@@ -1178,18 +1179,18 @@ function agruparSkus(itens){
   (itens||STATE.itens).forEach(function(it){
     var k=it._sku_pai;var c=it._canal||'—';
     if(!map[k])map[k]={sku_pai:k,nome:it._nome,cat:it._cat,custoUn:it._custoUn||0,
-      receita:0,qtd:0,custoTotal:0,fee:0,devolucao:0,freteSeller:0,freteCliente:0,
+      receita:0,qtd:0,custoTotal:0,fee:0,devolucao:0,freteSeller:0,
       porCanal:{},pedidoIds:{},datas:{}};
     var g=map[k];
     g.receita+=it._receita; g.qtd+=it._qtd;
     g.custoTotal+=(it._custoUn||0)*it._qtd;
     g.fee+=it._fee||0; g.devolucao+=it._devolucao||0;
-    g.freteSeller+=it._freteSeller||0; g.freteCliente+=it._freteCliente||0;
-    if(!g.porCanal[c])g.porCanal[c]={qtd:0,receita:0,fee:0,devolucao:0,freteSeller:0,freteCliente:0,custoTotal:0};
+    g.freteSeller+=it._freteSeller||0;
+    if(!g.porCanal[c])g.porCanal[c]={qtd:0,receita:0,fee:0,devolucao:0,freteSeller:0,custoTotal:0};
     var pc=g.porCanal[c];
     pc.qtd+=it._qtd; pc.receita+=it._receita;
     pc.fee+=it._fee||0; pc.devolucao+=it._devolucao||0;
-    pc.freteSeller+=it._freteSeller||0; pc.freteCliente+=it._freteCliente||0;
+    pc.freteSeller+=it._freteSeller||0;
     pc.custoTotal+=(it._custoUn||0)*it._qtd;
     if(it.pedido_id)g.pedidoIds[it.pedido_id]=true;
     var d=(it._data||'').slice(0,10);if(d){g.datas[d]=(g.datas[d]||0)+(it._qtd||0);}
