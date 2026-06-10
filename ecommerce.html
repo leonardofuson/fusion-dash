@@ -494,7 +494,6 @@ function custoPct(n){return CANAL_CUSTO[n]!==undefined?CANAL_CUSTO[n]:0.0;}
 function fmt(n){return 'R$ '+Math.round(n||0).toLocaleString('pt-BR');}
 function fmtK(n){n=n||0;if(Math.abs(n)>=1e6)return 'R$ '+(n/1e6).toFixed(1)+'M';if(Math.abs(n)>=1e3)return 'R$ '+Math.round(n/1e3)+'k';return 'R$ '+Math.round(n);}
 function fmtN(n){return Math.round(n||0).toLocaleString('pt-BR');}
-function fmtP(n){return(n||0).toFixed(1)+'%';}
 function fmtD(n){return(n||0).toFixed(1);}
 function hojeSP(){return new Date().toLocaleString('sv-SE',{timeZone:'America/Sao_Paulo'}).slice(0,10);}
 function somaDias(ds,d){var t=new Date(ds+'T00:00:00Z');t.setUTCDate(t.getUTCDate()+d);return t.toISOString().slice(0,10);}
@@ -530,7 +529,7 @@ async function buscarTudo(tab,filtro){
   }
   return todos;
 }
-var SEL_PED='id,data_pedido,valor_bruto,canal_nome_raw,origem_conta,status,frete,frete_ml_seller,desconto,valor_liquido,uf,cidade,fee_canal,valor_devolucao,valor_chargeback,devolucao_pipeline,metodo_pagamento,parcelas';
+var SEL_PED='id,data_pedido,valor_bruto,canal_nome_raw,origem_conta,status,frete,frete_ml_seller,desconto,uf,cidade,fee_canal,valor_devolucao,valor_chargeback,devolucao_pipeline,metodo_pagamento,parcelas';
 // Receita inclui frete cliente APENAS pra ML (vb ML = total_amount = só itens, frete fora).
 // Demais canais: vb JÁ INCLUI frete cliente (validado empiricamente 25/05):
 //   - TikTok:   vb = itens + frete (payment.total_amount)
@@ -695,8 +694,8 @@ async function fetchProdutos(){
 
 // ── State ──
 var DE=null,ATE=null;
-var STATE={pedidos:[],pedidosFull:[],anteriores:[],anterioresFull:[],itens:[],itensFocus:[],canais:[],canaisSel:{},stackMode:'abs',focusCanal:null,skuGroups:[],skuSel:null,skuSort:{key:'receita',dir:'desc'},adsByCanal:{},adsByCanalPrev:{},adsBySkuPai:{},adsBySkuPaiCanal:{},devBySkuPai:{}};
-var CHARTS={hero:null,pareto:null,recvWeeks:null};
+var STATE={pedidos:[],pedidosFull:[],itens:[],itensFocus:[],canais:[],canaisSel:{},stackMode:'abs',focusCanal:null,skuGroups:[],skuSel:null,skuSort:{key:'receita',dir:'desc'},adsByCanal:{},adsByCanalPrev:{},adsBySkuPai:{},adsBySkuPaiCanal:{},devBySkuPai:{}};
+var CHARTS={hero:null,pareto:null};
 var GEO_UF_SEL=null;
 
 function periodoAnterior(de,ate){var d=daysBetween(de,ate);var novoAte=somaDias(de,-1);var novoDe=somaDias(novoAte,-(d-1));return{de:novoDe,ate:novoAte};}
@@ -770,7 +769,7 @@ async function carregar(){
     var fetches=[fetchPedidos(DE,ATE)];
     var res=await Promise.all(fetches);
     if(seq!==LOAD_SEQ)return;   // período mudou durante o fetch — aborta este load
-    STATE.pedidosRaw=res[0];STATE.anterioresRaw=[];
+    STATE.pedidosRaw=res[0];
     fetchTroqueSite(DE,ATE).then(function(rows){STATE.troqueSite=rows;try{renderAlerts();}catch(e){}}).catch(function(){STATE.troqueSite=null;});
     if(STATE.canais.length===0){var seen={};STATE.pedidosRaw.forEach(function(p){if(shouldDedup(p))return;var n=getNome(p.canal_nome_raw,p.origem_conta);if(!seen[n]){seen[n]=true;STATE.canaisSel[n]=true;}});STATE.canais=Object.keys(seen).sort();renderCanalChips();}
 
@@ -847,11 +846,9 @@ function focusCanal(n){STATE.focusCanal=STATE.focusCanal===n?null:n;renderAll();
 
 function renderAll(){
   STATE.pedidos=filtrarPedidos(STATE.pedidosRaw||[]);
-  STATE.anteriores=filtrarPedidos(STATE.anterioresRaw||[]);
-  STATE.pedidosFull=STATE.pedidos;STATE.anterioresFull=STATE.anteriores;
+  STATE.pedidosFull=STATE.pedidos;   // prev vem da MV (mvRowsPrev); STATE.anteriores removido (vestigial pós-otimização)
   if(STATE.focusCanal){
     STATE.pedidos=STATE.pedidos.filter(function(p){return p._nome===STATE.focusCanal;});
-    STATE.anteriores=STATE.anteriores.filter(function(p){return p._nome===STATE.focusCanal;});
     STATE.itensFocus=STATE.itens.filter(function(it){return it._canal===STATE.focusCanal;});
   }else{STATE.itensFocus=STATE.itens;}
   agruparSkus(STATE.itensFocus);
@@ -1160,7 +1157,7 @@ function renderDowHeat(){
   ped.forEach(function(p){if(p._canc)return;var d=(p.data_pedido||'').slice(0,10);if(!d)return;if(!matrix[p._nome])matrix[p._nome]=new Array(7).fill(0);matrix[p._nome][dowIdx(d)]+=valorReceita(p);});
   var canais=Object.keys(matrix).sort(function(a,b){var sa=matrix[a].reduce(function(s,v){return s+v;},0);var sb=matrix[b].reduce(function(s,v){return s+v;},0);return sb-sa;});
   if(canais.length===0){document.getElementById('canal-dow-heat').innerHTML='<div class="geo-empty">Sem dados.</div>';return;}
-  var nCols=7+1;var gridCols='80px repeat(7,1fr) 80px';
+  var gridCols='80px repeat(7,1fr) 80px';
   var html='<div class="heat-grid" style="grid-template-columns:'+gridCols+'"><div class="heat-lbl"></div>';
   DIAS_SEM.forEach(function(d){html+='<div class="heat-lbl col">'+d+'</div>';});
   html+='<div class="heat-lbl col" style="color:var(--amber)">Total</div>';
@@ -1338,8 +1335,6 @@ function renderEcommSkuDetail(){
   // Velocidade
   var datas=Object.keys(s.datas||{}).sort();
   var diasComVenda=datas.length;
-  var qtdTotal=qtd;
-  var velMedia=diasComVenda>0?qtdTotal/diasComVenda:0;
   // Tendência 7d vs 30d (un/dia)
   var hoje=hojeSP();
   var d7Ini=somaDias(hoje,-7);var d30Ini=somaDias(hoje,-30);
