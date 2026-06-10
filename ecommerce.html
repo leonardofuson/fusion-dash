@@ -624,8 +624,8 @@ function adsFiltrado(byCanal){
   return tot;
 }
 
-// localStorage cache (TTL 5min) — só MV rows agregados (~200KB cabe folgado).
-// Pedidos detalhados continuam vindo do servidor.
+// localStorage cache (TTL 5min) — MV rows agregados (canal_dia + sku_dia ~ algumas
+// centenas de KB; cabe folgado no limite de ~5MB). Pedidos detalhados vêm do servidor.
 function cacheKey(de,ate){return 'ecomm_v1_'+de+'_'+ate;}
 function cacheGet(de,ate){
   try{
@@ -698,7 +698,7 @@ async function fetchProdutos(){
 
 // ── State ──
 var DE=null,ATE=null;
-var STATE={pedidos:[],pedidosFull:[],itens:[],itensFocus:[],canais:[],canaisSel:{},stackMode:'abs',focusCanal:null,skuGroups:[],skuSel:null,skuSort:{key:'receita',dir:'desc'},adsByCanal:{},adsByCanalPrev:{},adsBySkuPai:{},adsBySkuPaiCanal:{},devBySkuPai:{},skuMVRows:[]};
+var STATE={pedidos:[],pedidosFull:[],itens:[],itensFocus:[],canais:[],canaisSel:{},stackMode:'abs',focusCanal:null,skuGroups:[],skuSel:null,skuSort:{key:'receita',dir:'desc'},adsByCanal:{},adsByCanalPrev:{},adsBySkuPai:{},adsBySkuPaiCanal:{},devBySkuPai:{},skuMVRows:[],geoMVRows:[],pgtoMVRows:[]};
 var CHARTS={hero:null,pareto:null};
 var GEO_UF_SEL=null;
 
@@ -740,6 +740,11 @@ async function carregar(){
       renderKPIsImediato(c,p);
       renderWaterfallImediato(c,p);
       renderCanalTableFromMV(cached.mv);
+      // PERF (09/06): lista de produtos também do cache → pinta instant no revisit
+      // (antes só KPIs/waterfall; a lista esperava fetchSkuMV ~1-2s de novo).
+      if(cached.sku&&cached.sku.length){STATE.skuMVRows=cached.sku;try{montarSkuGroups();renderTopProdutos();}catch(e){}}
+      if(cached.geo&&cached.geo.length){STATE.geoMVRows=cached.geo;try{renderGeoMV(cached.geo);}catch(e){}}
+      if(cached.pgto&&cached.pgto.length){STATE.pgtoMVRows=cached.pgto;try{renderPaymentsMV(cached.pgto);}catch(e){}}
       document.getElementById('upd').textContent='Cache · atualizando…';
     }catch(e){console.warn('cache render:',e);}
   } else {
@@ -753,6 +758,10 @@ async function carregar(){
     var pDev=fetchDevItem(DE,ATE).then(devRowsToBySkuPai).catch(function(){return{};});
     var pSkuMV=fetchSkuMV(DE,ATE).catch(function(){return[];});      // PERF: lista de produtos no paint imediato
     var pAdsItem=fetchAdsItem(DE,ATE).catch(function(){return[];});  // PERF: em paralelo (era serial após itens)
+    // PERF (09/06): geo + pagamentos no paint imediato via MV — pinta assim que a MV
+    // chega (antes do fetch detalhado). renderAll() depois sobrescreve com dado idêntico.
+    fetchGeoMV(DE,ATE).then(function(rows){if(seq!==LOAD_SEQ)return;STATE.geoMVRows=rows;try{renderGeoMV(rows);}catch(e){}}).catch(function(){});
+    fetchPgtoMV(DE,ATE).then(function(rows){if(seq!==LOAD_SEQ)return;STATE.pgtoMVRows=rows;try{renderPaymentsMV(rows);}catch(e){}}).catch(function(){});
     // Progressive load: dispara MV em paralelo, renderiza KPIs/Waterfall já quando ela chega.
     var pMV=fetchAgregadoMV(DE,ATE).then(function(mvRows){
       if(!mvRows||!mvRows.length)return null;
@@ -834,7 +843,7 @@ async function carregar(){
       try{fn();}catch(e){console.error(fn.name+':',e);}});
     document.getElementById('upd').textContent='Atualizado '+new Date().toLocaleTimeString('pt-BR');
     // Salva cache pra próxima visita (TTL 5min)
-    try{var mvNow=await pMV;cacheSet(DE,ATE,{mv:mvNow,mvPrev:STATE.mvRowsPrev||null});}catch(e){}
+    try{var mvNow=await pMV;cacheSet(DE,ATE,{mv:mvNow,mvPrev:STATE.mvRowsPrev||null,sku:STATE.skuMVRows||null,geo:STATE.geoMVRows||null,pgto:STATE.pgtoMVRows||null});}catch(e){}
   }catch(err){console.error(err);document.getElementById('kpis').innerHTML='<div class="kpi"><div class="kpi-lbl">Erro</div><div class="kpi-val d-dn">!</div><div class="kpi-sub">'+err.message+'</div></div>';}
 }
 
@@ -1109,12 +1118,29 @@ function renderHero(){
 
 // ── GEOGRAPHY ──
 function renderGeo(){
-  var ufWrap=document.getElementById('geo-ufs');var cityWrap=document.getElementById('geo-cities');
   var byUF={},byCity={};
   STATE.pedidos.forEach(function(p){if(p._canc)return;var uf=(p.uf||'').trim().toUpperCase();if(!uf||uf.length!==2)return;var cidade=(p.cidade||'').trim();var v=valorReceita(p);
     if(!byUF[uf])byUF[uf]={r:0,n:0};byUF[uf].r+=v;byUF[uf].n++;
     if(cidade){var ck=uf+'|'+cidade;if(!byCity[ck])byCity[ck]={uf:uf,cidade:cidade,r:0,n:0};byCity[ck].r+=v;byCity[ck].n++;}
   });
+  pintarGeo(byUF,byCity);
+}
+// Paint imediato de geo via MV (linhas agregadas por dia/canal/uf/cidade). Aplica os
+// mesmos filtros que renderGeo herda de STATE.pedidos (focusCanal + canaisSel).
+function renderGeoMV(rows){
+  var byUF={},byCity={};
+  (rows||[]).forEach(function(r){var canal=getNome(r.canal_nome_raw,r.origem_conta);
+    if(STATE.focusCanal&&canal!==STATE.focusCanal)return;
+    if(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[canal])return;
+    var uf=(r.uf||'').trim().toUpperCase();if(!uf||uf.length!==2)return;var cidade=(r.cidade||'').trim();
+    var v=parseFloat(r.receita||0),n=parseInt(r.pedidos||0);
+    if(!byUF[uf])byUF[uf]={r:0,n:0};byUF[uf].r+=v;byUF[uf].n+=n;
+    if(cidade){var ck=uf+'|'+cidade;if(!byCity[ck])byCity[ck]={uf:uf,cidade:cidade,r:0,n:0};byCity[ck].r+=v;byCity[ck].n+=n;}
+  });
+  pintarGeo(byUF,byCity);
+}
+function pintarGeo(byUF,byCity){
+  var ufWrap=document.getElementById('geo-ufs');var cityWrap=document.getElementById('geo-cities');
   var ufs=Object.keys(byUF).sort(function(a,b){return byUF[b].r-byUF[a].r;});
   if(ufs.length===0){ufWrap.innerHTML='<div class="geo-empty">Dados de UF/cidade serão populados nas próximas sincronizações via API direta.</div>';cityWrap.innerHTML='';return;}
   var maxR=byUF[ufs[0]].r;var totalR=ufs.reduce(function(s,u){return s+byUF[u].r;},0);
@@ -1137,6 +1163,21 @@ function renderPayments(){
     if(m){if(!methods[m])methods[m]={r:0,n:0};methods[m].r+=v;methods[m].n++;}
     if(parc>0){var faixa=parc===1?'1x':(parc<=3?'2-3x':(parc<=6?'4-6x':'7-12x'));if(!installments[faixa])installments[faixa]={r:0,n:0};installments[faixa].r+=v;installments[faixa].n++;}
   });
+  pintarPayments(methods,installments);
+}
+// Paint imediato de pagamentos via MV (agregada por dia/canal/método/parcelas).
+function renderPaymentsMV(rows){
+  var methods={},installments={};
+  (rows||[]).forEach(function(r){var canal=getNome(r.canal_nome_raw,r.origem_conta);
+    if(STATE.focusCanal&&canal!==STATE.focusCanal)return;
+    if(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[canal])return;
+    var m=r.metodo_pagamento||'';var parc=parseInt(r.parcelas||0);var v=parseFloat(r.receita||0),n=parseInt(r.pedidos||0);
+    if(m){if(!methods[m])methods[m]={r:0,n:0};methods[m].r+=v;methods[m].n+=n;}
+    if(parc>0){var faixa=parc===1?'1x':(parc<=3?'2-3x':(parc<=6?'4-6x':'7-12x'));if(!installments[faixa])installments[faixa]={r:0,n:0};installments[faixa].r+=v;installments[faixa].n+=n;}
+  });
+  pintarPayments(methods,installments);
+}
+function pintarPayments(methods,installments){
   var mKeys=Object.keys(methods).sort(function(a,b){return methods[b].r-methods[a].r;});
   var mEl=document.getElementById('pay-methods');
   if(mKeys.length===0){mEl.innerHTML='<div class="geo-empty">Dados de método de pagamento serão populados via API direta.</div>';}
@@ -1184,6 +1225,14 @@ function renderDowHeat(){
 // continuam carregando em background pra enriquecer o drawer (variantes/fee/dev/frete) e o CMV real.
 async function fetchSkuMV(de,ate){
   return buscarTudo('mvw_ecommerce_sku_dia','select=sku_pai,nome,cat,canal_nome_raw,origem_conta,receita,qtd,cmv&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc');
+}
+// PERF (09/06): geo (UF/cidade) e pagamentos (método/parcelas) vêm de MV no paint imediato —
+// antes ficavam vazios até o fetch de 10-115k pedidos chegar. Validado A/B (0 divergências).
+async function fetchGeoMV(de,ate){
+  return buscarTudo('mvw_ecommerce_geo_dia','select=canal_nome_raw,origem_conta,uf,cidade,pedidos,receita&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=receita.desc');
+}
+async function fetchPgtoMV(de,ate){
+  return buscarTudo('mvw_ecommerce_pgto_dia','select=canal_nome_raw,origem_conta,metodo_pagamento,parcelas,pedidos,receita&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=receita.desc');
 }
 function agruparSkusMV(rows){
   var map={};
