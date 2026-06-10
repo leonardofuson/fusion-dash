@@ -3067,6 +3067,17 @@ function setLocFilt(loc) {
   renderInsumos();
 }
 
+// Tecido comprometido em OPs ativas de um insumo NESTE costureiro (pra escopar "Em Produção"
+// quando a aba Insumos está filtrada por costureiro).
+function emProducaoNoCostureiro(insumoId, costuNome) {
+  var cid = costureiroIdPorNome(costuNome);
+  if (cid == null) return 0;
+  return (STATE.ops || []).filter(function(o) {
+    return o.insumo_id === insumoId && o.costureiro_id === cid
+      && o.quantidade_tecido_usada && o.status !== 'Entregue' && o.status !== 'Cancelado';
+  }).reduce(function(s, o) { return s + (o.quantidade_tecido_usada || 0); }, 0);
+}
+
 function renderInsumos() {
   var insumos = STATE.insumos;
   var busca = (document.getElementById('flt-insumo-busca') || {}).value || '';
@@ -3074,6 +3085,14 @@ function renderInsumos() {
   var tipo = tipoFilt ? tipoFilt.dataset.tipo : 'tecido';
   var locFiltVal = STATE.locFilt || '';
   renderLocChips(); // re-render chips (preserva STATE.locFilt)
+
+  // Total físico no ESCOPO do filtro de localização (sem filtro = total global; CD/costureiro = só ali).
+  function totalEscopoInsumo(i) {
+    var sl = (STATE.saldoLocalIdx || {})[i.id] || {};
+    if (!locFiltVal) return i.quantidade_atual || 0;
+    if (locFiltVal === '__costureiros__') return Object.keys(sl).reduce(function(s,l){ return l!=='CD FUSION' ? s+(sl[l]||0) : s; }, 0);
+    return sl[locFiltVal] || 0;
+  }
 
   // IDs de insumos que têm OPs ATIVAS consumindo eles (Em Produção / Devolvido Fornecedor)
   var insumosEmUso = {};
@@ -3116,7 +3135,7 @@ function renderInsumos() {
   // KPIs
   var total = filtered.length;
   var zerados = filtered.filter(function(i) { return (i.quantidade_atual || 0) <= 0; }).length;
-  var valorTotal = filtered.reduce(function(s, i) { return s + (i.quantidade_atual || 0) * (i.valor_unitario_referencia || 0); }, 0);
+  var valorTotal = filtered.reduce(function(s, i) { return s + totalEscopoInsumo(i) * (i.valor_unitario_referencia || 0); }, 0);
 
   document.getElementById('kpis-insumos').innerHTML = [
     kpiHtml('Total Cadastrados', total, tipo === 'tecido' ? 'tecidos' : 'aviamentos', '--kpi-accent:var(--indigo)'),
@@ -3124,7 +3143,8 @@ function renderInsumos() {
     kpiHtml('Valor em Estoque', fmtR(valorTotal), 'estimado', '--kpi-accent:var(--purple)'),
   ].join('');
 
-  document.getElementById('insumo-count').textContent = ' — ' + filtered.length + ' itens';
+  var escopoTxt = locFiltVal ? (' · valores no local: ' + (locFiltVal === '__costureiros__' ? 'Costureiros' : locFiltVal)) : '';
+  document.getElementById('insumo-count').textContent = ' — ' + filtered.length + ' itens' + escopoTxt;
 
   // Calcular "em produção" (soma de tecido das OPs ativas com insumo_id = este)
   // Só conta OPs com status ativo (Em Produção / Devolvido Fornecedor) — Entregue/Cancelado não conta
@@ -3134,6 +3154,14 @@ function renderInsumos() {
       emProducaoPorInsumo[op.insumo_id] = (emProducaoPorInsumo[op.insumo_id] || 0) + (op.quantidade_tecido_usada || 0);
     }
   });
+
+  // "Em Produção" no escopo do filtro: sem filtro / Costureiros = total das OPs ativas;
+  // CD FUSION = 0 (CD não produz); costureiro específico = só as OPs daquele costureiro.
+  function emProdEscopoInsumo(i) {
+    if (!locFiltVal || locFiltVal === '__costureiros__') return emProducaoPorInsumo[i.id] || 0;
+    if (locFiltVal === 'CD FUSION') return 0;
+    return emProducaoNoCostureiro(i.id, locFiltVal);
+  }
 
   if (!STATE.insumoExpanded) STATE.insumoExpanded = {};
 
@@ -3154,8 +3182,8 @@ function renderInsumos() {
       };
     }
     var g = grupos[key];
-    var em_producao = emProducaoPorInsumo[i.id] || 0;
-    var total_v = i.quantidade_atual || 0;
+    var total_v = totalEscopoInsumo(i);
+    var em_producao = emProdEscopoInsumo(i);
     var saldo_livre = total_v - em_producao;
     g.variantes.push({ item: i, em_producao: em_producao, saldo_livre: saldo_livre, total: total_v });
     g.total += total_v;
