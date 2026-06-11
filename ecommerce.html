@@ -326,16 +326,31 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
         <tbody id="canal-tbody"></tbody>
       </table>
     </div>
-    <div style="margin-top:10px;font-size:11.5px;line-height:1.6;color:var(--muted,#94a3b8);border-top:1px solid rgba(148,163,184,.15);padding-top:9px">
-      <strong>Fontes</strong> (dados reais da API por pedido; % = sobre a Receita Bruta do canal):
-      <b>Receita Bruta</b> = vendas (exclui cancelados; inclui devolvidos como venda + devolução). ·
-      <b>Comissão</b> = taxa real da API (ML <i>sale_fee</i>, Shopee <i>escrow</i>, TikTok <i>statement</i>, Site <i>Pagar.me payables</i>); estimada onde ainda não maturou e na Shein (sem API). ·
-      <b>Devoluções</b> = reembolso real por canal (ML <i>claims</i>, Shopee <i>returns</i>, TikTok <i>statement</i>, Site <i>Shopify refunds</i>) + <i>chargeback</i> Pagar.me (só Site). Troca/vale-crédito do site (Troque) NÃO entra aqui (não é perda de caixa). ·
-      <b>Frete</b> = custo do seller via API (ML/TikTok <i>shipments</i>). ·
-      <b>Receita Líquida</b> = Bruta − Comissão − Devoluções − Frete. ·
-      <b>Ads</b> = custo de mídia real: <b>Mercado Ads (ML) + Shopee Ads</b>. Meta/Google/TikTok pendentes de credenciais (esses canais aparecem com Ads R$0). ·
-      <b>CMV</b> = custo real (item × custo do produto / WAC dos costureiros) nos meses recentes; proporção real por canal nos meses antigos. ·
-      <b>Resultado</b> = Líquida − CMV.
+    <div style="margin-top:10px;font-size:11.5px;line-height:1.65;color:var(--muted,#94a3b8);border-top:1px solid rgba(148,163,184,.15);padding-top:9px">
+      <div style="margin-bottom:7px;">
+        <strong>De onde vêm os dados</strong> — cada canal é puxado <b>direto da API da própria plataforma, por pedido</b> (não é estimativa nem rateio):
+        ML <i>(sale_fee · shipments · claims)</i> · Shopee <i>(escrow · returns)</i> · TikTok <i>(statement)</i> ·
+        Shein <i>(commission — via API desde 11/06/2026, comissão real ~22%)</i> · Site Próprio <i>(Pagar.me · Shopify refunds)</i>.
+        Pedidos antigos (pré-API) e taxas ainda não liquidadas usam <b>estimativa por canal</b> como fallback.
+      </div>
+      <div style="margin-bottom:7px;background:rgba(234,179,8,.06);border-left:2px solid rgba(234,179,8,.5);padding:6px 9px;border-radius:4px;">
+        <strong>Por que os números podem parecer diferentes</strong> de outras telas (painel do marketplace, Power BI, ERP):
+        <b>1)</b> aqui mostramos o <b>Resultado LÍQUIDO real</b> (Bruta − Comissão − Devolução − Frete − Ads − CMV), não só o faturamento bruto — por isso o resultado é bem menor que a "receita" que o marketplace exibe. ·
+        <b>2)</b> cada plataforma <b>liquida em tempos diferentes</b> (escrow D+X, statement após entrega + hold ~15d): os <b>últimos dias ainda estão maturando</b> e sobem conforme os valores chegam. ·
+        <b>3)</b> <b>devolução é medida pela data do pedido</b> (coorte) — meses recentes subestimam, pois ainda vão voltar devoluções. ·
+        <b>4)</b> ML/TikTok não incluem frete no bruto (a API manda só o valor dos itens); aqui o frete já é somado pra ficar comparável aos demais.
+      </div>
+      <div>
+        <strong>Colunas</strong> (% = sobre a Receita Bruta do canal):
+        <b>Receita Bruta</b> = vendas (exclui cancelados; inclui devolvidos como venda + devolução). ·
+        <b>Comissão</b> = taxa real da API; estimada só onde ainda não maturou. ·
+        <b>Devoluções</b> = reembolso real (ML <i>claims</i> · Shopee <i>returns</i> · TikTok <i>statement</i> · Site <i>Shopify refunds</i>) + <i>chargeback</i> (só Site). Troca/vale-crédito do site NÃO entra (não é perda de caixa). ·
+        <b>Frete</b> = custo do seller via API. ·
+        <b>Receita Líquida</b> = Bruta − Comissão − Devoluções − Frete. ·
+        <b>Ads</b> = mídia real (Mercado Ads + Shopee Ads); Meta/Google/TikTok pendentes (aparecem R$0). ·
+        <b>CMV</b> = custo real do produto (item × custo) nos meses recentes; proporção real por canal nos antigos. ·
+        <b>Resultado</b> = Líquida − CMV.
+      </div>
     </div>
   </div>
 
