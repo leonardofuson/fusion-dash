@@ -37,8 +37,23 @@
   .pane{display:none}.pane.on{display:block}
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:12px;margin-bottom:18px}
   .kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
-  .kpi .lbl{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+  .kpi .lbl{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center}
   .kpi .val{font-size:24px;font-weight:800;margin-top:6px}
+  .info{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;
+    background:var(--panel2);border:1px solid var(--line);color:var(--mut);font-size:9px;font-style:normal;
+    cursor:help;margin-left:6px;position:relative;flex:none;text-transform:none}
+  .info:hover::after{content:attr(data-tip);position:absolute;left:0;top:150%;width:240px;
+    background:#0b0d12;border:1px solid var(--line);color:var(--txt);padding:9px 11px;border-radius:8px;
+    font-size:11px;font-weight:400;line-height:1.45;letter-spacing:0;z-index:70;white-space:normal;text-align:left;
+    box-shadow:0 8px 24px rgba(0,0,0,.6);text-transform:none}
+  details.gloss{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:0 14px;margin-bottom:16px}
+  details.gloss summary{cursor:pointer;padding:13px 0;font-weight:600;color:var(--accent2);list-style:none}
+  details.gloss summary::-webkit-details-marker{display:none}
+  details.gloss summary::before{content:'❔ ';}
+  details.gloss[open] summary::before{content:'✕ ';}
+  details.gloss .gbody{padding:2px 0 16px;color:var(--mut);font-size:13px;line-height:1.65}
+  details.gloss .gbody b{color:var(--txt)} details.gloss .gbody .gi{margin:8px 0}
+  details.gloss .gbody code{background:var(--panel2);padding:1px 5px;border-radius:4px;color:var(--accent2);font-size:12px}
   .kpi .sub{color:var(--mut);font-size:12px;margin-top:2px}
   .kpi.accent .val{color:var(--accent2)}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
@@ -103,6 +118,12 @@
   <!-- VISÃO GERAL -->
   <section class="pane on" id="pane-geral">
     <div class="note">A north-star é <b>margem de contribuição (CM3)</b>, não ROAS. <b>MER_site</b> (Meta÷Shopify) é o guardrail confiável; MER_loja (Google÷loja) é fraco — walk-in não é ad-driven. Break-even MER ≈ 1÷margem.</div>
+    <details class="gloss"><summary>Como ler este painel</summary><div class="gbody">
+      <div class="gi"><b>A ideia central:</b> a maioria dos painéis mede <b>ROAS</b> (receita ÷ gasto) — mas receita não é lucro. Um produto pode ter ROAS lindo e <b>perder dinheiro</b> depois do custo de produzir, da comissão, do frete e da devolução. Aqui a pergunta é: <b>"depois de TODOS os custos, o anúncio deixou dinheiro no caixa?"</b> Isso é <b>margem de contribuição</b>.</div>
+      <div class="gi"><b>A cascata de custos:</b> Receita −COGS (custo de produzir) = <b>CM1</b> · −comissão/frete/devolução = <b>CM2</b> · −gasto de ads = <b>CM3</b>. <b>CM3 é o que importa</b>: positivo = ganhou; negativo = queimou.</div>
+      <div class="gi"><b>Gasto Meta/Google</b> = quanto você investiu (Meta→site, Google→lojas). <b>Receita Site</b> = faturamento do Shopify. <b>MER_site</b> = receita do site ÷ gasto Meta (break-even ≈2 com 50% de margem). <b>POAS médio</b> = margem dos anúncios ÷ gasto (>1 = lucrativo). <b>CM3 estimado</b> = o lucro em R$ que sobrou.</div>
+      <div class="gi"><b>Por que não MER de loja aqui?</b> O gasto Google é minúsculo e a receita de loja é quase toda walk-in (gente que não veio de anúncio) → o número infla e mente. Fica na aba de dados, marcado como fraco.</div>
+    </div></details>
     <div class="kpis" id="kpis-geral"></div>
     <div class="grid2">
       <div class="card"><h3>Gasto diário <span class="hint">Meta + Google</span></h3><canvas id="ch-spend"></canvas></div>
@@ -113,6 +134,13 @@
   <!-- LUCRO POR SKU -->
   <section class="pane" id="pane-sku">
     <div class="note">⭐ A decisão é por <b>lucro-por-pedido (POAS)</b>, não ROAS. <b>POAS&gt;1</b> = o anúncio gera mais margem que custa (CM3&gt;0). <span class="muted">ROAS é só diagnóstico — a plataforma sobre-atribui. cmROAS é o cross-check cético (margem real ÷ gasto).</span></div>
+    <details class="gloss"><summary>Como ler as colunas</summary><div class="gbody">
+      <div class="gi"><b>ROAS</b> = receita que a plataforma reivindica ÷ gasto. <b>Só diagnóstico</b> (a agência otimiza por ele). ROAS alto ≠ lucro.</div>
+      <div class="gi"><b>CM2%</b> = margem real do produto após COGS + comissão + frete + devolução, antes dos ads. É a "qualidade econômica" do SKU.</div>
+      <div class="gi"><b>POAS</b> ⭐ = margem atribuída ÷ gasto. <b>>1 = lucrativo.</b> É o que pinta a cor e define o sinal.</div>
+      <div class="gi"><b>cmROAS</b> = margem real TOTAL do canal ÷ gasto (ignora atribuição da plataforma). Se <code>POAS alto + cmROAS baixo</code> → a plataforma está se atribuindo crédito demais.</div>
+      <div class="gi"><b>CM3 est.</b> = lucro em R$ depois do gasto. <b>Sinal</b>: <span class="badge b-escalar">escalar</span> POAS&gt;1,2 · <span class="badge b-cortar">cortar</span> POAS&lt;0,8 · <span class="badge b-manter">manter</span> · <span class="badge b-sem">sem venda</span> (gastou e não vendeu no canal → suspeito).</div>
+    </div></details>
     <div class="kpis" id="kpis-sku"></div>
     <div class="filtros">
       <select id="f-plat"><option value="">Todas plataformas</option><option value="meta_ads">Meta (site)</option><option value="google_ads">Google (loja)</option></select>
@@ -123,11 +151,16 @@
     <div class="card" style="overflow:auto;max-height:640px">
       <table id="tbl-sku">
         <thead><tr>
-          <th data-k="sku_raw">SKU</th><th data-k="plataforma">Plat.</th>
-          <th data-k="ad_spend" class="sorted">Gasto</th><th data-k="roas">ROAS</th>
-          <th data-k="cm2_pct">CM2%</th><th data-k="poas">POAS</th>
-          <th data-k="cmroas">cmROAS</th><th data-k="cm3">CM3 est.</th>
-          <th data-k="unidades">Un.</th><th data-k="sinal">Sinal</th>
+          <th data-k="sku_raw" title="SKU (variante Shopify) anunciado">SKU</th>
+          <th data-k="plataforma" title="Meta = site / Google = lojas físicas">Plat.</th>
+          <th data-k="ad_spend" class="sorted" title="Gasto de anúncio nesse SKU no período">Gasto</th>
+          <th data-k="roas" title="Receita atribuída pela plataforma ÷ gasto. SÓ DIAGNÓSTICO — a plataforma sobre-atribui. ROAS alto ≠ lucro.">ROAS</th>
+          <th data-k="cm2_pct" title="Margem real do produto (após COGS + comissão + frete + devolução), antes dos ads. A 'qualidade econômica' do SKU.">CM2%</th>
+          <th data-k="poas" title="Profit On Ad Spend = margem atribuída ÷ gasto. >1 = lucrativo. ESTA é a métrica de decisão.">POAS</th>
+          <th data-k="cmroas" title="Cross-check cético: margem real TOTAL do canal ÷ gasto (ignora atribuição). Se POAS alto mas cmROAS baixo → plataforma inflando.">cmROAS</th>
+          <th data-k="cm3" title="Lucro real (R$) após o gasto de ads. Negativo = esse SKU perde dinheiro com anúncio.">CM3 est.</th>
+          <th data-k="unidades" title="Unidades vendidas do SKU no canal">Un.</th>
+          <th data-k="sinal" title="Veredito: escalar (POAS>1,2) / cortar (POAS<0,8) / manter / sem venda">Sinal</th>
         </tr></thead>
         <tbody id="tb-sku"></tbody>
       </table>
@@ -137,6 +170,10 @@
   <!-- AUDITORIA -->
   <section class="pane" id="pane-audit">
     <div class="note">Log de tudo que a agência altera (Meta <i>/activities</i> + Google <i>change_event</i>): quem, o quê, quando, antes→depois. Fonte: <b>ads_changes</b>.</div>
+    <details class="gloss"><summary>Para que serve esta aba</summary><div class="gbody">
+      <div class="gi">Como a Fusion é <b>dona</b> das contas de anúncio, dá pra puxar via API <b>cada mudança</b> que a agência faz — coisa que ela não compartilha. Aqui você vê <b>quem</b> mexeu (ex.: Igor Rezende), <b>o quê</b> (orçamento, status, lance), <b>quando</b> e <b>antes→depois</b>.</div>
+      <div class="gi">Serve pra <b>fiscalizar e sustentar conversas</b> com a agência: pausas indevidas, cortes de orçamento, mudanças fora de hora. O KPI <b>Orçamento/lance</b> isola as mexidas que movem dinheiro.</div>
+    </div></details>
     <div class="kpis" id="kpis-audit"></div>
     <div class="filtros">
       <select id="a-plat"><option value="">Todas plataformas</option><option value="meta_ads">Meta</option><option value="google_ads">Google</option></select>
@@ -205,6 +242,11 @@ const rs1=v=>'R$'+(v||0).toLocaleString('pt-BR',{minimumFractionDigits:0,maximum
 const n2=v=>(v==null||isNaN(v))?'—':(+v).toFixed(2);
 const pct=v=>(v==null||isNaN(v))?'—':(v*100).toFixed(0)+'%';
 const idle=window.requestIdleCallback||(f=>setTimeout(f,0));
+function kpiHTML(k){
+  const tip=k.t?` <span class="info" data-tip="${(k.t||'').replace(/"/g,'&quot;')}">i</span>`:'';
+  return `<div class="kpi ${k.accent?'accent':''}"><div class="lbl">${k.l}${tip}</div>`+
+         `<div class="val ${k.cls||''}">${k.v}</div><div class="sub">${k.s||''}</div></div>`;
+}
 
 // ---------- agregação por SKU (a MV é mensal) ----------
 function aggSku(){
@@ -243,13 +285,13 @@ function renderGeral(){
   const poasMed=spendTot>0?margTot/spendTot:null;
   const merSite=meta>0?site/meta:null;
   document.getElementById('kpis-geral').innerHTML=[
-    ['Gasto Meta',rs(meta),'site / Shopify'],
-    ['Gasto Google',rs(goog),'lojas físicas'],
-    ['Receita Site',rs(site),'atribuível ao Meta'],
-    ['MER_site',n2(merSite),'break-even ≈2',true],
-    ['POAS médio',n2(poasMed),'>1 = lucrativo',true],
-    ['CM3 estimado',rs(cm3),'margem após ads',cm3>=0],
-  ].map(k=>`<div class="kpi ${k[3]===true?'accent':''}"><div class="lbl">${k[0]}</div><div class="val ${typeof k[3]==='boolean'&&k[0].startsWith('CM3')?(k[3]?'pos':'neg'):''}">${k[1]}</div><div class="sub">${k[2]}</div></div>`).join('');
+    {l:'Gasto Meta',v:rs(meta),s:'site / Shopify',t:'Total investido em Meta Ads (Facebook/Instagram) no período. O Meta traz tráfego pro site Shopify.'},
+    {l:'Gasto Google',v:rs(goog),s:'lojas físicas',t:'Total investido em Google Ads no período. O Google trabalha as lojas físicas (anúncios locais).'},
+    {l:'Receita Site',v:rs(site),s:'atribuível ao Meta',t:'Faturamento bruto do Site Próprio (Shopify) no período. É a receita que o Meta é responsável por influenciar.'},
+    {l:'MER_site',v:n2(merSite),s:'break-even ≈2',accent:true,t:'Marketing Efficiency Ratio = Receita Site ÷ Gasto Meta. Para cada R$1 no Meta, quantos R$ de receita o site fez (contando TODA venda, não só o que o Meta reivindica). Break-even ≈2 (com ~50% de margem você precisa de R$2 de receita pra cobrir R$1 de anúncio + custo do produto). Acima de 2 = lucrativo. Mais honesto que o ROAS da plataforma, que sobre-atribui.'},
+    {l:'POAS médio',v:n2(poasMed),s:'>1 = lucrativo',accent:true,t:'Profit On Ad Spend = margem que os anúncios geraram ÷ gasto. É o ROAS de LUCRO. POAS>1 = os anúncios geraram mais margem do que custaram (CM3 positivo). É a métrica de decisão, não o ROAS.'},
+    {l:'CM3 estimado',v:rs(cm3),s:'margem após ads',cls:cm3>=0?'pos':'neg',t:'Margem de Contribuição nível 3 = lucro real (R$) que sobrou DEPOIS de descontar COGS + custos de canal + o próprio gasto de ads. Verde = o programa de anúncios deu lucro no período.'},
+  ].map(kpiHTML).join('');
   idle(()=>{
     drawLine('ch-spend',m.map(r=>r.data),[
       {label:'Meta',data:m.map(r=>+r.meta_spend||0),color:'#7c5cff'},
@@ -273,9 +315,12 @@ function renderSku(){
   const esc=rows.filter(r=>r.sinal==='escalar').length, cor=rows.filter(r=>r.sinal==='cortar').length;
   const sp=rows.reduce((s,r)=>s+r.ad_spend,0), c3=rows.reduce((s,r)=>s+r.cm3,0);
   document.getElementById('kpis-sku').innerHTML=[
-    ['SKUs com gasto',rows.length,''],['Gasto total',rs(sp),''],
-    ['CM3 total',rs(c3),'',c3>=0],['Escalar',esc,'POAS>1,2'],['Cortar',cor,'POAS<0,8'],
-  ].map(k=>`<div class="kpi"><div class="lbl">${k[0]}</div><div class="val ${typeof k[3]==='boolean'?(k[3]?'pos':'neg'):''}">${k[1]}</div><div class="sub">${k[2]||''}</div></div>`).join('');
+    {l:'SKUs com gasto',v:rows.length,t:'Quantos SKUs (variantes) tiveram gasto de anúncio no período e estão na tabela.'},
+    {l:'Gasto total',v:rs(sp),t:'Soma do gasto de ads dos SKUs filtrados.'},
+    {l:'CM3 total',v:rs(c3),cls:c3>=0?'pos':'neg',t:'Lucro real somado dos SKUs filtrados, após COGS + custos de canal + ads. Verde = lucrativo.'},
+    {l:'Escalar',v:esc,s:'POAS>1,2',t:'Nº de SKUs com POAS>1,2 — sobra margem suficiente pra valer investir mais.'},
+    {l:'Cortar',v:cor,s:'POAS<0,8',t:'Nº de SKUs com POAS<0,8 — o anúncio está destruindo margem; reduzir ou parar.'},
+  ].map(kpiHTML).join('');
   document.getElementById('sku-count').textContent=rows.length+' linhas';
   const badge={escalar:'b-escalar',cortar:'b-cortar',manter:'b-manter',sem_venda_no_canal:'b-sem'};
   const lbl={escalar:'escalar',cortar:'cortar',manter:'manter',sem_venda_no_canal:'sem venda'};
@@ -300,9 +345,10 @@ function renderAudit(){
   let rows=c.filter(r=>(!plat||r.plataforma===plat)&&(!actor||r.actor===actor));
   const orc=rows.filter(r=>/orçament|budget|lance|bid/i.test(r.evento||'')).length;
   document.getElementById('kpis-audit').innerHTML=[
-    ['Mudanças',rows.length,'no período'],['Atores',actors.length,'pessoas/sistemas'],
-    ['Orçamento/lance',orc,'mexidas sensíveis'],
-  ].map(k=>`<div class="kpi"><div class="lbl">${k[0]}</div><div class="val">${k[1]}</div><div class="sub">${k[2]}</div></div>`).join('');
+    {l:'Mudanças',v:rows.length,s:'no período',t:'Quantas alterações a agência fez nas contas (orçamento, status de anúncio, etc.) no período.'},
+    {l:'Atores',v:actors.length,s:'pessoas/sistemas',t:'Quantas pessoas/sistemas distintos mexeram na conta — pra você ver quem está tocando o quê.'},
+    {l:'Orçamento/lance',v:orc,s:'mexidas sensíveis',t:'Quantas mudanças foram em ORÇAMENTO ou LANCE — as que mexem dinheiro diretamente. As mais sensíveis de fiscalizar.'},
+  ].map(kpiHTML).join('');
   document.getElementById('tl-audit').innerHTML=rows.slice(0,300).map(r=>{
     const d=new Date(r.changed_at);const when=d.toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
     const delta=(r.valor_antes!=null||r.valor_depois!=null)?`<span class="delta">${r.valor_antes??'?'} → ${r.valor_depois??'?'}</span>`:'';
