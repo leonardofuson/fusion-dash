@@ -117,12 +117,12 @@
 
   <!-- VISÃO GERAL -->
   <section class="pane on" id="pane-geral">
-    <div class="note">A north-star é <b>margem de contribuição (CM3)</b>, não ROAS. <b>MER_site</b> (Meta÷Shopify) é o guardrail confiável; MER_loja (Google÷loja) é fraco — walk-in não é ad-driven. Break-even MER ≈ 1÷margem.</div>
+    <div class="note">A métrica-norte é <b>margem de contribuição (CM3)</b>, não ROAS. <b>MER_site</b> (Meta÷Shopify) é o indicador confiável; MER_loja (Google÷loja) é fraco — movimento espontâneo de loja não vem de anúncio. MER de equilíbrio ≈ 1÷margem.</div>
     <details class="gloss"><summary>Como ler este painel</summary><div class="gbody">
       <div class="gi"><b>A ideia central:</b> a maioria dos painéis mede <b>ROAS</b> (receita ÷ gasto) — mas receita não é lucro. Um produto pode ter ROAS lindo e <b>perder dinheiro</b> depois do custo de produzir, da comissão, do frete e da devolução. Aqui a pergunta é: <b>"depois de TODOS os custos, o anúncio deixou dinheiro no caixa?"</b> Isso é <b>margem de contribuição</b>.</div>
-      <div class="gi"><b>A cascata de custos:</b> Receita −COGS (custo de produzir) = <b>CM1</b> · −comissão/frete/devolução = <b>CM2</b> · −gasto de ads = <b>CM3</b>. <b>CM3 é o que importa</b>: positivo = ganhou; negativo = queimou.</div>
-      <div class="gi"><b>Gasto Meta/Google</b> = quanto você investiu (Meta→site, Google→lojas). <b>Receita Site</b> = faturamento do Shopify. <b>MER_site</b> = receita do site ÷ gasto Meta (break-even ≈2 com 50% de margem). <b>POAS médio</b> = margem dos anúncios ÷ gasto (>1 = lucrativo). <b>CM3 estimado</b> = o lucro em R$ que sobrou.</div>
-      <div class="gi"><b>Por que não MER de loja aqui?</b> O gasto Google é minúsculo e a receita de loja é quase toda walk-in (gente que não veio de anúncio) → o número infla e mente. Fica na aba de dados, marcado como fraco.</div>
+      <div class="gi"><b>A cascata de custos:</b> Receita −CMV (custo de produzir) = <b>CM1</b> · −comissão/frete/devolução = <b>CM2</b> · −gasto de anúncios = <b>CM3</b>. <b>CM3 é o que importa</b>: positivo = ganhou; negativo = queimou.</div>
+      <div class="gi"><b>Gasto Meta/Google</b> = quanto você investiu (Meta→site, Google→lojas). <b>Receita Site</b> = faturamento do Shopify. <b>MER_site</b> = receita do site ÷ gasto Meta (ponto de equilíbrio ≈2 com 50% de margem). <b>POAS médio</b> = margem dos anúncios ÷ gasto (>1 = lucrativo). <b>CM3 estimado</b> = o lucro em R$ que sobrou.</div>
+      <div class="gi"><b>Por que não MER de loja aqui?</b> O gasto Google é minúsculo e a receita de loja é quase toda movimento espontâneo (gente que não veio de anúncio) → o número infla e mente. Fica na aba de dados, marcado como fraco.</div>
     </div></details>
     <div class="kpis" id="kpis-geral"></div>
     <div class="grid2">
@@ -133,10 +133,10 @@
 
   <!-- LUCRO POR SKU -->
   <section class="pane" id="pane-sku">
-    <div class="note">⭐ A decisão é por <b>lucro-por-pedido (POAS)</b>, não ROAS. <b>POAS&gt;1</b> = o anúncio gera mais margem que custa (CM3&gt;0). <span class="muted">ROAS é só diagnóstico — a plataforma sobre-atribui. cmROAS é o cross-check cético (margem real ÷ gasto).</span></div>
+    <div class="note">⭐ A decisão é por <b>lucro-por-pedido (POAS)</b>, não ROAS. <b>POAS&gt;1</b> = o anúncio gera mais margem que custa (CM3&gt;0). <span class="muted">ROAS é só diagnóstico — a plataforma sobre-atribui. cmROAS é a conferência cética (margem real ÷ gasto).</span></div>
     <details class="gloss"><summary>Como ler as colunas</summary><div class="gbody">
       <div class="gi"><b>ROAS</b> = receita que a plataforma reivindica ÷ gasto. <b>Só diagnóstico</b> (a agência otimiza por ele). ROAS alto ≠ lucro.</div>
-      <div class="gi"><b>CM2%</b> = margem real do produto após COGS + comissão + frete + devolução, antes dos ads. É a "qualidade econômica" do SKU.</div>
+      <div class="gi"><b>CM2%</b> = margem real do produto após CMV + comissão + frete + devolução, antes dos anúncios. É a "qualidade econômica" do SKU.</div>
       <div class="gi"><b>POAS</b> ⭐ = margem atribuída ÷ gasto. <b>>1 = lucrativo.</b> É o que pinta a cor e define o sinal.</div>
       <div class="gi"><b>cmROAS</b> = margem real TOTAL do canal ÷ gasto (ignora atribuição da plataforma). Se <code>POAS alto + cmROAS baixo</code> → a plataforma está se atribuindo crédito demais.</div>
       <div class="gi"><b>CM3 est.</b> = lucro em R$ depois do gasto. <b>Sinal</b>: <span class="badge b-escalar">escalar</span> POAS&gt;1,2 · <span class="badge b-cortar">cortar</span> POAS&lt;0,8 · <span class="badge b-manter">manter</span> · <span class="badge b-sem">sem venda</span> (gastou e não vendeu no canal → suspeito).</div>
@@ -155,10 +155,10 @@
           <th data-k="plataforma" title="Meta = site / Google = lojas físicas">Plat.</th>
           <th data-k="ad_spend" class="sorted" title="Gasto de anúncio nesse SKU no período">Gasto</th>
           <th data-k="roas" title="Receita atribuída pela plataforma ÷ gasto. SÓ DIAGNÓSTICO — a plataforma sobre-atribui. ROAS alto ≠ lucro.">ROAS</th>
-          <th data-k="cm2_pct" title="Margem real do produto (após COGS + comissão + frete + devolução), antes dos ads. A 'qualidade econômica' do SKU.">CM2%</th>
-          <th data-k="poas" title="Profit On Ad Spend = margem atribuída ÷ gasto. >1 = lucrativo. ESTA é a métrica de decisão.">POAS</th>
-          <th data-k="cmroas" title="Cross-check cético: margem real TOTAL do canal ÷ gasto (ignora atribuição). Se POAS alto mas cmROAS baixo → plataforma inflando.">cmROAS</th>
-          <th data-k="cm3" title="Lucro real (R$) após o gasto de ads. Negativo = esse SKU perde dinheiro com anúncio.">CM3 est.</th>
+          <th data-k="cm2_pct" title="Margem real do produto (após CMV + comissão + frete + devolução), antes dos anúncios. A 'qualidade econômica' do SKU.">CM2%</th>
+          <th data-k="poas" title="Lucro sobre o gasto de anúncio = margem atribuída ÷ gasto. >1 = lucrativo. ESTA é a métrica de decisão.">POAS</th>
+          <th data-k="cmroas" title="Conferência cética: margem real TOTAL do canal ÷ gasto (ignora atribuição). Se POAS alto mas cmROAS baixo → plataforma inflando.">cmROAS</th>
+          <th data-k="cm3" title="Lucro real (R$) após o gasto de anúncios. Negativo = esse SKU perde dinheiro com anúncio.">CM3 est.</th>
           <th data-k="unidades" title="Unidades vendidas do SKU no canal">Un.</th>
           <th data-k="sinal" title="Veredito: escalar (POAS>1,2) / cortar (POAS<0,8) / manter / sem venda">Sinal</th>
         </tr></thead>
@@ -288,9 +288,9 @@ function renderGeral(){
     {l:'Gasto Meta',v:rs(meta),s:'site / Shopify',t:'Total investido em Meta Ads (Facebook/Instagram) no período. O Meta traz tráfego pro site Shopify.'},
     {l:'Gasto Google',v:rs(goog),s:'lojas físicas',t:'Total investido em Google Ads no período. O Google trabalha as lojas físicas (anúncios locais).'},
     {l:'Receita Site',v:rs(site),s:'atribuível ao Meta',t:'Faturamento bruto do Site Próprio (Shopify) no período. É a receita que o Meta é responsável por influenciar.'},
-    {l:'MER_site',v:n2(merSite),s:'break-even ≈2',accent:true,t:'Marketing Efficiency Ratio = Receita Site ÷ Gasto Meta. Para cada R$1 no Meta, quantos R$ de receita o site fez (contando TODA venda, não só o que o Meta reivindica). Break-even ≈2 (com ~50% de margem você precisa de R$2 de receita pra cobrir R$1 de anúncio + custo do produto). Acima de 2 = lucrativo. Mais honesto que o ROAS da plataforma, que sobre-atribui.'},
-    {l:'POAS médio',v:n2(poasMed),s:'>1 = lucrativo',accent:true,t:'Profit On Ad Spend = margem que os anúncios geraram ÷ gasto. É o ROAS de LUCRO. POAS>1 = os anúncios geraram mais margem do que custaram (CM3 positivo). É a métrica de decisão, não o ROAS.'},
-    {l:'CM3 estimado',v:rs(cm3),s:'margem após ads',cls:cm3>=0?'pos':'neg',t:'Margem de Contribuição nível 3 = lucro real (R$) que sobrou DEPOIS de descontar COGS + custos de canal + o próprio gasto de ads. Verde = o programa de anúncios deu lucro no período.'},
+    {l:'MER_site',v:n2(merSite),s:'equilíbrio ≈2',accent:true,t:'Eficiência de marketing do site = Receita Site ÷ Gasto Meta. Para cada R$1 no Meta, quantos R$ de receita o site fez (contando TODA venda, não só o que o Meta reivindica). Ponto de equilíbrio ≈2 (com ~50% de margem você precisa de R$2 de receita pra cobrir R$1 de anúncio + custo do produto). Acima de 2 = lucrativo. Mais honesto que o ROAS da plataforma, que sobre-atribui.'},
+    {l:'POAS médio',v:n2(poasMed),s:'>1 = lucrativo',accent:true,t:'Lucro sobre o gasto de anúncio = margem que os anúncios geraram ÷ gasto. É o ROAS de LUCRO. POAS>1 = os anúncios geraram mais margem do que custaram (CM3 positivo). É a métrica de decisão, não o ROAS.'},
+    {l:'CM3 estimado',v:rs(cm3),s:'margem após anúncios',cls:cm3>=0?'pos':'neg',t:'Margem de Contribuição nível 3 = lucro real (R$) que sobrou DEPOIS de descontar CMV + custos de canal + o próprio gasto de anúncios. Verde = o programa de anúncios deu lucro no período.'},
   ].map(kpiHTML).join('');
   idle(()=>{
     drawLine('ch-spend',m.map(r=>r.data),[
@@ -316,8 +316,8 @@ function renderSku(){
   const sp=rows.reduce((s,r)=>s+r.ad_spend,0), c3=rows.reduce((s,r)=>s+r.cm3,0);
   document.getElementById('kpis-sku').innerHTML=[
     {l:'SKUs com gasto',v:rows.length,t:'Quantos SKUs (variantes) tiveram gasto de anúncio no período e estão na tabela.'},
-    {l:'Gasto total',v:rs(sp),t:'Soma do gasto de ads dos SKUs filtrados.'},
-    {l:'CM3 total',v:rs(c3),cls:c3>=0?'pos':'neg',t:'Lucro real somado dos SKUs filtrados, após COGS + custos de canal + ads. Verde = lucrativo.'},
+    {l:'Gasto total',v:rs(sp),t:'Soma do gasto de anúncios dos SKUs filtrados.'},
+    {l:'CM3 total',v:rs(c3),cls:c3>=0?'pos':'neg',t:'Lucro real somado dos SKUs filtrados, após CMV + custos de canal + ads. Verde = lucrativo.'},
     {l:'Escalar',v:esc,s:'POAS>1,2',t:'Nº de SKUs com POAS>1,2 — sobra margem suficiente pra valer investir mais.'},
     {l:'Cortar',v:cor,s:'POAS<0,8',t:'Nº de SKUs com POAS<0,8 — o anúncio está destruindo margem; reduzir ou parar.'},
   ].map(kpiHTML).join('');
