@@ -295,7 +295,19 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
     <button class="btn-ghost" onclick="clearCanais()">Limpar</button>
   </div>
 
-  <!-- 1. P&L WATERFALL -->
+  <!-- 1. VENDAS DIÁRIAS (movido pro topo) -->
+  <div class="card">
+    <div class="card-title">
+      <span>Receita diária por canal</span>
+      <div class="chips" style="gap:4px;">
+        <button class="chip-sm on" id="stk-abs" onclick="setStack('abs')">R$</button>
+        <button class="chip-sm" id="stk-pct" onclick="setStack('pct')">100%</button>
+      </div>
+    </div>
+    <div class="chart-hero"><canvas id="chart-hero"></canvas></div>
+  </div>
+
+  <!-- 2. P&L WATERFALL -->
   <div class="card">
     <div class="card-title">P&L — Decomposição do Lucro</div>
     <div id="waterfall" class="wf-wrap"><div class="spin"></div></div>
@@ -375,18 +387,6 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
     <div id="ecomm-sku-detail" style="padding:32px 20px;text-align:center;color:var(--txt3);font-size:12px;border:1px dashed var(--bdr);border-radius:10px;">
       Selecione um produto acima pra ver KPIs ecommerce (comissão real, devolução %, frete líquido, velocidade) + distribuição cross-canal.
     </div>
-  </div>
-
-  <!-- 5. RECEITA DIÁRIA -->
-  <div class="card">
-    <div class="card-title">
-      <span>Receita diária por canal</span>
-      <div class="chips" style="gap:4px;">
-        <button class="chip-sm on" id="stk-abs" onclick="setStack('abs')">R$</button>
-        <button class="chip-sm" id="stk-pct" onclick="setStack('pct')">100%</button>
-      </div>
-    </div>
-    <div class="chart-hero"><canvas id="chart-hero"></canvas></div>
   </div>
 
   <!-- 6. GEOGRAFIA -->
