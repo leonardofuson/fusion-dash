@@ -46,14 +46,20 @@
     background:#0b0d12;border:1px solid var(--line);color:var(--txt);padding:9px 11px;border-radius:8px;
     font-size:11px;font-weight:400;line-height:1.45;letter-spacing:0;z-index:70;white-space:normal;text-align:left;
     box-shadow:0 8px 24px rgba(0,0,0,.6);text-transform:none}
-  details.gloss{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:0 14px;margin-bottom:16px}
-  details.gloss summary{cursor:pointer;padding:13px 0;font-weight:600;color:var(--accent2);list-style:none}
+  details.gloss{background:var(--panel);border:1px solid var(--line);border-radius:12px;margin-bottom:16px;overflow:hidden}
+  details.gloss summary{cursor:pointer;padding:12px 15px;font-weight:600;color:var(--txt);list-style:none;display:flex;align-items:center;gap:9px;background:var(--panel2);transition:background .15s}
+  details.gloss summary:hover{background:#232834}
   details.gloss summary::-webkit-details-marker{display:none}
-  details.gloss summary::before{content:'❔ ';}
-  details.gloss[open] summary::before{content:'✕ ';}
-  details.gloss .gbody{padding:2px 0 16px;color:var(--mut);font-size:13px;line-height:1.65}
-  details.gloss .gbody b{color:var(--txt)} details.gloss .gbody .gi{margin:8px 0}
-  details.gloss .gbody code{background:var(--panel2);padding:1px 5px;border-radius:4px;color:var(--accent2);font-size:12px}
+  details.gloss summary::before{content:'❔';font-size:14px}
+  details.gloss summary::after{content:'▸';margin-left:auto;color:var(--mut);transition:transform .2s}
+  details.gloss[open] summary::after{transform:rotate(90deg)}
+  details.gloss[open] summary{border-bottom:1px solid var(--line)}
+  details.gloss .gbody{padding:14px 16px;color:var(--mut);font-size:13px;line-height:1.6}
+  details.gloss .gi{position:relative;padding-left:18px;margin:0 0 11px}
+  details.gloss .gi:last-child{margin-bottom:0}
+  details.gloss .gi::before{content:'▸';position:absolute;left:2px;color:var(--accent);font-weight:700}
+  details.gloss b{color:var(--txt)}
+  details.gloss code{background:var(--panel2);padding:1px 5px;border-radius:4px;color:var(--accent2);font-size:12px}
   .kpi .sub{color:var(--mut);font-size:12px;margin-top:2px}
   .kpi.accent .val{color:var(--accent2)}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
@@ -86,7 +92,9 @@
   .ev .what{flex:1;color:var(--txt)}
   .ev .delta{color:var(--amber);font-size:12px}
   .muted{color:var(--mut)}
-  .note{background:var(--panel2);border-left:3px solid var(--accent);padding:8px 12px;border-radius:6px;font-size:12px;color:var(--mut);margin-bottom:14px}
+  .note{background:linear-gradient(180deg,rgba(124,92,255,.10),rgba(124,92,255,.03));border:1px solid rgba(124,92,255,.25);border-radius:10px;padding:11px 14px 11px 40px;position:relative;font-size:12.5px;color:var(--txt);line-height:1.55;margin-bottom:14px}
+  .note::before{content:'💡';position:absolute;left:13px;top:10px;font-size:15px}
+  .note b{color:#fff}
   canvas{max-height:300px}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
   @media(max-width:760px){.grid2{grid-template-columns:1fr}th,td{padding:6px}}
@@ -139,7 +147,8 @@
   <!-- LUCRO POR SKU -->
   <section class="pane" id="pane-sku">
     <div class="note">⭐ A decisão é por <b>lucro-por-pedido (POAS)</b>, não ROAS. <b>POAS&gt;1</b> = o anúncio gera mais margem que custa (CM3&gt;0). <span class="muted">ROAS é só diagnóstico — a plataforma sobre-atribui. cmROAS é a conferência cética (margem real ÷ gasto). Cada linha é um <b>produto-pai</b> — clique pra abrir as variantes (cor/tamanho).</span></div>
-    <details class="gloss"><summary>Como ler as colunas</summary><div class="gbody">
+    <details class="gloss"><summary>Como funciona esta aba</summary><div class="gbody">
+      <div class="gi"><b>Cada linha é um PRODUTO, não uma variante.</b> O Meta e o Google anunciam por <b>catálogo</b>: cada cor/tamanho é um item separado do feed, e a plataforma atribui o gasto <b>por variante</b> (não por "anúncio" nem por dia). Para não virar centenas de linhas, agrupamos as variantes no <b>produto-pai</b> — a linha mostra o total e, ao <b>clicar</b>, abre cada variante com seu próprio gasto, POAS e canal (Meta = site · Google = loja).</div>
       <div class="gi"><b>Receita / Unidades</b> = venda REAL desses produtos no canal (anúncio + orgânica) e peças vendidas. É a base de onde sai a margem — não confundir com a receita que a plataforma atribui (essa vira o ROAS).</div>
       <div class="gi"><b>ROAS</b> = receita que a plataforma reivindica ÷ gasto. <b>Só diagnóstico</b> (a agência otimiza por ele). ROAS alto ≠ lucro.</div>
       <div class="gi"><b>CM2%</b> = margem real do produto após CMV + comissão + frete + devolução, antes dos anúncios. É a "qualidade econômica" do SKU.</div>
