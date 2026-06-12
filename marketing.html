@@ -152,15 +152,14 @@
 
   <!-- LUCRO POR SKU -->
   <section class="pane" id="pane-sku">
-    <div class="note">⭐ A decisão é por <b>lucro-por-pedido (POAS)</b>, não ROAS. <b>POAS&gt;1</b> = o anúncio gera mais margem que custa (CM3&gt;0). <span class="muted">ROAS é só diagnóstico — a plataforma sobre-atribui. cmROAS é a conferência cética (margem real ÷ gasto). Cada linha é um <b>produto-pai</b> — clique pra abrir as variantes (cor/tamanho).</span></div>
+    <div class="note">⭐ A decisão é por <b>lucro-por-pedido (POAS)</b>, não ROAS. <b>POAS&gt;1</b> = o anúncio gera mais margem que custa (CM3&gt;0). <span class="muted">ROAS é só diagnóstico — a plataforma sobre-atribui; POAS usa a margem real (CM2÷gasto). Cada linha é um <b>produto-pai</b> — clique pra abrir as variantes (cor/tamanho) e ver a cascata de custos.</span></div>
     <details class="gloss"><summary>Como funciona esta aba</summary><div class="gbody">
       <div class="gi"><b>Cada linha é um PRODUTO, não uma variante.</b> O Meta e o Google anunciam por <b>catálogo</b>: cada cor/tamanho é um item separado do feed, e a plataforma atribui o gasto <b>por variante</b> (não por "anúncio" nem por dia). Para não virar centenas de linhas, agrupamos as variantes no <b>produto-pai</b> — a linha mostra o total e, ao <b>clicar</b>, abre cada variante com seu próprio gasto, POAS e canal (Meta = site · Google = loja).</div>
       <div class="gi"><b>Receita / Unidades</b> = venda REAL desses produtos no canal (anúncio + orgânica) e peças vendidas. É a base de onde sai a margem — não confundir com a receita que a plataforma atribui (essa vira o ROAS).</div>
       <div class="gi"><b>ROAS</b> = receita que a plataforma reivindica ÷ gasto. <b>Só diagnóstico</b> (a agência otimiza por ele). ROAS alto ≠ lucro.</div>
       <div class="gi"><b>CM2%</b> = margem real do produto após CMV + comissão + frete + devolução, antes dos anúncios. É a "qualidade econômica" do SKU.</div>
-      <div class="gi"><b>POAS</b> ⭐ = margem atribuída ÷ gasto. <b>>1 = lucrativo.</b> É o que pinta a cor e define o sinal.</div>
-      <div class="gi"><b>cmROAS</b> = margem real TOTAL do canal ÷ gasto (ignora atribuição da plataforma). Se <code>POAS alto + cmROAS baixo</code> → a plataforma está se atribuindo crédito demais.</div>
-      <div class="gi"><b>CM3 est.</b> = lucro em R$ depois do gasto. <b>Sinal</b>: <span class="badge b-escalar">escalar</span> POAS&gt;1,2 · <span class="badge b-cortar">cortar</span> POAS&lt;0,8 · <span class="badge b-manter">manter</span> · <span class="badge b-sem">sem venda</span> (gastou e não vendeu no canal → suspeito).</div>
+      <div class="gi"><b>POAS</b> ⭐ = <b>CM2 ÷ gasto</b> (margem real do produto ÷ investimento em anúncio). <b>>1 = a margem cobre o anúncio</b> (CM3>0). É o que pinta a cor e define o sinal. É blended (margem total do canal, não incremental).</div>
+      <div class="gi"><b>CM3 est.</b> = <b>CM2 − Anúncios</b> (lucro do produto no canal depois do gasto de anúncio). Fecha com a cascata. <b>Sinal</b>: <span class="badge b-escalar">escalar</span> POAS&gt;1,2 · <span class="badge b-cortar">cortar</span> POAS&lt;0,8 · <span class="badge b-manter">manter</span> · <span class="badge b-sem">sem venda</span> (gastou e não vendeu no canal → suspeito).</div>
     </div></details>
     <div class="kpis" id="kpis-sku"></div>
     <div class="filtros">
@@ -178,8 +177,7 @@
           <th data-k="receita_canal" title="Receita REAL do canal desses produtos (venda real — anúncio + orgânica, não incremental). A base de onde sai a margem.">Receita</th>
           <th data-k="roas" title="Receita atribuída pela plataforma ÷ gasto. SÓ DIAGNÓSTICO — a plataforma sobre-atribui. ROAS alto ≠ lucro.">ROAS</th>
           <th data-k="cm2_pct" title="Margem real do produto (após CMV + comissão + frete + devolução), antes dos anúncios. A 'qualidade econômica' do SKU.">CM2%</th>
-          <th data-k="poas" title="Lucro sobre o gasto de anúncio = margem atribuída ÷ gasto. >1 = lucrativo. ESTA é a métrica de decisão.">POAS</th>
-          <th data-k="cmroas" title="Conferência cética: margem real TOTAL do canal ÷ gasto (ignora atribuição). Se POAS alto mas cmROAS baixo → plataforma inflando.">cmROAS</th>
+          <th data-k="poas" title="CM2 ÷ gasto = margem real do produto por R$ de anúncio. >1 = a margem cobre o anúncio (CM3>0). ESTA é a métrica de decisão. (Blended: margem total do canal, não incremental.)">POAS</th>
           <th data-k="cm3" title="Lucro real (R$) após o gasto de anúncios. Negativo = esse SKU perde dinheiro com anúncio.">CM3 est.</th>
           <th data-k="unidades" title="Unidades vendidas do SKU no canal">Un.</th>
           <th data-k="sinal" title="Veredito: escalar (POAS>1,2) / cortar (POAS<0,8) / manter / sem venda">Sinal</th>
@@ -218,7 +216,7 @@ function inicioMesSP(){const d=spNow();return fmtD(new Date(d.getFullYear(),d.ge
 function hojeSP(){return fmtD(spNow());}
 
 // ---------- cache (TTL 5min) ----------
-function cacheKey(){return 'marketing_v4_'+STATE.de+'_'+STATE.ate;}
+function cacheKey(){return 'marketing_v5_'+STATE.de+'_'+STATE.ate;}
 function cacheGet(){try{const o=JSON.parse(localStorage.getItem(cacheKey()));if(o&&Date.now()-o.t<300000)return o.d;}catch(e){}return null;}
 function cacheSet(d){try{localStorage.setItem(cacheKey(),JSON.stringify({t:Date.now(),d}));}catch(e){}}
 
@@ -278,18 +276,17 @@ function aggSku(){
     if(plat&&r.plataforma!==plat)return;
     const k=r.sku_raw+'|'+r.plataforma;
     const a=m[k]||(m[k]={sku_raw:r.sku_raw,plataforma:r.plataforma,ad_spend:0,impressoes:0,cliques:0,
-      ad_receita_plat:0,receita_canal:0,cm1:0,cm2:0,cm3:0,unidades:0,margemAtr:0,fee:0,frete:0,devolucao:0});
+      ad_receita_plat:0,receita_canal:0,cm1:0,cm2:0,cm3:0,unidades:0,fee:0,frete:0,devolucao:0});
     a.ad_spend+=+r.ad_spend||0;a.impressoes+=+r.impressoes||0;a.cliques+=+r.cliques||0;
     a.ad_receita_plat+=+r.ad_receita_plat||0;a.receita_canal+=+r.receita_canal||0;
     a.cm1+=+r.cm1||0;a.cm2+=+r.cm2||0;a.unidades+=+r.unidades_canal||0;
     a.fee+=+r.fee||0;a.frete+=+r.frete||0;a.devolucao+=+r.devolucao||0;
-    if(r.cm3_estimado!=null){a.cm3+=+r.cm3_estimado;a.margemAtr+=(+r.cm3_estimado)+(+r.ad_spend||0);}
   });
   return Object.values(m).map(a=>{
-    a.roas=a.ad_spend>0?a.ad_receita_plat/a.ad_spend:null;
+    a.cm3=a.cm2-a.ad_spend;                                  // CM3 = CM2 − Anúncios (a cascata fecha)
+    a.roas=a.ad_spend>0?a.ad_receita_plat/a.ad_spend:null;   // plataforma (diagnóstico, sobre-atribui)
     a.cm2_pct=a.receita_canal>0?a.cm2/a.receita_canal:null;
-    a.poas=a.ad_spend>0?a.margemAtr/a.ad_spend:null;
-    a.cmroas=a.ad_spend>0?a.cm2/a.ad_spend:null;
+    a.poas=a.ad_spend>0?a.cm2/a.ad_spend:null;               // CM2 ÷ gasto (>1 ⟺ CM3>0)
     a.sinal=a.receita_canal<=0?'sem_venda_no_canal':(a.poas>1.2?'escalar':(a.poas<0.8?'cortar':'manter'));
     return a;
   });
@@ -305,7 +302,7 @@ function renderGeral(){
   const unSite=m.reduce((s,r)=>s+(+r.un_site||0),0), ticket=unSite>0?site/unSite:null;
   const ag=aggSku();
   const cm3=ag.reduce((s,r)=>s+r.cm3,0);
-  const spendTot=ag.reduce((s,r)=>s+r.ad_spend,0), margTot=ag.reduce((s,r)=>s+r.margemAtr,0);
+  const spendTot=ag.reduce((s,r)=>s+r.ad_spend,0), margTot=ag.reduce((s,r)=>s+r.cm2,0);
   const poasMed=spendTot>0?margTot/spendTot:null;
   const merSite=meta>0?site/meta:null;
   document.getElementById('kpis-geral').innerHTML=[
@@ -315,7 +312,7 @@ function renderGeral(){
     {l:'Unidades Site',v:(unSite).toLocaleString('pt-BR'),s:'peças vendidas',t:'Total de peças vendidas no Site Próprio no período. Junto com a receita, ajuda a dimensionar o tamanho do canal por trás do MER/POAS.'},
     {l:'Ticket médio',v:ticket==null?'—':rs(ticket),s:'site (receita÷peças)',t:'Receita do site ÷ peças vendidas. Valor médio por peça no Site Próprio.'},
     {l:'MER_site',v:n2(merSite),s:'equilíbrio ≈2',accent:true,t:'Eficiência de marketing do site = Receita Site ÷ Gasto Meta. Para cada R$1 no Meta, quantos R$ de receita o site fez (contando TODA venda, não só o que o Meta reivindica). Ponto de equilíbrio ≈2 (com ~50% de margem você precisa de R$2 de receita pra cobrir R$1 de anúncio + custo do produto). Acima de 2 = lucrativo. Mais honesto que o ROAS da plataforma, que sobre-atribui.'},
-    {l:'POAS médio',v:n2(poasMed),s:'>1 = lucrativo',accent:true,t:'Lucro sobre o gasto de anúncio = margem que os anúncios geraram ÷ gasto. É o ROAS de LUCRO. POAS>1 = os anúncios geraram mais margem do que custaram (CM3 positivo). É a métrica de decisão, não o ROAS.'},
+    {l:'POAS médio',v:n2(poasMed),s:'>1 = lucrativo',accent:true,t:'POAS = CM2 (margem real) ÷ gasto. É o ROAS de LUCRO. >1 = a margem cobre o anúncio (CM3>0). É a métrica de decisão, não o ROAS de receita.'},
     {l:'CM3 estimado',v:rs(cm3),s:'margem após anúncios',cls:cm3>=0?'pos':'neg',t:'Margem de Contribuição nível 3 = lucro real (R$) que sobrou DEPOIS de descontar CMV + custos de canal + o próprio gasto de anúncios. Verde = o programa de anúncios deu lucro no período.'},
   ].map(kpiHTML).join('');
   idle(()=>{
@@ -333,15 +330,14 @@ const BADGE={escalar:'b-escalar',cortar:'b-cortar',manter:'b-manter',sem_venda_n
 const LBL={escalar:'escalar',cortar:'cortar',manter:'manter',sem_venda_no_canal:'sem venda'};
 function parentOf(sku){return STATE.skuParent[sku]||{pid:'v:'+sku,produto:sku,variante:''};}
 function summarize(list){ // soma um conjunto de variantes num resumo (produto-pai)
-  const a={ad_spend:0,impressoes:0,cliques:0,ad_receita_plat:0,receita_canal:0,cm1:0,cm2:0,cm3:0,unidades:0,margemAtr:0,fee:0,frete:0,devolucao:0};
+  const a={ad_spend:0,impressoes:0,cliques:0,ad_receita_plat:0,receita_canal:0,cm1:0,cm2:0,cm3:0,unidades:0,fee:0,frete:0,devolucao:0};
   list.forEach(r=>{a.ad_spend+=r.ad_spend;a.impressoes+=r.impressoes;a.cliques+=r.cliques;
     a.ad_receita_plat+=r.ad_receita_plat;a.receita_canal+=r.receita_canal;a.cm1+=r.cm1;a.cm2+=r.cm2;
-    a.cm3+=r.cm3;a.unidades+=r.unidades;a.margemAtr+=r.margemAtr;
-    a.fee+=r.fee||0;a.frete+=r.frete||0;a.devolucao+=r.devolucao||0;});
+    a.unidades+=r.unidades;a.fee+=r.fee||0;a.frete+=r.frete||0;a.devolucao+=r.devolucao||0;});
+  a.cm3=a.cm2-a.ad_spend;
   a.roas=a.ad_spend>0?a.ad_receita_plat/a.ad_spend:null;
   a.cm2_pct=a.receita_canal>0?a.cm2/a.receita_canal:null;
-  a.poas=a.ad_spend>0?a.margemAtr/a.ad_spend:null;
-  a.cmroas=a.ad_spend>0?a.cm2/a.ad_spend:null;
+  a.poas=a.ad_spend>0?a.cm2/a.ad_spend:null;
   a.sinal=a.receita_canal<=0?'sem_venda_no_canal':(a.poas>1.2?'escalar':(a.poas<0.8?'cortar':'manter'));
   return a;
 }
@@ -349,7 +345,7 @@ function cellsHTML(r){ // colunas numéricas (compartilhadas por pai e filho)
   return `<td>${r.plat||(r.plataforma==='meta_ads'?'Meta':'Google')}</td>`+
     `<td>${rs(r.ad_spend)}</td><td>${rs(r.receita_canal)}</td><td>${n2(r.roas)}</td><td>${pct(r.cm2_pct)}</td>`+
     `<td class="${r.poas>=1?'pos':'neg'}"><b>${n2(r.poas)}</b></td>`+
-    `<td>${n2(r.cmroas)}</td><td class="${r.cm3>=0?'pos':'neg'}">${rs(r.cm3)}</td>`+
+    `<td class="${r.cm3>=0?'pos':'neg'}">${rs(r.cm3)}</td>`+
     `<td>${r.unidades||0}</td><td><span class="badge ${BADGE[r.sinal]}">${LBL[r.sinal]}</span></td>`;
 }
 function renderSku(){
@@ -389,7 +385,7 @@ function renderSku(){
     html+=`<tr class="parent" data-pid="${p.pid}"><td><span class="exp">${open?'▾':'▸'}</span> ${p.produto} <span class="muted">· ${p.nvar} var</span></td>${cellsHTML(p)}</tr>`;
     if(open){
       const cogs=p.receita_canal-p.cm1;  // CMV = receita − CM1
-      html+=`<tr class="pnl"><td colspan="11"><div class="pnlcell">`+
+      html+=`<tr class="pnl"><td colspan="10"><div class="pnlcell">`+
         `<span class="pl-r">Receita ${rs(p.receita_canal)}</span>`+
         `<span class="pl-c">− CMV ${rs(cogs)}</span>`+
         `<span class="pl-c">− Comissão ${rs(p.fee)}</span>`+
