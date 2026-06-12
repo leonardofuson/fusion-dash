@@ -218,7 +218,7 @@ function inicioMesSP(){const d=spNow();return fmtD(new Date(d.getFullYear(),d.ge
 function hojeSP(){return fmtD(spNow());}
 
 // ---------- cache (TTL 5min) ----------
-function cacheKey(){return 'marketing_v3_'+STATE.de+'_'+STATE.ate;}
+function cacheKey(){return 'marketing_v4_'+STATE.de+'_'+STATE.ate;}
 function cacheGet(){try{const o=JSON.parse(localStorage.getItem(cacheKey()));if(o&&Date.now()-o.t<300000)return o.d;}catch(e){}return null;}
 function cacheSet(d){try{localStorage.setItem(cacheKey(),JSON.stringify({t:Date.now(),d}));}catch(e){}}
 
