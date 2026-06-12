@@ -65,6 +65,11 @@
   th{color:var(--mut);font-weight:600;cursor:pointer;user-select:none;position:sticky;top:0;background:var(--panel);z-index:3;box-shadow:inset 0 -1px 0 var(--line)}
   th.sorted::after{content:' ▾';color:var(--accent)}
   tbody tr:hover{background:var(--panel2)}
+  tr.parent{cursor:pointer}
+  tr.parent>td:first-child{font-weight:600}
+  .exp{display:inline-block;width:12px;color:var(--accent);font-size:11px}
+  tr.child>td{background:rgba(124,92,255,.05);font-size:12px;border-bottom:1px solid #20242d}
+  td.kidcell{padding-left:30px!important;color:var(--mut)}
   .badge{padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700}
   .b-escalar{background:rgba(47,191,113,.16);color:var(--green)}
   .b-cortar{background:rgba(239,83,80,.16);color:var(--red)}
@@ -133,7 +138,7 @@
 
   <!-- LUCRO POR SKU -->
   <section class="pane" id="pane-sku">
-    <div class="note">⭐ A decisão é por <b>lucro-por-pedido (POAS)</b>, não ROAS. <b>POAS&gt;1</b> = o anúncio gera mais margem que custa (CM3&gt;0). <span class="muted">ROAS é só diagnóstico — a plataforma sobre-atribui. cmROAS é a conferência cética (margem real ÷ gasto).</span></div>
+    <div class="note">⭐ A decisão é por <b>lucro-por-pedido (POAS)</b>, não ROAS. <b>POAS&gt;1</b> = o anúncio gera mais margem que custa (CM3&gt;0). <span class="muted">ROAS é só diagnóstico — a plataforma sobre-atribui. cmROAS é a conferência cética (margem real ÷ gasto). Cada linha é um <b>produto-pai</b> — clique pra abrir as variantes (cor/tamanho).</span></div>
     <details class="gloss"><summary>Como ler as colunas</summary><div class="gbody">
       <div class="gi"><b>ROAS</b> = receita que a plataforma reivindica ÷ gasto. <b>Só diagnóstico</b> (a agência otimiza por ele). ROAS alto ≠ lucro.</div>
       <div class="gi"><b>CM2%</b> = margem real do produto após CMV + comissão + frete + devolução, antes dos anúncios. É a "qualidade econômica" do SKU.</div>
@@ -151,7 +156,7 @@
     <div class="card" style="overflow:auto;max-height:640px;padding:0">
       <table id="tbl-sku">
         <thead><tr>
-          <th data-k="sku_raw" title="SKU (variante Shopify) anunciado">SKU</th>
+          <th data-k="sku_raw" title="Produto-pai (agrupa as variantes). Clique na linha pra abrir as variantes.">Produto</th>
           <th data-k="plataforma" title="Meta = site / Google = lojas físicas">Plat.</th>
           <th data-k="ad_spend" class="sorted" title="Gasto de anúncio nesse SKU no período">Gasto</th>
           <th data-k="roas" title="Receita atribuída pela plataforma ÷ gasto. SÓ DIAGNÓSTICO — a plataforma sobre-atribui. ROAS alto ≠ lucro.">ROAS</th>
@@ -186,7 +191,7 @@
 <script>
 let auth=null, SB='', ANON='';
 const CHARTS={};
-let STATE={de:'',ate:'',tab:'geral', mer:[], pnl:[], changes:[], skuTitles:{}, sort:{k:'ad_spend',dir:-1}};
+let STATE={de:'',ate:'',tab:'geral', mer:[], pnl:[], changes:[], skuTitles:{}, skuParent:{}, expanded:new Set(), sort:{k:'ad_spend',dir:-1}};
 
 // ---------- datas (America/Sao_Paulo) ----------
 function spNow(){return new Date(new Date().toLocaleString('en-US',{timeZone:'America/Sao_Paulo'}));}
@@ -303,36 +308,68 @@ function renderGeral(){
   });
 }
 
+const BADGE={escalar:'b-escalar',cortar:'b-cortar',manter:'b-manter',sem_venda_no_canal:'b-sem'};
+const LBL={escalar:'escalar',cortar:'cortar',manter:'manter',sem_venda_no_canal:'sem venda'};
+function parentOf(sku){return STATE.skuParent[sku]||{pid:'v:'+sku,produto:sku,variante:''};}
+function summarize(list){ // soma um conjunto de variantes num resumo (produto-pai)
+  const a={ad_spend:0,impressoes:0,cliques:0,ad_receita_plat:0,receita_canal:0,cm1:0,cm2:0,cm3:0,unidades:0,margemAtr:0};
+  list.forEach(r=>{a.ad_spend+=r.ad_spend;a.impressoes+=r.impressoes;a.cliques+=r.cliques;
+    a.ad_receita_plat+=r.ad_receita_plat;a.receita_canal+=r.receita_canal;a.cm1+=r.cm1;a.cm2+=r.cm2;
+    a.cm3+=r.cm3;a.unidades+=r.unidades;a.margemAtr+=r.margemAtr;});
+  a.roas=a.ad_spend>0?a.ad_receita_plat/a.ad_spend:null;
+  a.cm2_pct=a.receita_canal>0?a.cm2/a.receita_canal:null;
+  a.poas=a.ad_spend>0?a.margemAtr/a.ad_spend:null;
+  a.cmroas=a.ad_spend>0?a.cm2/a.ad_spend:null;
+  a.sinal=a.receita_canal<=0?'sem_venda_no_canal':(a.poas>1.2?'escalar':(a.poas<0.8?'cortar':'manter'));
+  return a;
+}
+function cellsHTML(r){ // colunas numéricas (compartilhadas por pai e filho)
+  return `<td>${r.plat||(r.plataforma==='meta_ads'?'Meta':'Google')}</td>`+
+    `<td>${rs(r.ad_spend)}</td><td>${n2(r.roas)}</td><td>${pct(r.cm2_pct)}</td>`+
+    `<td class="${r.poas>=1?'pos':'neg'}"><b>${n2(r.poas)}</b></td>`+
+    `<td>${n2(r.cmroas)}</td><td class="${r.cm3>=0?'pos':'neg'}">${rs(r.cm3)}</td>`+
+    `<td>${r.unidades||0}</td><td><span class="badge ${BADGE[r.sinal]}">${LBL[r.sinal]}</span></td>`;
+}
 function renderSku(){
-  let rows=aggSku();
+  let variants=aggSku();
   const sinal=document.getElementById('f-sinal').value, busca=document.getElementById('f-busca').value.toLowerCase();
-  if(sinal)rows=rows.filter(r=>r.sinal===sinal);
-  if(busca)rows=rows.filter(r=>(r.sku_raw||'').toLowerCase().includes(busca));
-  const sk=STATE.sort;
-  rows.sort((a,b)=>{let x=a[sk.k],y=b[sk.k];x=x==null?-1e15:x;y=y==null?-1e15:y;
-    if(typeof x==='string')return sk.dir*x.localeCompare(y);return sk.dir*(x-y);});
-  // KPIs
-  const esc=rows.filter(r=>r.sinal==='escalar').length, cor=rows.filter(r=>r.sinal==='cortar').length;
-  const sp=rows.reduce((s,r)=>s+r.ad_spend,0), c3=rows.reduce((s,r)=>s+r.cm3,0);
+  if(sinal)variants=variants.filter(r=>r.sinal===sinal);
+  if(busca)variants=variants.filter(r=>(r.sku_raw||'').toLowerCase().includes(busca)||(parentOf(r.sku_raw).produto||'').toLowerCase().includes(busca));
+  // agrupa variantes -> produto-pai (via shopify_product_id)
+  const g={};
+  variants.forEach(r=>{const k=parentOf(r.sku_raw).pid;(g[k]||(g[k]=[])).push(r);});
+  let parents=Object.entries(g).map(([pid,list])=>{
+    const s=summarize(list);s.pid=pid;s.produto=parentOf(list[0].sku_raw).produto;
+    const plats=[...new Set(list.map(x=>x.plataforma))];
+    s.plat=plats.length>1?'Meta+Google':(plats[0]==='meta_ads'?'Meta':'Google');
+    s.nvar=new Set(list.map(x=>x.sku_raw)).size;s.children=list;return s;
+  });
+  const sk=STATE.sort, key=(sk.k==='sku_raw'||sk.k==='plataforma')?'produto':sk.k;
+  parents.sort((a,b)=>{let x=a[key],y=b[key];x=x==null?-1e15:x;y=y==null?-1e15:y;
+    if(typeof x==='string')return sk.dir*String(x).localeCompare(String(y));return sk.dir*(x-y);});
+  // KPIs no nível PRODUTO
+  const esc=parents.filter(r=>r.sinal==='escalar').length, cor=parents.filter(r=>r.sinal==='cortar').length;
+  const sp=parents.reduce((s,r)=>s+r.ad_spend,0), c3=parents.reduce((s,r)=>s+r.cm3,0);
   document.getElementById('kpis-sku').innerHTML=[
-    {l:'SKUs com gasto',v:rows.length,t:'Quantos SKUs (variantes) tiveram gasto de anúncio no período e estão na tabela.'},
-    {l:'Gasto total',v:rs(sp),t:'Soma do gasto de anúncios dos SKUs filtrados.'},
-    {l:'CM3 total',v:rs(c3),cls:c3>=0?'pos':'neg',t:'Lucro real somado dos SKUs filtrados, após CMV + custos de canal + ads. Verde = lucrativo.'},
-    {l:'Escalar',v:esc,s:'POAS>1,2',t:'Nº de SKUs com POAS>1,2 — sobra margem suficiente pra valer investir mais.'},
-    {l:'Cortar',v:cor,s:'POAS<0,8',t:'Nº de SKUs com POAS<0,8 — o anúncio está destruindo margem; reduzir ou parar.'},
+    {l:'Produtos',v:parents.length,s:variants.length+' variantes',t:'Produtos-pai com gasto de anúncio (cada um agrupa suas variantes de cor/tamanho). Clique numa linha pra abrir as variantes.'},
+    {l:'Gasto total',v:rs(sp),t:'Soma do gasto de anúncios dos produtos filtrados.'},
+    {l:'CM3 total',v:rs(c3),cls:c3>=0?'pos':'neg',t:'Lucro real somado, após CMV + custos de canal + anúncios. Verde = lucrativo.'},
+    {l:'Escalar',v:esc,s:'POAS>1,2',t:'Nº de PRODUTOS com POAS>1,2 — vale investir mais.'},
+    {l:'Cortar',v:cor,s:'POAS<0,8',t:'Nº de PRODUTOS com POAS<0,8 — o anúncio destrói margem; reduzir/parar.'},
   ].map(kpiHTML).join('');
-  document.getElementById('sku-count').textContent=rows.length+' linhas';
-  const badge={escalar:'b-escalar',cortar:'b-cortar',manter:'b-manter',sem_venda_no_canal:'b-sem'};
-  const lbl={escalar:'escalar',cortar:'cortar',manter:'manter',sem_venda_no_canal:'sem venda'};
-  document.getElementById('tb-sku').innerHTML=rows.slice(0,400).map(r=>{
-    const tit=STATE.skuTitles[r.sku_raw]||'';
-    return `<tr><td title="${tit}">${r.sku_raw}${tit?' <span class="muted">· '+tit.slice(0,22)+'</span>':''}</td>
-      <td>${r.plataforma==='meta_ads'?'Meta':'Google'}</td>
-      <td>${rs(r.ad_spend)}</td><td>${n2(r.roas)}</td><td>${pct(r.cm2_pct)}</td>
-      <td class="${r.poas>=1?'pos':'neg'}"><b>${n2(r.poas)}</b></td>
-      <td>${n2(r.cmroas)}</td><td class="${r.cm3>=0?'pos':'neg'}">${rs(r.cm3)}</td>
-      <td>${r.unidades||0}</td><td><span class="badge ${badge[r.sinal]}">${lbl[r.sinal]}</span></td></tr>`;
-  }).join('');
+  document.getElementById('sku-count').textContent=parents.length+' produtos · '+variants.length+' variantes';
+  let html='';
+  parents.slice(0,200).forEach(p=>{
+    const open=STATE.expanded.has(p.pid);
+    html+=`<tr class="parent" data-pid="${p.pid}"><td><span class="exp">${open?'▾':'▸'}</span> ${p.produto} <span class="muted">· ${p.nvar} var</span></td>${cellsHTML(p)}</tr>`;
+    if(open){
+      p.children.slice().sort((a,b)=>(b.ad_spend||0)-(a.ad_spend||0)).forEach(c=>{
+        const v=parentOf(c.sku_raw).variante;
+        html+=`<tr class="child"><td class="kidcell">${c.sku_raw}${v?' <span class="muted">'+v+'</span>':''}</td>${cellsHTML(c)}</tr>`;
+      });
+    }
+  });
+  document.getElementById('tb-sku').innerHTML=html;
 }
 
 function renderAudit(){
@@ -385,8 +422,13 @@ function setPeriodo(p){
 }
 
 async function carregarTitulos(){
-  const rows=await buscarTudo('ads_produto_sku_map','select=sku,titulo&resolvido=is.true&sku=not.is.null');
-  rows.forEach(r=>{if(r.sku&&!STATE.skuTitles[r.sku])STATE.skuTitles[r.sku]=r.titulo||'';});
+  const rows=await buscarTudo('ads_produto_sku_map','select=sku,titulo,shopify_product_id&resolvido=is.true&sku=not.is.null');
+  rows.forEach(r=>{
+    if(!r.sku||STATE.skuParent[r.sku])return;
+    const parts=(r.titulo||'').split(' — ');
+    STATE.skuParent[r.sku]={pid:r.shopify_product_id||('v:'+r.sku),produto:parts[0]||r.sku,variante:parts.slice(1).join(' — ')};
+    STATE.skuTitles[r.sku]=r.titulo||'';
+  });
 }
 
 (async function init(){
@@ -412,6 +454,9 @@ async function carregarTitulos(){
     document.querySelectorAll('#tbl-sku th').forEach(x=>x.classList.toggle('sorted',x===th));
     renderSku();
   });
+  // clicar numa linha de produto expande/colapsa suas variantes
+  document.getElementById('tb-sku').onclick=e=>{const tr=e.target.closest('tr.parent');if(!tr)return;
+    const pid=tr.dataset.pid;if(STATE.expanded.has(pid))STATE.expanded.delete(pid);else STATE.expanded.add(pid);renderSku();};
   // refresh button → RPC + recarrega
   document.getElementById('btnRefresh').onclick=async()=>{
     const b=document.getElementById('btnRefresh');b.textContent='atualizando…';b.disabled=true;
