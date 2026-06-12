@@ -140,6 +140,7 @@
   <section class="pane" id="pane-sku">
     <div class="note">⭐ A decisão é por <b>lucro-por-pedido (POAS)</b>, não ROAS. <b>POAS&gt;1</b> = o anúncio gera mais margem que custa (CM3&gt;0). <span class="muted">ROAS é só diagnóstico — a plataforma sobre-atribui. cmROAS é a conferência cética (margem real ÷ gasto). Cada linha é um <b>produto-pai</b> — clique pra abrir as variantes (cor/tamanho).</span></div>
     <details class="gloss"><summary>Como ler as colunas</summary><div class="gbody">
+      <div class="gi"><b>Receita / Unidades</b> = venda REAL desses produtos no canal (anúncio + orgânica) e peças vendidas. É a base de onde sai a margem — não confundir com a receita que a plataforma atribui (essa vira o ROAS).</div>
       <div class="gi"><b>ROAS</b> = receita que a plataforma reivindica ÷ gasto. <b>Só diagnóstico</b> (a agência otimiza por ele). ROAS alto ≠ lucro.</div>
       <div class="gi"><b>CM2%</b> = margem real do produto após CMV + comissão + frete + devolução, antes dos anúncios. É a "qualidade econômica" do SKU.</div>
       <div class="gi"><b>POAS</b> ⭐ = margem atribuída ÷ gasto. <b>>1 = lucrativo.</b> É o que pinta a cor e define o sinal.</div>
@@ -158,7 +159,8 @@
         <thead><tr>
           <th data-k="sku_raw" title="Produto-pai (agrupa as variantes). Clique na linha pra abrir as variantes.">Produto</th>
           <th data-k="plataforma" title="Meta = site / Google = lojas físicas">Plat.</th>
-          <th data-k="ad_spend" class="sorted" title="Gasto de anúncio nesse SKU no período">Gasto</th>
+          <th data-k="ad_spend" class="sorted" title="Gasto de anúncio nesse produto no período">Gasto</th>
+          <th data-k="receita_canal" title="Receita REAL do canal desses produtos (venda real — anúncio + orgânica, não incremental). A base de onde sai a margem.">Receita</th>
           <th data-k="roas" title="Receita atribuída pela plataforma ÷ gasto. SÓ DIAGNÓSTICO — a plataforma sobre-atribui. ROAS alto ≠ lucro.">ROAS</th>
           <th data-k="cm2_pct" title="Margem real do produto (após CMV + comissão + frete + devolução), antes dos anúncios. A 'qualidade econômica' do SKU.">CM2%</th>
           <th data-k="poas" title="Lucro sobre o gasto de anúncio = margem atribuída ÷ gasto. >1 = lucrativo. ESTA é a métrica de decisão.">POAS</th>
@@ -201,7 +203,7 @@ function inicioMesSP(){const d=spNow();return fmtD(new Date(d.getFullYear(),d.ge
 function hojeSP(){return fmtD(spNow());}
 
 // ---------- cache (TTL 5min) ----------
-function cacheKey(){return 'marketing_v1_'+STATE.de+'_'+STATE.ate;}
+function cacheKey(){return 'marketing_v2_'+STATE.de+'_'+STATE.ate;}
 function cacheGet(){try{const o=JSON.parse(localStorage.getItem(cacheKey()));if(o&&Date.now()-o.t<300000)return o.d;}catch(e){}return null;}
 function cacheSet(d){try{localStorage.setItem(cacheKey(),JSON.stringify({t:Date.now(),d}));}catch(e){}}
 
@@ -284,6 +286,7 @@ function renderGeral(){
   const m=STATE.mer;
   const meta=m.reduce((s,r)=>s+(+r.meta_spend||0),0), goog=m.reduce((s,r)=>s+(+r.google_spend||0),0);
   const site=m.reduce((s,r)=>s+(+r.rev_site||0),0), loja=m.reduce((s,r)=>s+(+r.rev_loja||0),0);
+  const unSite=m.reduce((s,r)=>s+(+r.un_site||0),0), ticket=unSite>0?site/unSite:null;
   const ag=aggSku();
   const cm3=ag.reduce((s,r)=>s+r.cm3,0);
   const spendTot=ag.reduce((s,r)=>s+r.ad_spend,0), margTot=ag.reduce((s,r)=>s+r.margemAtr,0);
@@ -293,6 +296,8 @@ function renderGeral(){
     {l:'Gasto Meta',v:rs(meta),s:'site / Shopify',t:'Total investido em Meta Ads (Facebook/Instagram) no período. O Meta traz tráfego pro site Shopify.'},
     {l:'Gasto Google',v:rs(goog),s:'lojas físicas',t:'Total investido em Google Ads no período. O Google trabalha as lojas físicas (anúncios locais).'},
     {l:'Receita Site',v:rs(site),s:'atribuível ao Meta',t:'Faturamento bruto do Site Próprio (Shopify) no período. É a receita que o Meta é responsável por influenciar.'},
+    {l:'Unidades Site',v:(unSite).toLocaleString('pt-BR'),s:'peças vendidas',t:'Total de peças vendidas no Site Próprio no período. Junto com a receita, ajuda a dimensionar o tamanho do canal por trás do MER/POAS.'},
+    {l:'Ticket médio',v:ticket==null?'—':rs(ticket),s:'site (receita÷peças)',t:'Receita do site ÷ peças vendidas. Valor médio por peça no Site Próprio.'},
     {l:'MER_site',v:n2(merSite),s:'equilíbrio ≈2',accent:true,t:'Eficiência de marketing do site = Receita Site ÷ Gasto Meta. Para cada R$1 no Meta, quantos R$ de receita o site fez (contando TODA venda, não só o que o Meta reivindica). Ponto de equilíbrio ≈2 (com ~50% de margem você precisa de R$2 de receita pra cobrir R$1 de anúncio + custo do produto). Acima de 2 = lucrativo. Mais honesto que o ROAS da plataforma, que sobre-atribui.'},
     {l:'POAS médio',v:n2(poasMed),s:'>1 = lucrativo',accent:true,t:'Lucro sobre o gasto de anúncio = margem que os anúncios geraram ÷ gasto. É o ROAS de LUCRO. POAS>1 = os anúncios geraram mais margem do que custaram (CM3 positivo). É a métrica de decisão, não o ROAS.'},
     {l:'CM3 estimado',v:rs(cm3),s:'margem após anúncios',cls:cm3>=0?'pos':'neg',t:'Margem de Contribuição nível 3 = lucro real (R$) que sobrou DEPOIS de descontar CMV + custos de canal + o próprio gasto de anúncios. Verde = o programa de anúncios deu lucro no período.'},
@@ -325,7 +330,7 @@ function summarize(list){ // soma um conjunto de variantes num resumo (produto-p
 }
 function cellsHTML(r){ // colunas numéricas (compartilhadas por pai e filho)
   return `<td>${r.plat||(r.plataforma==='meta_ads'?'Meta':'Google')}</td>`+
-    `<td>${rs(r.ad_spend)}</td><td>${n2(r.roas)}</td><td>${pct(r.cm2_pct)}</td>`+
+    `<td>${rs(r.ad_spend)}</td><td>${rs(r.receita_canal)}</td><td>${n2(r.roas)}</td><td>${pct(r.cm2_pct)}</td>`+
     `<td class="${r.poas>=1?'pos':'neg'}"><b>${n2(r.poas)}</b></td>`+
     `<td>${n2(r.cmroas)}</td><td class="${r.cm3>=0?'pos':'neg'}">${rs(r.cm3)}</td>`+
     `<td>${r.unidades||0}</td><td><span class="badge ${BADGE[r.sinal]}">${LBL[r.sinal]}</span></td>`;
@@ -350,9 +355,12 @@ function renderSku(){
   // KPIs no nível PRODUTO
   const esc=parents.filter(r=>r.sinal==='escalar').length, cor=parents.filter(r=>r.sinal==='cortar').length;
   const sp=parents.reduce((s,r)=>s+r.ad_spend,0), c3=parents.reduce((s,r)=>s+r.cm3,0);
+  const rev=parents.reduce((s,r)=>s+(r.receita_canal||0),0), un=parents.reduce((s,r)=>s+(r.unidades||0),0);
   document.getElementById('kpis-sku').innerHTML=[
     {l:'Produtos',v:parents.length,s:variants.length+' variantes',t:'Produtos-pai com gasto de anúncio (cada um agrupa suas variantes de cor/tamanho). Clique numa linha pra abrir as variantes.'},
     {l:'Gasto total',v:rs(sp),t:'Soma do gasto de anúncios dos produtos filtrados.'},
+    {l:'Receita',v:rs(rev),s:'venda real do canal',t:'Receita REAL desses produtos no canal (anúncio + orgânica) — não é só o que a plataforma atribui. É a base de onde sai a margem (CM2/CM3).'},
+    {l:'Unidades',v:un.toLocaleString('pt-BR'),s:'peças vendidas',t:'Peças vendidas desses produtos no canal no período.'},
     {l:'CM3 total',v:rs(c3),cls:c3>=0?'pos':'neg',t:'Lucro real somado, após CMV + custos de canal + anúncios. Verde = lucrativo.'},
     {l:'Escalar',v:esc,s:'POAS>1,2',t:'Nº de PRODUTOS com POAS>1,2 — vale investir mais.'},
     {l:'Cortar',v:cor,s:'POAS<0,8',t:'Nº de PRODUTOS com POAS<0,8 — o anúncio destrói margem; reduzir/parar.'},
