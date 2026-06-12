@@ -76,6 +76,12 @@
   .exp{display:inline-block;width:12px;color:var(--accent);font-size:11px}
   tr.child>td{background:rgba(124,92,255,.05);font-size:12px;border-bottom:1px solid #20242d}
   td.kidcell{padding-left:30px!important;color:var(--mut)}
+  tr.pnl>td{background:#13161d;padding:9px 14px;border-bottom:1px solid #20242d}
+  .pnlcell{display:flex;flex-wrap:wrap;gap:7px 10px;align-items:center;font-size:12px}
+  .pnlcell .pl-r{font-weight:700;color:var(--txt)}
+  .pnlcell .pl-c{color:var(--mut)}
+  .pnlcell .pl-eq{font-weight:700;color:var(--accent2)}
+  .pnlcell .pl-eq.pos{color:var(--green)} .pnlcell .pl-eq.neg{color:var(--red)}
   .badge{padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700}
   .b-escalar{background:rgba(47,191,113,.16);color:var(--green)}
   .b-cortar{background:rgba(239,83,80,.16);color:var(--red)}
@@ -212,7 +218,7 @@ function inicioMesSP(){const d=spNow();return fmtD(new Date(d.getFullYear(),d.ge
 function hojeSP(){return fmtD(spNow());}
 
 // ---------- cache (TTL 5min) ----------
-function cacheKey(){return 'marketing_v2_'+STATE.de+'_'+STATE.ate;}
+function cacheKey(){return 'marketing_v3_'+STATE.de+'_'+STATE.ate;}
 function cacheGet(){try{const o=JSON.parse(localStorage.getItem(cacheKey()));if(o&&Date.now()-o.t<300000)return o.d;}catch(e){}return null;}
 function cacheSet(d){try{localStorage.setItem(cacheKey(),JSON.stringify({t:Date.now(),d}));}catch(e){}}
 
@@ -272,10 +278,11 @@ function aggSku(){
     if(plat&&r.plataforma!==plat)return;
     const k=r.sku_raw+'|'+r.plataforma;
     const a=m[k]||(m[k]={sku_raw:r.sku_raw,plataforma:r.plataforma,ad_spend:0,impressoes:0,cliques:0,
-      ad_receita_plat:0,receita_canal:0,cm1:0,cm2:0,cm3:0,unidades:0,margemAtr:0});
+      ad_receita_plat:0,receita_canal:0,cm1:0,cm2:0,cm3:0,unidades:0,margemAtr:0,fee:0,frete:0,devolucao:0});
     a.ad_spend+=+r.ad_spend||0;a.impressoes+=+r.impressoes||0;a.cliques+=+r.cliques||0;
     a.ad_receita_plat+=+r.ad_receita_plat||0;a.receita_canal+=+r.receita_canal||0;
     a.cm1+=+r.cm1||0;a.cm2+=+r.cm2||0;a.unidades+=+r.unidades_canal||0;
+    a.fee+=+r.fee||0;a.frete+=+r.frete||0;a.devolucao+=+r.devolucao||0;
     if(r.cm3_estimado!=null){a.cm3+=+r.cm3_estimado;a.margemAtr+=(+r.cm3_estimado)+(+r.ad_spend||0);}
   });
   return Object.values(m).map(a=>{
@@ -326,10 +333,11 @@ const BADGE={escalar:'b-escalar',cortar:'b-cortar',manter:'b-manter',sem_venda_n
 const LBL={escalar:'escalar',cortar:'cortar',manter:'manter',sem_venda_no_canal:'sem venda'};
 function parentOf(sku){return STATE.skuParent[sku]||{pid:'v:'+sku,produto:sku,variante:''};}
 function summarize(list){ // soma um conjunto de variantes num resumo (produto-pai)
-  const a={ad_spend:0,impressoes:0,cliques:0,ad_receita_plat:0,receita_canal:0,cm1:0,cm2:0,cm3:0,unidades:0,margemAtr:0};
+  const a={ad_spend:0,impressoes:0,cliques:0,ad_receita_plat:0,receita_canal:0,cm1:0,cm2:0,cm3:0,unidades:0,margemAtr:0,fee:0,frete:0,devolucao:0};
   list.forEach(r=>{a.ad_spend+=r.ad_spend;a.impressoes+=r.impressoes;a.cliques+=r.cliques;
     a.ad_receita_plat+=r.ad_receita_plat;a.receita_canal+=r.receita_canal;a.cm1+=r.cm1;a.cm2+=r.cm2;
-    a.cm3+=r.cm3;a.unidades+=r.unidades;a.margemAtr+=r.margemAtr;});
+    a.cm3+=r.cm3;a.unidades+=r.unidades;a.margemAtr+=r.margemAtr;
+    a.fee+=r.fee||0;a.frete+=r.frete||0;a.devolucao+=r.devolucao||0;});
   a.roas=a.ad_spend>0?a.ad_receita_plat/a.ad_spend:null;
   a.cm2_pct=a.receita_canal>0?a.cm2/a.receita_canal:null;
   a.poas=a.ad_spend>0?a.margemAtr/a.ad_spend:null;
@@ -380,6 +388,17 @@ function renderSku(){
     const open=STATE.expanded.has(p.pid);
     html+=`<tr class="parent" data-pid="${p.pid}"><td><span class="exp">${open?'▾':'▸'}</span> ${p.produto} <span class="muted">· ${p.nvar} var</span></td>${cellsHTML(p)}</tr>`;
     if(open){
+      const cogs=p.receita_canal-p.cm1;  // CMV = receita − CM1
+      html+=`<tr class="pnl"><td colspan="11"><div class="pnlcell">`+
+        `<span class="pl-r">Receita ${rs(p.receita_canal)}</span>`+
+        `<span class="pl-c">− CMV ${rs(cogs)}</span>`+
+        `<span class="pl-c">− Comissão ${rs(p.fee)}</span>`+
+        `<span class="pl-c">− Frete ${rs(p.frete)}</span>`+
+        `<span class="pl-c">− Devolução ${rs(p.devolucao)}</span>`+
+        `<span class="pl-eq">= CM2 ${rs(p.cm2)} (${pct(p.cm2_pct)})</span>`+
+        `<span class="pl-c">− Anúncios ${rs(p.ad_spend)}</span>`+
+        `<span class="pl-eq ${p.cm3>=0?'pos':'neg'}">= CM3 ${rs(p.cm3)}</span>`+
+        `</div></td></tr>`;
       p.children.slice().sort((a,b)=>(b.ad_spend||0)-(a.ad_spend||0)).forEach(c=>{
         const v=parentOf(c.sku_raw).variante;
         html+=`<tr class="child"><td class="kidcell">${c.sku_raw}${v?' <span class="muted">'+v+'</span>':''}</td>${cellsHTML(c)}</tr>`;
