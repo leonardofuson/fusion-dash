@@ -86,7 +86,9 @@
   .b-escalar{background:rgba(47,191,113,.16);color:var(--green)}
   .b-cortar{background:rgba(239,83,80,.16);color:var(--red)}
   .b-manter{background:rgba(245,166,35,.16);color:var(--amber)}
+  .b-revisar{background:rgba(34,211,238,.16);color:var(--accent2)}
   .b-sem{background:rgba(154,163,178,.16);color:var(--mut)}
+  tr.pnl-conc>td{background:#101820}
   .pos{color:var(--green)}.neg{color:var(--red)}
   .filtros{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
   select,input{background:var(--panel2);border:1px solid var(--line);color:var(--txt);padding:6px 9px;border-radius:8px;font-size:13px}
@@ -152,19 +154,17 @@
 
   <!-- LUCRO POR SKU -->
   <section class="pane" id="pane-sku">
-    <div class="note">⭐ A decisão é por <b>lucro-por-pedido (POAS)</b>, não ROAS. <b>POAS&gt;1</b> = o anúncio gera mais margem que custa (CM3&gt;0). <span class="muted">ROAS é só diagnóstico — a plataforma sobre-atribui; POAS usa a margem real (CM2÷gasto). Cada linha é um <b>produto-pai</b> — clique pra abrir as variantes (cor/tamanho) e ver a cascata de custos.</span></div>
+    <div class="note">⭐ A decisão é por <b>lucro real (POAS = CM2÷gasto)</b>, no <b>produto-pai</b> — não por variante e não por ROAS. <span class="muted">Produtos que vendem a maior parte <b>fora do canal do anúncio</b> viram <span class="badge b-revisar">revisar</span> (o Meta pode estar gerando venda no TikTok/loja) — abra "Como funciona esta aba". Clique num produto pra ver a cascata de custos + a concentração de canal.</span></div>
     <details class="gloss"><summary>Como funciona esta aba</summary><div class="gbody">
-      <div class="gi"><b>Cada linha é um PRODUTO, não uma variante.</b> O Meta e o Google anunciam por <b>catálogo</b>: cada cor/tamanho é um item separado do feed, e a plataforma atribui o gasto <b>por variante</b> (não por "anúncio" nem por dia). Para não virar centenas de linhas, agrupamos as variantes no <b>produto-pai</b> — a linha mostra o total e, ao <b>clicar</b>, abre cada variante com seu próprio gasto, POAS e canal (Meta = site · Google = loja).</div>
-      <div class="gi"><b>Receita / Unidades</b> = venda REAL desses produtos no canal (anúncio + orgânica) e peças vendidas. É a base de onde sai a margem — não confundir com a receita que a plataforma atribui (essa vira o ROAS).</div>
-      <div class="gi"><b>ROAS</b> = receita que a plataforma reivindica ÷ gasto. <b>Só diagnóstico</b> (a agência otimiza por ele). ROAS alto ≠ lucro.</div>
-      <div class="gi"><b>CM2%</b> = margem real do produto após CMV + comissão + frete + devolução, antes dos anúncios. É a "qualidade econômica" do SKU.</div>
-      <div class="gi"><b>POAS</b> ⭐ = <b>CM2 ÷ gasto</b> (margem real do produto ÷ investimento em anúncio). <b>>1 = a margem cobre o anúncio</b> (CM3>0). É o que pinta a cor e define o sinal. É blended (margem total do canal, não incremental).</div>
-      <div class="gi"><b>CM3 est.</b> = <b>CM2 − Anúncios</b> (lucro do produto no canal depois do gasto de anúncio). Fecha com a cascata. <b>Sinal</b>: <span class="badge b-escalar">escalar</span> POAS&gt;1,2 · <span class="badge b-cortar">cortar</span> POAS&lt;0,8 · <span class="badge b-manter">manter</span> · <span class="badge b-sem">sem venda</span> (gastou e não vendeu no canal → suspeito).</div>
+      <div class="gi"><b>Cada linha é um PRODUTO, não uma variante.</b> Meta e Google anunciam por <b>catálogo</b>: cada cor/tamanho é um item do feed, e a plataforma atribui o gasto por variante. A variante que recebe mais gasto é a que o <b>algoritmo decidiu mostrar</b> — não uma escolha sua. Por isso o <b>veredito (escalar/cortar) fica SÓ no produto-pai</b>; clicar abre as variantes (informativo, sem veredito).</div>
+      <div class="gi"><b>⚠ Cross-channel — o ponto mais importante.</b> O gasto do Meta mira o site e o do Google mira a loja, MAS <b>um anúncio do Meta pode gerar venda no TikTok, na loja física ou no ML</b> — a pessoa descobre o produto no anúncio e compra onde for mais fácil. Exemplo real: a Calça Alfaiataria vende <b>~5% no site e ~95% no TikTok</b>. Se olhássemos só a margem do site, mandaríamos <b>cortar um anúncio que pode estar vendendo fora</b>. Por isso medimos a <b>concentração de canal</b> (% que o produto vende no canal do anúncio) — aparece ao expandir o produto — e tratamos esses casos como <b>revisar</b>, não cortar.</div>
+      <div class="gi"><b>Os números</b>: <b>Receita</b> = venda real no canal do anúncio (base da margem) · <b>CM2%</b> = margem após CMV+comissão+frete+devolução · <b>POAS = CM2÷gasto</b> (>1 ⟺ CM3>0) · <b>CM3 = CM2−Anúncios</b> (fecha com a cascata) · <b>ROAS</b> = receita que a plataforma reivindica ÷ gasto — só diagnóstico (sobre-atribui).</div>
+      <div class="gi"><b>Veredito (no produto-pai):</b> <span class="badge b-escalar">escalar</span> a margem cobre bem o anúncio · <span class="badge b-cortar">cortar</span> margem real não cobre <b>E</b> o produto vende no próprio canal · <span class="badge b-revisar">revisar</span> vende &lt;50% no canal do anúncio (provável cross-channel) OU o P&L e a plataforma discordam → <b>não corte às cegas: teste</b> (desligue o anúncio ~2 semanas e olhe a venda TOTAL, não só a do site) · <span class="badge b-manter">manter</span> · <span class="badge b-sem">sem venda</span>.</div>
     </div></details>
     <div class="kpis" id="kpis-sku"></div>
     <div class="filtros">
       <select id="f-plat"><option value="">Todas plataformas</option><option value="meta_ads">Meta (site)</option><option value="google_ads">Google (loja)</option></select>
-      <select id="f-sinal"><option value="">Todos sinais</option><option value="escalar">Escalar</option><option value="cortar">Cortar</option><option value="manter">Manter</option><option value="sem_venda_no_canal">Sem venda</option></select>
+      <select id="f-sinal"><option value="">Todos sinais</option><option value="escalar">Escalar</option><option value="revisar">Revisar</option><option value="cortar">Cortar</option><option value="manter">Manter</option><option value="sem_venda_no_canal">Sem venda</option></select>
       <input id="f-busca" placeholder="buscar SKU…" style="flex:1;min-width:140px">
       <span class="muted" id="sku-count"></span>
     </div>
@@ -216,7 +216,7 @@ function inicioMesSP(){const d=spNow();return fmtD(new Date(d.getFullYear(),d.ge
 function hojeSP(){return fmtD(spNow());}
 
 // ---------- cache (TTL 5min) ----------
-function cacheKey(){return 'marketing_v5_'+STATE.de+'_'+STATE.ate;}
+function cacheKey(){return 'marketing_v6_'+STATE.de+'_'+STATE.ate;}
 function cacheGet(){try{const o=JSON.parse(localStorage.getItem(cacheKey()));if(o&&Date.now()-o.t<300000)return o.d;}catch(e){}return null;}
 function cacheSet(d){try{localStorage.setItem(cacheKey(),JSON.stringify({t:Date.now(),d}));}catch(e){}}
 
@@ -276,9 +276,10 @@ function aggSku(){
     if(plat&&r.plataforma!==plat)return;
     const k=r.sku_raw+'|'+r.plataforma;
     const a=m[k]||(m[k]={sku_raw:r.sku_raw,plataforma:r.plataforma,ad_spend:0,impressoes:0,cliques:0,
-      ad_receita_plat:0,receita_canal:0,cm1:0,cm2:0,cm3:0,unidades:0,fee:0,frete:0,devolucao:0});
+      ad_receita_plat:0,receita_canal:0,receita_total:0,cm1:0,cm2:0,cm3:0,unidades:0,fee:0,frete:0,devolucao:0});
     a.ad_spend+=+r.ad_spend||0;a.impressoes+=+r.impressoes||0;a.cliques+=+r.cliques||0;
     a.ad_receita_plat+=+r.ad_receita_plat||0;a.receita_canal+=+r.receita_canal||0;
+    a.receita_total+=+r.receita_total_canais||0;
     a.cm1+=+r.cm1||0;a.cm2+=+r.cm2||0;a.unidades+=+r.unidades_canal||0;
     a.fee+=+r.fee||0;a.frete+=+r.frete||0;a.devolucao+=+r.devolucao||0;
   });
@@ -287,9 +288,21 @@ function aggSku(){
     a.roas=a.ad_spend>0?a.ad_receita_plat/a.ad_spend:null;   // plataforma (diagnóstico, sobre-atribui)
     a.cm2_pct=a.receita_canal>0?a.cm2/a.receita_canal:null;
     a.poas=a.ad_spend>0?a.cm2/a.ad_spend:null;               // CM2 ÷ gasto (>1 ⟺ CM3>0)
-    a.sinal=a.receita_canal<=0?'sem_venda_no_canal':(a.poas>1.2?'escalar':(a.poas<0.8?'cortar':'manter'));
+    a.conc=a.receita_total>0?a.receita_canal/a.receita_total:null;  // % que vende no canal do anúncio
+    a.sinal=vereditoSinal(a);
     return a;
   });
+}
+
+// veredito escalar/cortar/manter/revisar (mesma lógica p/ variante e produto-pai)
+function vereditoSinal(a){
+  if(!(a.receita_canal>0)) return 'sem_venda_no_canal';
+  if(a.conc!=null && a.conc<0.5) return 'revisar';          // vende <50% no canal do anúncio → cross-channel
+  const poasAtr=(a.ad_spend>0 && a.receita_canal>0)?(a.ad_receita_plat*(a.cm2/a.receita_canal))/a.ad_spend:null;
+  if(a.poas<0.8 && poasAtr!=null && poasAtr>1.2) return 'revisar';  // P&L e plataforma discordam
+  if(a.poas>1.2) return 'escalar';
+  if(a.poas<0.8) return 'cortar';
+  return 'manter';
 }
 
 // ---------- render ----------
@@ -326,32 +339,37 @@ function renderGeral(){
   });
 }
 
-const BADGE={escalar:'b-escalar',cortar:'b-cortar',manter:'b-manter',sem_venda_no_canal:'b-sem'};
-const LBL={escalar:'escalar',cortar:'cortar',manter:'manter',sem_venda_no_canal:'sem venda'};
+const BADGE={escalar:'b-escalar',cortar:'b-cortar',manter:'b-manter',revisar:'b-revisar',sem_venda_no_canal:'b-sem'};
+const LBL={escalar:'escalar',cortar:'cortar',manter:'manter',revisar:'revisar',sem_venda_no_canal:'sem venda'};
 function parentOf(sku){return STATE.skuParent[sku]||{pid:'v:'+sku,produto:sku,variante:''};}
 function summarize(list){ // soma um conjunto de variantes num resumo (produto-pai)
-  const a={ad_spend:0,impressoes:0,cliques:0,ad_receita_plat:0,receita_canal:0,cm1:0,cm2:0,cm3:0,unidades:0,fee:0,frete:0,devolucao:0};
+  const a={ad_spend:0,impressoes:0,cliques:0,ad_receita_plat:0,receita_canal:0,receita_total:0,cm1:0,cm2:0,cm3:0,unidades:0,fee:0,frete:0,devolucao:0};
+  const totBySku={};  // receita all-channel é por SKU → dedup pra não somar 2x (meta+google do mesmo sku)
   list.forEach(r=>{a.ad_spend+=r.ad_spend;a.impressoes+=r.impressoes;a.cliques+=r.cliques;
     a.ad_receita_plat+=r.ad_receita_plat;a.receita_canal+=r.receita_canal;a.cm1+=r.cm1;a.cm2+=r.cm2;
-    a.unidades+=r.unidades;a.fee+=r.fee||0;a.frete+=r.frete||0;a.devolucao+=r.devolucao||0;});
+    a.unidades+=r.unidades;a.fee+=r.fee||0;a.frete+=r.frete||0;a.devolucao+=r.devolucao||0;
+    totBySku[r.sku_raw]=r.receita_total||0;});
+  a.receita_total=Object.values(totBySku).reduce((s,v)=>s+v,0);
   a.cm3=a.cm2-a.ad_spend;
   a.roas=a.ad_spend>0?a.ad_receita_plat/a.ad_spend:null;
   a.cm2_pct=a.receita_canal>0?a.cm2/a.receita_canal:null;
   a.poas=a.ad_spend>0?a.cm2/a.ad_spend:null;
-  a.sinal=a.receita_canal<=0?'sem_venda_no_canal':(a.poas>1.2?'escalar':(a.poas<0.8?'cortar':'manter'));
+  a.conc=a.receita_total>0?a.receita_canal/a.receita_total:null;
+  a.sinal=vereditoSinal(a);  // veredito SÓ no produto-pai (decisão é no SKU principal)
   return a;
 }
-function cellsHTML(r){ // colunas numéricas (compartilhadas por pai e filho)
+function cellsHTML(r,isChild){ // colunas numéricas (compartilhadas por pai e filho)
+  // o VEREDITO (sinal) aparece só no produto-pai; variante mostra "—"
+  const verd=isChild?'<td class="muted">—</td>':`<td><span class="badge ${BADGE[r.sinal]}">${LBL[r.sinal]}</span></td>`;
   return `<td>${r.plat||(r.plataforma==='meta_ads'?'Meta':'Google')}</td>`+
     `<td>${rs(r.ad_spend)}</td><td>${rs(r.receita_canal)}</td><td>${n2(r.roas)}</td><td>${pct(r.cm2_pct)}</td>`+
     `<td class="${r.poas>=1?'pos':'neg'}"><b>${n2(r.poas)}</b></td>`+
     `<td class="${r.cm3>=0?'pos':'neg'}">${rs(r.cm3)}</td>`+
-    `<td>${r.unidades||0}</td><td><span class="badge ${BADGE[r.sinal]}">${LBL[r.sinal]}</span></td>`;
+    `<td>${r.unidades||0}</td>`+verd;
 }
 function renderSku(){
   let variants=aggSku();
   const sinal=document.getElementById('f-sinal').value, busca=document.getElementById('f-busca').value.toLowerCase();
-  if(sinal)variants=variants.filter(r=>r.sinal===sinal);
   if(busca)variants=variants.filter(r=>(r.sku_raw||'').toLowerCase().includes(busca)||(parentOf(r.sku_raw).produto||'').toLowerCase().includes(busca));
   // agrupa variantes -> produto-pai (via shopify_product_id)
   const g={};
@@ -362,21 +380,23 @@ function renderSku(){
     s.plat=plats.length>1?'Meta+Google':(plats[0]==='meta_ads'?'Meta':'Google');
     s.nvar=new Set(list.map(x=>x.sku_raw)).size;s.children=list;return s;
   });
+  if(sinal)parents=parents.filter(p=>p.sinal===sinal);  // filtro de veredito é no PRODUTO-pai
   const sk=STATE.sort, key=(sk.k==='sku_raw'||sk.k==='plataforma')?'produto':sk.k;
   parents.sort((a,b)=>{let x=a[key],y=b[key];x=x==null?-1e15:x;y=y==null?-1e15:y;
     if(typeof x==='string')return sk.dir*String(x).localeCompare(String(y));return sk.dir*(x-y);});
   // KPIs no nível PRODUTO
-  const esc=parents.filter(r=>r.sinal==='escalar').length, cor=parents.filter(r=>r.sinal==='cortar').length;
+  const esc=parents.filter(r=>r.sinal==='escalar').length, cor=parents.filter(r=>r.sinal==='cortar').length, revi=parents.filter(r=>r.sinal==='revisar').length;
   const sp=parents.reduce((s,r)=>s+r.ad_spend,0), c3=parents.reduce((s,r)=>s+r.cm3,0);
   const rev=parents.reduce((s,r)=>s+(r.receita_canal||0),0), un=parents.reduce((s,r)=>s+(r.unidades||0),0);
   document.getElementById('kpis-sku').innerHTML=[
-    {l:'Produtos',v:parents.length,s:variants.length+' variantes',t:'Produtos-pai com gasto de anúncio (cada um agrupa suas variantes de cor/tamanho). Clique numa linha pra abrir as variantes.'},
+    {l:'Produtos',v:parents.length,s:variants.length+' variantes',t:'Produtos-pai com gasto de anúncio (cada um agrupa suas variantes de cor/tamanho). O veredito é por PRODUTO-pai, não por variante. Clique pra abrir as variantes.'},
     {l:'Gasto total',v:rs(sp),t:'Soma do gasto de anúncios dos produtos filtrados.'},
-    {l:'Receita',v:rs(rev),s:'venda real do canal',t:'Receita REAL desses produtos no canal (anúncio + orgânica) — não é só o que a plataforma atribui. É a base de onde sai a margem (CM2/CM3).'},
-    {l:'Unidades',v:un.toLocaleString('pt-BR'),s:'peças vendidas',t:'Peças vendidas desses produtos no canal no período.'},
+    {l:'Receita',v:rs(rev),s:'venda real do canal',t:'Receita REAL desses produtos NO CANAL do anúncio (anúncio + orgânica) — não é só o que a plataforma atribui. É a base de onde sai a margem (CM2/CM3).'},
+    {l:'Unidades',v:un.toLocaleString('pt-BR'),s:'peças vendidas',t:'Peças vendidas desses produtos no canal do anúncio no período.'},
     {l:'CM3 total',v:rs(c3),cls:c3>=0?'pos':'neg',t:'Lucro real somado, após CMV + custos de canal + anúncios. Verde = lucrativo.'},
-    {l:'Escalar',v:esc,s:'POAS>1,2',t:'Nº de PRODUTOS com POAS>1,2 — vale investir mais.'},
-    {l:'Cortar',v:cor,s:'POAS<0,8',t:'Nº de PRODUTOS com POAS<0,8 — o anúncio destrói margem; reduzir/parar.'},
+    {l:'Escalar',v:esc,s:'POAS>1,2',t:'Nº de PRODUTOS onde a margem cobre bem o anúncio — vale investir mais.'},
+    {l:'Revisar',v:revi,s:'cross-channel',cls:revi>0?'':'',t:'Produtos que vendem <50% no canal do anúncio (o Meta/Google pode estar gerando venda em OUTRO canal — TikTok, lojas, ML) OU onde o P&L e a plataforma discordam. NÃO cortar às cegas — testar.'},
+    {l:'Cortar',v:cor,s:'POAS<0,8',t:'Nº de PRODUTOS onde a margem real não cobre o anúncio E que vendem no próprio canal — reduzir/parar.'},
   ].map(kpiHTML).join('');
   document.getElementById('sku-count').textContent=parents.length+' produtos · '+variants.length+' variantes';
   let html='';
@@ -395,9 +415,19 @@ function renderSku(){
         `<span class="pl-c">− Anúncios ${rs(p.ad_spend)}</span>`+
         `<span class="pl-eq ${p.cm3>=0?'pos':'neg'}">= CM3 ${rs(p.cm3)}</span>`+
         `</div></td></tr>`;
+      // Lens C — concentração de canal (cross-channel)
+      if(p.conc!=null){
+        const pc=Math.round(p.conc*100), fora=p.receita_total-p.receita_canal;
+        const alerta=pc<50?`<span class="pl-eq" style="color:var(--accent2)">⚠ vende mais FORA do canal do anúncio — o Meta/Google pode estar gerando essa venda (TikTok, lojas, ML). Teste antes de cortar.</span>`:'';
+        html+=`<tr class="pnl pnl-conc"><td colspan="10"><div class="pnlcell">`+
+          `<span class="pl-r">📊 Concentração de canal</span>`+
+          `<span class="pl-c"><b style="color:var(--txt)">${pc}%</b> no canal do anúncio (${rs(p.receita_canal)})</span>`+
+          `<span class="pl-c">· ${100-pc}% em outros canais (${rs(fora)})</span>`+
+          alerta+`</div></td></tr>`;
+      }
       p.children.slice().sort((a,b)=>(b.ad_spend||0)-(a.ad_spend||0)).forEach(c=>{
         const v=parentOf(c.sku_raw).variante;
-        html+=`<tr class="child"><td class="kidcell">${c.sku_raw}${v?' <span class="muted">'+v+'</span>':''}</td>${cellsHTML(c)}</tr>`;
+        html+=`<tr class="child"><td class="kidcell">${c.sku_raw}${v?' <span class="muted">'+v+'</span>':''}</td>${cellsHTML(c,true)}</tr>`;
       });
     }
   });
