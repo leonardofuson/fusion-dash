@@ -292,8 +292,8 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
 
 <div class="main">
 
-  <!-- FILTROS (compartilhado entre as abas Diário/Mensal) -->
-  <div class="filtros">
+  <!-- FILTROS (só Diário — escondidos no Mensal, que usa a régua Janela própria) -->
+  <div class="filtros" id="filtros-diario">
     <div class="chips">
       <button class="chip" data-preset="hoje" onclick="setPeriodo('hoje',this)">Hoje</button>
       <button class="chip" data-preset="ontem" onclick="setPeriodo('ontem',this)">Ontem</button>
@@ -317,7 +317,7 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
     <span id="upd" style="margin-left:auto;font-size:11px;color:var(--txt3);"></span>
   </div>
 
-  <div class="filter-row">
+  <div class="filter-row" id="filtros-canais">
     <span class="filter-label">Canais:</span>
     <div class="chips" id="canal-chips"></div>
     <button class="btn-ghost" onclick="selAllCanais()">Todos</button>
@@ -455,9 +455,10 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
     <div class="filtros" style="margin-bottom:14px;">
       <span class="filter-label">Janela:</span>
       <div class="chips">
-        <button class="chip on" data-mp="12" onclick="setMesesMensal(12,this)">12 meses</button>
         <button class="chip" data-mp="6" onclick="setMesesMensal(6,this)">6 meses</button>
+        <button class="chip on" data-mp="12" onclick="setMesesMensal(12,this)">12 meses</button>
         <button class="chip" data-mp="24" onclick="setMesesMensal(24,this)">24 meses</button>
+        <button class="chip" data-mp="ytd" onclick="setMensalYTD(this)">YTD</button>
       </div>
       <span id="upd-mensal" style="margin-left:auto;font-size:11px;color:var(--txt3);"></span>
     </div>
@@ -466,7 +467,7 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
     <div class="card"><div class="card-title">P&amp;L mensal — comparativo (últimos meses)</div><div style="overflow-x:auto;"><table class="canal-tbl" id="mensal-pnl"><thead></thead><tbody></tbody></table></div></div>
     <div class="card"><div class="card-title">Mix de canais ao longo dos meses (% da receita)</div><div class="chart-hero"><canvas id="chart-mensal-mix"></canvas></div></div>
 
-    <div style="font-size:11px;color:var(--txt3);margin:4px 2px 10px;">As análises abaixo (geografia, pagamentos, pareto, dia da semana) refletem o <b>período selecionado nos filtros acima</b> — ajuste o período pra analisar um mês específico.</div>
+    <div style="font-size:11px;color:var(--txt3);margin:4px 2px 10px;">Todas as análises abaixo (geografia, pagamentos, pareto, dia da semana) refletem a <b>janela selecionada acima</b>.</div>
 
     <!-- GEOGRAFIA -->
     <div class="card">
@@ -777,7 +778,7 @@ async function fetchProdutos(){
 
 // ── State ──
 var DE=null,ATE=null;
-var STATE={pedidos:[],pedidosFull:[],itens:[],itensFocus:[],canais:[],canaisSel:{},stackMode:'abs',focusCanal:null,skuGroups:[],skuSel:null,skuSort:{key:'receita',dir:'desc'},adsByCanal:{},adsByCanalPrev:{},adsBySkuPai:{},adsBySkuPaiCanal:{},devBySkuPai:{},skuMVRows:[],geoMVRows:[],pgtoMVRows:[],dailyMetric:'rev',mensalMeses:12,mensalRows:null};
+var STATE={pedidos:[],pedidosFull:[],itens:[],itensFocus:[],canais:[],canaisSel:{},stackMode:'abs',focusCanal:null,skuGroups:[],skuSel:null,skuSort:{key:'receita',dir:'desc'},adsByCanal:{},adsByCanalPrev:{},adsBySkuPai:{},adsBySkuPaiCanal:{},devBySkuPai:{},skuMVRows:[],geoMVRows:[],pgtoMVRows:[],dailyMetric:'rev',mensalMeses:12,mensalRows:null,mensalDe:null,mensalAte:null,mensalYTD:false,mensalSkuRows:[]};
 
 // ── TABS (Diário · Mensal) ──
 function setTab(t){
@@ -785,11 +786,18 @@ function setTab(t){
   document.getElementById('tab-mensal').style.display = t==='mensal'?'':'none';
   document.getElementById('tb-diario').classList.toggle('active', t==='diario');
   document.getElementById('tb-mensal').classList.toggle('active', t==='mensal');
+  // Os filtros diários (chips de período + date-range + canais) só fazem sentido no Diário.
+  // No Mensal o controle de período é a régua Janela (6/12/24 meses · YTD), própria da aba.
+  var fd=document.getElementById('filtros-diario'),fc=document.getElementById('filtros-canais');
+  if(fd)fd.style.display = t==='mensal'?'none':'';
+  if(fc)fc.style.display = t==='mensal'?'none':'';
   if(t==='mensal'){
-    if(!STATE.mensalRows) carregarMensal();
-    // re-render as análises (geo/pgto/dow/pareto) agora que a aba ficou visível —
-    // o Pareto é canvas e renderiza em 0px se desenhado escondido.
-    if((STATE.pedidos||[]).length){try{renderGeo();renderPayments();renderDowHeat();renderPareto();}catch(e){console.warn('mensal re-render',e);}}
+    // Primeira entrada → carrega a janela default (12m) pra TODAS as seções do Mensal.
+    if(!STATE.mensalRows){ aplicarJanelaMensal(STATE.mensalMeses||12, null); }
+    else {
+      // Re-render (Pareto/charts são canvas e renderizam em 0px se desenhados escondidos).
+      try{renderMensal();renderGeoMV(STATE.geoMVRows||[]);renderPaymentsMV(STATE.pgtoMVRows||[]);renderPareto();renderDowHeatMV(STATE.mensalSkuRows||[]);}catch(e){console.warn('mensal re-render',e);}
+    }
   }
 }
 var CHARTS={hero:null,pareto:null};
@@ -1317,6 +1325,21 @@ function dowIdx(dstr){var dt=new Date(dstr+'T12:00:00Z');return(dt.getUTCDay()+6
 function renderDowHeat(){
   var ped=STATE.pedidosFull||STATE.pedidos;var matrix={};
   ped.forEach(function(p){if(p._canc)return;var d=(p.data_pedido||'').slice(0,10);if(!d)return;if(!matrix[p._nome])matrix[p._nome]=new Array(7).fill(0);matrix[p._nome][dowIdx(d)]+=valorReceita(p);});
+  pintarDowHeat(matrix);
+}
+// Variante MV (aba Mensal): mesma matriz canal×dia-da-semana a partir das linhas
+// agregadas por dia (mvw_ecommerce_sku_dia), respeitando focusCanal + canaisSel.
+function renderDowHeatMV(rows){
+  var matrix={};
+  (rows||[]).forEach(function(r){var canal=getNome(r.canal_nome_raw,r.origem_conta);
+    if(STATE.focusCanal&&canal!==STATE.focusCanal)return;
+    if(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[canal])return;
+    var d=(r.data_pedido||'').slice(0,10);if(!d)return;
+    if(!matrix[canal])matrix[canal]=new Array(7).fill(0);
+    matrix[canal][dowIdx(d)]+=parseFloat(r.receita||0);});
+  pintarDowHeat(matrix);
+}
+function pintarDowHeat(matrix){
   var canais=Object.keys(matrix).sort(function(a,b){var sa=matrix[a].reduce(function(s,v){return s+v;},0);var sb=matrix[b].reduce(function(s,v){return s+v;},0);return sb-sa;});
   if(canais.length===0){document.getElementById('canal-dow-heat').innerHTML='<div class="geo-empty">Sem dados.</div>';return;}
   var gridCols='80px repeat(7,1fr) 80px';
@@ -1348,6 +1371,11 @@ async function fetchGeoMV(de,ate){
 }
 async function fetchPgtoMV(de,ate){
   return buscarTudo('mvw_ecommerce_pgto_dia','select=canal_nome_raw,origem_conta,metodo_pagamento,parcelas,pedidos,receita&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=receita.desc');
+}
+// Como fetchSkuMV, mas inclui data_pedido — usado pela aba Mensal pra alimentar Pareto
+// (via agruparSkusMV) E o heatmap dia-da-semana (renderDowHeatMV) com uma só leitura.
+async function fetchSkuMVData(de,ate){
+  return buscarTudo('mvw_ecommerce_sku_dia','select=sku_pai,nome,cat,canal_nome_raw,origem_conta,receita,qtd,cmv,data_pedido&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc');
 }
 function agruparSkusMV(rows){
   var map={};
@@ -1852,19 +1880,37 @@ function inicioJanelaMensal(meses){
   m-=(meses-1);while(m<1){m+=12;y--;}
   return y+'-'+('0'+m).slice(-2)+'-01';
 }
-function setMesesMensal(n,el){
-  STATE.mensalMeses=n;
+function setMesesMensal(n,el){ aplicarJanelaMensal(n,el); }
+function setMensalYTD(el){ aplicarJanelaMensal('ytd',el); }
+// Régua Janela do Mensal: define a janela e dirige TODAS as seções da aba
+// (mês-a-mês + geografia + pagamentos + pareto + dia-da-semana). Desacoplada do
+// período do Diário — trocar de aba não altera o filtro de lá.
+function aplicarJanelaMensal(modo,el){
   document.querySelectorAll('#tab-mensal .chip[data-mp]').forEach(function(c){c.classList.remove('on');});
+  // el vem do clique; quando chamado pelo setTab (default), realça o chip pelo data-mp.
+  if(!el)el=document.querySelector('#tab-mensal .chip[data-mp="'+modo+'"]');
   if(el)el.classList.add('on');
-  STATE.mensalRows=null;carregarMensal();
+  var h=hojeSP(),de;
+  if(modo==='ytd'){ de=inicioAno(); STATE.mensalYTD=true; }
+  else { STATE.mensalMeses=modo; STATE.mensalYTD=false; de=inicioJanelaMensal(modo); }
+  STATE.mensalDe=de; STATE.mensalAte=h; STATE.mensalRows=null;
+  carregarMensal();
+  carregarMensalDetalhe(de,h);
 }
 async function carregarMensal(){
   var u=document.getElementById('upd-mensal');if(u)u.textContent='Carregando…';
-  var de=inicioJanelaMensal(STATE.mensalMeses);
+  var de=STATE.mensalDe||inicioJanelaMensal(STATE.mensalMeses);
   var rows=await buscarTudo('mvw_ecommerce_canal_mes','select=*&mes=gte.'+de+'&order=mes.asc').catch(function(){return[];});
   STATE.mensalRows=rows;
   try{renderMensal();}catch(e){console.error('renderMensal',e);}
   if(u)u.textContent='Atualizado '+new Date().toLocaleTimeString('pt-BR');
+}
+// Carrega geografia + pagamentos + pareto + dia-da-semana pra janela do Mensal,
+// das MVs de histórico completo (geo/pgto/sku _dia). Cheap e desacoplado do Diário.
+async function carregarMensalDetalhe(de,ate){
+  try{var g=await fetchGeoMV(de,ate);STATE.geoMVRows=g;renderGeoMV(g);}catch(e){console.warn('mensal geo',e);}
+  try{var p=await fetchPgtoMV(de,ate);STATE.pgtoMVRows=p;renderPaymentsMV(p);}catch(e){console.warn('mensal pgto',e);}
+  try{var s=await fetchSkuMVData(de,ate);STATE.mensalSkuRows=s;agruparSkusMV(s);renderPareto();renderDowHeatMV(s);}catch(e){console.warn('mensal sku',e);}
 }
 // Agrega a MV canal_dia por mês. Receita/Comissão/Devol/Frete = REAIS da MV;
 // CMV = estimativa pela proporção real por canal (cmvPct) — meses não têm item carregado.
