@@ -84,7 +84,18 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
 #dash-cards{display:flex;flex-direction:column;}
 /* Ordem + ocultações da visão MENSAL */
 #dash-cards.mensal .c-prizes{display:none;}
+#dash-cards.mensal .c-forecast{order:0;}
 #dash-cards.mensal #kpis{order:1;}
+.c-forecast{background:linear-gradient(135deg,rgba(251,191,36,0.10),rgba(34,197,94,0.06));border-color:rgba(251,191,36,0.35);}
+.fc-wrap{display:flex;align-items:center;gap:28px;flex-wrap:wrap;}
+.fc-main{display:flex;flex-direction:column;gap:2px;}
+.fc-lbl{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#fbbf24;}
+.fc-val{font-size:2.1rem;font-weight:800;color:var(--txt1);font-variant-numeric:tabular-nums;line-height:1.1;}
+.fc-stats{display:flex;gap:24px;flex-wrap:wrap;margin-left:auto;}
+.fc-stat{display:flex;flex-direction:column;gap:1px;}
+.fc-stat-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--txt3);}
+.fc-stat-val{font-size:1.05rem;font-weight:800;color:var(--txt1);font-variant-numeric:tabular-nums;}
+@media(max-width:600px){.fc-stats{margin-left:0;}.fc-val{font-size:1.6rem;}}
 #dash-cards.mensal .c-hero{order:2;}
 #dash-cards.mensal .c-lojas{order:3;}
 #dash-cards.mensal #highlights{order:4;}
@@ -442,6 +453,8 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
   </div>
 
   <div id="dash-cards">
+
+  <div class="card c-forecast" id="forecast-2026" style="display:none;"></div>
 
   <div class="kpi-grid" id="kpis">
     <div class="kpi hero"><div class="kpi-lbl">Carregando...</div><div class="spin"></div></div>
@@ -1626,6 +1639,8 @@ function renderHero(){
   var mensal=STATE.viewMode==='mensal';
   var ht=document.getElementById('hero-title');
   if(ht) ht.textContent=mensal?'Receita mensal por loja':'Receita diária por loja';
+  var fcEl=document.getElementById('forecast-2026');
+  if(fcEl) fcEl.style.display='none';  // só aparece quando o forecast é calculado (mensal)
   var pedidosUse=STATE.pedidosEscopo||STATE.pedidos;
   var diario={};
   var lojas={};
@@ -1736,6 +1751,29 @@ function renderHero(){
       dias=dias.concat(futKeys);
       STATE.heroForecastGrowth=g;
       if(ht) ht.textContent='Receita mensal por loja · forecast '+Yc+' (cresc. YTD '+(g>=1?'+':'')+((g-1)*100).toFixed(0)+'%)';
+
+      // ---- Card de forecast total do ano ----
+      // realizado YTD (sumCur, inclui mês corrente parcial) + restante do mês corrente
+      // projetado + meses futuros (sazonalidade×crescimento).
+      var sumFuture=forecastVals.reduce(function(s,v){return s+(v||0);},0)-curTot;
+      var curPrev=(STATE.heroPrevByMonth||{})[(Yc-1)+'-'+String(Mc).padStart(2,'0')];
+      var restCur=curPrev?Math.max(0,curPrev*g-curTot):0;
+      var realizadoYTD=sumCur;
+      var projRestante=restCur+sumFuture;
+      var forecastAno=realizadoYTD+projRestante;
+      if(fcEl){
+        fcEl.style.display='';
+        fcEl.innerHTML=
+          '<div class="fc-wrap">'+
+            '<div class="fc-main"><span class="fc-lbl">📈 Forecast '+Yc+' · vendas das lojas</span>'+
+              '<span class="fc-val">'+fmt(forecastAno)+'</span></div>'+
+            '<div class="fc-stats">'+
+              '<div class="fc-stat"><span class="fc-stat-lbl">Realizado YTD</span><span class="fc-stat-val">'+fmt(realizadoYTD)+'</span></div>'+
+              '<div class="fc-stat"><span class="fc-stat-lbl">Projeção restante</span><span class="fc-stat-val" style="color:#fbbf24;">'+fmt(projRestante)+'</span></div>'+
+              '<div class="fc-stat"><span class="fc-stat-lbl">Crescimento YTD</span><span class="fc-stat-val" style="color:'+(g>=1?'var(--green)':'var(--red)')+';">'+(g>=1?'+':'')+((g-1)*100).toFixed(1)+'%</span></div>'+
+            '</div>'+
+          '</div>';
+      }
     }
   }
 
