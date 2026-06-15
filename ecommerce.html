@@ -6,6 +6,9 @@
 <title>Fusion — E-commerce</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+<script>/* datalabels auto-registra global; desliga por default e religa só por-chart (ex: linha de margem do Mensal) */
+if(window.Chart&&window.ChartDataLabels){try{Chart.defaults.set('plugins.datalabels',{display:false});}catch(e){}}</script>
 <style>
 :root{--bg:#09090b;--bg2:#18181b;--bg3:#27272a;--bdr:#2a2a2e;--txt1:#fafafa;--txt2:#a1a1aa;--txt3:#52525b;
   --blue:#6366f1;--green:#22c55e;--red:#f43f5e;--amber:#eab308;--purple:#a855f7;--pink:#ec4899;--cyan:#06b6d4;}
@@ -1905,8 +1908,9 @@ function aplicarJanelaMensal(modo,el){
 }
 async function carregarMensal(){
   var u=document.getElementById('upd-mensal');if(u)u.textContent='Carregando…';
-  var de=STATE.mensalDe||inicioJanelaMensal(STATE.mensalMeses);
-  var rows=await buscarTudo('mvw_ecommerce_canal_mes','select=*&mes=gte.'+de+'&order=mes.asc').catch(function(){return[];});
+  // Busca TODO o histórico (MV pequena, ~21 meses) — renderMensal fatia pela janela
+  // e ainda calcula a janela anterior equivalente pros Δ% dos KPIs.
+  var rows=await buscarTudo('mvw_ecommerce_canal_mes','select=*&order=mes.asc').catch(function(){return[];});
   STATE.mensalRows=rows;
   try{renderMensal();}catch(e){console.error('renderMensal',e);}
   if(u)u.textContent='Atualizado '+new Date().toLocaleTimeString('pt-BR');
@@ -1936,24 +1940,37 @@ function aggMensal(rows){
     m.liquida=m.receita-m.comissao-m.dev-m.frete;m.resultado=m.liquida-m.cmv;
     m.margem=m.receita>0?m.resultado/m.receita*100:0;m.ticket=m.pedidos>0?m.receita/m.pedidos:0;return m;});
 }
+function subMeses(ymd,n){var y=+ymd.slice(0,4),m=+ymd.slice(5,7);m-=n;while(m<1){m+=12;y--;}return y+'-'+('0'+m).slice(-2)+'-01';}
+// Soma uma janela de meses (aggMensal já tem totais por mês) → KPIs agregados.
+function sumWin(arr){var a={receita:0,liquida:0,resultado:0,pedidos:0,cmv:0};
+  (arr||[]).forEach(function(m){a.receita+=m.receita;a.liquida+=m.liquida;a.resultado+=m.resultado;a.pedidos+=m.pedidos;a.cmv+=m.cmv;});
+  a.margem=a.receita>0?a.resultado/a.receita*100:0;a.ticket=a.pedidos>0?a.receita/a.pedidos:0;a.cmvPct=a.receita>0?a.cmv/a.receita*100:0;return a;}
 function renderMensal(){
-  var M=aggMensal(STATE.mensalRows);
+  var de=(STATE.mensalDe||inicioJanelaMensal(STATE.mensalMeses||12)).slice(0,7);
+  var all=aggMensal(STATE.mensalRows);                                  // todos os meses
+  var M=all.filter(function(m){return m.ym>=de;});                     // janela selecionada
   if(!M.length){document.getElementById('mensal-kpis').innerHTML='<div class="kpi"><div class="kpi-lbl">Sem dados</div></div>';return;}
-  var cur=M[M.length-1],prev=M.length>1?M[M.length-2]:null;
+  // KPIs = TOTAIS da janela (respondem à régua 6/12/24/YTD). Δ = janela anterior equivalente.
+  var prevDe=subMeses(de+'-01',M.length).slice(0,7);
+  var Mprev=all.filter(function(m){return m.ym>=prevDe&&m.ym<de;});
+  var cur=sumWin(M),prev=sumWin(Mprev),hasPrev=prev.receita>0;
   function dp(a,b){return b?((a-b)/b*100):0;}
   function bdg(v){var c=v>=0?'#22c55e':'#f43f5e';return '<span style="color:'+c+';font-size:11px">'+(v>=0?'▲':'▼')+' '+Math.abs(v).toFixed(0)+'%</span>';}
-  var ya=M.filter(function(m){return m.ym===((+cur.ym.slice(0,4)-1)+cur.ym.slice(4));})[0];
+  function dlt(a,b){return hasPrev?'<div class="kpi-delta">'+bdg(dp(a,b))+'</div>':'';}
   var k='';
-  k+='<div class="kpi" style="--kpi-accent:'+(cur.resultado>=0?"#22c55e":"#f43f5e")+'"><div class="kpi-lbl">Resultado '+ymLabel(cur.ym)+'</div><div class="kpi-val" style="color:'+(cur.resultado>=0?"#22c55e":"#f43f5e")+'">'+fmt(cur.resultado)+'</div><div class="kpi-sub">margem '+fmtD(cur.margem)+'%</div>'+(prev?'<div class="kpi-delta">'+bdg(dp(cur.resultado,prev.resultado))+'</div>':'')+'</div>';
-  k+='<div class="kpi" style="--kpi-accent:#6366f1"><div class="kpi-lbl">Receita Bruta</div><div class="kpi-val">'+fmt(cur.receita)+'</div>'+(prev?'<div class="kpi-delta">'+bdg(dp(cur.receita,prev.receita))+'</div>':'')+'</div>';
-  k+='<div class="kpi" style="--kpi-accent:#06b6d4"><div class="kpi-lbl">Receita Líquida</div><div class="kpi-val">'+fmt(cur.liquida)+'</div>'+(prev?'<div class="kpi-delta">'+bdg(dp(cur.liquida,prev.liquida))+'</div>':'')+'</div>';
-  k+='<div class="kpi" style="--kpi-accent:#22c55e"><div class="kpi-lbl">Pedidos</div><div class="kpi-val">'+fmtN(cur.pedidos)+'</div>'+(prev?'<div class="kpi-delta">'+bdg(dp(cur.pedidos,prev.pedidos))+'</div>':'')+'</div>';
-  k+='<div class="kpi" style="--kpi-accent:#06b6d4"><div class="kpi-lbl">Ticket Médio</div><div class="kpi-val">'+fmt(cur.ticket)+'</div>'+(prev?'<div class="kpi-delta">'+bdg(dp(cur.ticket,prev.ticket))+'</div>':'')+'</div>';
-  var cmvP=cur.receita>0?cur.cmv/cur.receita*100:0, cmvPa=prev&&prev.receita>0?prev.cmv/prev.receita*100:0;
-  k+='<div class="kpi" style="--kpi-accent:#ec4899"><div class="kpi-lbl">CMV % (ACGS)</div><div class="kpi-val">'+fmtD(cmvP)+'%</div><div class="kpi-sub">'+fmtK(cur.cmv)+' custo</div>'+(prev?'<div class="kpi-delta">'+bdg(dp(cmvP,cmvPa))+'</div>':'')+'</div>';
-  k+='<div class="kpi" style="--kpi-accent:#eab308"><div class="kpi-lbl">vs mesmo mês ano passado</div><div class="kpi-val">'+(ya?bdg(dp(cur.receita,ya.receita)):'—')+'</div><div class="kpi-sub">'+(ya?'receita '+fmtK(ya.receita):'sem base')+'</div></div>';
+  k+='<div class="kpi" style="--kpi-accent:#6366f1"><div class="kpi-lbl">Receita Bruta</div><div class="kpi-val">'+fmt(cur.receita)+'</div>'+dlt(cur.receita,prev.receita)+'</div>';
+  k+='<div class="kpi" style="--kpi-accent:#06b6d4"><div class="kpi-lbl">Receita Líquida</div><div class="kpi-val">'+fmt(cur.liquida)+'</div>'+dlt(cur.liquida,prev.liquida)+'</div>';
+  k+='<div class="kpi" style="--kpi-accent:#22c55e"><div class="kpi-lbl">Pedidos</div><div class="kpi-val">'+fmtN(cur.pedidos)+'</div>'+dlt(cur.pedidos,prev.pedidos)+'</div>';
+  k+='<div class="kpi" style="--kpi-accent:#06b6d4"><div class="kpi-lbl">Ticket Médio</div><div class="kpi-val">'+fmt(cur.ticket)+'</div>'+dlt(cur.ticket,prev.ticket)+'</div>';
+  k+='<div class="kpi" style="--kpi-accent:#ec4899"><div class="kpi-lbl">CMV % (ACGS)</div><div class="kpi-val">'+fmtD(cur.cmvPct)+'%</div><div class="kpi-sub">'+fmtK(cur.cmv)+' custo</div>'+dlt(cur.cmvPct,prev.cmvPct)+'</div>';
+  k+='<div class="kpi" style="--kpi-accent:'+(cur.resultado>=0?"#22c55e":"#f43f5e")+'"><div class="kpi-lbl">Resultado</div><div class="kpi-val" style="color:'+(cur.resultado>=0?"#22c55e":"#f43f5e")+'">'+fmt(cur.resultado)+'</div><div class="kpi-sub">margem '+fmtD(cur.margem)+'%</div>'+dlt(cur.resultado,prev.resultado)+'</div>';
   document.getElementById('mensal-kpis').innerHTML=k;
   renderMensalRev(M);renderMensalPnL(M);renderMensalMix(M);
+  // Charts criados logo após a aba ficar visível podem nascer com width estreito
+  // (layout ainda não estabilizado) → dados colados à esquerda. Resize no próximo
+  // frame força o Chart.js a recalcular o chartArea com a largura final.
+  var fixar=function(){['mensalRev','mensalMix'].forEach(function(k){var c=CHARTS[k];if(c&&c.resize){try{c.resize();}catch(e){}}});};
+  requestAnimationFrame(fixar);setTimeout(fixar,150);
 }
 function optsMensal(dual,stk){
   var o={responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
@@ -1968,11 +1985,18 @@ function optsMensal(dual,stk){
 function renderMensalRev(M){
   var ctx=document.getElementById('chart-mensal-rev');if(!ctx)return;
   if(CHARTS.mensalRev)CHARTS.mensalRev.destroy();
+  var opts=optsMensal(true,false);
+  // Rótulo da % de margem na própria linha, sem casas decimais (só nesta linha — y2).
+  opts.plugins.datalabels={
+    display:function(c){return c.dataset.yAxisID==='y2';},
+    align:'top',anchor:'end',offset:4,color:'#eab308',font:{size:10,weight:'700'},
+    formatter:function(v){return Math.round(v)+'%';}
+  };
   CHARTS.mensalRev=new Chart(ctx,{data:{labels:M.map(function(m){return ymLabel(m.ym);}),datasets:[
-    {type:'bar',label:'Receita Bruta',data:M.map(function(m){return Math.round(m.receita);}),backgroundColor:'rgba(99,102,241,.55)',yAxisID:'y',order:3},
+    {type:'bar',label:'Receita Bruta',data:M.map(function(m){return Math.round(m.receita);}),backgroundColor:'rgba(99,102,241,.55)',yAxisID:'y',order:1},
     {type:'bar',label:'Resultado',data:M.map(function(m){return Math.round(m.resultado);}),backgroundColor:'rgba(34,197,94,.65)',yAxisID:'y',order:2},
-    {type:'line',label:'Margem %',data:M.map(function(m){return +m.margem.toFixed(1);}),borderColor:'#eab308',backgroundColor:'#eab308',yAxisID:'y2',tension:.3,order:1,pointRadius:3,borderWidth:2}
-  ]},options:optsMensal(true,false)});
+    {type:'line',label:'Margem %',data:M.map(function(m){return +m.margem.toFixed(1);}),borderColor:'#eab308',backgroundColor:'#eab308',yAxisID:'y2',tension:.3,order:3,pointRadius:3,borderWidth:2}
+  ]},options:opts,plugins:[ChartDataLabels]});
 }
 function renderMensalMix(M){
   var ctx=document.getElementById('chart-mensal-mix');if(!ctx)return;
