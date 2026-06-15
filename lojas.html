@@ -72,6 +72,29 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
 
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;}
 .card{background:var(--bg2);border:1px solid var(--bdr);border-radius:14px;padding:18px;margin-bottom:14px;font-variant-numeric:tabular-nums;}
+/* ===== Segmented control Diário/Mensal (linha de destaque) ===== */
+.viewbar{display:flex;align-items:center;gap:14px;margin:0 0 18px;}
+.viewseg{display:inline-flex;background:var(--bg2);border:1px solid var(--bdr);border-radius:14px;padding:5px;gap:5px;}
+.viewseg button{display:flex;align-items:center;gap:8px;padding:11px 26px;border:none;background:transparent;color:var(--txt2);font-size:15px;font-weight:800;letter-spacing:.01em;cursor:pointer;border-radius:10px;transition:all .15s;}
+.viewseg button .vs-dot{width:7px;height:7px;border-radius:50%;background:currentColor;opacity:.45;transition:all .15s;}
+.viewseg button.on{background:var(--green);color:#06140b;box-shadow:0 4px 14px rgba(34,197,94,.32);}
+.viewseg button.on .vs-dot{opacity:1;background:#06140b;}
+.viewseg button:not(.on):hover{color:var(--txt1);background:rgba(255,255,255,0.04);}
+.viewbar-hint{font-size:12px;color:var(--txt3);font-weight:600;}
+#dash-cards{display:flex;flex-direction:column;}
+/* Ordem + ocultações da visão MENSAL */
+#dash-cards.mensal .c-prizes{display:none;}
+#dash-cards.mensal #kpis{order:1;}
+#dash-cards.mensal .c-hero{order:2;}
+#dash-cards.mensal .c-lojas{order:3;}
+#dash-cards.mensal #highlights{order:4;}
+#dash-cards.mensal .c-produtos{order:5;}
+#dash-cards.mensal .c-vend{order:6;}
+#dash-cards.mensal .c-pareto{order:7;}
+/* Mensal: tabela de vendedores sem Meta/Atg%/Prev/Comissão (col 9-12) */
+#dash-cards.mensal #thead-vendedores th:nth-child(n+9),
+#dash-cards.mensal #tbody-vendedores tr td:nth-child(n+9){display:none;}
+@media(max-width:600px){.viewseg button{padding:10px 18px;font-size:13px;}.viewbar-hint{display:none;}}
 .card-title{font-size:13px;font-weight:700;color:var(--txt1);margin-bottom:14px;letter-spacing:0.02em;display:flex;align-items:center;justify-content:space-between;gap:8px;}
 .chart-wrap{position:relative;height:260px;}
 .chart-hero{position:relative;height:360px;}
@@ -364,12 +387,15 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
 
 <div class="main">
 
-  <div class="filtros">
-    <div class="chips view-tabs">
-      <button id="tab-diario" class="chip on" onclick="setView('diario',this)">📅 Diário</button>
-      <button id="tab-mensal" class="chip" onclick="setView('mensal',this)">🗓️ Mensal</button>
+  <div class="viewbar">
+    <div class="viewseg">
+      <button id="tab-diario" class="on" onclick="setView('diario',this)"><span class="vs-dot"></span>Diário</button>
+      <button id="tab-mensal" onclick="setView('mensal',this)"><span class="vs-dot"></span>Mensal</button>
     </div>
-    <span class="topbar-div" style="height:20px;"></span>
+    <span class="viewbar-hint" id="viewbar-hint">Acompanhamento dia a dia do mês corrente</span>
+  </div>
+
+  <div class="filtros">
     <!-- Controles DIÁRIO -->
     <div id="ctrl-diario" style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
       <div class="chips">
@@ -415,18 +441,20 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
     <button class="btn-ghost" style="padding:4px 10px;font-size:11px;" onclick="clearLojas()">Limpar</button>
   </div>
 
+  <div id="dash-cards">
+
   <div class="kpi-grid" id="kpis">
     <div class="kpi hero"><div class="kpi-lbl">Carregando...</div><div class="spin"></div></div>
   </div>
 
   <div class="highlights" id="highlights"></div>
 
-  <div class="card">
+  <div class="card c-prizes">
     <div class="card-title">&#x1F3C6; Premiação por loja <button class="btn-export" onclick="exportImage('premiacao')">Compartilhar</button></div>
     <div id="premiacao-grid" class="premiacao-grid"><div class="premio-empty">Carregando premiação…</div></div>
   </div>
 
-  <div class="card">
+  <div class="card c-hero">
     <div class="card-title">
       <span id="hero-title">Receita diária por loja</span>
       <div class="chips" style="gap:4px;">
@@ -437,14 +465,14 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
     <div class="chart-hero"><canvas id="chart-hero"></canvas></div>
   </div>
 
-  <div class="card">
+  <div class="card c-lojas">
     <div class="card-title">Desempenho por loja <button class="btn-export" onclick="exportImage('lojas')">Compartilhar</button></div>
     <div class="canal-cards" id="loja-cards"></div>
   </div>
 
 
 
-  <div class="card">
+  <div class="card c-produtos">
     <div class="card-title">
       <span>Venda de Produtos por Loja</span>
       <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
@@ -458,7 +486,7 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
     <div id="sku-detail" class="sku-empty">Selecione um SKU pai acima para ver o desempenho cross-loja.</div>
   </div>
 
-  <div class="card">
+  <div class="card c-vend">
     <div class="card-title">Top vendedores <button class="btn-export" onclick="exportImage('vendedores')">Compartilhar</button></div>
     <div id="vend-breadcrumb-slot"></div>
     <div class="tb-wrap-scroll" style="max-height:480px;"><table class="tb"><thead><tr id="thead-vendedores">
@@ -477,10 +505,12 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
     </tr></thead><tbody id="tbody-vendedores"></tbody></table></div>
   </div>
 
-  <div class="card">
+  <div class="card c-pareto">
     <div class="card-title" id="pareto-title">Mix de Produtos no fat — Pareto 80/20</div>
     <div class="chart-sm" style="height:280px"><canvas id="chart-pareto"></canvas></div>
   </div>
+
+  </div><!-- /#dash-cards -->
 
 </div>
 
@@ -712,7 +742,10 @@ function setView(mode,el){
   document.getElementById('tab-mensal').classList.toggle('on',mode==='mensal');
   document.getElementById('ctrl-diario').style.display=(mode==='diario')?'flex':'none';
   document.getElementById('ctrl-mensal').style.display=(mode==='mensal')?'flex':'none';
+  document.getElementById('dash-cards').classList.toggle('mensal',mode==='mensal');
   document.getElementById('compare-lbl').textContent=(mode==='mensal')?'vs ano passado':'vs período anterior';
+  var hint=document.getElementById('viewbar-hint');
+  if(hint) hint.textContent=(mode==='mensal')?'Comparação mês a mês · vs mesmo período do ano passado':'Acompanhamento dia a dia do mês corrente';
   if(mode==='mensal') setPeriodoMes('12m', document.querySelector('.chip[data-mpreset="12m"]'));
   else setPeriodo('mtd', document.querySelector('.chip[data-preset="mtd"]'));
 }
@@ -1165,6 +1198,7 @@ function calcPALoja(){
 }
 
 function renderKPIs(){
+  var mensal=STATE.viewMode==='mensal';
   var cur=calcKPIs(STATE.pedidosEscopo);
   var prev=calcKPIs(STATE.anterioresEscopo);
 
@@ -1212,8 +1246,8 @@ function renderKPIs(){
   html+='<div class="kpi hero">';
   html+='<div class="kpi-lbl">Receita Bruta</div>';
   html+='<div class="kpi-val">'+fmt(cur.fat)+'</div>';
-  html+='<div class="kpi-delta">'+deltaBadge(delta(cur.fat,prev.fat))+' <span style="color:#d4d4d8">vs anterior</span></div>';
-  if(metaTotal>0){
+  html+='<div class="kpi-delta">'+deltaBadge(delta(cur.fat,prev.fat))+' <span style="color:#d4d4d8">'+(mensal?'vs ano passado':'vs anterior')+'</span></div>';
+  if(metaTotal>0 && !mensal){
     var barW=pctMeta>100?100:pctMeta;
     var barC=pctMeta>=100?'var(--green)':(pctMeta>=70?'var(--amber)':'var(--red)');
     html+='<div style="margin-top:8px;">';
@@ -1221,7 +1255,7 @@ function renderKPIs(){
     html+='<div style="display:flex;justify-content:space-between;font-size:9px;margin-top:3px;color:#d4d4d8;font-weight:600;"><span style="color:'+barC+'">'+pctMeta.toFixed(0)+'% da meta</span><span>Meta: '+fmt(metaTotal)+'</span></div>';
     html+='</div>';
   }
-  if(projTotal>0){
+  if(projTotal>0 && !mensal){
     var projC=metaTotal>0?(projPctMeta>=100?'var(--green)':(projPctMeta>=70?'var(--amber)':'var(--red)')):'var(--amber)';
     html+='<div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.06);">';
     html+='<div style="font-size:9px;font-weight:700;color:#d4d4d8;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:3px;">Proj. mês'+(metaTotal>0?' · <span style="color:'+projC+'">'+projPctMeta.toFixed(0)+'% da meta</span>':'')+'</div>';
