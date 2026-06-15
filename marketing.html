@@ -235,7 +235,7 @@ function inicioMesSP(){const d=spNow();return fmtD(new Date(d.getFullYear(),d.ge
 function hojeSP(){return fmtD(spNow());}
 
 // ---------- cache (TTL 5min) ----------
-function cacheKey(){return 'marketing_v7_'+STATE.de+'_'+STATE.ate;}
+function cacheKey(){return 'marketing_v8_'+STATE.de+'_'+STATE.ate;}
 function cacheGet(){try{const o=JSON.parse(localStorage.getItem(cacheKey()));if(o&&Date.now()-o.t<300000)return o.d;}catch(e){}return null;}
 function cacheSet(d){try{localStorage.setItem(cacheKey(),JSON.stringify({t:Date.now(),d}));}catch(e){}}
 
@@ -267,7 +267,7 @@ async function carregar(force){
       buscarTudo('mvw_marketing_mer_dia','select=*&data=gte.'+STATE.de+'&data=lte.'+STATE.ate+'&order=data.asc'),
       buscarTudo('mvw_marketing_sku_pnl','select=*&mes=in.('+ms.join(',')+')&order=mes.asc'),
       buscarTudo('ads_changes','select=plataforma,actor,evento,objeto_nome,objeto_id,valor_antes,valor_depois,changed_at&changed_at=gte.'+STATE.de+'&changed_at=lte.'+somaDias(STATE.ate,1)+'&order=changed_at.desc'),
-      buscarTudo('mvw_marketing_canal_margem','select=*&canal_grupo=eq.site&mes=in.('+ms.join(',')+')&order=mes.asc'),
+      buscarTudo('mvw_marketing_canal_margem_dia','select=*&canal_grupo=eq.site&data=gte.'+STATE.de+'&data=lte.'+STATE.ate+'&order=data.asc'),
     ]);
     data={mer,pnl,changes,canal};cacheSet(data);
   }
@@ -331,17 +331,16 @@ function renderAll(){renderGeral();renderSku();renderAudit();}
 function renderGeral(){
   const m=STATE.mer;
   const meta=m.reduce((s,r)=>s+(+r.meta_spend||0),0), goog=m.reduce((s,r)=>s+(+r.google_spend||0),0);
-  const site=m.reduce((s,r)=>s+(+r.rev_site||0),0);
-  const unSite=m.reduce((s,r)=>s+(+r.un_site||0),0), ticket=unSite>0?site/unSite:null;
-  // P&L do canal SITE (todos os produtos) — base da cascata
+  // P&L do canal SITE (todos os produtos, DIÁRIO) — mesma fonte dos KPIs e da cascata (period-exact)
   const c=(STATE.canal||[]).reduce((a,r)=>{['receita','cogs','cm1','fee','frete','devolucao','cm2','unidades'].forEach(k=>a[k]=(a[k]||0)+(+r[k]||0));return a;},{receita:0,cogs:0,cm1:0,fee:0,frete:0,devolucao:0,cm2:0,unidades:0});
-  const cm2=c.cm2, cm3=cm2-meta;
-  const merSite=meta>0?site/meta:null, poas=meta>0?cm2/meta:null;
-  const pc=v=>c.receita>0?Math.round(v/c.receita*100):0;
+  const rec=c.receita, cm2=c.cm2, cm3=cm2-meta;
+  const unSite=c.unidades||0, ticket=unSite>0?rec/unSite:null;
+  const merSite=meta>0?rec/meta:null, poas=meta>0?cm2/meta:null;
+  const pc=v=>rec>0?Math.round(v/rec*100):0;
   // KPIs na ordem do fluxo de dinheiro: Investimento → Receita → Margem → Lucro → Eficiência
   document.getElementById('kpis-geral').innerHTML=[
     {l:'Gasto Meta',v:rs(meta),s:goog>0?'+ Google '+rs(goog):'investimento',t:'Total investido em Meta Ads no período (custo de marketing do site). O Google entra como contexto da loja.'},
-    {l:'Receita Site',v:rs(site),s:unSite.toLocaleString('pt-BR')+' peças · ticket '+(ticket?rs(ticket):'—'),t:'Faturamento bruto do Site Próprio (Shopify), todos os produtos. É a base do demonstrativo abaixo.'},
+    {l:'Receita Site',v:rs(rec),s:unSite.toLocaleString('pt-BR')+' peças · ticket '+(ticket?rs(ticket):'—'),t:'Faturamento do Site Próprio (Shopify), todos os produtos, no período exato. É a base (100%) do demonstrativo abaixo.'},
     {l:'CM2',v:rs(cm2),s:pc(cm2)+'% da receita',t:'Margem de contribuição do site = Receita − CMV − comissão − frete − devolução. O que sobra ANTES do anúncio.'},
     {l:'CM3',v:rs(cm3),s:pc(cm3)+'% · lucro após Meta',cls:cm3>=0?'pos':'neg',accent:true,t:'Lucro do canal site DEPOIS do gasto Meta. CM3 = CM2 − Anúncios. Verde = o site deu lucro após o marketing.'},
     {l:'MER_site',v:n2(merSite),s:'equilíbrio ≈2',t:'Receita Site ÷ Gasto Meta. Eficiência blended do canal. Acima de ~2 = lucrativo.'},
