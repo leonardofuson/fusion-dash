@@ -1644,6 +1644,21 @@ function renderEcommSkuDetail(){
       });
     });
     html+=  '</div></div>';
+    // Total de unidades por TAMANHO e por COR (marginais do heatmap)
+    var totTam={},totCor={},totG=0;
+    tams.forEach(function(t){var s=0;cores.forEach(function(c){s+=byGC[t+'__'+c]||0;});if(t!=='-')totTam[t]=s;totG+=s;});
+    cores.forEach(function(c){var s=0;tams.forEach(function(t){s+=byGC[t+'__'+c]||0;});if(c!=='-')totCor[c]=s;});
+    function _barTC(lbl,v,mx){var w=mx>0?(v/mx*100):0;var pc=totG>0?(v/totG*100):0;
+      return '<div style="display:flex;align-items:center;gap:8px;font-size:11px;margin:3px 0;"><span style="min-width:50px;color:var(--txt1);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="'+lbl+'">'+lbl+'</span><div style="flex:1;background:rgba(255,255,255,.05);border-radius:4px;height:13px;overflow:hidden;"><div style="height:100%;width:'+w.toFixed(0)+'%;background:#6366f1;"></div></div><span style="min-width:80px;text-align:right;color:var(--txt2);font-variant-numeric:tabular-nums;">'+fmtN(v)+' un · '+pc.toFixed(0)+'%</span></div>';}
+    var tArr=tams.filter(function(t){return t!=='-';});           // ordem de grade (38→58)
+    var maxT=Math.max.apply(null,tArr.map(function(t){return totTam[t];}).concat([1]));
+    var cArr=Object.keys(totCor).sort(function(a,b){return totCor[b]-totCor[a];}); // rank por volume
+    var maxC=Math.max.apply(null,cArr.map(function(c){return totCor[c];}).concat([1]));
+    html+='<div class="drawer-section" style="margin-bottom:18px;"><div class="drawer-section-title">Total de unidades por tamanho e por cor</div>';
+    html+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px;">';
+    html+='<div><div style="font-size:10px;font-weight:700;color:var(--txt3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;">Por tamanho</div>'+(tArr.length?tArr.map(function(t){return _barTC(t,totTam[t],maxT);}).join(''):'<span style="color:var(--txt3);font-size:11px;">sem grade</span>')+'</div>';
+    html+='<div><div style="font-size:10px;font-weight:700;color:var(--txt3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;">Por cor</div>'+(cArr.length?cArr.map(function(c){return _barTC(c.length>13?c.slice(0,12)+'…':c,totCor[c],maxC);}).join(''):'<span style="color:var(--txt3);font-size:11px;">sem cor</span>')+'</div>';
+    html+='</div></div>';
   }
 
   // Série temporal
