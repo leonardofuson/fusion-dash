@@ -1776,6 +1776,7 @@ function mesesNoRange(de,ate){
 }
 
 function renderLojaCards(){
+  var mensal=STATE.viewMode==='mensal';
   var pedidosUse=STATE.pedidosEscopo||STATE.pedidos;
   var anterioresUse=STATE.anterioresEscopo||STATE.anteriores;
   var cur=calcKPIs(pedidosUse).porLoja;
@@ -1813,8 +1814,9 @@ function renderLojaCards(){
     var dlt=p.fat?((c.fat-p.fat)/p.fat*100):null;
     var dltTxt=dlt===null?'—':((dlt>=0?'+':'')+dlt.toFixed(1)+'%');
     var pa=paLoja[n];
-    var proj=projMes[n]||0;
-    var meta=STATE.metas[n]||0;
+    // Mensal: sem previsão de mês nem meta por loja (não fazem sentido em janela de meses)
+    var proj=mensal?0:(projMes[n]||0);
+    var meta=mensal?0:(STATE.metas[n]||0);
     var cor=getCor(n);
     var cid='cc-spark-'+(cardId++);
     var fatMesLoja=fatMesPorLoja[n]||0;
@@ -1843,7 +1845,7 @@ function renderLojaCards(){
       '<div class="cc-head"><span class="cc-dot"></span><span class="cc-name">'+lojaDisplay(n)+'</span></div>'+
       '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:4px;">'+
         '<div><div class="cc-receita">'+fmt(c.fat)+(meta>0?'<span style="font-size:12px;font-weight:700;color:'+pctMetaCor+';margin-left:8px;">'+pctMetaAtual.toFixed(0)+'%</span>':'')+'</div>'+
-        '<div class="cc-delta-row"><span class="delta-badge '+(dlt>=0.5?'up':(dlt<=-0.5?'down':'flat'))+'">'+dltTxt+'</span><span>vs anterior</span></div></div>'+
+        '<div class="cc-delta-row"><span class="delta-badge '+(dlt>=0.5?'up':(dlt<=-0.5?'down':'flat'))+'">'+dltTxt+'</span><span>'+(mensal?'vs ano passado':'vs anterior')+'</span></div></div>'+
         (proj>0?'<div style="text-align:right;"><div style="font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:2px;">Previsão mês</div><div style="font-size:1.15rem;font-weight:800;color:'+projCor+';font-variant-numeric:tabular-nums;">'+fmt(proj)+'</div>'+(meta>0?'<div style="font-size:10px;font-weight:700;color:'+projCor+';">'+projPctMeta.toFixed(0)+'% da meta</div>':'')+'</div>':'')+
       '</div>'+
       '<div class="cc-bar-wrap"><div class="cc-bar-fill" style="width:'+pct.toFixed(1)+'%"></div></div>'+
