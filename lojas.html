@@ -454,6 +454,7 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
       <th class="r sortable" data-sort="meta" onclick="setVendSort('meta')" title="Meta do vendedor no(s) mês(es) do período">Meta</th>
       <th class="r sortable" data-sort="metaPct" onclick="setVendSort('metaPct')" title="% atingido da meta (realizado do período ÷ meta)">Atg.%</th>
       <th class="r sortable" data-sort="proj" onclick="setVendSort('proj')" title="Previsão fim do mês: realizado + projeção do resto do mês corrente (ritmo atual)">Prev. mês</th>
+      <th class="r sortable" data-sort="comissao" onclick="setVendSort('comissao')" title="Comissão sobre as vendas do período: 2% se atingiu 100% da meta, senão 0,75%">Comissão</th>
     </tr></thead><tbody id="tbody-vendedores"></tbody></table></div>
   </div>
 
@@ -2147,6 +2148,8 @@ function renderVendedores(){
   }
 
   // --- Meta / atingimento / previsão (period-aware: segue o mês do período) ---
+  // Contas que NÃO são vendedor (não recebem comissão — mostram —).
+  var NAO_VENDEDORES=new Set(['Online SBC','Suporte Marcolina','Suporte Oriente','Compra Funcionário','Vendedor Não Identificado']);
   var vm=calcVendMes();                 // fatMes (MTD do mês corrente) — base da projeção do resto do mês
   var mesesRange=mesesNoRange(DE,ATE);  // meses cobertos pelo período selecionado
   var fatPerVend={};                    // realizado do período por vendedor (sem filtro de produto)
@@ -2169,6 +2172,12 @@ function renderVendedores(){
     v.proj=realizado+remanescente;        // previsão até fim do mês (só projeta a parte do mês corrente)
     v.metaPct=v.meta>0?realizado/v.meta*100:-1;
     v.projPct=v.meta>0?v.proj/v.meta*100:-1;
+    // Comissão (regra hardcoded): atingiu 100% da meta → 2% sobre vendas; senão → 0,75%.
+    // Base = realizado do período (total do vendedor, não filtrado por produto).
+    // Contas que não são vendedor de verdade não recebem comissão (mostram —).
+    v.realizado=realizado;
+    v.comissaoPct=NAO_VENDEDORES.has(v.nome)?0:((v.meta>0 && realizado>=v.meta)?0.02:0.0075);
+    v.comissao=realizado*v.comissaoPct;
   });
   var sk=STATE.vendSort.key, sd=STATE.vendSort.dir==='asc'?1:-1;
   var arr=Object.values(agg).sort(function(a,b){
@@ -2206,16 +2215,18 @@ function renderVendedores(){
       :'—';
     // Previsão: verde se ≥ meta, vermelho se abaixo
     var prevCor=v.meta>0?(v.projPct>=100?'var(--green)':'var(--red)'):'';
+    var comCor=v.comissaoPct>=0.02?'var(--green)':'#a1a1aa';
     var metaTd=
       '<td class="val">'+(v.meta>0?fmt(v.meta):'—')+'</td>'+
       '<td class="val" style="text-align:center;">'+atgBar+'</td>'+
-      '<td class="val" style="color:'+prevCor+';font-weight:'+(v.meta>0?'800':'600')+';">'+(v.proj>0?fmt(v.proj):'—')+'</td>';
+      '<td class="val" style="color:'+prevCor+';font-weight:'+(v.meta>0?'800':'600')+';">'+(v.proj>0?fmt(v.proj):'—')+'</td>'+
+      '<td class="val" style="color:'+comCor+';font-weight:700;" title="'+(v.comissaoPct*100).toFixed(2).replace('.',',')+'% sobre '+fmt(v.realizado)+'">'+(v.comissao>0?fmt(v.comissao):'—')+'</td>';
     return '<tr style="cursor:pointer;'+activeStyle+'" onclick="selectVend(\''+v.nome.replace(/'/g,"\\'")+'\')"><td class="r">'+(i+1)+'</td><td style="font-weight:600">'+v.nome+'</td><td style="color:'+getCor(v.lojaTop)+'">'+lojaDisplay(v.lojaTop)+'</td><td class="val">'+fmt(v.fat)+'</td><td class="val">'+fmtN(v.ped)+'</td><td class="val">'+fmtN(v.qtd)+'</td><td class="val">'+fmt(tm)+'</td><td class="val">'+(pa!=null?fmtD(pa):'—')+'</td>'+metaTd+'</tr>';
   }).join('');
   var wrap=document.getElementById('tbody-vendedores').parentElement.parentElement.parentElement; // .tb-wrap-scroll
   // inject breadcrumb above the table
   document.getElementById('vend-breadcrumb-slot').innerHTML=breadcrumb;
-  document.getElementById('tbody-vendedores').innerHTML=html||'<tr><td colspan="11" style="text-align:center;color:#d4d4d8;padding:20px;">Sem vendedores no escopo.</td></tr>';
+  document.getElementById('tbody-vendedores').innerHTML=html||'<tr><td colspan="12" style="text-align:center;color:#d4d4d8;padding:20px;">Sem vendedores no escopo.</td></tr>';
 }
 
 // ============================================================
