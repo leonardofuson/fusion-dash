@@ -359,7 +359,7 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
         <b>Devoluções</b> = reembolso real (ML <i>claims</i> · Shopee <i>returns</i> · TikTok <i>statement</i> · Site <i>Shopify refunds</i>) + <i>chargeback</i> (só Site). Troca/vale-crédito do site NÃO entra (não é perda de caixa). ·
         <b>Frete</b> = custo do seller via API. ·
         <b>Receita Líquida</b> = Bruta − Comissão − Devoluções − Frete. ·
-        <b>Ads</b> = mídia real (Mercado Ads + Shopee Ads); Meta/Google/TikTok pendentes (aparecem R$0). ·
+        <b>Ads</b> = mídia real (Mercado Ads + Shopee Ads + <b>Meta → Site Próprio</b>, via API); Google fica nas lojas físicas e TikTok ainda pendente. ·
         <b>CMV</b> = custo real do produto (item × custo) nos meses recentes; proporção real por canal nos antigos. ·
         <b>Resultado</b> = Líquida − CMV.
       </div>
@@ -595,12 +595,14 @@ async function fetchTroqueSite(de,ate){
 // Ads (custo de mídia). HOJE só Mercado Ads (ML) — Meta/Google/TikTok/Shopee pendentes de
 // credenciais. Soma só level=campaign (item duplica exatamente o mesmo gasto). Coorte por data.
 async function fetchAds(de,ate){
-  // level=campaign pra ambos (ML: item duplica o mesmo gasto; Shopee grava 1 linha/dia em campaign).
-  return buscarTudo('ads_metrics','select=conta,gasto,plataforma&plataforma=in.(mercado_ads,shopee_ads)&level=eq.campaign&data=gte.'+de+'&data=lte.'+ate);
+  // level=campaign (item duplica o gasto em ML/Meta). Meta → Site Próprio; Google NÃO entra (vai p/ lojas físicas).
+  // Validado 15/06: campaign-level bate ao centavo com o dash de Marketing (mvw_marketing_mer_dia) no mês fechado.
+  return buscarTudo('ads_metrics','select=conta,gasto,plataforma&plataforma=in.(mercado_ads,shopee_ads,meta_ads)&level=eq.campaign&data=gte.'+de+'&data=lte.'+ate);
 }
 function adsRowsToByCanal(rows){
   var by={};
   (rows||[]).forEach(function(r){
+    if(r.plataforma==='meta_ads'){by['Site Próprio']=(by['Site Próprio']||0)+parseFloat(r.gasto||0);return;}  // Meta = tráfego pro site
     var oc=r.conta==='confeccoes'?'confeccoes':'fio_e_trama';
     var raw=r.plataforma==='shopee_ads'
       ?(oc==='confeccoes'?'Shopee Confecções':'Shopee FIO')
@@ -919,7 +921,7 @@ function renderWaterfallImediato(cur,prev){
     {lbl:'− Devoluções',val:-cur.devolucoes,color:'#f43f5e',prev:-prev.devolucoes},
     {lbl:'− Frete',val:-cur.frete,color:'#8b5cf6',prev:-prev.frete},
     {lbl:'= Receita Líquida',val:cur.liquida,color:cur.liquida>=0?'#06b6d4':'#f43f5e',prev:prev.liquida},
-    {lbl:'− Ads (ML)',val:-cur.ads,color:'#eab308',prev:-prev.ads},
+    {lbl:'− Ads',val:-cur.ads,color:'#eab308',prev:-prev.ads},
     {lbl:'− CMV (estim)',val:-cur.cmv,color:'#ec4899',prev:-prev.cmv},
     {lbl:'= Resultado',val:cur.lucro,color:cur.lucro>=0?'#22c55e':'#f43f5e',prev:prev.lucro}
   ];
@@ -943,7 +945,7 @@ function renderWaterfall(){
     {lbl:'− Devoluções',val:-cur.devolucoes,color:'#f43f5e',prev:-prev.devolucoes},
     {lbl:'− Frete',val:-cur.frete,color:'#8b5cf6',prev:-prev.frete},
     {lbl:'= Receita Líquida',val:cur.liquida,color:cur.liquida>=0?'#06b6d4':'#f43f5e',prev:prev.liquida},
-    {lbl:'− Ads (ML)',val:-cur.ads,color:'#eab308',prev:-prev.ads},
+    {lbl:'− Ads',val:-cur.ads,color:'#eab308',prev:-prev.ads},
     {lbl:'− CMV',val:-cur.cmv,color:'#ec4899',prev:-prev.cmv},
     {lbl:'= Resultado',val:cur.lucro,color:cur.lucro>=0?'#22c55e':'#f43f5e',prev:prev.lucro}
   ];
