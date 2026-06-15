@@ -419,9 +419,9 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
     <div id="ctrl-mensal" style="display:none;gap:16px;align-items:center;flex-wrap:wrap;">
       <div class="chips">
         <button class="chip" data-mpreset="6m" onclick="setPeriodoMes('6m',this)">6 meses</button>
-        <button class="chip on" data-mpreset="12m" onclick="setPeriodoMes('12m',this)">12 meses</button>
+        <button class="chip" data-mpreset="12m" onclick="setPeriodoMes('12m',this)">12 meses</button>
         <button class="chip" data-mpreset="24m" onclick="setPeriodoMes('24m',this)">24 meses</button>
-        <button class="chip" data-mpreset="ytd" onclick="setPeriodoMes('ytd',this)">Este Ano</button>
+        <button class="chip on" data-mpreset="ytd" onclick="setPeriodoMes('ytd',this)">Este Ano</button>
       </div>
       <div class="drange">
         <input type="month" id="mes-de" class="dinput">
@@ -746,7 +746,7 @@ function setView(mode,el){
   document.getElementById('compare-lbl').textContent=(mode==='mensal')?'vs ano passado':'vs período anterior';
   var hint=document.getElementById('viewbar-hint');
   if(hint) hint.textContent=(mode==='mensal')?'Comparação mês a mês · vs mesmo período do ano passado':'Acompanhamento dia a dia do mês corrente';
-  if(mode==='mensal') setPeriodoMes('12m', document.querySelector('.chip[data-mpreset="12m"]'));
+  if(mode==='mensal') setPeriodoMes('ytd', document.querySelector('.chip[data-mpreset="ytd"]'));
   else setPeriodo('mtd', document.querySelector('.chip[data-preset="mtd"]'));
 }
 function setPeriodoMes(preset,el){
