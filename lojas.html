@@ -797,10 +797,12 @@ function periodoAnterior(de,ate){
   return {de:novoDe, ate:novoAte};
 }
 
+var REDISTRIBUIR_LOJA='Outras Receitas Lojas';  // bucket sem loja real → rateado entre as lojas
 function filtrarPedidos(lista){
   var incCanc=false; // filtro "incluir cancelados" removido — sempre exclui cancelados/devolvidos
   var CANC=['cancelado','devolvido'];
-  var ativos=[];
+  // Passe 1: classifica (sem filtro de loja ainda — redistribuição precisa de todos)
+  var tmp=[];
   lista.forEach(function(p){
     var nome=getLoja(p.loja_nome,p.origem_conta);
     if(IGNORAR_LOJA.indexOf(nome)>=0) return;
@@ -811,6 +813,30 @@ function filtrarPedidos(lista){
     p._cor=getCor(nome);
     p._canc=isCanc;
     p._vend=(p.vendedor||'').trim()||'Vendedor Não Identificado';
+    tmp.push(p);
+  });
+  // Rateio: "Outras Receitas Lojas" é distribuído entre as lojas reais
+  // proporcionalmente à participação de cada uma na receita (greedy por déficit,
+  // pra a soma adicionada bater ~exato com o share). Mantém o total intacto.
+  var realTot={}, realSum=0;
+  tmp.forEach(function(p){ if(p._nome!==REDISTRIBUIR_LOJA && !p._canc){var v=parseFloat(p.valor_bruto||0);realTot[p._nome]=(realTot[p._nome]||0)+v;realSum+=v;} });
+  var lojasReais=Object.keys(realTot);
+  if(lojasReais.length){
+    var outras=tmp.filter(function(p){return p._nome===REDISTRIBUIR_LOJA;});
+    var outrasSum=0; outras.forEach(function(p){if(!p._canc)outrasSum+=parseFloat(p.valor_bruto||0);});
+    var target={}, added={};
+    lojasReais.forEach(function(n){target[n]=(realTot[n]/realSum)*outrasSum;added[n]=0;});
+    outras.sort(function(a,b){return parseFloat(b.valor_bruto||0)-parseFloat(a.valor_bruto||0);});
+    outras.forEach(function(p){
+      var v=p._canc?0:parseFloat(p.valor_bruto||0);
+      var best=lojasReais[0], bestDef=-Infinity;
+      lojasReais.forEach(function(n){var def=target[n]-added[n];if(def>bestDef){bestDef=def;best=n;}});
+      p._nome=best; p._cor=getCor(best); added[best]+=v;
+    });
+  }
+  // Passe 2: aplica filtro de loja selecionada (já com _nome redistribuído)
+  var ativos=[];
+  tmp.forEach(function(p){
     if(STATE.lojasSel && Object.keys(STATE.lojasSel).length>0 && !STATE.lojasSel[p._nome]) return;
     ativos.push(p);
   });
@@ -924,6 +950,7 @@ async function carregar(){
       STATE.pedidosRaw.forEach(function(p){
         var n=getLoja(p.loja_nome,p.origem_conta);
         if(IGNORAR_LOJA.indexOf(n)>=0) return;
+        if(n===REDISTRIBUIR_LOJA) return;  // bucket rateado entre as lojas — não vira chip
         if(!seen[n]){seen[n]=true;STATE.lojasSel[n]=true;}
       });
       STATE.lojas=Object.keys(seen).sort();
