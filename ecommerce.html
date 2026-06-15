@@ -465,10 +465,17 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
       <span class="filter-label">Janela:</span>
       <div class="chips">
         <button class="chip" data-mp="6" onclick="setMesesMensal(6,this)">6 meses</button>
-        <button class="chip on" data-mp="12" onclick="setMesesMensal(12,this)">12 meses</button>
+        <button class="chip" data-mp="12" onclick="setMesesMensal(12,this)">12 meses</button>
         <button class="chip" data-mp="24" onclick="setMesesMensal(24,this)">24 meses</button>
-        <button class="chip" data-mp="ytd" onclick="setMensalYTD(this)">YTD</button>
+        <button class="chip on" data-mp="ytd" onclick="setMensalYTD(this)">Este Ano</button>
       </div>
+      <div class="drange">
+        <input type="month" id="mes-de" class="dinput">
+        <span style="color:var(--txt3);font-size:12px;">até</span>
+        <input type="month" id="mes-ate" class="dinput">
+        <button class="btnf" onclick="aplicarFiltroMes()">Filtrar</button>
+      </div>
+      <label class="toggle"><input type="checkbox" id="chk-mensal-yoy" checked onchange="carregarMensal()"> vs ano passado</label>
       <span id="upd-mensal" style="margin-left:auto;font-size:11px;color:var(--txt3);"></span>
     </div>
     <div id="mensal-kpis" class="kpi-grid"><div class="kpi"><div class="kpi-lbl">Carregando…</div><div class="spin"></div></div></div>
@@ -801,8 +808,9 @@ function setTab(t){
   if(fd)fd.style.display = t==='mensal'?'none':'';
   if(fc)fc.style.display = t==='mensal'?'none':'';
   if(t==='mensal'){
-    // Primeira entrada → carrega a janela default (12m) pra TODAS as seções do Mensal.
-    if(!STATE.mensalRows){ aplicarJanelaMensal(STATE.mensalMeses||12, null); }
+    // Primeira entrada → abre em "Este Ano" (YTD), como o dash Lojas — janela onde a
+    // comparação YoY tem base completa. Carrega TODAS as seções do Mensal.
+    if(!STATE.mensalRows){ aplicarJanelaMensal('ytd', null); }
     else {
       // Re-render (Pareto/charts são canvas e renderizam em 0px se desenhados escondidos).
       try{renderMensal();renderGeoMV(STATE.geoMVRows||[]);renderPaymentsMV(STATE.pgtoMVRows||[]);renderPareto();renderDowHeatMV(STATE.mensalSkuRows||[]);}catch(e){console.warn('mensal re-render',e);}
@@ -1889,6 +1897,9 @@ function inicioJanelaMensal(meses){
   m-=(meses-1);while(m<1){m+=12;y--;}
   return y+'-'+('0'+m).slice(-2)+'-01';
 }
+// 'YYYY-MM' → 'YYYY-MM-DD' do último dia do mês (mesma lógica do dash Lojas).
+function fimDoMes(ym){var y=+ym.slice(0,4),m=+ym.slice(5,7);var last=new Date(Date.UTC(y,m,0)).getUTCDate();return ym.slice(0,7)+'-'+('0'+last).slice(-2);}
+function anoAtras(ym){return (+ym.slice(0,4)-1)+ym.slice(4,7);}  // 'YYYY-MM' → mesmo mês, ano-1
 function setMesesMensal(n,el){ aplicarJanelaMensal(n,el); }
 function setMensalYTD(el){ aplicarJanelaMensal('ytd',el); }
 // Régua Janela do Mensal: define a janela e dirige TODAS as seções da aba
@@ -1899,12 +1910,23 @@ function aplicarJanelaMensal(modo,el){
   // el vem do clique; quando chamado pelo setTab (default), realça o chip pelo data-mp.
   if(!el)el=document.querySelector('#tab-mensal .chip[data-mp="'+modo+'"]');
   if(el)el.classList.add('on');
-  var h=hojeSP(),de;
+  var h=hojeSP(),de,ate=fimDoMes(h.slice(0,7));
   if(modo==='ytd'){ de=inicioAno(); STATE.mensalYTD=true; }
   else { STATE.mensalMeses=modo; STATE.mensalYTD=false; de=inicioJanelaMensal(modo); }
-  STATE.mensalDe=de; STATE.mensalAte=h; STATE.mensalRows=null;
+  STATE.mensalDe=de; STATE.mensalAte=ate; STATE.mensalRows=null;
+  var mi=document.getElementById('mes-de'),ma=document.getElementById('mes-ate');
+  if(mi)mi.value=de.slice(0,7); if(ma)ma.value=ate.slice(0,7);
   carregarMensal();
-  carregarMensalDetalhe(de,h);
+  carregarMensalDetalhe(de,ate);
+}
+// Picker de intervalo por MÊS (igual ao dash Lojas): escolhe mês-de até mês-até.
+function aplicarFiltroMes(){
+  var md=document.getElementById('mes-de').value, ma=document.getElementById('mes-ate').value;
+  if(!md||!ma)return;
+  document.querySelectorAll('#tab-mensal .chip[data-mp]').forEach(function(c){c.classList.remove('on');});
+  STATE.mensalDe=md+'-01'; STATE.mensalAte=fimDoMes(ma); STATE.mensalYTD=false; STATE.mensalRows=null;
+  carregarMensal();
+  carregarMensalDetalhe(STATE.mensalDe,STATE.mensalAte);
 }
 async function carregarMensal(){
   var u=document.getElementById('upd-mensal');if(u)u.textContent='Carregando…';
@@ -1947,16 +1969,23 @@ function sumWin(arr){var a={receita:0,liquida:0,resultado:0,pedidos:0,cmv:0};
   a.margem=a.receita>0?a.resultado/a.receita*100:0;a.ticket=a.pedidos>0?a.receita/a.pedidos:0;a.cmvPct=a.receita>0?a.cmv/a.receita*100:0;return a;}
 function renderMensal(){
   var de=(STATE.mensalDe||inicioJanelaMensal(STATE.mensalMeses||12)).slice(0,7);
+  var ate=(STATE.mensalAte||hojeSP()).slice(0,7);
   var all=aggMensal(STATE.mensalRows);                                  // todos os meses
-  var M=all.filter(function(m){return m.ym>=de;});                     // janela selecionada
+  var M=all.filter(function(m){return m.ym>=de&&m.ym<=ate;});          // janela selecionada
   if(!M.length){document.getElementById('mensal-kpis').innerHTML='<div class="kpi"><div class="kpi-lbl">Sem dados</div></div>';return;}
-  // KPIs = TOTAIS da janela (respondem à régua 6/12/24/YTD). Δ = janela anterior equivalente.
-  var prevDe=subMeses(de+'-01',M.length).slice(0,7);
-  var Mprev=all.filter(function(m){return m.ym>=prevDe&&m.ym<de;});
-  var cur=sumWin(M),prev=sumWin(Mprev),hasPrev=prev.receita>0;
+  // KPIs = TOTAIS da janela. Comparação (igual ao dash Lojas): YoY = mesmo período do
+  // ano passado quando o toggle "vs ano passado" está ligado; senão janela anterior equiv.
+  var yoyEl=document.getElementById('chk-mensal-yoy'),useYoY=!yoyEl||yoyEl.checked;
+  var Mprev;
+  if(useYoY){ Mprev=all.filter(function(m){return m.ym>=anoAtras(de)&&m.ym<=anoAtras(ate);}); }
+  else { var prevDe=subMeses(de+'-01',M.length).slice(0,7); Mprev=all.filter(function(m){return m.ym>=prevDe&&m.ym<de;}); }
+  var cur=sumWin(M),prev=sumWin(Mprev);
+  // Só mostra Δ se a base de comparação cobre os mesmos N meses (evita comparar com base parcial).
+  var hasPrev=prev.receita>0 && Mprev.length===M.length;
+  var cmpTxt=useYoY?'vs ano passado':'vs período anterior';
   function dp(a,b){return b?((a-b)/b*100):0;}
   function bdg(v){var c=v>=0?'#22c55e':'#f43f5e';return '<span style="color:'+c+';font-size:11px">'+(v>=0?'▲':'▼')+' '+Math.abs(v).toFixed(0)+'%</span>';}
-  function dlt(a,b){return hasPrev?'<div class="kpi-delta">'+bdg(dp(a,b))+'</div>':'';}
+  function dlt(a,b){return hasPrev?'<div class="kpi-delta">'+bdg(dp(a,b))+' <span style="color:var(--txt3);font-weight:600;font-size:10px">'+cmpTxt+'</span></div>':'';}
   var k='';
   k+='<div class="kpi" style="--kpi-accent:#6366f1"><div class="kpi-lbl">Receita Bruta</div><div class="kpi-val">'+fmt(cur.receita)+'</div>'+dlt(cur.receita,prev.receita)+'</div>';
   k+='<div class="kpi" style="--kpi-accent:#06b6d4"><div class="kpi-lbl">Receita Líquida</div><div class="kpi-val">'+fmt(cur.liquida)+'</div>'+dlt(cur.liquida,prev.liquida)+'</div>';
