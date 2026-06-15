@@ -1533,8 +1533,19 @@ var heroTotalsPlugin={
       var v=totals[i];
       if(v<=0) continue;
       var txt=v>=1e6?'R$ '+(v/1e6).toFixed(1)+'M':(v>=1e3?'R$ '+(v/1e3).toFixed(1)+'k':'R$ '+Math.round(v));
+      // Delta YoY (visão mensal): vs o mesmo mês do ano passado
+      var dTxt='',dCol='#4ade80';
+      if(STATE.viewMode==='mensal'&&STATE.heroMonthKeys&&STATE.heroPrevByMonth){
+        var mk=STATE.heroMonthKeys[i];
+        if(mk){
+          var pk=(parseInt(mk.slice(0,4))-1)+mk.slice(4);   // mesmo mês, ano-1
+          var pv=STATE.heroPrevByMonth[pk];
+          if(pv&&pv>0){var dp=(v-pv)/pv*100;dTxt='  '+(dp>=0?'+':'')+dp.toFixed(0)+'%';dCol=dp>=0?'#4ade80':'#f87171';}
+        }
+      }
+      var full=txt+dTxt;
       var x=pt.x, y=pt.y-8;
-      var w=ctx.measureText(txt).width;
+      var w=ctx.measureText(full).width;
       ctx.fillStyle='rgba(9,9,11,0.85)';
       ctx.strokeStyle='rgba(34,197,94,0.5)';
       ctx.lineWidth=1;
@@ -1548,8 +1559,13 @@ var heroTotalsPlugin={
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
+      // valor em branco + delta colorido, na mesma linha
+      ctx.textAlign='left';
+      var sx=x-w/2;
       ctx.fillStyle='#fafafa';
-      ctx.fillText(txt,x,y-2);
+      ctx.fillText(txt,sx,y-2);
+      if(dTxt){ctx.fillStyle=dCol;ctx.fillText(dTxt,sx+ctx.measureText(txt).width,y-2);}
+      ctx.textAlign='center';
     }
     ctx.restore();
   }
@@ -1670,6 +1686,19 @@ function renderHero(){
     if(mensal){var pp=d.split('-');return MES_ABREV[parseInt(pp[1])-1]+'/'+pp[0].slice(2);}
     return new Date(d+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
   });
+  // YoY por mês pro plugin de totais: total do MESMO mês no ano anterior (delta no rótulo)
+  STATE.heroMonthKeys = mensal ? dias.slice() : null;
+  STATE.heroPrevByMonth = null;
+  if(mensal){
+    var prevUse=STATE.anterioresEscopo||STATE.anteriores||[];
+    var pm={};
+    prevUse.forEach(function(p){
+      if(p._canc) return;
+      var k=(p.data_pedido||'').slice(0,7); if(!k) return;
+      pm[k]=(pm[k]||0)+parseFloat(p.valor_bruto||0);
+    });
+    STATE.heroPrevByMonth=pm;
+  }
   if(CHARTS.hero) CHARTS.hero.destroy();
   CHARTS.hero=new Chart(document.getElementById('chart-hero'),{
     type:'line',
