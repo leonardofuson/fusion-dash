@@ -365,23 +365,46 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
 <div class="main">
 
   <div class="filtros">
-    <div class="chips">
-      <button class="chip" data-preset="hoje" onclick="setPeriodo('hoje',this)">Hoje</button>
-      <button class="chip" data-preset="ontem" onclick="setPeriodo('ontem',this)">Ontem</button>
-      <button class="chip" data-preset="7d" onclick="setPeriodo('7d',this)">7 dias</button>
-      <button class="chip" data-preset="30d" onclick="setPeriodo('30d',this)">30 dias</button>
-      <button class="chip on" data-preset="mtd" onclick="setPeriodo('mtd',this)">Este Mês</button>
-      <button class="chip" data-preset="m-1" onclick="setPeriodo('m-1',this)">Último Mês</button>
-      <button class="chip" data-preset="ytd" onclick="setPeriodo('ytd',this)">Este Ano</button>
-      <button class="chip" data-preset="12m" onclick="setPeriodo('12m',this)">12m</button>
+    <div class="chips view-tabs">
+      <button id="tab-diario" class="chip on" onclick="setView('diario',this)">📅 Diário</button>
+      <button id="tab-mensal" class="chip" onclick="setView('mensal',this)">🗓️ Mensal</button>
     </div>
-    <div class="drange">
-      <input type="date" id="dt-de" class="dinput" onclick="this.showPicker && this.showPicker()" onfocus="this.showPicker && this.showPicker()">
-      <span style="color:var(--txt3);font-size:12px;">até</span>
-      <input type="date" id="dt-ate" class="dinput" onclick="this.showPicker && this.showPicker()" onfocus="this.showPicker && this.showPicker()">
-      <button class="btnf" onclick="aplicarFiltro()">Filtrar</button>
+    <span class="topbar-div" style="height:20px;"></span>
+    <!-- Controles DIÁRIO -->
+    <div id="ctrl-diario" style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
+      <div class="chips">
+        <button class="chip" data-preset="hoje" onclick="setPeriodo('hoje',this)">Hoje</button>
+        <button class="chip" data-preset="ontem" onclick="setPeriodo('ontem',this)">Ontem</button>
+        <button class="chip" data-preset="7d" onclick="setPeriodo('7d',this)">7 dias</button>
+        <button class="chip" data-preset="30d" onclick="setPeriodo('30d',this)">30 dias</button>
+        <button class="chip on" data-preset="mtd" onclick="setPeriodo('mtd',this)">Este Mês</button>
+        <button class="chip" data-preset="m-1" onclick="setPeriodo('m-1',this)">Último Mês</button>
+        <button class="chip" data-preset="ytd" onclick="setPeriodo('ytd',this)">Este Ano</button>
+        <button class="chip" data-preset="12m" onclick="setPeriodo('12m',this)">12m</button>
+      </div>
+      <div class="drange">
+        <input type="date" id="dt-de" class="dinput" onclick="this.showPicker && this.showPicker()" onfocus="this.showPicker && this.showPicker()">
+        <span style="color:var(--txt3);font-size:12px;">até</span>
+        <input type="date" id="dt-ate" class="dinput" onclick="this.showPicker && this.showPicker()" onfocus="this.showPicker && this.showPicker()">
+        <button class="btnf" onclick="aplicarFiltro()">Filtrar</button>
+      </div>
     </div>
-    <label class="toggle"><input type="checkbox" id="chk-compare" checked onchange="carregar()"> vs período anterior</label>
+    <!-- Controles MENSAL -->
+    <div id="ctrl-mensal" style="display:none;gap:16px;align-items:center;flex-wrap:wrap;">
+      <div class="chips">
+        <button class="chip" data-mpreset="6m" onclick="setPeriodoMes('6m',this)">6 meses</button>
+        <button class="chip on" data-mpreset="12m" onclick="setPeriodoMes('12m',this)">12 meses</button>
+        <button class="chip" data-mpreset="24m" onclick="setPeriodoMes('24m',this)">24 meses</button>
+        <button class="chip" data-mpreset="ytd" onclick="setPeriodoMes('ytd',this)">Este Ano</button>
+      </div>
+      <div class="drange">
+        <input type="month" id="mes-de" class="dinput">
+        <span style="color:var(--txt3);font-size:12px;">até</span>
+        <input type="month" id="mes-ate" class="dinput">
+        <button class="btnf" onclick="aplicarFiltroMes()">Filtrar</button>
+      </div>
+    </div>
+    <label class="toggle"><input type="checkbox" id="chk-compare" checked onchange="carregar()"> <span id="compare-lbl">vs período anterior</span></label>
     <span id="upd" style="margin-left:auto;font-size:11px;color:#d4d4d8;font-weight:600;"></span>
   </div>
 
@@ -405,7 +428,7 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
 
   <div class="card">
     <div class="card-title">
-      <span>Receita diária por loja</span>
+      <span id="hero-title">Receita diária por loja</span>
       <div class="chips" style="gap:4px;">
         <button class="chip-sm on" id="stk-abs" onclick="setStack('abs')">R$</button>
         <button class="chip-sm" id="stk-pct" onclick="setStack('pct')">100%</button>
@@ -420,10 +443,6 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
   </div>
 
 
-  <div class="card">
-    <div class="card-title">Mix de Produtos no fat — Pareto 80/20</div>
-    <div class="chart-sm" style="height:280px"><canvas id="chart-pareto"></canvas></div>
-  </div>
 
   <div class="card">
     <div class="card-title">
@@ -456,6 +475,11 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
       <th class="r sortable" data-sort="proj" onclick="setVendSort('proj')" title="Previsão fim do mês: realizado + projeção do resto do mês corrente (ritmo atual)">Prev. mês</th>
       <th class="r sortable" data-sort="comissao" onclick="setVendSort('comissao')" title="Comissão sobre as vendas do período: 2% se atingiu 100% da meta, senão 0,75%. Cor = trajetória (previsão fim do mês ÷ meta): verde ≥100% · amarelo 95-99% · vermelho <95%">Comissão</th>
     </tr></thead><tbody id="tbody-vendedores"></tbody></table></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title" id="pareto-title">Mix de Produtos no fat — Pareto 80/20</div>
+    <div class="chart-sm" style="height:280px"><canvas id="chart-pareto"></canvas></div>
   </div>
 
 </div>
@@ -640,7 +664,7 @@ async function fetchProdutos(){
 
 // ---- State ----
 var DE=null, ATE=null;
-var STATE={pedidos:[],anteriores:[],pedidosEscopo:[],anterioresEscopo:[],itens:[],prods:null,lojas:[],lojasSel:{},stackMode:'abs',skuGroups:[],skuSel:null,vendSel:null,totLoja:{},metas:{},metasVend:{},metasLoaded:false,freshness:null,lojaHighlight:null,catSel:null,vendSort:{key:'fat',dir:'desc'},skuSort:{key:'receita',dir:'desc'}};
+var STATE={pedidos:[],anteriores:[],pedidosEscopo:[],anterioresEscopo:[],itens:[],prods:null,lojas:[],lojasSel:{},stackMode:'abs',skuGroups:[],skuSel:null,vendSel:null,totLoja:{},metas:{},metasVend:{},metasLoaded:false,freshness:null,lojaHighlight:null,catSel:null,vendSort:{key:'fat',dir:'desc'},skuSort:{key:'receita',dir:'desc'},viewMode:'diario'};
 var CHARTS={hero:null,pareto:null,sparkPed:null,sparkTM:null,sparkPA:null,lojaSparklines:[]};
 
 function setPeriodo(preset,el){
@@ -673,6 +697,53 @@ function aplicarFiltro(){
   document.querySelectorAll('.chip[data-preset]').forEach(function(c){c.classList.remove('on');});
   carregar();
 }
+
+// ===== Visão Diário ↔ Mensal =====
+function somaAno(d,n){var p=d.split('-');return (parseInt(p[0])+n)+'-'+p[1]+'-'+p[2];}
+function fimDoMes(ym){ // ym='YYYY-MM' → 'YYYY-MM-DD' do último dia
+  var y=parseInt(ym.slice(0,4)),m=parseInt(ym.slice(5,7));
+  var last=new Date(Date.UTC(y,m,0)).getUTCDate();
+  return ym+'-'+String(last).padStart(2,'0');
+}
+function setView(mode,el){
+  if(STATE.viewMode===mode){return;}
+  STATE.viewMode=mode;
+  document.getElementById('tab-diario').classList.toggle('on',mode==='diario');
+  document.getElementById('tab-mensal').classList.toggle('on',mode==='mensal');
+  document.getElementById('ctrl-diario').style.display=(mode==='diario')?'flex':'none';
+  document.getElementById('ctrl-mensal').style.display=(mode==='mensal')?'flex':'none';
+  document.getElementById('compare-lbl').textContent=(mode==='mensal')?'vs ano passado':'vs período anterior';
+  if(mode==='mensal') setPeriodoMes('12m', document.querySelector('.chip[data-mpreset="12m"]'));
+  else setPeriodo('mtd', document.querySelector('.chip[data-preset="mtd"]'));
+}
+function setPeriodoMes(preset,el){
+  var h=hojeSP(), mesAtual=h.slice(0,7), de, ate=fimDoMes(mesAtual);
+  switch(preset){
+    case '6m':  de=somaMeses(mesAtual,-5)+'-01'; break;
+    case '12m': de=somaMeses(mesAtual,-11)+'-01'; break;
+    case '24m': de=somaMeses(mesAtual,-23)+'-01'; break;
+    case 'ytd': de=h.slice(0,4)+'-01-01'; break;
+    default:    de=somaMeses(mesAtual,-11)+'-01';
+  }
+  DE=de; ATE=ate;
+  document.getElementById('mes-de').value=DE.slice(0,7);
+  document.getElementById('mes-ate').value=ATE.slice(0,7);
+  document.querySelectorAll('.chip[data-mpreset]').forEach(function(c){c.classList.remove('on');});
+  if(el) el.classList.add('on');
+  carregar();
+}
+function somaMeses(ym,n){
+  var y=parseInt(ym.slice(0,4)),m=parseInt(ym.slice(5,7))-1+n;
+  y+=Math.floor(m/12); m=((m%12)+12)%12;
+  return y+'-'+String(m+1).padStart(2,'0');
+}
+function aplicarFiltroMes(){
+  var md=document.getElementById('mes-de').value, ma=document.getElementById('mes-ate').value;
+  if(!md||!ma) return;
+  DE=md+'-01'; ATE=fimDoMes(ma);
+  document.querySelectorAll('.chip[data-mpreset]').forEach(function(c){c.classList.remove('on');});
+  carregar();
+}
 function setStack(m){
   STATE.stackMode=m;
   document.getElementById('stk-abs').classList.toggle('on',m==='abs');
@@ -681,6 +752,12 @@ function setStack(m){
 }
 
 function periodoAnterior(de,ate){
+  // Mensal: compara com o MESMO período do ano passado (YoY).
+  // ate via fimDoMes do mês-alvo (evita 29/02 inválido em ano não-bissexto).
+  if(STATE.viewMode==='mensal'){
+    return {de:somaAno(de,-1), ate:fimDoMes(somaAno(ate,-1).slice(0,7))};
+  }
+  // Diário: período imediatamente anterior de igual duração.
   var dias=daysBetween(de,ate);
   var novoAte=somaDias(de,-1);
   var novoDe=somaDias(novoAte,-(dias-1));
@@ -1446,12 +1523,15 @@ var heroTotalsPlugin={
 
 // ---- Hero stacked area ----
 function renderHero(){
+  var mensal=STATE.viewMode==='mensal';
+  var ht=document.getElementById('hero-title');
+  if(ht) ht.textContent=mensal?'Receita mensal por loja':'Receita diária por loja';
   var pedidosUse=STATE.pedidosEscopo||STATE.pedidos;
   var diario={};
   var lojas={};
   pedidosUse.forEach(function(p){
     if(p._canc) return;
-    var d=(p.data_pedido||'').slice(0,10);
+    var d=mensal?(p.data_pedido||'').slice(0,7):(p.data_pedido||'').slice(0,10);
     if(!d) return;
     if(!diario[d]) diario[d]={};
     diario[d][p._nome]=(diario[d][p._nome]||0)+parseFloat(p.valor_bruto||0);
@@ -1468,7 +1548,7 @@ function renderHero(){
   // Extende o chart até o fim do mês e adiciona uma linha pontilhada
   // projetada a partir de média por dia da semana + média diária observada.
   var hoje=hojeSP();
-  var projActive=(STATE.stackMode==='abs') && DE<=hoje && ATE>=hoje;
+  var projActive=(!mensal) && (STATE.stackMode==='abs') && DE<=hoje && ATE>=hoje;
   var projValues=null;
   var diasExtras=[];
   if(projActive){
@@ -1551,7 +1631,11 @@ function renderHero(){
     });
   }
 
-  var labels=dias.map(function(d){return new Date(d+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});});
+  var MES_ABREV=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  var labels=dias.map(function(d){
+    if(mensal){var pp=d.split('-');return MES_ABREV[parseInt(pp[1])-1]+'/'+pp[0].slice(2);}
+    return new Date(d+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
+  });
   if(CHARTS.hero) CHARTS.hero.destroy();
   CHARTS.hero=new Chart(document.getElementById('chart-hero'),{
     type:'line',
@@ -1797,23 +1881,35 @@ function renderPareto(){
     var f=itensFiltrados();
     grupos=gruparSkusFromItens(f.itens);
   }
-  var top=grupos.slice(0,20);
+  // ordena desc por receita (defensivo) e calcula o corte 80% sobre TODOS os produtos
+  var sorted=grupos.slice().sort(function(a,b){return b.receita-a.receita;});
+  var totAll=sorted.reduce(function(s,x){return s+x.receita;},0);
+  var acc=0,n80=0;
+  for(var i=0;i<sorted.length;i++){acc+=sorted[i].receita;n80++;if(totAll>0&&acc>=0.8*totAll)break;}
+  var ptit=document.getElementById('pareto-title');
+  if(ptit) ptit.textContent='Mix de Produtos — Pareto 80/20 · '+n80+' de '+sorted.length+' produtos = 80% da receita';
+  var top=sorted.slice(0,20);
   var labels=top.map(function(s){
     var nome=s.nome||s.sku_pai;
     return nome.length>26?nome.slice(0,24)+'…':nome;
   });
   var fullNames=top.map(function(s){return s.nome||s.sku_pai;});
   var receita=top.map(function(s){return s.receita;});
-  var tot=grupos.reduce(function(s,x){return s+x.receita;},0);
+  var tot=totAll;
   var cum=0;
   var cumPct=receita.map(function(v){cum+=v;return tot>0?cum/tot*100:0;});
+  // barras dentro do corte 80% (vital few) sólidas; resto esmaecido
+  var barCor=top.map(function(s,i){return i<n80?'#22c55e':'#22c55e40';});
+  var linha80=receita.map(function(){return 80;});
   if(CHARTS.pareto) CHARTS.pareto.destroy();
   CHARTS.pareto=new Chart(document.getElementById('chart-pareto'),{
     plugins:[paretoLabelsPlugin],
     data:{labels:labels,datasets:[
-      {type:'bar',label:'Receita',data:receita,backgroundColor:'#22c55e',borderRadius:4,borderSkipped:false,yAxisID:'y'},
+      {type:'bar',label:'Receita',data:receita,backgroundColor:barCor,borderRadius:4,borderSkipped:false,yAxisID:'y'},
       {type:'line',label:'Cumulativo %',data:cumPct,borderColor:'#eab308',backgroundColor:'rgba(234,179,8,0.08)',tension:0.35,
-        pointRadius:3,pointBackgroundColor:'#eab308',pointBorderColor:'#09090b',pointBorderWidth:1.5,pointHoverRadius:6,borderWidth:2.5,yAxisID:'y1'}
+        pointRadius:3,pointBackgroundColor:'#eab308',pointBorderColor:'#09090b',pointBorderWidth:1.5,pointHoverRadius:6,borderWidth:2.5,yAxisID:'y1'},
+      {type:'line',label:'Corte 80%',data:linha80,borderColor:'rgba(255,255,255,0.45)',borderDash:[5,4],borderWidth:1.5,
+        pointRadius:0,pointHoverRadius:0,fill:false,yAxisID:'y1'}
     ]},
     options:{responsive:true,maintainAspectRatio:false,interaction:{intersect:false,mode:'index'},layout:{padding:{top:20}},
       plugins:{legend:{labels:{color:'#a1a1aa',font:{size:11},usePointStyle:true,pointStyle:'circle'}},
