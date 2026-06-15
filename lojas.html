@@ -2213,8 +2213,8 @@ function renderVendedores(){
     var atgBar=v.meta>0
       ?'<span class="atg-bar"><span class="atg-fill" style="width:'+Math.min(Math.max(v.metaPct,0),100)+'%;background:'+corMeta(v.metaPct)+';"></span><span class="atg-txt">'+v.metaPct.toFixed(0)+'%</span></span>'
       :'—';
-    // Previsão: verde se ≥ meta, vermelho se abaixo
-    var prevCor=v.meta>0?(v.projPct>=100?'var(--green)':'var(--red)'):'';
+    // Previsão: mesma régua de trajetória da comissão — verde ≥100% · amarelo 95-99% · vermelho <95%
+    var prevCor=v.meta>0?(v.projPct>=100?'var(--green)':(v.projPct>=95?'var(--amber)':'var(--red)')):'';
     // Cor da comissão = trajetória rumo à meta (via projeção fim do mês):
     // verde ≥100% · amarelo 95-99% (até 5% abaixo) · vermelho <95% · cinza sem meta.
     var comCor=v.meta>0?(v.projPct>=100?'var(--green)':(v.projPct>=95?'var(--amber)':'var(--red)')):'#a1a1aa';
