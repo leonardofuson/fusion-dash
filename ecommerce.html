@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Fusion — E-commerce v2</title>
+<title>Fusion — E-commerce</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
@@ -68,6 +68,21 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
 
 /* KPI Strip */
 .kpi-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:12px;margin-bottom:1.25rem;}
+#kpis{grid-template-columns:repeat(5,1fr);}  /* scorecard diário: 2 linhas de 5 (topline · resultado) */
+@media(max-width:1100px){#kpis{grid-template-columns:repeat(3,1fr);}}
+@media(max-width:680px){#kpis{grid-template-columns:1fr 1fr;}}
+.canal-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px;}
+.cc{background:var(--bg2);border:1px solid var(--bdr);border-top:3px solid #6366f1;border-radius:12px;padding:12px 14px;}
+.cc-nome{font-size:11px;font-weight:700;color:var(--txt2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cc-val{font-size:1.15rem;font-weight:800;color:var(--txt1);margin:3px 0 2px;font-variant-numeric:tabular-nums;}
+.cc-delta{font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;}
+.cc-up{color:#22c55e;} .cc-down{color:#f43f5e;} .cc-flat{color:var(--txt3);}
+.pd-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;}
+.pd{background:rgba(255,255,255,.02);border:1px solid var(--bdr);border-radius:10px;padding:10px 12px;}
+.pd-nome{font-size:12px;font-weight:600;color:var(--txt1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pd-row{display:flex;justify-content:space-between;align-items:baseline;margin-top:4px;}
+.pd-val{font-size:15px;font-weight:800;color:var(--txt1);font-variant-numeric:tabular-nums;}
+.pd-delta{font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;}
 .kpi{background:linear-gradient(145deg,var(--bg2) 0%,#141417 100%);border:1px solid var(--bdr);border-radius:14px;padding:18px;position:relative;overflow:hidden;transition:transform 0.2s;}
 .kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--kpi-accent,var(--blue));opacity:0.7;}
 .kpi:hover{transform:translateY(-2px);}
@@ -318,6 +333,9 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
 
   <div id="tab-diario" class="tab-panel">
 
+  <!-- 0. FATURAMENTO POR MARKETPLACE (cards) -->
+  <div id="canal-cards" class="canal-cards"></div>
+
   <!-- 1. VENDAS DIÁRIAS (topo) -->
   <div class="card">
     <div class="card-title">
@@ -336,24 +354,21 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
     <div class="chart-hero"><canvas id="chart-hero"></canvas></div>
   </div>
 
-  <!-- 1b. O QUE MUDOU (movers) -->
-  <div class="card">
-    <div class="card-title"><span>O que mudou</span><span style="font-size:10px;font-weight:500;color:var(--txt3);">maiores variações de receita vs período anterior</span></div>
-    <div class="movers-grid">
-      <div><div style="font-size:11px;font-weight:700;color:var(--txt2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em;">Canais</div><div id="movers-canais"></div></div>
-      <div><div style="font-size:11px;font-weight:700;color:var(--txt2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em;">Produtos</div><div id="movers-produtos"></div></div>
-    </div>
+  <!-- 2. KPI SCORECARD (topline · resultado) -->
+  <div class="kpi-grid" id="kpis">
+    <div class="kpi"><div class="kpi-lbl">Carregando...</div><div class="spin"></div></div>
   </div>
 
-  <!-- 2. P&L WATERFALL -->
+  <!-- 3. P&L WATERFALL -->
   <div class="card">
     <div class="card-title">P&L — Decomposição do Lucro</div>
     <div id="waterfall" class="wf-wrap"><div class="spin"></div></div>
   </div>
 
-  <!-- 2. KPI STRIP -->
-  <div class="kpi-grid" id="kpis">
-    <div class="kpi"><div class="kpi-lbl">Carregando...</div><div class="spin"></div></div>
+  <!-- 4. PRODUTOS EM DESTAQUE (vs período anterior) -->
+  <div class="card">
+    <div class="card-title"><span>Produtos em destaque</span><span style="font-size:10px;font-weight:500;color:var(--txt3);">principais produtos por receita · variação vs período anterior</span></div>
+    <div id="prod-destaque" class="pd-grid"></div>
   </div>
 
   <!-- 3. TABELA DE CANAIS -->
@@ -945,7 +960,7 @@ function renderAll(){
   }else{STATE.itensFocus=STATE.itens;}
   montarSkuGroups();
   // Critical render path — visualmente prioritário (KPIs + tabela canais + Top Produtos)
-  var criticos=[renderWaterfall,renderKPIs,renderCanalTable,renderTopProdutos,renderMovers];
+  var criticos=[renderWaterfall,renderKPIs,renderCanalTable,renderTopProdutos,renderCanalCards,renderProdutosDestaque];
   criticos.forEach(function(fn){try{fn();}catch(e){console.error(fn.name+':',e);}});
   // Charts/heatmaps pesados — deferidos pro idle. Em janelas grandes esses
   // somam ~600-1000ms de Chart.js; idle deixa o browser respirar.
@@ -1083,27 +1098,25 @@ function renderKPIs(){
   var tm=pedAtivos.length>0?cur.receita/pedAtivos.length:0;
   var tmAnt=pedAntN>0?prev.receita/pedAntN:0;
   var mp=cur.receita>0?cur.lucro/cur.receita*100:0;
-  var html='';
-  html+='<div class="kpi" style="--kpi-accent:'+(cur.lucro>=0?'#22c55e':'#f43f5e')+'"><div class="kpi-lbl">Lucro Operacional</div><div class="kpi-val" style="color:'+(cur.lucro>=0?'#22c55e':'#f43f5e')+'">'+fmt(cur.lucro)+'</div><div class="kpi-sub">margem '+fmtD(mp)+'%</div><div class="kpi-delta">'+deltaBadge(delta(cur.lucro,prev.lucro))+'</div></div>';
   var proj=projecaoMes(cur.receita);
+  var devPct=cur.receita>0?cur.devolucoes/cur.receita*100:0, prevDevP=prev.receita>0?prev.devolucoes/prev.receita*100:0;
+  var temItens=(STATE.itens||[]).length>0;var un=totUnidades();var pa=(temItens&&pedAtivos.length>0)?un/pedAtivos.length:0;
+  var prevMp=prev.receita>0?prev.lucro/prev.receita*100:0;
+  var tacos=cur.receita>0?cur.ads/cur.receita*100:0, prevTac=prev.receita>0?prev.ads/prev.receita*100:0;
+  var mc=mp>=20?'#22c55e':(mp>=10?'#eab308':'#f43f5e'), dc=devPct<=5?'#22c55e':(devPct<=10?'#eab308':'#f43f5e'), ac=tacos<=8?'#22c55e':(tacos<=15?'#eab308':'#f43f5e');
+  var html='';
+  // LINHA 1 — topline (volume de vendas)
   html+='<div class="kpi" style="--kpi-accent:#6366f1"><div class="kpi-lbl">Receita Bruta</div><div class="kpi-val">'+fmt(cur.receita)+'</div>'+(proj?'<div class="kpi-sub">proj. mês: '+fmt(proj)+'</div>':'')+'<div class="kpi-delta">'+deltaBadge(delta(cur.receita,prev.receita))+'</div></div>';
   html+='<div class="kpi" style="--kpi-accent:#22c55e"><div class="kpi-lbl">Pedidos</div><div class="kpi-val">'+fmtN(pedAtivos.length)+'</div><div class="kpi-delta">'+deltaBadge(delta(pedAtivos.length,pedAntN))+'</div></div>';
   html+='<div class="kpi" style="--kpi-accent:#06b6d4"><div class="kpi-lbl">Ticket Médio</div><div class="kpi-val">'+fmt(tm)+'</div><div class="kpi-delta">'+deltaBadge(delta(tm,tmAnt))+'</div></div>';
-  var devPct=cur.receita>0?cur.devolucoes/cur.receita*100:0;
-  html+='<div class="kpi" style="--kpi-accent:#06b6d4"><div class="kpi-lbl">Receita Líquida</div><div class="kpi-val">'+fmt(cur.liquida)+'</div><div class="kpi-sub">−'+fmtD(cur.devolucoes/cur.receita*100||0)+'% dev real</div><div class="kpi-delta">'+deltaBadge(delta(cur.liquida,prev.liquida))+'</div></div>';
-  var temItens=(STATE.itens||[]).length>0;var un=totUnidades();var pa=(temItens&&pedAtivos.length>0)?un/pedAtivos.length:0;
   html+='<div class="kpi" style="--kpi-accent:#a78bfa"><div class="kpi-lbl">Unidades</div><div class="kpi-val">'+(temItens?fmtN(un):'—')+'</div><div class="kpi-sub">'+(temItens?'itens vendidos':'indisp. p/ período antigo')+'</div></div>';
   html+='<div class="kpi" style="--kpi-accent:#a78bfa"><div class="kpi-lbl">PA · peças/pedido</div><div class="kpi-val">'+(temItens?fmtD(pa):'—')+'</div><div class="kpi-sub">unid. ÷ pedidos</div></div>';
-  // ── indicadores de SAÚDE (% sobre receita) — o que olhar diariamente ──
-  var prevMp=prev.receita>0?prev.lucro/prev.receita*100:0;
-  var mc=mp>=20?'#22c55e':(mp>=10?'#eab308':'#f43f5e');
+  // LINHA 2 — resultado e saúde (% sobre receita)
+  html+='<div class="kpi" style="--kpi-accent:#06b6d4"><div class="kpi-lbl">Receita Líquida</div><div class="kpi-val">'+fmt(cur.liquida)+'</div><div class="kpi-sub">após comissão/dev/frete</div><div class="kpi-delta">'+deltaBadge(delta(cur.liquida,prev.liquida))+'</div></div>';
   html+='<div class="kpi" style="--kpi-accent:'+mc+'"><div class="kpi-lbl">Margem líquida %</div><div class="kpi-val" style="color:'+mc+'">'+fmtD(mp)+'%</div><div class="kpi-delta">'+deltaBadge(delta(mp,prevMp))+'</div></div>';
-  var prevDevP=prev.receita>0?prev.devolucoes/prev.receita*100:0;
-  var dc=devPct<=5?'#22c55e':(devPct<=10?'#eab308':'#f43f5e');
   html+='<div class="kpi" style="--kpi-accent:'+dc+'"><div class="kpi-lbl">Devolução %</div><div class="kpi-val" style="color:'+dc+'">'+fmtD(devPct)+'%</div><div class="kpi-sub">'+fmtK(cur.devolucoes)+' · ant. '+fmtD(prevDevP)+'%</div></div>';
-  var tacos=cur.receita>0?cur.ads/cur.receita*100:0;var prevTac=prev.receita>0?prev.ads/prev.receita*100:0;
-  var ac=tacos<=8?'#22c55e':(tacos<=15?'#eab308':'#f43f5e');
   html+='<div class="kpi" style="--kpi-accent:'+ac+'"><div class="kpi-lbl">Ads % (TACoS)</div><div class="kpi-val" style="color:'+ac+'">'+fmtD(tacos)+'%</div><div class="kpi-sub">'+fmtK(cur.ads)+' · ant. '+fmtD(prevTac)+'%</div></div>';
+  html+='<div class="kpi" style="--kpi-accent:'+(cur.lucro>=0?'#22c55e':'#f43f5e')+'"><div class="kpi-lbl">Resultado</div><div class="kpi-val" style="color:'+(cur.lucro>=0?'#22c55e':'#f43f5e')+'">'+fmt(cur.lucro)+'</div><div class="kpi-sub">margem '+fmtD(mp)+'%</div><div class="kpi-delta">'+deltaBadge(delta(cur.lucro,prev.lucro))+'</div></div>';
   document.getElementById('kpis').innerHTML=html;
 }
 
@@ -1785,44 +1798,50 @@ document.addEventListener('keydown',function(e){
   carregar();
 })();
 
-// ═══════════════════ "O QUE MUDOU" (movers) ═══════════════════
-function renderMovers(){
-  var comp=document.getElementById('chk-compare').checked;
+// ═══════════════════ CARDS DE RECEITA BRUTA POR CANAL (vs mês anterior) ═══════════════════
+// Um card por marketplace acima do gráfico: receita bruta do período + variação
+// contra o período equivalente anterior (mvRowsPrev). Respeita canaisSel.
+function renderCanalCards(){
+  var el=document.getElementById('canal-cards');if(!el)return;
   var selOk=function(n){return !(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[n]);};
-  // CANAIS — atual de STATE.pedidos, anterior da MV prev
-  var curC={},priC={};
-  STATE.pedidos.forEach(function(p){if(p._canc)return;curC[p._nome]=(curC[p._nome]||0)+valorReceita(p);});
-  (STATE.mvRowsPrev||[]).forEach(function(r){var n=getNome(r.canal_nome_raw,r.origem_conta);if(!selOk(n))return;priC[n]=(priC[n]||0)+parseFloat(r.receita_bruta||0);});
-  renderMoverList('movers-canais',curC,priC,comp);
-  // PRODUTOS — atual dos skuGroups, anterior da sku MV prev
-  var curP={},priP={};
-  (STATE.skuGroups||[]).forEach(function(g){var nm=g.nome||g.sku_pai;curP[nm]=(curP[nm]||0)+g.receita;});
-  (STATE.skuMVRowsPrev||[]).forEach(function(r){var canal=getNome(r.canal_nome_raw,r.origem_conta);if(STATE.focusCanal&&canal!==STATE.focusCanal)return;if(!selOk(canal))return;var nm=r.nome||r.sku_pai;priP[nm]=(priP[nm]||0)+parseFloat(r.receita||0);});
-  renderMoverList('movers-produtos',curP,priP,comp);
+  var hasPrev=(STATE.mvRowsPrev||[]).length>0;
+  var cur={},pri={};
+  STATE.pedidos.forEach(function(p){if(p._canc)return;if(!selOk(p._nome))return;cur[p._nome]=(cur[p._nome]||0)+valorReceita(p);});
+  (STATE.mvRowsPrev||[]).forEach(function(r){var n=getNome(r.canal_nome_raw,r.origem_conta);if(!selOk(n))return;pri[n]=(pri[n]||0)+parseFloat(r.receita_bruta||0);});
+  var nomes=Object.keys(cur).filter(function(n){return cur[n]>0;}).sort(function(a,b){return cur[b]-cur[a];});
+  if(!nomes.length){el.innerHTML='';return;}
+  el.innerHTML=nomes.map(function(n){
+    var c=cur[n],p=pri[n]||0,d=delta(c,p);
+    var cls=(d===null||isNaN(d))?'cc-flat':(d>=0.5?'cc-up':(d<=-0.5?'cc-down':'cc-flat'));
+    var arrow=(d===null||isNaN(d))?'':(d>=0.5?'▲ ':(d<=-0.5?'▼ ':''));
+    var pctS=!hasPrev?'—':((d===null||isNaN(d))?'novo':((d>=0?'+':'')+d.toFixed(1)+'%'));
+    return '<div class="cc" style="border-top-color:'+getCor(n)+'"><div class="cc-nome" title="'+n+'">'+n+'</div>'
+      +'<div class="cc-val">'+fmtK(c)+'</div>'
+      +'<div class="cc-delta '+cls+'">'+arrow+pctS+' <span style="color:var(--txt3);font-weight:600">vs mês ant.</span></div></div>';
+  }).join('');
 }
-function renderMoverList(elId,cur,pri,comp){
-  var el=document.getElementById(elId);if(!el)return;
-  var keys={};Object.keys(cur).forEach(function(k){keys[k]=1;});Object.keys(pri).forEach(function(k){keys[k]=1;});
-  var arr=Object.keys(keys).map(function(k){var c=cur[k]||0,p=pri[k]||0;return {nome:k,cur:c,delta:c-p,pct:p>0?(c-p)/p*100:(c>0?null:0),novo:p<=0&&c>0};});
-  if(!comp){
-    arr.sort(function(a,b){return b.cur-a.cur;});
-    el.innerHTML=arr.slice(0,6).map(function(m){return '<div class="mover-row"><span class="mover-name">'+m.nome+'</span><span class="mover-val">'+fmtK(m.cur)+'</span></div>';}).join('')||'<div style="color:var(--txt3);font-size:11px;">sem dados</div>';
-    return;
-  }
-  arr.sort(function(a,b){return b.delta-a.delta;});
-  var gain=arr.filter(function(m){return m.delta>0.5;}).slice(0,3);
-  var loss=arr.filter(function(m){return m.delta<-0.5;}).sort(function(a,b){return a.delta-b.delta;}).slice(0,3);
-  function row(m){
-    var up=m.delta>=0;
-    var pctS=m.novo?'novo':(m.pct===null?'':(up?'+':'')+Math.round(m.pct)+'%');
-    var dval=fmtK(Math.abs(m.delta)).replace('R$ ','R$');
-    return '<div class="mover-row"><span class="mover-name" title="'+m.nome+'">'+m.nome+'</span><span class="mover-val">'+fmtK(m.cur)+'</span>'
-      +'<span class="mover-delta '+(up?'mover-up':'mover-down')+'">'+(up?'▲ +':'▼ −')+dval+' <span style="opacity:.65;font-weight:500">'+pctS+'</span></span></div>';
-  }
-  var html='';gain.forEach(function(m){html+=row(m);});
-  if(gain.length&&loss.length)html+='<div style="height:7px;border-top:1px dashed rgba(255,255,255,.06);margin:4px 0"></div>';
-  loss.forEach(function(m){html+=row(m);});
-  el.innerHTML=html||'<div style="color:var(--txt3);font-size:11px;">sem variação relevante</div>';
+
+// ═══════════════════ PRODUTOS EM DESTAQUE (top por receita, vs mês anterior) ═══════════════════
+// Tiles dos principais produtos do período com receita + variação MoM. Substitui
+// o antigo container "O que mudou" (movers). Respeita focusCanal + canaisSel.
+function renderProdutosDestaque(){
+  var el=document.getElementById('prod-destaque');if(!el)return;
+  var selOk=function(n){return !(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[n]);};
+  var hasPrev=(STATE.skuMVRowsPrev||[]).length>0;
+  var cur={},pri={};
+  (STATE.skuGroups||[]).forEach(function(g){var nm=g.nome||g.sku_pai;cur[nm]=(cur[nm]||0)+g.receita;});
+  (STATE.skuMVRowsPrev||[]).forEach(function(r){var canal=getNome(r.canal_nome_raw,r.origem_conta);if(STATE.focusCanal&&canal!==STATE.focusCanal)return;if(!selOk(canal))return;var nm=r.nome||r.sku_pai;pri[nm]=(pri[nm]||0)+parseFloat(r.receita||0);});
+  var nomes=Object.keys(cur).filter(function(n){return cur[n]>0;}).sort(function(a,b){return cur[b]-cur[a];}).slice(0,8);
+  if(!nomes.length){el.innerHTML='<div style="color:var(--txt3);font-size:12px;">sem dados de produtos no período</div>';return;}
+  el.innerHTML=nomes.map(function(nm){
+    var c=cur[nm],p=pri[nm]||0,d=delta(c,p);
+    var cls=(d===null||isNaN(d))?'cc-flat':(d>=0.5?'cc-up':(d<=-0.5?'cc-down':'cc-flat'));
+    var arrow=(d===null||isNaN(d))?'':(d>=0.5?'▲ ':(d<=-0.5?'▼ ':''));
+    var pctS=!hasPrev?'—':((d===null||isNaN(d))?'novo':((d>=0?'+':'')+Math.round(d)+'%'));
+    return '<div class="pd"><div class="pd-nome" title="'+nm+'">'+nm+'</div>'
+      +'<div class="pd-row"><span class="pd-val">'+fmtK(c)+'</span>'
+      +'<span class="pd-delta '+cls+'" title="vs mês anterior">'+arrow+pctS+'</span></div></div>';
+  }).join('');
 }
 
 // ═══════════════════ TAB MENSAL ═══════════════════
