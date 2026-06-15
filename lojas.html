@@ -998,6 +998,28 @@ async function carregar(){
     });
     STATE.freshness=maxData;
 
+    // Forecast sazonal (visão mensal): receita dos meses FUTUROS no ano passado,
+    // pra projetar o resto do ano = sazonalidade(ano-1) × crescimento(YTD).
+    STATE.seasonPrevByMonth=null;
+    if(STATE.viewMode==='mensal'){
+      try{
+        var _Y=parseInt(hojeSP().slice(0,4)), _M=parseInt(hojeSP().slice(5,7));
+        if(_M<12){
+          var _py=_Y-1, _de=_py+'-'+String(_M+1).padStart(2,'0')+'-01', _ate=_py+'-12-31';
+          var segRows=await fetchAgregadoMV(_de,_ate);
+          var sp={};
+          segRows.forEach(function(r){
+            var n=(r.loja_nome||'').trim();
+            if(IGNORAR_LOJA.indexOf(n)>=0) return;
+            if(STATE.lojasSel && Object.keys(STATE.lojasSel).length>0 && !STATE.lojasSel[n]) return;
+            var k=(r.data_pedido||'').slice(0,7);
+            sp[k]=(sp[k]||0)+parseFloat(r.receita_bruta||0);
+          });
+          STATE.seasonPrevByMonth=sp;
+        }
+      }catch(e){STATE.seasonPrevByMonth=null;}
+    }
+
     renderAll();
     var freshTxt=STATE.freshness?'Dados até '+new Date(STATE.freshness+'T12:00:00').toLocaleDateString('pt-BR'):'';
     document.getElementById('upd').textContent=freshTxt+' · Atualizado '+new Date().toLocaleTimeString('pt-BR');
@@ -1593,6 +1615,20 @@ function renderHero(){
     return sb-sa;
   });
 
+  // YoY por mês (ano passado, mesmos meses): usado pro delta no rótulo E pro
+  // crescimento do forecast sazonal. Calculado ANTES do forecast que o consome.
+  STATE.heroPrevByMonth = null;
+  if(mensal){
+    var prevUse=STATE.anterioresEscopo||STATE.anteriores||[];
+    var pm={};
+    prevUse.forEach(function(p){
+      if(p._canc) return;
+      var k=(p.data_pedido||'').slice(0,7); if(!k) return;
+      pm[k]=(pm[k]||0)+parseFloat(p.valor_bruto||0);
+    });
+    STATE.heroPrevByMonth=pm;
+  }
+
   // ---- Projeção do mês ----
   // Só ativa se stackMode==='abs' e o range inclui hoje.
   // Extende o chart até o fim do mês e adiciona uma linha pontilhada
@@ -1600,6 +1636,7 @@ function renderHero(){
   var hoje=hojeSP();
   var projActive=(!mensal) && (STATE.stackMode==='abs') && DE<=hoje && ATE>=hoje;
   var projValues=null;
+  var forecastVals=null;
   var diasExtras=[];
   if(projActive){
     var fimMes=fimMesSP();
@@ -1646,6 +1683,34 @@ function renderHero(){
     dias=diasAll;
   }
 
+  // ---- Forecast sazonal do resto do ano (visão mensal) ----
+  // Projeta meses futuros = sazonalidade(ano-1) × crescimento YTD (ano/ano-1).
+  if(mensal && STATE.seasonPrevByMonth){
+    var Yc=parseInt(hoje.slice(0,4)), Mc=parseInt(hoje.slice(5,7));
+    var curKey=Yc+'-'+String(Mc).padStart(2,'0');
+    if(dias.length && dias[dias.length-1]===curKey && Mc<12){
+      var sumCur=0,sumPrev=0;
+      dias.forEach(function(d){
+        var pk=(parseInt(d.slice(0,4))-1)+d.slice(4);
+        var pv=(STATE.heroPrevByMonth||{})[pk]; if(!pv) return;
+        var t=0; lojasL.forEach(function(n){t+=diario[d][n]||0;});
+        sumCur+=t; sumPrev+=pv;
+      });
+      var g=sumPrev>0?sumCur/sumPrev:1;
+      var curTot=0; lojasL.forEach(function(n){curTot+=diario[curKey][n]||0;});
+      var futKeys=[];
+      for(var mm=Mc+1;mm<=12;mm++) futKeys.push(Yc+'-'+String(mm).padStart(2,'0'));
+      forecastVals=dias.map(function(d){return d===curKey?curTot:null;}).concat(
+        futKeys.map(function(fk){
+          var sv=(STATE.seasonPrevByMonth||{})[(Yc-1)+'-'+fk.slice(5)];
+          return sv?sv*g:null;
+        }));
+      dias=dias.concat(futKeys);
+      STATE.heroForecastGrowth=g;
+      if(ht) ht.textContent='Receita mensal por loja · forecast '+Yc+' (cresc. YTD '+(g>=1?'+':'')+((g-1)*100).toFixed(0)+'%)';
+    }
+  }
+
   var showPoints=dias.length<=45;
   var datasets=lojasL.map(function(n){
     var vals=dias.map(function(d){return diario[d]?(diario[d][n]||0):0;});
@@ -1680,25 +1745,30 @@ function renderHero(){
       spanGaps:true
     });
   }
+  if(forecastVals){
+    datasets.push({
+      label:'Forecast sazonal',
+      data:forecastVals,
+      borderColor:'#fbbf24',
+      backgroundColor:'rgba(251,191,36,0.06)',
+      borderDash:[6,4],
+      fill:false,
+      tension:0.3,
+      pointRadius:3,
+      pointBackgroundColor:'#fbbf24',
+      pointHoverRadius:6,
+      borderWidth:2.5,
+      stack:null,
+      spanGaps:true
+    });
+  }
 
   var MES_ABREV=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
   var labels=dias.map(function(d){
     if(mensal){var pp=d.split('-');return MES_ABREV[parseInt(pp[1])-1]+'/'+pp[0].slice(2);}
     return new Date(d+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
   });
-  // YoY por mês pro plugin de totais: total do MESMO mês no ano anterior (delta no rótulo)
-  STATE.heroMonthKeys = mensal ? dias.slice() : null;
-  STATE.heroPrevByMonth = null;
-  if(mensal){
-    var prevUse=STATE.anterioresEscopo||STATE.anteriores||[];
-    var pm={};
-    prevUse.forEach(function(p){
-      if(p._canc) return;
-      var k=(p.data_pedido||'').slice(0,7); if(!k) return;
-      pm[k]=(pm[k]||0)+parseFloat(p.valor_bruto||0);
-    });
-    STATE.heroPrevByMonth=pm;
-  }
+  STATE.heroMonthKeys = mensal ? dias.slice() : null;  // inclui meses futuros do forecast
   if(CHARTS.hero) CHARTS.hero.destroy();
   CHARTS.hero=new Chart(document.getElementById('chart-hero'),{
     type:'line',
