@@ -1417,6 +1417,7 @@ function exportImage(tipo){
 // ---- URL State ----
 function syncToURL(){
   var p=new URLSearchParams();
+  p.set('v',STATE.viewMode);
   if(DE) p.set('de',DE);
   if(ATE) p.set('ate',ATE);
   var preset=document.querySelector('.chip.on[data-preset]');
@@ -2870,16 +2871,24 @@ async function salvarMetas(){
     if(btnM) btnM.style.display='inline-block';
   }
   var h=hojeSP();
+  var urlView=new URLSearchParams(location.search).get('v');
   var urlPreset=loadFromURL();
-  if(!DE){DE=inicioMesSP();ATE=h;}
-  document.getElementById('dt-de').value=DE;
-  document.getElementById('dt-ate').value=ATE;
-  if(urlPreset){
-    document.querySelectorAll('.chip[data-preset]').forEach(function(c){c.classList.remove('on');});
-    var el=document.querySelector('.chip[data-preset="'+urlPreset+'"]');
-    if(el) el.classList.add('on');
+  if(urlView==='mensal'){
+    // Restaura a visão Mensal (setView aplica período YTD + carrega).
+    setView('mensal');
+  } else {
+    var presetEl=urlPreset?document.querySelector('.chip[data-preset="'+urlPreset+'"]'):null;
+    if(presetEl){
+      // Preset é autoritativo: recomputa as datas a partir dele (evita herdar
+      // datas do Mensal que ficaram na URL). setPeriodo já chama carregar().
+      setPeriodo(urlPreset, presetEl);
+    } else {
+      if(!DE){DE=inicioMesSP();ATE=h;}
+      document.getElementById('dt-de').value=DE;
+      document.getElementById('dt-ate').value=ATE;
+      carregar();
+    }
   }
-  carregar();
 })();
 </script>
 
