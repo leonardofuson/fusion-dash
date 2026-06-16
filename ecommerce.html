@@ -1130,18 +1130,18 @@ function renderKPIs(){
   var tacos=cur.receita>0?cur.ads/cur.receita*100:0, prevTac=prev.receita>0?prev.ads/prev.receita*100:0;
   var mc=mp>=20?'#22c55e':(mp>=10?'#eab308':'#f43f5e'), dc=devPct<=5?'#22c55e':(devPct<=10?'#eab308':'#f43f5e'), ac=tacos<=8?'#22c55e':(tacos<=15?'#eab308':'#f43f5e');
   var html='';
-  // LINHA 1 — topline (volume de vendas)
+  // LINHA 1 — Receita Bruta · Receita Líquida · Resultado · Margem % · Ticket Médio
   html+='<div class="kpi" style="--kpi-accent:#6366f1"><div class="kpi-lbl">Receita Bruta</div><div class="kpi-val">'+fmt(cur.receita)+'</div>'+(proj?'<div class="kpi-sub">proj. mês: '+fmt(proj)+'</div>':'')+'<div class="kpi-delta">'+deltaBadge(delta(cur.receita,prev.receita))+'</div></div>';
-  html+='<div class="kpi" style="--kpi-accent:#22c55e"><div class="kpi-lbl">Pedidos</div><div class="kpi-val">'+fmtN(pedAtivos.length)+'</div><div class="kpi-delta">'+deltaBadge(delta(pedAtivos.length,pedAntN))+'</div></div>';
+  html+='<div class="kpi" style="--kpi-accent:#06b6d4"><div class="kpi-lbl">Receita Líquida</div><div class="kpi-val">'+fmt(cur.liquida)+'</div><div class="kpi-sub">após comissão/dev/frete</div><div class="kpi-delta">'+deltaBadge(delta(cur.liquida,prev.liquida))+'</div></div>';
+  html+='<div class="kpi" style="--kpi-accent:'+(cur.lucro>=0?'#22c55e':'#f43f5e')+'"><div class="kpi-lbl">Resultado</div><div class="kpi-val" style="color:'+(cur.lucro>=0?'#22c55e':'#f43f5e')+'">'+fmt(cur.lucro)+'</div><div class="kpi-sub">margem '+fmtD(mp)+'%</div><div class="kpi-delta">'+deltaBadge(delta(cur.lucro,prev.lucro))+'</div></div>';
+  html+='<div class="kpi" style="--kpi-accent:'+mc+'"><div class="kpi-lbl">Margem líquida %</div><div class="kpi-val" style="color:'+mc+'">'+fmtD(mp)+'%</div><div class="kpi-delta">'+deltaBadge(delta(mp,prevMp))+'</div></div>';
   html+='<div class="kpi" style="--kpi-accent:#06b6d4"><div class="kpi-lbl">Ticket Médio</div><div class="kpi-val">'+fmt(tm)+'</div><div class="kpi-delta">'+deltaBadge(delta(tm,tmAnt))+'</div></div>';
+  // LINHA 2 — Pedidos · Unidades · PA · Devolução % · Ads %
+  html+='<div class="kpi" style="--kpi-accent:#22c55e"><div class="kpi-lbl">Pedidos</div><div class="kpi-val">'+fmtN(pedAtivos.length)+'</div><div class="kpi-delta">'+deltaBadge(delta(pedAtivos.length,pedAntN))+'</div></div>';
   html+='<div class="kpi" style="--kpi-accent:#a78bfa"><div class="kpi-lbl">Unidades</div><div class="kpi-val">'+(temItens?fmtN(un):'—')+'</div><div class="kpi-sub">'+(temItens?'itens vendidos':'indisp. p/ período antigo')+'</div></div>';
   html+='<div class="kpi" style="--kpi-accent:#a78bfa"><div class="kpi-lbl">PA · peças/pedido</div><div class="kpi-val">'+(temItens?fmtD(pa):'—')+'</div><div class="kpi-sub">unid. ÷ pedidos</div></div>';
-  // LINHA 2 — resultado e saúde (% sobre receita)
-  html+='<div class="kpi" style="--kpi-accent:#06b6d4"><div class="kpi-lbl">Receita Líquida</div><div class="kpi-val">'+fmt(cur.liquida)+'</div><div class="kpi-sub">após comissão/dev/frete</div><div class="kpi-delta">'+deltaBadge(delta(cur.liquida,prev.liquida))+'</div></div>';
-  html+='<div class="kpi" style="--kpi-accent:'+mc+'"><div class="kpi-lbl">Margem líquida %</div><div class="kpi-val" style="color:'+mc+'">'+fmtD(mp)+'%</div><div class="kpi-delta">'+deltaBadge(delta(mp,prevMp))+'</div></div>';
   html+='<div class="kpi" style="--kpi-accent:'+dc+'"><div class="kpi-lbl">Devolução %</div><div class="kpi-val" style="color:'+dc+'">'+fmtD(devPct)+'%</div><div class="kpi-sub">'+fmtK(cur.devolucoes)+' · ant. '+fmtD(prevDevP)+'%</div></div>';
   html+='<div class="kpi" style="--kpi-accent:'+ac+'"><div class="kpi-lbl">Ads % (TACoS)</div><div class="kpi-val" style="color:'+ac+'">'+fmtD(tacos)+'%</div><div class="kpi-sub">'+fmtK(cur.ads)+' · ant. '+fmtD(prevTac)+'%</div></div>';
-  html+='<div class="kpi" style="--kpi-accent:'+(cur.lucro>=0?'#22c55e':'#f43f5e')+'"><div class="kpi-lbl">Resultado</div><div class="kpi-val" style="color:'+(cur.lucro>=0?'#22c55e':'#f43f5e')+'">'+fmt(cur.lucro)+'</div><div class="kpi-sub">margem '+fmtD(mp)+'%</div><div class="kpi-delta">'+deltaBadge(delta(cur.lucro,prev.lucro))+'</div></div>';
   document.getElementById('kpis').innerHTML=html;
 }
 
