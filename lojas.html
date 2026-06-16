@@ -1727,20 +1727,25 @@ function renderHero(){
   }
 
   // ---- Forecast sazonal do resto do ano (visão mensal) ----
-  // Projeta meses futuros = sazonalidade(ano-1) × crescimento YTD (ano/ano-1).
+  // Projeta meses futuros = sazonalidade(ano-1) × crescimento. O crescimento usa
+  // só MESES COMPLETOS do ano corrente (o mês parcial dilui o fator).
   if(mensal && STATE.seasonPrevByMonth){
     var Yc=parseInt(hoje.slice(0,4)), Mc=parseInt(hoje.slice(5,7));
     var curKey=Yc+'-'+String(Mc).padStart(2,'0');
     if(dias.length && dias[dias.length-1]===curKey && Mc<12){
-      var sumCur=0,sumPrev=0;
+      var sumComplC=0,sumComplP=0,realizadoYTD=0,curTot=0;
+      lojasL.forEach(function(n){curTot+=diario[curKey]?(diario[curKey][n]||0):0;});
       dias.forEach(function(d){
-        var pk=(parseInt(d.slice(0,4))-1)+d.slice(4);
-        var pv=(STATE.heroPrevByMonth||{})[pk]; if(!pv) return;
+        if(d.slice(0,4)!==String(Yc) || d>curKey) return;   // só ano corrente até hoje
         var t=0; lojasL.forEach(function(n){t+=diario[d][n]||0;});
-        sumCur+=t; sumPrev+=pv;
+        realizadoYTD+=t;
+        if(d===curKey) return;                                // mês parcial fica fora do crescimento
+        var pv=(STATE.heroPrevByMonth||{})[(Yc-1)+d.slice(4)]; if(!pv) return;
+        sumComplC+=t; sumComplP+=pv;
       });
-      var g=sumPrev>0?sumCur/sumPrev:1;
-      var curTot=0; lojasL.forEach(function(n){curTot+=diario[curKey][n]||0;});
+      var g;
+      if(sumComplP>0) g=sumComplC/sumComplP;
+      else { var pvc=(STATE.heroPrevByMonth||{})[(Yc-1)+curKey.slice(4)]; g=(pvc>0&&curTot>0)?curTot/pvc:1; }
       var futKeys=[];
       for(var mm=Mc+1;mm<=12;mm++) futKeys.push(Yc+'-'+String(mm).padStart(2,'0'));
       forecastVals=dias.map(function(d){return d===curKey?curTot:null;}).concat(
@@ -1750,15 +1755,12 @@ function renderHero(){
         }));
       dias=dias.concat(futKeys);
       STATE.heroForecastGrowth=g;
-      if(ht) ht.textContent='Receita mensal por loja · forecast '+Yc+' (cresc. YTD '+(g>=1?'+':'')+((g-1)*100).toFixed(0)+'%)';
+      if(ht) ht.textContent='Receita mensal por loja · forecast '+Yc+' (cresc. '+(g>=1?'+':'')+((g-1)*100).toFixed(0)+'% · meses completos)';
 
       // ---- Card de forecast total do ano ----
-      // realizado YTD (sumCur, inclui mês corrente parcial) + restante do mês corrente
-      // projetado + meses futuros (sazonalidade×crescimento).
-      var sumFuture=forecastVals.reduce(function(s,v){return s+(v||0);},0)-curTot;
-      var curPrev=(STATE.heroPrevByMonth||{})[(Yc-1)+'-'+String(Mc).padStart(2,'0')];
+      var sumFuture=futKeys.reduce(function(s,fk){var sv=(STATE.seasonPrevByMonth||{})[(Yc-1)+'-'+fk.slice(5)];return s+(sv?sv*g:0);},0);
+      var curPrev=(STATE.heroPrevByMonth||{})[(Yc-1)+curKey.slice(4)];
       var restCur=curPrev?Math.max(0,curPrev*g-curTot):0;
-      var realizadoYTD=sumCur;
       var projRestante=restCur+sumFuture;
       var forecastAno=realizadoYTD+projRestante;
       if(fcEl){
