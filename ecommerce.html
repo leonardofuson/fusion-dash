@@ -79,7 +79,10 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
 @media(max-width:1100px){#kpis{grid-template-columns:repeat(3,1fr);}}
 @media(max-width:680px){#kpis{grid-template-columns:1fr 1fr;}}
 .canal-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px;}
-.cc{background:var(--bg2);border:1px solid var(--bdr);border-top:3px solid #6366f1;border-radius:12px;padding:12px 14px;}
+.cc{background:var(--bg2);border:1px solid var(--bdr);border-top:3px solid #6366f1;border-radius:12px;padding:12px 14px;cursor:pointer;transition:all .15s;}
+.cc:hover{border-color:#52525b;transform:translateY(-2px);}
+.cc.focused{box-shadow:0 0 0 2px #6366f1;background:#1e1e24;}
+.cc.dimmed{opacity:.45;}.cc.dimmed:hover{opacity:1;}
 .cc-nome{font-size:11px;font-weight:700;color:var(--txt2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .cc-val{font-size:1.15rem;font-weight:800;color:var(--txt1);margin:3px 0 2px;font-variant-numeric:tabular-nums;}
 .cc-delta{font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;}
@@ -1850,8 +1853,11 @@ function renderCanalCards(){
   var el=document.getElementById('canal-cards');if(!el)return;
   var selOk=function(n){return !(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[n]);};
   var hasPrev=(STATE.mvRowsPrev||[]).length>0;
+  // pedidosFull (não o pedidos filtrado por focusCanal) → os cards mostram TODOS os
+  // canais sempre, pra permitir alternar o foco clicando. Mesma lógica da tabela de canais.
+  var base=STATE.pedidosFull||STATE.pedidos;
   var cur={},pri={};
-  STATE.pedidos.forEach(function(p){if(p._canc)return;if(!selOk(p._nome))return;cur[p._nome]=(cur[p._nome]||0)+valorReceita(p);});
+  base.forEach(function(p){if(p._canc)return;if(!selOk(p._nome))return;cur[p._nome]=(cur[p._nome]||0)+valorReceita(p);});
   (STATE.mvRowsPrev||[]).forEach(function(r){var n=getNome(r.canal_nome_raw,r.origem_conta);if(!selOk(n))return;pri[n]=(pri[n]||0)+parseFloat(r.receita_bruta||0);});
   var nomes=Object.keys(cur).filter(function(n){return cur[n]>0;}).sort(function(a,b){return cur[b]-cur[a];});
   if(!nomes.length){el.innerHTML='';return;}
@@ -1860,7 +1866,9 @@ function renderCanalCards(){
     var cls=(d===null||isNaN(d))?'cc-flat':(d>=0.5?'cc-up':(d<=-0.5?'cc-down':'cc-flat'));
     var arrow=(d===null||isNaN(d))?'':(d>=0.5?'▲ ':(d<=-0.5?'▼ ':''));
     var pctS=!hasPrev?'—':((d===null||isNaN(d))?'novo':((d>=0?'+':'')+d.toFixed(1)+'%'));
-    return '<div class="cc" style="border-top-color:'+getCor(n)+'"><div class="cc-nome" title="'+n+'">'+n+'</div>'
+    // Clicar o card foca o canal (filtra o dashboard inteiro) — igual à tabela de canais.
+    var foc=STATE.focusCanal===n?' focused':(STATE.focusCanal?' dimmed':'');
+    return '<div class="cc'+foc+'" style="border-top-color:'+getCor(n)+'" onclick="focusCanal(\''+n.replace(/'/g,"\\'")+'\')"><div class="cc-nome" title="'+n+'">'+n+'</div>'
       +'<div class="cc-val">'+fmtK(c)+'</div>'
       +'<div class="cc-delta '+cls+'">'+arrow+pctS+' <span style="color:var(--txt3);font-weight:600">vs mês ant.</span></div></div>';
   }).join('');
