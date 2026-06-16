@@ -6191,6 +6191,19 @@ function coletarInsumosRows() {
   return insumos;
 }
 
+// Hint ao ajustar a metragem em produção no Editar OP: mostra o delta e pra onde vai.
+function onMetragemEditChange() {
+  var inp = document.getElementById('f-edit-metragem'); if (!inp) return;
+  var hint = document.getElementById('f-edit-metragem-hint'); if (!hint) return;
+  var orig = parseFloat(inp.dataset.original) || 0;
+  var novo = parseFloat(inp.value) || 0;
+  var un = (STATE.editingOp && STATE.editingOp.unidade) || 'm';
+  var delta = orig - novo;
+  if (Math.abs(delta) < 0.001) { hint.textContent = ''; return; }
+  if (delta > 0) hint.innerHTML = '<span style="color:var(--green)">↓ Reduzindo ' + fmt(Math.round(delta*100)/100) + ' ' + un + ' → volta como saldo livre no costureiro.</span>';
+  else hint.innerHTML = '<span style="color:var(--orange)">↑ Aumentando ' + fmt(Math.round(-delta*100)/100) + ' ' + un + ' → compromete mais tecido (confirme que o costureiro tem).</span>';
+}
+
 function buildEditOPForm(op) {
   var prodOpts = produtosPais().map(function(p) {
     var sel = p.sku_pai === op.sku_produto ? ' selected' : '';
@@ -6241,7 +6254,19 @@ function buildEditOPForm(op) {
     '</div>'
   ) : '';
 
-  return infoTecidoBlock +
+  // Metragem em produção editável (ajuste com o real informado pelo produtor). Reduzir/aumentar
+  // muda o tecido comprometido; a diferença volta como saldo livre no costureiro (sem mov física).
+  var unidEdit = (insumoVinc && insumoVinc.unidade) || op.unidade || 'm';
+  var metragemAtual = (op.quantidade_tecido_usada != null ? op.quantidade_tecido_usada : (op.metros_kg != null ? op.metros_kg : ''));
+  var metragemBlock = op.insumo_id ? (
+    '<div class="form-group"><label class="form-label">Metragem em produção (' + unidEdit + ') ' +
+      '<small style="color:var(--txt3);font-weight:400">— ajuste com o real do produtor; a diferença volta como saldo livre no costureiro</small></label>' +
+      '<input class="form-input" type="number" step="0.01" id="f-edit-metragem" value="' + metragemAtual + '" data-original="' + (parseFloat(metragemAtual)||0) + '" oninput="onMetragemEditChange()">' +
+      '<div id="f-edit-metragem-hint" style="font-size:11px;color:var(--txt3);margin-top:4px"></div>' +
+    '</div>'
+  ) : '';
+
+  return infoTecidoBlock + metragemBlock +
     '<div class="form-group"><label class="form-label">Produto</label>' +
       '<select class="form-select" id="f-edit-produto" onchange="atualizarCamposProduto(\'edit\')">' +
         '<option value="">Selecione...</option>' + prodOpts +
@@ -6958,9 +6983,25 @@ async function submitDrawer() {
       // Detectar transição de status pra gerar movimentação de tecido (Sprint 6)
       var statusAntigo = op.status;
       var costureiroNomeAtual = costuName(body.costureiro_id);
-      // Quantidade real de tecido: prefere quantidade_tecido_usada (preenchido na criação via dash),
-      // fallback pra metros_kg (dado de migração antigo). Ambos representam metros/kg.
-      var metrosKg = parseFloat(op.quantidade_tecido_usada) || parseFloat(op.metros_kg) || 0;
+      // Ajuste de metragem em produção (real do produtor). Atualiza o tecido comprometido na OP;
+      // a diferença vira saldo livre no costureiro automaticamente (saldo = físico − comprometido).
+      // Sem mov física — decisão Leo 16/06 ("fica livre no próprio costureiro").
+      var metragemEdit = parseFloat((document.getElementById('f-edit-metragem') || {}).value);
+      if (!isNaN(metragemEdit) && metragemEdit >= 0) {
+        if (op.insumo_id) {
+          var fisicoCostu = ((STATE.saldoLocalIdx || {})[op.insumo_id] || {})[costureiroNomeAtual] || 0;
+          if (metragemEdit > fisicoCostu + 0.01) {
+            if (!confirm('A metragem (' + fmt(metragemEdit) + ') é maior que o tecido físico no costureiro ' + costureiroNomeAtual + ' (' + fmt(fisicoCostu) + '). Vai ficar com saldo livre negativo — transfira mais tecido antes.\n\nSalvar mesmo assim?')) {
+              btn.textContent = 'Salvar'; btn.disabled = false; return;
+            }
+          }
+        }
+        body.quantidade_tecido_usada = metragemEdit;
+        body.metros_kg = metragemEdit;
+      }
+      // Quantidade real de tecido: usa o valor (possivelmente ajustado acima); fallback pro original.
+      var metrosKg = (body.quantidade_tecido_usada != null ? body.quantidade_tecido_usada
+                      : (parseFloat(op.quantidade_tecido_usada) || parseFloat(op.metros_kg) || 0));
       var movsExtras = [];
       if (statusAntigo === 'Em Produção' && novoStatus === 'Entregue' && op.insumo_id && metrosKg > 0) {
         // Consumo: tecido virou produto, sai do saldo total (-X no costureiro).
