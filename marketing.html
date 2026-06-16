@@ -89,6 +89,7 @@
   .b-revisar{background:rgba(34,211,238,.16);color:var(--accent2)}
   .b-sem{background:rgba(154,163,178,.16);color:var(--mut)}
   tr.pnl-conc>td{background:#101820}
+  .cat-chip{display:inline-block;padding:1px 7px;border-radius:5px;background:rgba(124,92,255,.18);color:#b9a9ff;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;vertical-align:middle;margin-right:2px}
   .casc{font-size:13px}
   .casc-row{display:grid;grid-template-columns:1fr 120px 46px;align-items:center;gap:10px;padding:6px 2px}
   .casc-row .lbl2{display:flex;align-items:center;gap:9px;min-width:0;color:var(--mut)}
@@ -184,7 +185,8 @@
     <div class="filtros">
       <select id="f-plat"><option value="">Todas plataformas</option><option value="meta_ads">Meta (site)</option><option value="google_ads">Google (loja)</option></select>
       <select id="f-sinal"><option value="">Todos sinais</option><option value="escalar">Escalar</option><option value="revisar">Revisar</option><option value="cortar">Cortar</option><option value="manter">Manter</option><option value="sem_venda_no_canal">Sem venda</option></select>
-      <input id="f-busca" placeholder="buscar SKU…" style="flex:1;min-width:140px">
+      <select id="f-categoria"><option value="">Todas categorias</option></select>
+      <input id="f-busca" placeholder="buscar produto ou SKU…" style="flex:1;min-width:160px">
       <span class="muted" id="sku-count"></span>
     </div>
     <div class="card" style="overflow:auto;max-height:640px;padding:0">
@@ -192,8 +194,8 @@
         <thead><tr>
           <th data-k="sku_raw" title="Produto-pai (agrupa as variantes). Clique na linha pra abrir as variantes.">Produto</th>
           <th data-k="plataforma" title="Meta = site / Google = lojas físicas">Plat.</th>
-          <th data-k="ad_spend" class="sorted" title="Gasto de anúncio nesse produto no período">Gasto</th>
-          <th data-k="receita_canal" title="Receita REAL do canal desses produtos (venda real — anúncio + orgânica, não incremental). A base de onde sai a margem.">Receita</th>
+          <th data-k="ad_spend" title="Gasto de anúncio nesse produto no período">Gasto</th>
+          <th data-k="receita_canal" class="sorted" title="Receita REAL do canal desses produtos (venda real — anúncio + orgânica, não incremental). A base de onde sai a margem. Ordem padrão: por aqui (desc), desempate por Gasto.">Receita</th>
           <th data-k="roas" title="Receita atribuída pela plataforma ÷ gasto. SÓ DIAGNÓSTICO — a plataforma sobre-atribui. ROAS alto ≠ lucro.">ROAS</th>
           <th data-k="cm2_pct" title="Margem real do produto (após CMV + comissão + frete + devolução), antes dos anúncios. A 'qualidade econômica' do SKU.">CM2%</th>
           <th data-k="poas" title="CM2 ÷ gasto = margem real do produto por R$ de anúncio. >1 = a margem cobre o anúncio (CM3>0). ESTA é a métrica de decisão. (Blended: margem total do canal, não incremental.)">POAS</th>
@@ -225,7 +227,7 @@
 <script>
 let auth=null, SB='', ANON='';
 const CHARTS={};
-let STATE={de:'',ate:'',tab:'geral', mer:[], pnl:[], changes:[], skuTitles:{}, skuParent:{}, expanded:new Set(), sort:{k:'ad_spend',dir:-1}};
+let STATE={de:'',ate:'',tab:'geral', mer:[], pnl:[], changes:[], skuTitles:{}, skuParent:{}, expanded:new Set(), sort:{k:'receita_canal',dir:-1}};
 
 // ---------- datas (America/Sao_Paulo) ----------
 function spNow(){return new Date(new Date().toLocaleString('en-US',{timeZone:'America/Sao_Paulo'}));}
@@ -235,7 +237,7 @@ function inicioMesSP(){const d=spNow();return fmtD(new Date(d.getFullYear(),d.ge
 function hojeSP(){return fmtD(spNow());}
 
 // ---------- cache (TTL 5min) ----------
-function cacheKey(){return 'marketing_v8_'+STATE.de+'_'+STATE.ate;}
+function cacheKey(){return 'marketing_v9_'+STATE.de+'_'+STATE.ate;}
 function cacheGet(){try{const o=JSON.parse(localStorage.getItem(cacheKey()));if(o&&Date.now()-o.t<300000)return o.d;}catch(e){}return null;}
 function cacheSet(d){try{localStorage.setItem(cacheKey(),JSON.stringify({t:Date.now(),d}));}catch(e){}}
 
@@ -295,8 +297,9 @@ function aggSku(){
   STATE.pnl.forEach(r=>{
     if(plat&&r.plataforma!==plat)return;
     const k=r.sku_raw+'|'+r.plataforma;
-    const a=m[k]||(m[k]={sku_raw:r.sku_raw,plataforma:r.plataforma,ad_spend:0,impressoes:0,cliques:0,
+    const a=m[k]||(m[k]={sku_raw:r.sku_raw,plataforma:r.plataforma,categoria:'',ad_spend:0,impressoes:0,cliques:0,
       ad_receita_plat:0,receita_canal:0,receita_total:0,cm1:0,cm2:0,cm3:0,unidades:0,fee:0,frete:0,devolucao:0});
+    if(r.categoria && !a.categoria) a.categoria=r.categoria;
     a.ad_spend+=+r.ad_spend||0;a.impressoes+=+r.impressoes||0;a.cliques+=+r.cliques||0;
     a.ad_receita_plat+=+r.ad_receita_plat||0;a.receita_canal+=+r.receita_canal||0;
     a.receita_total+=+r.receita_total_canais||0;
@@ -386,11 +389,12 @@ const LBL={escalar:'escalar',cortar:'cortar',manter:'manter',revisar:'revisar',s
 function parentOf(sku){return STATE.skuParent[sku]||{pid:'v:'+sku,produto:sku,variante:''};}
 function summarize(list){ // soma um conjunto de variantes num resumo (produto-pai)
   const a={ad_spend:0,impressoes:0,cliques:0,ad_receita_plat:0,receita_canal:0,receita_total:0,cm1:0,cm2:0,cm3:0,unidades:0,fee:0,frete:0,devolucao:0};
-  const totBySku={};  // receita all-channel é por SKU → dedup pra não somar 2x (meta+google do mesmo sku)
+  const totBySku={}, catC={};  // receita all-channel é por SKU → dedup; categoria = moda das variantes
   list.forEach(r=>{a.ad_spend+=r.ad_spend;a.impressoes+=r.impressoes;a.cliques+=r.cliques;
     a.ad_receita_plat+=r.ad_receita_plat;a.receita_canal+=r.receita_canal;a.cm1+=r.cm1;a.cm2+=r.cm2;
     a.unidades+=r.unidades;a.fee+=r.fee||0;a.frete+=r.frete||0;a.devolucao+=r.devolucao||0;
-    totBySku[r.sku_raw]=r.receita_total||0;});
+    totBySku[r.sku_raw]=r.receita_total||0; if(r.categoria)catC[r.categoria]=(catC[r.categoria]||0)+1;});
+  a.categoria=Object.keys(catC).sort((x,y)=>catC[y]-catC[x])[0]||'';
   a.receita_total=Object.values(totBySku).reduce((s,v)=>s+v,0);
   a.cm3=a.cm2-a.ad_spend;
   a.roas=a.ad_spend>0?a.ad_receita_plat/a.ad_spend:null;
@@ -411,7 +415,7 @@ function cellsHTML(r,isChild){ // colunas numéricas (compartilhadas por pai e f
 }
 function renderSku(){
   let variants=aggSku();
-  const sinal=document.getElementById('f-sinal').value, busca=document.getElementById('f-busca').value.toLowerCase();
+  const sinal=document.getElementById('f-sinal').value, busca=document.getElementById('f-busca').value.toLowerCase(), cat=document.getElementById('f-categoria').value;
   if(busca)variants=variants.filter(r=>(r.sku_raw||'').toLowerCase().includes(busca)||(parentOf(r.sku_raw).produto||'').toLowerCase().includes(busca));
   // agrupa variantes -> produto-pai (via shopify_product_id)
   const g={};
@@ -422,10 +426,18 @@ function renderSku(){
     s.plat=plats.length>1?'Meta+Google':(plats[0]==='meta_ads'?'Meta':'Google');
     s.nvar=new Set(list.map(x=>x.sku_raw)).size;s.children=list;return s;
   });
-  if(sinal)parents=parents.filter(p=>p.sinal===sinal);  // filtro de veredito é no PRODUTO-pai
+  // popula o dropdown de categoria (1x) com as categorias presentes
+  const selCat=document.getElementById('f-categoria');
+  if(selCat.options.length<=1){
+    [...new Set(parents.map(p=>p.categoria||'(sem categoria)'))].sort().forEach(c=>{
+      const o=document.createElement('option');o.value=c;o.textContent=c;selCat.appendChild(o);});
+  }
+  if(sinal)parents=parents.filter(p=>p.sinal===sinal);  // veredito por PRODUTO-pai
+  if(cat)parents=parents.filter(p=>(p.categoria||'(sem categoria)')===cat);
   const sk=STATE.sort, key=(sk.k==='sku_raw'||sk.k==='plataforma')?'produto':sk.k;
   parents.sort((a,b)=>{let x=a[key],y=b[key];x=x==null?-1e15:x;y=y==null?-1e15:y;
-    if(typeof x==='string')return sk.dir*String(x).localeCompare(String(y));return sk.dir*(x-y);});
+    let d=(typeof x==='string')?sk.dir*String(x).localeCompare(String(y)):sk.dir*(x-y);
+    return d!==0?d:(b.ad_spend||0)-(a.ad_spend||0);});  // desempate: gasto (anúncios) desc
   // KPIs no nível PRODUTO
   const esc=parents.filter(r=>r.sinal==='escalar').length, cor=parents.filter(r=>r.sinal==='cortar').length, revi=parents.filter(r=>r.sinal==='revisar').length;
   const sp=parents.reduce((s,r)=>s+r.ad_spend,0), c3=parents.reduce((s,r)=>s+r.cm3,0);
@@ -444,7 +456,8 @@ function renderSku(){
   let html='';
   parents.slice(0,200).forEach(p=>{
     const open=STATE.expanded.has(p.pid);
-    html+=`<tr class="parent" data-pid="${p.pid}"><td><span class="exp">${open?'▾':'▸'}</span> ${p.produto} <span class="muted">· ${p.nvar} var</span></td>${cellsHTML(p)}</tr>`;
+    const chip=p.categoria?`<span class="cat-chip">${p.categoria}</span> `:'';
+    html+=`<tr class="parent" data-pid="${p.pid}"><td><span class="exp">${open?'▾':'▸'}</span> ${chip}${p.produto} <span class="muted">· ${p.nvar} var</span></td>${cellsHTML(p)}</tr>`;
     if(open){
       const cogs=p.receita_canal-p.cm1;  // CMV = receita − CM1
       html+=`<tr class="pnl"><td colspan="10"><div class="pnlcell">`+
@@ -550,7 +563,7 @@ async function carregarTitulos(){
   // chips
   document.querySelectorAll('#chips .chip').forEach(c=>c.onclick=()=>setPeriodo(c.dataset.p));
   // filtros SKU + audit
-  ['f-plat','f-sinal','f-busca'].forEach(id=>document.getElementById(id).addEventListener('input',renderSku));
+  ['f-plat','f-sinal','f-categoria','f-busca'].forEach(id=>document.getElementById(id).addEventListener('input',renderSku));
   ['a-plat','a-actor'].forEach(id=>document.getElementById(id).addEventListener('input',renderAudit));
   // sort tabela
   document.querySelectorAll('#tbl-sku th').forEach(th=>th.onclick=()=>{
