@@ -1993,6 +1993,8 @@ function renderMensal(){
   k+='<div class="kpi" style="--kpi-accent:#06b6d4"><div class="kpi-lbl">Ticket Médio</div><div class="kpi-val">'+fmt(cur.ticket)+'</div>'+dlt(cur.ticket,prev.ticket)+'</div>';
   k+='<div class="kpi" style="--kpi-accent:#ec4899"><div class="kpi-lbl">CMV % (ACGS)</div><div class="kpi-val">'+fmtD(cur.cmvPct)+'%</div><div class="kpi-sub">'+fmtK(cur.cmv)+' custo</div>'+dlt(cur.cmvPct,prev.cmvPct)+'</div>';
   k+='<div class="kpi" style="--kpi-accent:'+(cur.resultado>=0?"#22c55e":"#f43f5e")+'"><div class="kpi-lbl">Resultado</div><div class="kpi-val" style="color:'+(cur.resultado>=0?"#22c55e":"#f43f5e")+'">'+fmt(cur.resultado)+'</div><div class="kpi-sub">margem '+fmtD(cur.margem)+'%</div>'+dlt(cur.resultado,prev.resultado)+'</div>';
+  var mmc=cur.margem>=20?'#22c55e':(cur.margem>=10?'#eab308':'#f43f5e');
+  k+='<div class="kpi" style="--kpi-accent:'+mmc+'"><div class="kpi-lbl">Margem líquida %</div><div class="kpi-val" style="color:'+mmc+'">'+fmtD(cur.margem)+'%</div>'+dlt(cur.margem,prev.margem)+'</div>';
   document.getElementById('mensal-kpis').innerHTML=k;
   renderMensalRev(M);renderMensalPnL(M);renderMensalMix(M);
   // Charts criados logo após a aba ficar visível podem nascer com width estreito
