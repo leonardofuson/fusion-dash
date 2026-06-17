@@ -719,20 +719,36 @@ function mostrarAnalistaCache(){
 async function rodarAnalista(){
   const out=document.getElementById('analise-out'), btn=document.getElementById('btn-analista'), meta=document.getElementById('ana-meta');
   if(!(STATE.canal&&STATE.canal.length) || !(STATE.pnl&&STATE.pnl.length)){out.innerHTML='<div class="muted" style="padding:14px">Os dados do período ainda estão carregando — tente em alguns segundos.</div>';return;}
-  btn.disabled=true; const lbl=btn.textContent; btn.textContent='analisando…'; meta.textContent='';
-  out.innerHTML='<div class="muted" style="padding:18px">🤖 O analista está lendo os números do período…</div>';
+  btn.disabled=true; const lbl0=btn.textContent; btn.textContent='analisando…'; meta.textContent='';
+  out.innerHTML='<div class="muted" style="padding:18px">🤖 Lendo os números do período…</div>';
+  let acc='', custo=0, lastR=0;
+  const paint=force=>{const now=Date.now(); if(force||now-lastR>=110){lastR=now; out.innerHTML=renderAnaliseMD(acc);}};
   try{
     const foco=(document.getElementById('ana-foco').value||'').trim();
     const dados=buildAnalistaPayload();
-    const r=await fetch(MAXCHAT+'/api/marketing/analista',{method:'POST',headers:{...(await authHeaders()),'Content-Type':'application/json'},body:JSON.stringify({dados,foco})});
-    const j=await r.json().catch(()=>({}));
-    if(!r.ok){out.innerHTML='<div class="muted" style="padding:18px;color:var(--red)">Erro: '+((j&&j.erro)||('HTTP '+r.status))+'</div>';return;}
-    const html=renderAnaliseMD(j.resposta); out.innerHTML=html; out.dataset.loaded='1';
-    const mtxt='Sonnet · ~US$ '+(+(j.custo_usd||0)).toFixed(4)+' · '+new Date().toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    const resp=await fetch(MAXCHAT+'/api/marketing/analista',{method:'POST',headers:{...(await authHeaders()),'Content-Type':'application/json'},body:JSON.stringify({dados,foco})});
+    if(!resp.ok||!resp.body){const j=await resp.json().catch(()=>({}));out.innerHTML='<div class="muted" style="padding:18px;color:var(--red)">Erro: '+((j&&j.erro)||('HTTP '+resp.status))+'</div>';return;}
+    const reader=resp.body.getReader(), dec=new TextDecoder(); let buf='';
+    for(;;){
+      const {done,value}=await reader.read(); if(done)break;
+      buf+=dec.decode(value,{stream:true});
+      let i;
+      while((i=buf.indexOf('\n\n'))>=0){
+        const line=buf.slice(0,i); buf=buf.slice(i+2);
+        if(!line.startsWith('data:'))continue;
+        let obj; try{obj=JSON.parse(line.slice(5).trim());}catch(e){continue;}
+        if(obj.t){acc+=obj.t; paint(false);}
+        else if(obj.erro){out.innerHTML='<div class="muted" style="padding:18px;color:var(--red)">Erro: '+obj.erro+'</div>';return;}
+        else if(obj.done){custo=obj.custo_usd||0;}
+      }
+    }
+    paint(true); out.dataset.loaded='1';
+    const html=out.innerHTML;
+    const mtxt='Sonnet · ~US$ '+(+custo).toFixed(4)+' · '+new Date().toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
     meta.textContent=mtxt;
     try{localStorage.setItem(anaCacheKey(),JSON.stringify({html,meta:mtxt}));}catch(e){}
   }catch(e){out.innerHTML='<div class="muted" style="padding:18px;color:var(--red)">Falha de conexão com o analista: '+e+'</div>';}
-  finally{btn.disabled=false;btn.textContent=lbl.indexOf('Regenerar')<0?'↻ Regenerar análise':lbl;}
+  finally{btn.disabled=false;btn.textContent=(lbl0.indexOf('Regenerar')<0?'↻ Regenerar análise':lbl0);}
 }
 
 // ---------- charts ----------
