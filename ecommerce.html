@@ -1518,10 +1518,14 @@ function renderEcommSkuList(){
     Object.keys(s.porCanal).forEach(function(c){totCanal[c]=(totCanal[c]||0)+s.porCanal[c].receita;});
   });
   var canaisCols=Object.keys(totCanal).sort(function(a,b){return totCanal[b]-totCanal[a];});
-  // Legenda
-  var leg='<div style="display:flex;flex-wrap:wrap;gap:12px;font-size:11px;font-weight:600;">';
-  canaisCols.forEach(function(c){
-    leg+='<span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:12px;height:12px;border-radius:3px;background:'+getCor(c)+';flex-shrink:0;"></span><span style="color:#d4d4d8;">'+c+'</span></span>';
+  // Legenda — clicável: cada canal filtra o dashboard (focusCanal), igual aos cards.
+  // Usa STATE.canais (lista estável de todos os canais) pra ser um switcher completo
+  // mesmo com um foco ativo. Canal focado fica destacado; os outros esmaecidos.
+  var legChans=(STATE.canais&&STATE.canais.length)?STATE.canais:canaisCols;
+  var leg='<div style="display:flex;flex-wrap:wrap;gap:8px;font-size:11px;font-weight:600;">';
+  legChans.forEach(function(c){
+    var foc=STATE.focusCanal===c, dim=STATE.focusCanal&&!foc, cor=getCor(c);
+    leg+='<span onclick="focusCanal(\''+c.replace(/'/g,"\\'")+'\')" title="clique p/ filtrar por '+c+'" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;padding:2px 8px;border-radius:6px;transition:all .15s;opacity:'+(dim?'.4':'1')+';'+(foc?'background:'+cor+'22;outline:1px solid '+cor+';':'')+'"><span style="width:12px;height:12px;border-radius:3px;background:'+cor+';flex-shrink:0;"></span><span style="color:#d4d4d8;">'+c+'</span></span>';
   });
   leg+='</div>';
   if(legEl)legEl.innerHTML=leg;
@@ -1550,7 +1554,9 @@ function renderEcommSkuList(){
         var r=s.porCanal[c]?s.porCanal[c].receita:0;if(r<=0)return;
         var pct=totalP>0?r/totalP*100:0;var cor=getCor(c);
         var label=pct>=10?Math.round(pct)+'%':'';
-        bar+='<div style="width:'+pct+'%;background:'+cor+';display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;font-weight:700;text-shadow:0 1px 2px rgba(0,0,0,0.5);" title="'+c+': '+Math.round(pct)+'%">'+label+'</div>';
+        // Clicar um segmento filtra o dashboard por aquele canal (stopPropagation pra não
+        // também selecionar o SKU da linha).
+        bar+='<div onclick="event.stopPropagation();focusCanal(\''+c.replace(/'/g,"\\'")+'\')" style="width:'+pct+'%;background:'+cor+';display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;font-weight:700;text-shadow:0 1px 2px rgba(0,0,0,0.5);cursor:pointer;" title="'+c+': '+Math.round(pct)+'% — clique p/ filtrar">'+label+'</div>';
       });
       bar+='</div>';
       var dv=(STATE.devBySkuPai&&STATE.devBySkuPai[s.sku_pai])||{valor:0,cnt:0};
