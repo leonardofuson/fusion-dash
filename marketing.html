@@ -115,6 +115,12 @@
   .ev .plat{font-size:11px;padding:1px 7px;border-radius:5px;background:var(--panel2);color:var(--mut)}
   .ev .what{flex:1;color:var(--txt)}
   .ev .delta{color:var(--amber);font-size:12px}
+  .catchips{display:flex;flex-wrap:wrap;gap:8px 14px}
+  .catchip{font-size:12px;color:var(--mut);display:inline-flex;align-items:center;gap:5px}
+  .catchip .val,.catchip span:last-child{font-weight:700;color:var(--txt)}
+  .hilist{display:flex;flex-direction:column;gap:7px}
+  .hi{font-size:12.5px;color:var(--txt);display:flex;flex-wrap:wrap;align-items:center;gap:7px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+  .hi:last-child{border-bottom:none;padding-bottom:0}
   .muted{color:var(--mut)}
   .note{background:linear-gradient(180deg,rgba(124,92,255,.10),rgba(124,92,255,.03));border:1px solid rgba(124,92,255,.25);border-radius:10px;padding:11px 14px 11px 40px;position:relative;font-size:12.5px;color:var(--txt);line-height:1.55;margin-bottom:14px}
   .note::before{content:'💡';position:absolute;left:13px;top:10px;font-size:15px}
@@ -210,17 +216,21 @@
 
   <!-- AUDITORIA -->
   <section class="pane" id="pane-audit">
-    <div class="note">Ações de <b>ADMIN da agência</b> nas contas (quem mexeu, o quê, quando, antes→depois). <span class="muted">Eventos de sistema/cobrança do próprio Meta (conta cobrada, anúncio exibido, status pós-análise) ficam de fora por padrão — não é o que você fiscaliza. Fonte: <b>ads_changes</b>.</span></div>
+    <div class="note">Ações de <b>ADMIN da agência</b> nas contas (quem mexeu, o quê, quando, antes→depois), <b>categorizadas</b> por tipo de mudança. <span class="muted">A esteira de revisão do Meta e eventos de cobrança/entrega ficam de fora por padrão — não é o que você fiscaliza. Fonte: <b>ads_changes</b> (Meta Activities API + Google change_event).</span></div>
     <details class="gloss"><summary>Para que serve esta aba</summary><div class="gbody">
-      <div class="gi">Como a Fusion é <b>dona</b> das contas, dá pra puxar via API <b>cada mudança</b> que a agência faz — coisa que ela não compartilha. O foco é a <b>pessoa da agência</b> (ex.: Igor Rezende no Meta, o analista no Google) e o que ela altera: <span class="badge b-cortar" style="font-size:10px">Orçamento</span> <span class="badge b-revisar" style="font-size:10px">Lance</span> <span class="badge b-manter" style="font-size:10px">Status</span> <span class="badge b-escalar" style="font-size:10px">Segmentação</span> <span class="badge b-sem" style="font-size:10px">Criativo</span>.</div>
-      <div class="gi">Serve pra <b>fiscalizar e sustentar conversas</b> com a agência: pausas indevidas, cortes de orçamento, mudanças fora de hora. <b>Orçamento + lance</b> isola as mexidas que movem dinheiro. O Google aparece pouco porque a conta tem só 1 campanha ativa (o gasto está quase todo no Meta) e a API só guarda 30 dias.</div>
+      <div class="gi">Como a Fusion é <b>dona</b> das contas, dá pra puxar via API <b>cada mudança</b> que a agência faz — coisa que ela não compartilha. O foco é a <b>pessoa da agência</b> (ex.: Igor Rezende no Meta, o analista no Google) e <b>o que ela alterou</b>, classificado em: <span class="badge b-cortar" style="font-size:10px">💰 Orçamento</span> <span class="badge b-cortar" style="font-size:10px">🎯 Lance</span> <span class="badge b-escalar" style="font-size:10px">🆕 Novo anúncio</span> <span class="badge b-revisar" style="font-size:10px">⏸️ Pausa</span> <span class="badge b-manter" style="font-size:10px">🖼️ Imagem</span> <span class="badge b-manter" style="font-size:10px">✍️ Texto</span> <span class="badge b-escalar" style="font-size:10px">👥 Segmentação</span> <span class="badge b-revisar" style="font-size:10px">👤 Acesso</span>.</div>
+      <div class="gi"><b>O que destacar</b> (alto sinal, move dinheiro/estrutura): <b>mudança de orçamento</b> (mostra o antes→depois em R$/dia + %), <b>estratégia de lance</b>, <b>campanha/anúncio pausado</b> e <b>anúncio novo</b>. São o que sustenta conversa com a agência (corte de verba, pausa indevida, troca de criativo no meio de um teste). O bloco "Destaques" isola só esses.</div>
+      <div class="gi"><b>De onde vem cada dado:</b><br>• <b>Meta</b> — API de Atividades (<code>/act_{id}/activities</code>): traz <b>quem</b> (actor), <b>o quê</b> (evento traduzido) e <b>antes→depois</b>. Orçamento vem em <b>centavos/dia</b> (convertemos pra R$); "Anúncio atualizado" traz imagem+título+texto, e <b>comparamos</b> pra dizer se mudou a <b>foto</b> ou o <b>texto</b>.<br>• <b>Google</b> — <code>change_event</code> (GAQL): traz o <b>e-mail</b> de quem mexeu e o campo alterado, mas só guarda <b>30 dias</b> de histórico.</div>
+      <div class="gi"><b>Por que o Google aparece tão pouco:</b> a conta do Google roda <b>1 campanha Performance Max (PMax)</b> pras lojas físicas. PMax é <b>automática</b> — o Google distribui sozinho o anúncio entre Pesquisa, Display, YouTube, Gmail e Maps e otimiza o lance com IA, então há <b>pouca mexida manual</b> pra auditar. Some-se a isso o cap de 30 dias da API. O grosso do investimento e das alterações está no <b>Meta</b> (site próprio).</div>
+      <div class="gi"><b>Esteira de revisão do Meta</b> (oculta por padrão): todo anúncio editado passa por <i>Processo pendente → Análise pendente → Ativo</i>. Essas transições aparecem com a pessoa que disparou a edição, mas são <b>automáticas</b> — não são pausas humanas. Por isso viram a categoria <span class="badge b-sem" style="font-size:10px">🔄 Revisão (auto)</span> e não contam como "Pausa". Marque o checkbox pra inspecioná-las.</div>
     </div></details>
     <div class="kpis" id="kpis-audit"></div>
+    <div id="resumo-audit"></div>
     <div class="filtros">
       <select id="a-plat"><option value="">Todas plataformas</option><option value="meta_ads">Meta</option><option value="google_ads">Google</option></select>
       <select id="a-actor"><option value="">Todos atores (agência)</option></select>
-      <select id="a-cat"><option value="">Todas categorias</option><option>Orçamento</option><option>Lance</option><option>Status</option><option>Segmentação</option><option>Criativo</option></select>
-      <label class="muted" style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="a-sys" style="width:auto"> incluir eventos do Meta (cobrança/entrega/análise)</label>
+      <select id="a-cat"><option value="">Todas categorias</option></select>
+      <label class="muted" style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="a-sys" style="width:auto"> incluir sistema/revisão do Meta (cobrança/entrega/análise)</label>
     </div>
     <div class="card"><div class="timeline" id="tl-audit"></div></div>
   </section>
@@ -239,7 +249,7 @@ function inicioMesSP(){const d=spNow();return fmtD(new Date(d.getFullYear(),d.ge
 function hojeSP(){return fmtD(spNow());}
 
 // ---------- cache (TTL 5min) ----------
-function cacheKey(){return 'marketing_v9_'+STATE.de+'_'+STATE.ate;}
+function cacheKey(){return 'marketing_v10_'+STATE.de+'_'+STATE.ate;}
 function cacheGet(){try{const o=JSON.parse(localStorage.getItem(cacheKey()));if(o&&Date.now()-o.t<300000)return o.d;}catch(e){}return null;}
 function cacheSet(d){try{localStorage.setItem(cacheKey(),JSON.stringify({t:Date.now(),d}));}catch(e){}}
 
@@ -491,43 +501,122 @@ function renderSku(){
   document.getElementById('tb-sku').innerHTML=html;
 }
 
-// classifica o evento numa categoria de ADMIN + se é sistema do Meta
-function classCat(ev){
-  const e=(ev||'').toLowerCase();
-  if(/cobrad|billed|exibido|deliver|após a conclusão|análise do anúncio|review|status da conta|nome da conta|pessoa adicionada/.test(e)) return ['Sistema','b-sem'];
-  if(/orçament|budget/.test(e)) return ['Orçamento','b-cortar'];
-  if(/lance|bid|estratégia de lance/.test(e)) return ['Lance','b-revisar'];
-  if(/status/.test(e)) return ['Status','b-manter'];
-  if(/direcionament|público|target|audience|otimização|meta de otimiz/.test(e)) return ['Segmentação','b-escalar'];
-  if(/anúncio criado|anúncio atualizado|imagem|criativo|nome do conjunto|conjunto de anúncios criado|campanha criada/.test(e)) return ['Criativo','b-sem'];
-  return ['Outros','b-sem'];
+// ---------- auditoria: categorização granular das mudanças ----------
+const rsc=v=>'R$ '+(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+// orçamento Meta vem em centavos dentro de um dict-repr: {... 'old_value': 19321 ...}
+function budgetVals(r){
+  const g=(s,k)=>{const m=(s||'').match(new RegExp(k+"'?\\s*:\\s*(\\d+)"));return m?+m[1]:null;};
+  return {o:g(r.valor_antes,'old_value'),n:g(r.valor_depois,'new_value')};
+}
+// "Anúncio atualizado": array [img_url, título, texto, creative_id]. compara p/ saber se mudou foto ou texto
+// (ignora tokens CDN rotativos no fim da URL e os ids numéricos que sempre mudam)
+function anuncioDiff(a,b){
+  if(!a||!b) return null;
+  try{
+    const path=s=>{const m=s.match(/https?:\/\/[^?'\]]+/);return m?m[0]:'';};
+    const txt =s=>s.replace(/https?:\/\/[^'\]]+/g,'').replace(/\d{9,}/g,'');
+    const imgCh=path(a)&&path(b)&&path(a)!==path(b);
+    const txtCh=txt(a)!==txt(b);
+    if(imgCh&&!txtCh) return 'imagem';
+    if(txtCh&&!imgCh) return 'texto';
+    return null; // ambos ou indeterminado → criativo genérico
+  }catch(e){return null;}
+}
+// recebe a ROW (precisa dos valores em alguns casos). sig: 2=alto(dinheiro/estrutura) 1=médio 0=ruído/baixo
+function classCat(r){
+  const ev=((r&&r.evento)||'').toLowerCase();
+  const v=((r&&r.valor_antes)||'')+' '+((r&&r.valor_depois)||'');
+  // ruído de sistema/cobrança do próprio Meta
+  if(/cobrad|billed|exibido|deliver|limite de gasto|status da conta|conta de anúncios|método de pagamento/.test(ev)||(r&&r.actor==='Meta'&&!/orçament|budget/.test(ev)))
+    return {k:'sistema',l:'Sistema',e:'⚙️',b:'b-sem',sig:0};
+  // pipeline de revisão do Meta (Processo/Análise pendente) — NÃO é decisão humana, é a esteira de aprovação
+  if(/após a conclusão|análise do anúncio/.test(ev)||(/status/.test(ev)&&/pendente|análise|em revis/i.test(v)))
+    return {k:'revisao',l:'Revisão (auto)',e:'🔄',b:'b-sem',sig:0};
+  // DINHEIRO (alto)
+  if(/orçament|budget/.test(ev)) return {k:'orcamento',l:'Orçamento',e:'💰',b:'b-cortar',sig:2};
+  if(/lance|bid|estratégia de lance|meta de otimiz|otimização/.test(ev)) return {k:'lance',l:'Lance & meta',e:'🎯',b:'b-cortar',sig:2};
+  // ESTRUTURA (alto)
+  if(/criad|created/.test(ev)&&/anúncio|conjunto|campanha|campaign/.test(ev)) return {k:'novo',l:'Novo anúncio',e:'🆕',b:'b-escalar',sig:2};
+  if(/status/.test(ev)){ const vd=((r&&r.valor_depois)||'').toLowerCase(); const ativou=/ativ/.test(vd)&&!/inativ/.test(vd); return {k:'pausa',l:ativou?'Ativação':'Pausa',e:ativou?'▶️':'⏸️',b:'b-revisar',sig:2}; }
+  // CRIATIVO (médio)
+  if(/imagem|imagen/.test(ev)) return {k:'imagem',l:'Imagem',e:'🖼️',b:'b-manter',sig:1};
+  if(/anúncio atualizado/.test(ev)){
+    const d=anuncioDiff(r.valor_antes,r.valor_depois);
+    if(d==='imagem') return {k:'imagem',l:'Imagem',e:'🖼️',b:'b-manter',sig:1};
+    if(d==='texto')  return {k:'texto',l:'Texto/Título',e:'✍️',b:'b-manter',sig:1};
+    return {k:'criativo',l:'Criativo',e:'🎨',b:'b-manter',sig:1};
+  }
+  if(/criativo/.test(ev)) return {k:'criativo',l:'Criativo',e:'🎨',b:'b-manter',sig:1};
+  // SEGMENTAÇÃO / PÚBLICO (médio)
+  if(/direcionament|target/.test(ev)) return {k:'segmentacao',l:'Segmentação',e:'👥',b:'b-escalar',sig:1};
+  if(/público|audience/.test(ev)) return {k:'publico',l:'Público',e:'🎯',b:'b-escalar',sig:1};
+  // GOVERNANÇA / RENOMEAÇÃO (baixo)
+  if(/pessoa adicionada|acesso|usuário|permiss/.test(ev)) return {k:'acesso',l:'Acesso',e:'👤',b:'b-revisar',sig:1};
+  if(/nome d|renome|rename/.test(ev)) return {k:'renomear',l:'Renomear',e:'✏️',b:'b-sem',sig:0};
+  return {k:'outros',l:'Outros',e:'•',b:'b-sem',sig:0};
+}
+// linha antes→depois legível por categoria (sem despejar dict/array cru)
+function deltaHTML(r,c){
+  if(c.k==='orcamento'){
+    const {o,n}=budgetVals(r);
+    if(o!=null&&n!=null){const up=n>o,pct=o>0?Math.round((n-o)/o*100):null;
+      return `<span class="delta" style="color:${up?'var(--red)':'var(--green)'}">${rsc(o/100)}/dia ${up?'▲':'▼'} ${rsc(n/100)}/dia${pct!=null?' ('+(up?'+':'')+pct+'%)':''}</span>`;}
+  }
+  if(c.k==='imagem') return '<span class="delta muted">imagem trocada</span>';
+  if(c.k==='texto')  return '<span class="delta muted">texto/título alterado</span>';
+  const va=r.valor_antes,vd=r.valor_depois;
+  if((va||vd)&&(va||'').length<42&&(vd||'').length<42) return `<span class="delta">${va??'?'} → ${vd??'?'}</span>`;
+  return '';
 }
 function renderAudit(){
   const all=STATE.changes;
   const incSys=document.getElementById('a-sys').checked;
   const plat=document.getElementById('a-plat').value, actor=document.getElementById('a-actor').value, fcat=document.getElementById('a-cat').value;
-  // base = AÇÕES DA AGÊNCIA: exclui actor 'Meta' (sistema/cobrança) e categoria Sistema, salvo se incluir
-  let base=all.filter(r=>{ if(incSys) return true; return (r.actor&&r.actor!=='Meta') && classCat(r.evento)[0]!=='Sistema'; });
+  const NOISE=new Set(['sistema','revisao']);
+  // base = AÇÕES HUMANAS DA AGÊNCIA: exclui sistema/cobrança do Meta e a esteira de revisão (salvo se incluir)
+  let base=all.filter(r=>{ if(incSys) return true; return r.actor!=='Meta' && !NOISE.has(classCat(r).k); });
   const actors=[...new Set(all.filter(r=>r.actor&&r.actor!=='Meta').map(r=>r.actor))];
   const sel=document.getElementById('a-actor');
   if(sel.options.length<=1)actors.forEach(a=>{const o=document.createElement('option');o.value=a;o.textContent=a;sel.appendChild(o);});
-  let rows=base.filter(r=>(!plat||r.plataforma===plat)&&(!actor||r.actor===actor)&&(!fcat||classCat(r.evento)[0]===fcat));
-  const cats={}; rows.forEach(r=>{const c=classCat(r.evento)[0];cats[c]=(cats[c]||0)+1;});
-  const orc=(cats['Orçamento']||0)+(cats['Lance']||0);
+  let rows=base.filter(r=>(!plat||r.plataforma===plat)&&(!actor||r.actor===actor)&&(!fcat||classCat(r).k===fcat));
+  // popula filtro de categorias com o que existe (ordena por sinal desc, depois nome)
+  const catsPresent={}; base.filter(r=>!plat||r.plataforma===plat).forEach(r=>{const c=classCat(r);catsPresent[c.k]={l:c.l,e:c.e,sig:c.sig};});
+  const csel=document.getElementById('a-cat');
+  if(csel.options.length<=1)Object.entries(catsPresent).sort((a,b)=>b[1].sig-a[1].sig||a[1].l.localeCompare(b[1].l)).forEach(([k,c])=>{const o=document.createElement('option');o.value=k;o.textContent=c.e+' '+c.l;csel.appendChild(o);});
+  // contagem por categoria + por chave
+  const byK={}; rows.forEach(r=>{const c=classCat(r);byK[c.k]=byK[c.k]||{...c,n:0};byK[c.k].n++;});
+  const cnt=k=>byK[k]?byK[k].n:0;
+  const orc=cnt('orcamento')+cnt('lance');
+  // efeito líquido de orçamento (Σ das alterações Meta, em R$/dia)
+  let netB=0,hasB=false; rows.filter(r=>classCat(r).k==='orcamento').forEach(r=>{const{o,n}=budgetVals(r);if(o!=null&&n!=null){netB+=(n-o)/100;hasB=true;}});
+  const revN=all.filter(r=>(!plat||r.plataforma===plat)&&classCat(r).k==='revisao').length;
   document.getElementById('kpis-audit').innerHTML=[
-    {l:'Ações da agência',v:rows.length,s:incSys?'(incl. sistema)':'no período',t:'Mudanças de ADMIN feitas por pessoas da agência (orçamento, status, lance, segmentação, criativo). Eventos de sistema/cobrança do Meta ficam fora por padrão — marque o checkbox pra incluí-los.'},
-    {l:'Orçamento + lance',v:orc,s:'mexem dinheiro',cls:orc>0?'neg':'',t:'As mudanças que movem dinheiro: orçamento e estratégia de lance. As mais importantes de fiscalizar na agência.'},
-    {l:'Status',v:cats['Status']||0,s:'pausas/ativações',t:'Pausas e ativações de anúncio/conjunto/campanha — onde a agência liga e desliga coisas.'},
-    {l:'Atores',v:[...new Set(rows.map(r=>r.actor))].length,s:'pessoas da agência',t:'Quantas pessoas distintas da agência mexeram na conta no período.'},
+    {l:'Ações da agência',v:rows.length,s:incSys?'(incl. sistema/revisão)':'mudanças humanas',t:'Mudanças feitas por pessoas da agência (orçamento, lance, novos anúncios, pausas, criativo, segmentação). Não conta a esteira de revisão do Meta nem cobrança — marque o checkbox pra incluí-las.'},
+    {l:'Orçamento + lance',v:orc,s:hasB?(netB>=0?'líquido +':'líquido ')+rsc(netB).replace('R$ ','R$')+'/dia':'mexem dinheiro',cls:orc>0?'neg':'',t:'As mudanças que movem dinheiro: orçamento (com o antes→depois em R$/dia) e estratégia de lance/meta de otimização. As mais importantes de fiscalizar. O "líquido" soma todas as alterações de orçamento do período.'},
+    {l:'Pausas / ativações',v:cnt('pausa'),s:'liga/desliga real',t:'Pausas e ativações DELIBERADAS de campanha/conjunto/anúncio. NÃO inclui as transições automáticas da esteira de revisão do Meta (Processo/Análise pendente) — essas viram "Revisão (auto)" e ficam de fora.'},
+    {l:'Novos anúncios',v:cnt('novo'),s:'criados no período',t:'Anúncios, conjuntos e campanhas criados pela agência no período.'},
   ].map(kpiHTML).join('');
+  // resumo: chips por categoria + destaques de alto sinal
+  const chips=Object.values(byK).sort((a,b)=>b.sig-a.sig||b.n-a.n)
+    .map(c=>`<span class="catchip" title="${c.l}"><span class="badge ${c.b}" style="font-size:10px">${c.e} ${c.l}</span> <b>${c.n}</b></span>`).join('');
+  const hi=rows.filter(r=>classCat(r).sig===2).slice(0,8).map(r=>{
+    const c=classCat(r);const d=new Date(r.changed_at).toLocaleDateString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit'});
+    return `<div class="hi"><span class="badge ${c.b}" style="font-size:10px">${c.e} ${c.l}</span> <span class="muted">${(r.objeto_nome||r.objeto_id||'').slice(0,38)}</span> ${deltaHTML(r,c)} <span class="muted" style="font-size:11px">— ${r.actor||'—'} · ${d}</span></div>`;
+  }).join('');
+  document.getElementById('resumo-audit').innerHTML = rows.length ? (
+    `<div class="card" style="margin-bottom:14px;padding:13px 15px">
+      <div style="font-weight:700;margin-bottom:9px">Resumo do período</div>
+      <div class="catchips">${chips}</div>
+      ${hi?`<div style="font-weight:600;font-size:12px;color:var(--mut);margin:13px 0 6px">Destaques (o que moveu dinheiro / estrutura)</div><div class="hilist">${hi}</div>`:''}
+      ${(!incSys&&revN)?`<div class="muted" style="font-size:11.5px;margin-top:11px">+${revN} transições da esteira de revisão do Meta (automáticas, fora da contagem). Marque o checkbox acima pra vê-las.</div>`:''}
+    </div>`) : '';
   document.getElementById('tl-audit').innerHTML=rows.slice(0,300).map(r=>{
     const d=new Date(r.changed_at);const when=d.toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
-    const delta=(r.valor_antes!=null||r.valor_depois!=null)?`<span class="delta">${r.valor_antes??'?'} → ${r.valor_depois??'?'}</span>`:'';
-    const [cat,cls]=classCat(r.evento);
+    const c=classCat(r);
     return `<div class="ev"><div class="when">${when}</div><div class="who">${r.actor||'—'}</div>
       <span class="plat">${r.plataforma==='meta_ads'?'Meta':'Google'}</span>
-      <span class="badge ${cls}" style="font-size:10px">${cat}</span>
-      <div class="what">${r.evento||''} <span class="muted">${(r.objeto_nome||r.objeto_id||'').slice(0,40)}</span> ${delta}</div></div>`;
+      <span class="badge ${c.b}" style="font-size:10px">${c.e} ${c.l}</span>
+      <div class="what">${r.evento||''} <span class="muted">${(r.objeto_nome||r.objeto_id||'').slice(0,40)}</span> ${deltaHTML(r,c)}</div></div>`;
   }).join('')||'<div class="muted" style="padding:14px">Nenhuma ação da agência no período.</div>';
 }
 
