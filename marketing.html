@@ -125,6 +125,11 @@
   .note{position:relative;background:linear-gradient(135deg,rgba(124,92,255,.13),rgba(124,92,255,.035));border:1px solid rgba(124,92,255,.28);border-left:3px solid var(--accent);border-radius:12px;padding:14px 17px 14px 56px;font-size:13px;color:var(--txt);line-height:1.62;margin-bottom:16px}
   .note::before{content:'💡';position:absolute;left:15px;top:13px;display:grid;place-items:center;width:30px;height:30px;background:rgba(124,92,255,.2);border:1px solid rgba(124,92,255,.32);border-radius:9px;font-size:16px;line-height:1}
   .note b{color:#fff;font-weight:700}
+  .note-lead{font-weight:600;color:var(--txt);font-size:13.5px}
+  .note-lead+.note-sub{margin-top:6px;padding-top:6px;border-top:1px solid rgba(124,92,255,.16)}
+  .note-sub{color:var(--mut);font-size:12.5px;line-height:1.55}
+  .note-sub b{color:var(--txt);font-weight:700}
+  .note-sub .badge{vertical-align:baseline}
   canvas{max-height:300px}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
   @media(max-width:760px){.grid2{grid-template-columns:1fr}th,td{padding:6px}}
@@ -160,7 +165,10 @@
 
   <!-- VISÃO GERAL -->
   <section class="pane on" id="pane-geral">
-    <div class="note">A métrica-norte é <b>margem de contribuição (CM3)</b>, não ROAS. <b>MER_site</b> (Meta÷Shopify) é o indicador confiável; MER_loja (Google÷loja) é fraco — movimento espontâneo de loja não vem de anúncio. MER de equilíbrio ≈ 1÷margem.</div>
+    <div class="note">
+      <div class="note-lead">A métrica-norte é <b>margem de contribuição (CM3)</b> — não ROAS.</div>
+      <div class="note-sub"><b>MER_site</b> (Meta ÷ Shopify) é o indicador confiável. MER_loja (Google ÷ loja) é fraco: movimento espontâneo de loja não vem de anúncio. MER de equilíbrio ≈ 1 ÷ margem.</div>
+    </div>
     <details class="gloss"><summary>Como ler este painel</summary><div class="gbody">
       <div class="gi"><b>A ideia central:</b> a maioria dos painéis mede <b>ROAS</b> (receita ÷ gasto) — mas receita não é lucro. Um produto pode ter ROAS lindo e <b>perder dinheiro</b> depois do custo de produzir, da comissão, do frete e da devolução. Aqui a pergunta é: <b>"depois de TODOS os custos, o anúncio deixou dinheiro no caixa?"</b> Isso é <b>margem de contribuição</b>.</div>
       <div class="gi"><b>A cascata de custos:</b> Receita −CMV (custo de produzir) = <b>CM1</b> · −comissão/frete/devolução = <b>CM2</b> · −gasto de anúncios = <b>CM3</b>. <b>CM3 é o que importa</b>: positivo = ganhou; negativo = queimou.</div>
@@ -180,7 +188,10 @@
 
   <!-- LUCRO POR SKU -->
   <section class="pane" id="pane-sku">
-    <div class="note">A decisão é por <b>lucro real (POAS = CM2÷gasto)</b>, no <b>produto-pai</b> — não por variante e não por ROAS. <span class="muted">Produtos que vendem a maior parte <b>fora do canal do anúncio</b> viram <span class="badge b-revisar">revisar</span> (o Meta pode estar gerando venda no TikTok/loja) — abra "Como funciona esta aba". Clique num produto pra ver a cascata de custos + a concentração de canal.</span></div>
+    <div class="note">
+      <div class="note-lead">A decisão é por <b>lucro real (POAS = CM2 ÷ gasto)</b>, no <b>produto-pai</b> — não por variante e não por ROAS.</div>
+      <div class="note-sub">Produtos que vendem a maior parte <b>fora do canal do anúncio</b> viram <span class="badge b-revisar">revisar</span> (o Meta pode estar gerando venda no TikTok/loja). Clique num produto pra ver a cascata de custos + a concentração de canal.</div>
+    </div>
     <details class="gloss"><summary>Como funciona esta aba</summary><div class="gbody">
       <div class="gi"><b>Cada linha é um PRODUTO, não uma variante.</b> Meta e Google anunciam por <b>catálogo</b>: cada cor/tamanho é um item do feed, e a plataforma atribui o gasto por variante. A variante que recebe mais gasto é a que o <b>algoritmo decidiu mostrar</b> — não uma escolha sua. Por isso o <b>veredito (escalar/cortar) fica SÓ no produto-pai</b>; clicar abre as variantes (informativo, sem veredito).</div>
       <div class="gi"><b>⚠ Cross-channel — o ponto mais importante.</b> O gasto do Meta mira o site e o do Google mira a loja, MAS <b>um anúncio do Meta pode gerar venda no TikTok, na loja física ou no ML</b> — a pessoa descobre o produto no anúncio e compra onde for mais fácil. Exemplo real: a Calça Alfaiataria vende <b>~5% no site e ~95% no TikTok</b>. Se olhássemos só a margem do site, mandaríamos <b>cortar um anúncio que pode estar vendendo fora</b>. Por isso medimos a <b>concentração de canal</b> (% que o produto vende no canal do anúncio) — aparece ao expandir o produto — e tratamos esses casos como <b>revisar</b>, não cortar.</div>
@@ -216,7 +227,10 @@
 
   <!-- AUDITORIA -->
   <section class="pane" id="pane-audit">
-    <div class="note">Ações de <b>ADMIN da agência</b> nas contas (quem mexeu, o quê, quando, antes→depois), <b>categorizadas</b> por tipo de mudança. <span class="muted">A esteira de revisão do Meta e eventos de cobrança/entrega ficam de fora por padrão — não é o que você fiscaliza. Fonte: <b>ads_changes</b> (Meta Activities API + Google change_event).</span></div>
+    <div class="note">
+      <div class="note-lead">Ações de <b>ADMIN da agência</b> nas contas — quem mexeu, o quê, quando e o antes→depois, <b>categorizadas</b> por tipo de mudança.</div>
+      <div class="note-sub">A esteira de revisão do Meta e eventos de cobrança/entrega ficam de fora por padrão. Fonte: <b>ads_changes</b> (Meta Activities API + Google change_event).</div>
+    </div>
     <details class="gloss"><summary>Para que serve esta aba</summary><div class="gbody">
       <div class="gi">Como a Fusion é <b>dona</b> das contas, dá pra puxar via API <b>cada mudança</b> que a agência faz — coisa que ela não compartilha. O foco é a <b>pessoa da agência</b> (ex.: Igor Rezende no Meta, o analista no Google) e <b>o que ela alterou</b>, classificado em: <span class="badge b-cortar" style="font-size:10px">💰 Orçamento</span> <span class="badge b-cortar" style="font-size:10px">🎯 Lance</span> <span class="badge b-escalar" style="font-size:10px">🆕 Novo anúncio</span> <span class="badge b-revisar" style="font-size:10px">⏸️ Pausa</span> <span class="badge b-manter" style="font-size:10px">🖼️ Imagem</span> <span class="badge b-manter" style="font-size:10px">✍️ Texto</span> <span class="badge b-escalar" style="font-size:10px">👥 Segmentação</span> <span class="badge b-revisar" style="font-size:10px">👤 Acesso</span>.</div>
       <div class="gi"><b>O que destacar</b> (alto sinal, move dinheiro/estrutura): <b>mudança de orçamento</b> (mostra o antes→depois em R$/dia + %), <b>estratégia de lance</b>, <b>campanha/anúncio pausado</b> e <b>anúncio novo</b>. São o que sustenta conversa com a agência (corte de verba, pausa indevida, troca de criativo no meio de um teste). O bloco "Destaques" isola só esses.</div>
