@@ -179,6 +179,7 @@
   <div class="tabs">
     <div class="tab on" data-t="geral">Visão Geral</div>
     <div class="tab" data-t="sku">Lucro por SKU</div>
+    <div class="tab" data-t="criativo">Saúde de Criativo</div>
     <div class="tab" data-t="audit">Auditoria da Agência</div>
     <div class="tab" data-t="analista">🤖 Analista</div>
   </div>
@@ -250,6 +251,24 @@
         </tr></thead>
         <tbody id="tb-sku"></tbody>
       </table>
+    </div>
+  </section>
+
+  <!-- SAÚDE DE CRIATIVO -->
+  <section class="pane" id="pane-criativo">
+    <div class="note">
+      <div class="note-lead">Diagnóstico por <b>anúncio</b> (não por produto): o que o Meta diz de cada criativo vs a concorrência no leilão — e o que fazer.</div>
+      <div class="note-sub">Rankings da própria Meta (<b>qualidade</b>, <b>engajamento</b>, <b>conversão</b>) + frequência (saturação) + retenção de vídeo. Janela 30d, anúncios com ≥300 impressões. <span class="badge b-cortar">renovar criativo</span> qualidade/engajamento baixos · <span class="badge b-revisar">corrigir landing</span> conversão baixa (problema pós-clique, não o criativo) · <span class="badge b-manter">fadiga</span> frequência alta · <span class="badge b-escalar">ok</span>.</div>
+    </div>
+    <details class="gloss"><summary>Como ler os rankings</summary><div class="gbody">
+      <div class="gi"><b>Os 3 rankings</b> comparam seu anúncio com os concorrentes que disputam o <b>mesmo público</b> (terço de baixo / médio / superior). <b>Qualidade</b> = percepção do criativo (clickbait, qualidade); <b>Engajamento</b> = quão atraente (taxa de engajamento esperada); <b>Conversão</b> = quão bem converte depois do clique.</div>
+      <div class="gi"><b>O que fazer com cada um</b> (guia da Meta): qualidade ou engajamento <b>baixos</b> → o problema é o <b>criativo</b> (renovar). Conversão <b>baixa</b> → o problema é <b>pós-clique</b> (página/oferta/checkout), não o anúncio. <b>Frequência ≥4</b> = o público já viu demais → fadiga (renovar criativo ou ampliar público). <b>Retenção de vídeo</b> = % de quem passou de 25% e terminou o vídeo (segura a atenção?).</div>
+    </div></details>
+    <div class="kpis" id="kpis-criativo"></div>
+    <div class="card" style="padding:0;overflow:auto">
+      <table id="tbl-criativo"><thead><tr>
+        <th>Anúncio</th><th>Campanha</th><th>Qualidade</th><th>Engaj.</th><th>Conversão</th><th>Freq.</th><th>Retenção vídeo</th><th>Gasto</th><th>O que fazer</th>
+      </tr></thead><tbody id="tb-criativo"></tbody></table>
     </div>
   </section>
 
@@ -344,7 +363,8 @@ async function carregar(force){
   STATE.mer=data.mer;STATE.pnl=data.pnl;STATE.changes=data.changes;STATE.canal=data.canal||[];
   renderAll();
   document.getElementById('loader').style.display='none';
-  carregarCurva();  // curva 90d (independe do período) — fire-and-forget
+  carregarCurva();    // curva 90d (independe do período) — fire-and-forget
+  carregarCriativo(); // saúde de criativo (snapshot mais recente) — fire-and-forget
 }
 
 // ---------- helpers de formato ----------
@@ -522,6 +542,40 @@ async function carregarCurva(){
   STATE.curva=computeCurva(cd.ads, trec>0?tcm2/trec:0.45);
   STATE.eficiencia=computeEficiencia(cd.ads);
   renderCurva(); renderEficiencia();
+}
+
+// ---------- saúde de criativo (Meta, nível anúncio) ----------
+const RANKCHIP={above:['alta','b-escalar'],average:['média','b-sem'],below:['baixa','b-cortar'],unknown:['—','b-sem']};
+const VERDC={renovar_criativo:['renovar criativo','b-cortar'],corrigir_landing:['corrigir landing','b-revisar'],fadiga_publico:['fadiga','b-manter'],ok:['ok','b-escalar'],sem_dado:['sem dado','b-sem']};
+function rchip(v){const a=RANKCHIP[v]||RANKCHIP.unknown;return `<span class="badge ${a[1]}" style="font-size:10px">${a[0]}</span>`;}
+async function carregarCriativo(){
+  let rows=null; try{const o=JSON.parse(localStorage.getItem('mkt_criativo_v1'));if(o&&Date.now()-o.t<3600000)rows=o.d;}catch(e){}
+  if(!rows){
+    rows=await buscarTudo('ads_criativo_saude','select=ad_name,campaign_name,quality_ranking,engagement_rate_ranking,conversion_rate_ranking,frequency,hold_rate,spend,impressions,veredito,motivo,data_ref&order=data_ref.desc,spend.desc');
+    try{localStorage.setItem('mkt_criativo_v1',JSON.stringify({t:Date.now(),d:rows}));}catch(e){}
+  }
+  const maxd=rows.length?rows[0].data_ref:null;
+  STATE.criativo=rows.filter(r=>r.data_ref===maxd);
+  renderCriativo();
+}
+function renderCriativo(){
+  const rows=STATE.criativo||[];
+  const gBy=v=>rows.filter(r=>r.veredito===v).reduce((s,r)=>s+(+r.spend||0),0);
+  document.getElementById('kpis-criativo').innerHTML=[
+    {l:'Anúncios',v:rows.length,s:'≥300 impressões (30d)',t:'Anúncios ativos com impressões suficientes pro Meta calcular os rankings.'},
+    {l:'Gasto em fadiga',v:rs(gBy('fadiga_publico')),s:'frequência alta',cls:gBy('fadiga_publico')>0?'neg':'',t:'Gasto em anúncios com frequência alta (público cansando) — renovar criativo ou ampliar público.'},
+    {l:'Gasto p/ corrigir landing',v:rs(gBy('corrigir_landing')),s:'conversão baixa',cls:gBy('corrigir_landing')>0?'neg':'',t:'Gasto em anúncios cuja conversão pós-clique está abaixo da média — o problema é página/oferta, não o criativo.'},
+    {l:'Gasto p/ renovar criativo',v:rs(gBy('renovar_criativo')),s:'qualidade/engaj. baixos',cls:gBy('renovar_criativo')>0?'neg':'',t:'Gasto em anúncios com qualidade ou engajamento abaixo da concorrência — trocar o criativo.'},
+  ].map(kpiHTML).join('');
+  document.getElementById('tb-criativo').innerHTML=rows.map(r=>{
+    const a=VERDC[r.veredito]||VERDC.sem_dado;
+    const hold=r.hold_rate!=null?Math.round(r.hold_rate*100)+'%':'—';
+    const freq=(+r.frequency||0).toFixed(1);
+    return `<tr><td>${(r.ad_name||'').slice(0,34)}</td><td class="muted">${(r.campaign_name||'').slice(0,22)}</td>`+
+      `<td>${rchip(r.quality_ranking)}</td><td>${rchip(r.engagement_rate_ranking)}</td><td>${rchip(r.conversion_rate_ranking)}</td>`+
+      `<td class="${freq>=4?'neg':''}">${freq}</td><td>${hold}</td><td>${rs(r.spend)}</td>`+
+      `<td><span class="badge ${a[1]}" style="font-size:10px" title="${(r.motivo||'').replace(/"/g,'&quot;')}">${a[0]}</span></td></tr>`;
+  }).join('')||'<tr><td colspan="9" class="muted" style="padding:14px">Sem dados de criativo ainda (o cron diário popula).</td></tr>';
 }
 // eficiência de mídia Meta (fadiga de criativo / pressão de leilão) — dado já ingerido, sem sync novo
 function effWindow(ads, dStart, dEnd){ // [dStart, dEnd)
@@ -825,7 +879,17 @@ function buildAnalistaPayload(){
   if(ef)eficiencia={janela:'últimos 30d vs 30d anteriores',ctr_pct:ef.ctr!=null?+ef.ctr.toFixed(2):null,ctr_delta_pct:ef.ctr_delta!=null?Math.round(ef.ctr_delta):null,
     cpm:ef.cpm!=null?R(ef.cpm):null,cpm_delta_pct:ef.cpm_delta!=null?Math.round(ef.cpm_delta):null,
     cpc:ef.cpc!=null?+ef.cpc.toFixed(2):null,cpc_delta_pct:ef.cpc_delta!=null?Math.round(ef.cpc_delta):null,sinal_fadiga:ef.fadiga};
-  return {periodo:{de:STATE.de,ate:STATE.ate},cascata_site:cascata,mer,curva_canal:curva,eficiencia_meta:eficiencia,produtos,auditoria_agencia:aud};
+  // saúde de criativo por anúncio (Meta, rankings + fadiga) — snapshot 30d
+  let criativo=null; const cr=STATE.criativo;
+  if(cr&&cr.length){
+    const gBy=v=>cr.filter(r=>r.veredito===v).reduce((s,r)=>s+(+r.spend||0),0);
+    criativo={janela_dias:30,n_anuncios:cr.length,
+      resumo:{fadiga_publico:cr.filter(r=>r.veredito==='fadiga_publico').length,corrigir_landing:cr.filter(r=>r.veredito==='corrigir_landing').length,renovar_criativo:cr.filter(r=>r.veredito==='renovar_criativo').length,ok:cr.filter(r=>r.veredito==='ok').length},
+      gasto_fadiga:R(gBy('fadiga_publico')),gasto_corrigir_landing:R(gBy('corrigir_landing')),gasto_renovar_criativo:R(gBy('renovar_criativo')),
+      anuncios_problema:cr.filter(r=>['fadiga_publico','corrigir_landing','renovar_criativo'].includes(r.veredito)).sort((a,b)=>(b.spend||0)-(a.spend||0)).slice(0,8)
+        .map(r=>({anuncio:r.ad_name,campanha:r.campaign_name,veredito:r.veredito,qualidade:r.quality_ranking,engajamento:r.engagement_rate_ranking,conversao:r.conversion_rate_ranking,frequencia:+(+r.frequency||0).toFixed(1),gasto:R(r.spend)}))};
+  }
+  return {periodo:{de:STATE.de,ate:STATE.ate},cascata_site:cascata,mer,curva_canal:curva,eficiencia_meta:eficiencia,saude_criativo:criativo,produtos,auditoria_agencia:aud};
 }
 function renderAnaliseMD(md){
   try{return DOMPurify.sanitize(marked.parse(md||''));}catch(e){return '<div class="muted">'+(md||'').replace(/</g,'&lt;')+'</div>';}
