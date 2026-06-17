@@ -1170,11 +1170,12 @@ function filtrarPipelinePorProduto(nome) {
 function renderPipeline() {
   renderRecebimento30d();
   var ops = STATE.ops;
-  var ativas = ops.filter(function(o) { return o.status !== 'Entregue'; });
-  var entregues = ops.filter(function(o) { return o.status === 'Entregue'; });
+  // Alinhado ao Gantt e ao painel de Recebimento: ativas = exclui Entregue/Cancelado/Devolvido Fornecedor.
+  var ativas = ops.filter(function(o) { return ['Entregue','Cancelado','Devolvido Fornecedor'].indexOf(o.status) < 0; });
   var totalPecas = ativas.reduce(function(s, o) { return s + (o.qtde_pecas || 0); }, 0);
   var totalEntregues = ativas.reduce(function(s, o) { return s + (o.qtde_pecas_entregues || 0); }, 0);
-  var aReceber = totalPecas - totalEntregues;
+  // Peças a receber = Σ pendente por OP clampado a ≥0 (over-entrega não vira negativo) — bate com o painel de Recebimento.
+  var aReceber = ativas.reduce(function(s, o) { return s + Math.max(0, (o.qtde_pecas||0) - (o.qtde_pecas_entregues||0)); }, 0);
   var semData = ativas.filter(function(o) { return !o.data_prevista_entrega; }).length;
 
   document.getElementById('badge-pipeline').textContent = ativas.length;
