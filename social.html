@@ -1,0 +1,130 @@
+<!doctype html><html lang="pt-BR"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Orgânico — Fusion BI</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="auth.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root{--bg:#0f1115;--panel:#171a21;--panel2:#1e222b;--line:#2a2f3a;--txt:#e7ebf2;--mut:#9aa3b2;--accent:#7c5cff;--accent2:#22d3ee;--green:#2fbf71;--red:#ef5350;--amber:#f5a623}
+  *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:14px}
+  .topbar{display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5}
+  .topbar b{font-weight:800}.topbar .accent{color:var(--accent)}
+  .btn{background:var(--panel2);border:1px solid var(--line);color:var(--txt);padding:7px 12px;border-radius:8px;cursor:pointer;font-size:13px;text-decoration:none}
+  .btn:hover{border-color:var(--accent)}
+  main{padding:18px;max-width:1200px;margin:0 auto}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .kpi .lbl{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+  .kpi .val{font-size:24px;font-weight:800;margin-top:6px}.kpi .sub{color:var(--mut);font-size:12px;margin-top:2px}
+  .kpi.accent .val{color:var(--accent2)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:780px){.grid2{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
+  .card h3{margin:0 0 10px;font-size:14px}.card h3 .hint{color:var(--mut);font-weight:400;font-size:12px}
+  table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line)}
+  th{color:var(--mut);font-weight:600}td a{color:var(--accent2);text-decoration:none}
+  .badge{padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700}
+  .b-reel{background:rgba(124,92,255,.16);color:var(--accent)}.b-feed{background:rgba(34,211,238,.16);color:var(--accent2)}
+  .note{background:linear-gradient(135deg,rgba(124,92,255,.13),rgba(124,92,255,.035));border:1px solid rgba(124,92,255,.28);border-left:3px solid var(--accent);border-radius:12px;padding:13px 16px;margin-bottom:16px;font-size:13px;line-height:1.6}
+  .note b{color:#fff}.muted{color:var(--mut)}.pos{color:var(--green)}.neg{color:var(--red)}
+  .heat{display:grid;grid-template-columns:auto repeat(7,1fr);gap:3px;font-size:11px}
+  .heat .hc{height:22px;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#0b0d12;font-weight:700}
+  .heat .hl{color:var(--mut);display:flex;align-items:center;padding:0 4px}
+  #loader{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;color:var(--mut)}
+</style></head>
+<body>
+<div class="topbar"><b>FUSION <span class="accent">Orgânico</span></b><span class="muted" style="font-size:12px">@usefusion_</span>
+  <span style="flex:1"></span><span class="muted" id="who" style="font-size:12px"></span>
+  <a class="btn" href="/index.html">Menu</a><button class="btn" id="btnOut">Sair</button></div>
+<main>
+  <div class="note">Performance <b>orgânica</b> do Instagram (não-paga). O que cresce a conta e o que engaja — pra decidir <b>o que postar, em que formato e quando</b>. <span class="muted">Métricas pós-depreciação 2025 (alcance, salvamentos, compartilhamentos, interações). Crescimento diário acumula com o cron. TikTok entra quando o review da API liberar.</span></div>
+  <div class="kpis" id="kpis"></div>
+  <div class="grid2">
+    <div class="card"><h3>Crescimento <span class="hint">seguidores + alcance/dia</span></h3><canvas id="ch-growth" height="150"></canvas></div>
+    <div class="card"><h3>Engajamento por formato <span class="hint">taxa média (interações ÷ alcance)</span></h3><canvas id="ch-fmt" height="150"></canvas></div>
+  </div>
+  <div class="card"><h3>Melhor horário pra postar <span class="hint">engajamento médio por dia da semana × faixa de horário</span></h3><div id="heat"></div></div>
+  <div class="card"><h3>Top conteúdos <span class="hint">por taxa de engajamento</span></h3>
+    <table><thead><tr><th>Post</th><th>Formato</th><th>Alcance</th><th>Interações</th><th>Salvos</th><th>Engaj.</th><th></th></tr></thead><tbody id="tb-posts"></tbody></table>
+  </div>
+</main>
+<div id="loader">Carregando…</div>
+<script>
+let SB='',ANON='';
+const CHARTS={};
+const rs=v=>(Math.round(v||0)).toLocaleString('pt-BR');
+const pct=v=>v==null?'—':(v*100).toFixed(1)+'%';
+async function authHeaders(){const s=await fusionAuth.getSession();return{apikey:ANON,Authorization:'Bearer '+(s?s.access_token:'')};}
+async function api(tab,q){const h=await authHeaders();const r=await fetch(SB+'/rest/v1/'+tab+'?'+q,{headers:h});return r.ok?r.json():[];}
+const DOW=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+function spDate(ts){return new Date(new Date(ts).toLocaleString('en-US',{timeZone:'America/Sao_Paulo'}));}
+
+function render(conta,posts){
+  const cur=conta[conta.length-1]||{};
+  const withER=posts.filter(p=>p.engagement_rate!=null);
+  const erAvg=withER.length?withER.reduce((s,p)=>s+ +p.engagement_rate,0)/withER.length:null;
+  const reels=withER.filter(p=>p.formato==='REELS'), feed=withER.filter(p=>p.formato!=='REELS');
+  const erF=a=>a.length?a.reduce((s,p)=>s+ +p.engagement_rate,0)/a.length:0;
+  const melhorFmt=erF(reels)>=erF(feed)?'Reels':'Feed';
+  const novos=conta.reduce((s,r)=>s+(+r.novos_seguidores||0),0);
+  document.getElementById('kpis').innerHTML=[
+    {l:'Seguidores',v:rs(cur.seguidores),s:(novos>=0?'+':'')+rs(novos)+' no período'},
+    {l:'Alcance/dia',v:rs(cur.reach),s:'contas únicas (último dia)'},
+    {l:'Engajamento médio',v:pct(erAvg),s:withER.length+' posts',a:1},
+    {l:'Melhor formato',v:melhorFmt,s:'Reels '+pct(erF(reels))+' · Feed '+pct(erF(feed))},
+    {l:'Posts analisados',v:withER.length,s:'com insights'},
+  ].map(k=>`<div class="kpi ${k.a?'accent':''}"><div class="lbl">${k.l}</div><div class="val">${k.v}</div><div class="sub">${k.s||''}</div></div>`).join('');
+
+  // crescimento
+  if(CHARTS.g)CHARTS.g.destroy();
+  CHARTS.g=new Chart(document.getElementById('ch-growth'),{type:'line',
+    data:{labels:conta.map(r=>r.data.slice(5)),datasets:[
+      {label:'Seguidores',data:conta.map(r=>r.seguidores),borderColor:'#7c5cff',yAxisID:'y',tension:.3},
+      {label:'Alcance/dia',data:conta.map(r=>r.reach),borderColor:'#22d3ee',yAxisID:'y1',tension:.3}]},
+    options:{plugins:{legend:{labels:{color:'#9aa3b2',boxWidth:12}}},scales:{
+      y:{position:'left',ticks:{color:'#9aa3b2'},grid:{color:'#2a2f3a'}},
+      y1:{position:'right',ticks:{color:'#9aa3b2'},grid:{display:false}},x:{ticks:{color:'#9aa3b2'},grid:{display:false}}}}});
+
+  // por formato
+  if(CHARTS.f)CHARTS.f.destroy();
+  CHARTS.f=new Chart(document.getElementById('ch-fmt'),{type:'bar',
+    data:{labels:['Reels','Feed'],datasets:[{label:'Engaj. médio',data:[erF(reels)*100,erF(feed)*100],backgroundColor:['#7c5cff','#22d3ee']}]},
+    options:{plugins:{legend:{display:false}},scales:{y:{ticks:{color:'#9aa3b2',callback:v=>v+'%'},grid:{color:'#2a2f3a'}},x:{ticks:{color:'#9aa3b2'},grid:{display:false}}}}});
+
+  // heatmap melhor horário (DOW × faixa 6h)
+  const buckets={},faixas=['0-6','6-12','12-18','18-24'];
+  withER.forEach(p=>{const d=spDate(p.publicado_em);const dw=d.getDay(),fx=Math.floor(d.getHours()/6);
+    const k=dw+'_'+fx;(buckets[k]||(buckets[k]={s:0,n:0}));buckets[k].s+= +p.engagement_rate;buckets[k].n++;});
+  let max=0;Object.values(buckets).forEach(b=>max=Math.max(max,b.s/b.n));
+  let h='<div class="heat"><div></div>'+DOW.map(d=>`<div class="hl" style="justify-content:center">${d}</div>`).join('');
+  faixas.forEach((fx,fi)=>{h+=`<div class="hl">${fx}h</div>`;
+    for(let dw=0;dw<7;dw++){const b=buckets[dw+'_'+fi];const er=b?b.s/b.n:null;
+      const a=er==null?0:Math.max(.12,er/max);const c=er==null?'#1e222b':`rgba(124,92,255,${a})`;
+      h+=`<div class="hc" style="background:${c}" title="${er==null?'sem post':pct(er)+' ('+b.n+' posts)'}">${er==null?'':Math.round(er*100*10)/10}</div>`;}});
+  h+='</div><div class="muted" style="font-size:11px;margin-top:8px">Número = engajamento médio (%). Mais roxo = melhor. Horário de Brasília.</div>';
+  document.getElementById('heat').innerHTML=h;
+
+  // top posts
+  const top=[...withER].sort((a,b)=>+b.engagement_rate-+a.engagement_rate).slice(0,12);
+  document.getElementById('tb-posts').innerHTML=top.map(p=>{
+    const isR=p.formato==='REELS';
+    return `<tr><td>${(p.caption||'').replace(/\n/g,' ').slice(0,46)}…</td>`+
+      `<td><span class="badge ${isR?'b-reel':'b-feed'}">${isR?'Reels':'Feed'}</span></td>`+
+      `<td>${rs(p.reach)}</td><td>${rs(p.interactions)}</td><td>${rs(p.saved)}</td>`+
+      `<td><b>${pct(p.engagement_rate)}</b></td><td><a href="${p.permalink}" target="_blank">ver</a></td></tr>`;
+  }).join('');
+}
+
+(async()=>{
+  const auth=await fusionAuth.requireAuth('social');
+  document.getElementById('who').textContent=auth.email||'';
+  SB=fusionAuth.SUPABASE_URL;ANON=fusionAuth.SUPABASE_ANON_KEY;
+  document.getElementById('btnOut').onclick=()=>fusionAuth.signOut();
+  const [conta,posts]=await Promise.all([
+    api('social_conta_dia','select=*&plataforma=eq.instagram&order=data.asc'),
+    api('social_posts','select=*&plataforma=eq.instagram&order=publicado_em.desc&limit=200'),
+  ]);
+  render(conta,posts);
+  document.getElementById('loader').style.display='none';
+})();
+</script>
+</body></html>
