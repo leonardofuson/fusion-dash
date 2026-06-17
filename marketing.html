@@ -204,6 +204,10 @@
       <h3>Ponto ótimo de gasto — Meta → site <span class="hint">curva de retornos decrescentes · 90 dias · referência, não meta dura</span></h3>
       <div id="curva-body"><div class="muted" style="padding:6px 2px">Calculando…</div></div>
     </div>
+    <div class="card" id="efic-card">
+      <h3>Eficiência de mídia — Meta <span class="hint">fadiga de criativo / pressão de leilão · últimos 30d vs 30d anteriores</span></h3>
+      <div id="efic-body"><div class="muted" style="padding:6px 2px">Calculando…</div></div>
+    </div>
     <div class="grid2">
       <div class="card"><h3>Gasto diário <span class="hint">Meta + Google</span></h3><canvas id="ch-spend"></canvas></div>
       <div class="card"><h3>MER_site <span class="hint">receita Shopify ÷ gasto Meta</span></h3><canvas id="ch-mer"></canvas></div>
@@ -301,7 +305,7 @@ function inicioMesSP(){const d=spNow();return fmtD(new Date(d.getFullYear(),d.ge
 function hojeSP(){return fmtD(spNow());}
 
 // ---------- cache (TTL 5min) ----------
-function cacheKey(){return 'marketing_v11_'+STATE.de+'_'+STATE.ate;}
+function cacheKey(){return 'marketing_v12_'+STATE.de+'_'+STATE.ate;}
 function cacheGet(){try{const o=JSON.parse(localStorage.getItem(cacheKey()));if(o&&Date.now()-o.t<300000)return o.d;}catch(e){}return null;}
 function cacheSet(d){try{localStorage.setItem(cacheKey(),JSON.stringify({t:Date.now(),d}));}catch(e){}}
 
@@ -506,17 +510,46 @@ function renderCurva(){
 }
 async function carregarCurva(){
   const ate=hojeSP(), de=somaDias(ate,-90);
-  let cd=null; try{const o=JSON.parse(localStorage.getItem('mkt_curva_v2'));if(o&&Date.now()-o.t<3600000)cd=o.d;}catch(e){}
+  let cd=null; try{const o=JSON.parse(localStorage.getItem('mkt_curva_v3'));if(o&&Date.now()-o.t<3600000)cd=o.d;}catch(e){}
   if(!cd){
     const [ads,canal]=await Promise.all([
-      buscarTudo('ads_metrics','select=data,gasto,receita_total&plataforma=eq.meta_ads&level=eq.campaign&data=gte.'+de+'&data=lte.'+ate+'&order=data.asc'),
+      buscarTudo('ads_metrics','select=data,gasto,impressoes,cliques,receita_total&plataforma=eq.meta_ads&level=eq.campaign&data=gte.'+de+'&data=lte.'+ate+'&order=data.asc'),
       buscarTudo('mvw_marketing_canal_margem_dia','select=data,cm2,receita&canal_grupo=eq.site&data=gte.'+de+'&data=lte.'+ate+'&order=data.asc'),
     ]);
-    cd={ads,canal}; try{localStorage.setItem('mkt_curva_v2',JSON.stringify({t:Date.now(),d:cd}));}catch(e){}
+    cd={ads,canal}; try{localStorage.setItem('mkt_curva_v3',JSON.stringify({t:Date.now(),d:cd}));}catch(e){}
   }
   const tcm2=cd.canal.reduce((s,r)=>s+(+r.cm2||0),0), trec=cd.canal.reduce((s,r)=>s+(+r.receita||0),0);
   STATE.curva=computeCurva(cd.ads, trec>0?tcm2/trec:0.45);
-  renderCurva();
+  STATE.eficiencia=computeEficiencia(cd.ads);
+  renderCurva(); renderEficiencia();
+}
+// eficiência de mídia Meta (fadiga de criativo / pressão de leilão) — dado já ingerido, sem sync novo
+function effWindow(ads, dStart, dEnd){ // [dStart, dEnd)
+  let imp=0,cli=0,g=0; (ads||[]).forEach(r=>{if(r.data>=dStart&&r.data<dEnd){imp+=+r.impressoes||0;cli+=+r.cliques||0;g+=+r.gasto||0;}});
+  return {ctr:imp>0?cli/imp*100:null, cpm:imp>0?g/imp*1000:null, cpc:cli>0?g/cli:null, imp};
+}
+function computeEficiencia(ads){
+  const ate=hojeSP(), d30=somaDias(ate,-30), d60=somaDias(ate,-60);
+  const cur=effWindow(ads,d30,somaDias(ate,1)), prev=effWindow(ads,d60,d30);
+  if(!cur.imp||!prev.imp) return null;
+  const dl=(a,b)=>(a!=null&&b)?(a-b)/b*100:null;
+  const ctr_d=dl(cur.ctr,prev.ctr), cpm_d=dl(cur.cpm,prev.cpm), cpc_d=dl(cur.cpc,prev.cpc);
+  return {ctr:cur.ctr,cpm:cur.cpm,cpc:cur.cpc,ctr_delta:ctr_d,cpm_delta:cpm_d,cpc_delta:cpc_d,
+    fadiga:(ctr_d!=null&&ctr_d<-10)&&(cpm_d!=null&&cpm_d>10)};
+}
+function renderEficiencia(){
+  const el=document.getElementById('efic-body'); if(!el) return;
+  const e=STATE.eficiencia;
+  if(!e){el.innerHTML='<div class="muted" style="padding:6px 2px">Sem dado suficiente (precisa de 60d de impressões Meta).</div>';return;}
+  const arrow=(d,goodUp)=>{ if(d==null)return ''; const up=d>0; const good=goodUp?up:!up;
+    return `<span style="color:${good?'var(--green)':'var(--red)'};font-size:12px;font-weight:700"> ${up?'▲':'▼'}${Math.abs(Math.round(d))}%</span>`; };
+  el.innerHTML=
+    `<div class="curva-stats">`+
+    `<div class="cs"><span class="cl">CTR</span><span class="cv">${e.ctr!=null?e.ctr.toFixed(2)+'%':'—'}${arrow(e.ctr_delta,true)}</span></div>`+
+    `<div class="cs"><span class="cl">CPM</span><span class="cv">${e.cpm!=null?rs(e.cpm):'—'}${arrow(e.cpm_delta,false)}</span></div>`+
+    `<div class="cs"><span class="cl">CPC</span><span class="cv">${e.cpc!=null?'R$'+e.cpc.toFixed(2):'—'}${arrow(e.cpc_delta,false)}</span></div>`+
+    `</div>`+
+    `<div class="curva-frase">${e.fadiga?'<b>⚠ Sinal de fadiga de criativo:</b> o CTR caiu e o CPM subiu nos últimos 30 dias — o público está cansando do anúncio ou o leilão ficou mais caro. <b>Hora de renovar criativo.</b>':'Sem sinal claro de fadiga nos últimos 30 dias.'} <span class="muted">CTR↑ é bom; CPM/CPC↑ é ruim (mais caro alcançar/clicar). Comparação: últimos 30d vs os 30d anteriores. Fadiga = CTR caindo &gt;10% E CPM subindo &gt;10%.</span></div>`;
 }
 
 const BADGE={escalar:'b-escalar',cortar:'b-cortar',manter:'b-manter',revisar:'b-revisar',sem_venda_no_canal:'b-sem'};
@@ -787,7 +820,12 @@ function buildAnalistaPayload(){
   if(gc){const st=curvaStatus(gc);curva={modelo:'margem atribuída = a + b·ln(gasto+1), 90d',base:'lente da plataforma (receita atribuída × margem) — Meta sobre-atribui, ótimo real provavelmente menor; confirmar com teste de verba',
     gasto_medio_dia:R(gc.gmean),gasto_max_testado_dia:R(gc.gmax),ponto_otimo_dia:R(gc.otimo),
     margem_marginal_por_real:+gc.margAtual.toFixed(2),status:st?st.k:null,r2:+gc.r2.toFixed(2),amostra_dias:gc.n,extrapola:gc.extrapola};}
-  return {periodo:{de:STATE.de,ate:STATE.ate},cascata_site:cascata,mer,curva_canal:curva,produtos,auditoria_agencia:aud};
+  // eficiência de mídia Meta (fadiga de criativo) — últimos 30d vs 30d anteriores
+  let eficiencia=null; const ef=STATE.eficiencia;
+  if(ef)eficiencia={janela:'últimos 30d vs 30d anteriores',ctr_pct:ef.ctr!=null?+ef.ctr.toFixed(2):null,ctr_delta_pct:ef.ctr_delta!=null?Math.round(ef.ctr_delta):null,
+    cpm:ef.cpm!=null?R(ef.cpm):null,cpm_delta_pct:ef.cpm_delta!=null?Math.round(ef.cpm_delta):null,
+    cpc:ef.cpc!=null?+ef.cpc.toFixed(2):null,cpc_delta_pct:ef.cpc_delta!=null?Math.round(ef.cpc_delta):null,sinal_fadiga:ef.fadiga};
+  return {periodo:{de:STATE.de,ate:STATE.ate},cascata_site:cascata,mer,curva_canal:curva,eficiencia_meta:eficiencia,produtos,auditoria_agencia:aud};
 }
 function renderAnaliseMD(md){
   try{return DOMPurify.sanitize(marked.parse(md||''));}catch(e){return '<div class="muted">'+(md||'').replace(/</g,'&lt;')+'</div>';}
