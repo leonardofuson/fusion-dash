@@ -1857,7 +1857,9 @@ function renderCanalCards(){
   // canais sempre, pra permitir alternar o foco clicando. Mesma lógica da tabela de canais.
   var base=STATE.pedidosFull||STATE.pedidos;
   var cur={},pri={};
-  base.forEach(function(p){if(p._canc)return;if(!selOk(p._nome))return;cur[p._nome]=(cur[p._nome]||0)+valorReceita(p);});
+  // _cancelado (não _canc): igual à tabela de canais e ao KPI Receita Bruta — devolvido
+  // conta como venda bruta. Usar _canc subcontava Shopee/Site pelo valor devolvido.
+  base.forEach(function(p){if(p._cancelado)return;if(!selOk(p._nome))return;cur[p._nome]=(cur[p._nome]||0)+valorReceita(p);});
   (STATE.mvRowsPrev||[]).forEach(function(r){var n=getNome(r.canal_nome_raw,r.origem_conta);if(!selOk(n))return;pri[n]=(pri[n]||0)+parseFloat(r.receita_bruta||0);});
   var nomes=Object.keys(cur).filter(function(n){return cur[n]>0;}).sort(function(a,b){return cur[b]-cur[a];});
   if(!nomes.length){el.innerHTML='';return;}
