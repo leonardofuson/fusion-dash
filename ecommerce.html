@@ -1482,6 +1482,15 @@ function renderEcommSkuList(){
         || (s.nome||'').toLowerCase().indexOf(q)>=0
         || (s.cat||'').toLowerCase().indexOf(q)>=0;
   });
+  // Crescimento por produto vs período anterior (mesma base dos cards "Produtos em
+  // destaque"): receita do sku_pai no período anterior equivalente, da MV skuMVRowsPrev.
+  var hasPrevSku=(STATE.skuMVRowsPrev||[]).length>0;
+  var priBySku={};
+  (STATE.skuMVRowsPrev||[]).forEach(function(r){var canal=getNome(r.canal_nome_raw,r.origem_conta);
+    if(STATE.focusCanal&&canal!==STATE.focusCanal)return;
+    if(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[canal])return;
+    priBySku[r.sku_pai]=(priBySku[r.sku_pai]||0)+parseFloat(r.receita||0);});
+  function growthOf(s){var pr=priBySku[s.sku_pai]||0;return pr>0?(s.receita-pr)/pr*100:(s.receita>0?null:0);}
   // Sort
   var sk=STATE.skuSort.key,sd=STATE.skuSort.dir==='asc'?1:-1;
   groups.sort(function(a,b){
@@ -1490,6 +1499,7 @@ function renderEcommSkuList(){
     if(sk==='devPct'){va=a.receita>0?a.devolucao/a.receita:0;vb=b.receita>0?b.devolucao/b.receita:0;return (va-vb)*sd;}
     if(sk==='devml'){va=((STATE.devBySkuPai||{})[a.sku_pai]||{}).valor||0;vb=((STATE.devBySkuPai||{})[b.sku_pai]||{}).valor||0;return (va-vb)*sd;}
     if(sk==='margem'){va=a.receita-a.custoTotal-a.fee-a.devolucao;vb=b.receita-b.custoTotal-b.fee-b.devolucao;return (va-vb)*sd;}
+    if(sk==='crescimento'){va=growthOf(a);vb=growthOf(b);va=(va===null?-1e12:va);vb=(vb===null?-1e12:vb);return (va-vb)*sd;}
     va=a[sk]||0;vb=b[sk]||0;return (va-vb)*sd;
   });
   if(countEl)countEl.textContent=groups.length+' produtos';
@@ -1515,6 +1525,7 @@ function renderEcommSkuList(){
   var th='<tr>'
     +'<th class="sortable'+arrow('nome')+'" onclick="setEcommSkuSort(\'nome\')">Produto</th>'
     +'<th class="r sortable'+arrow('receita')+'" onclick="setEcommSkuSort(\'receita\')">Receita</th>'
+    +'<th class="r sortable'+arrow('crescimento')+'" onclick="setEcommSkuSort(\'crescimento\')" title="crescimento da receita vs período anterior equivalente">Δ vs mês ant.</th>'
     +'<th class="r sortable'+arrow('qtd')+'" onclick="setEcommSkuSort(\'qtd\')">Qtd</th>'
     +'<th class="r sortable'+arrow('devml')+'" onclick="setEcommSkuSort(\'devml\')">Devol. (un·R$)</th>'
     +'<th style="min-width:220px;">Distribuição por canal</th>'
@@ -1535,6 +1546,7 @@ function renderEcommSkuList(){
       return '<tr '+sel+' onclick="selectEcommSku(\''+s.sku_pai.replace(/'/g,"\\'")+'\')">'
         +'<td style="font-weight:600;max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="'+(s.nome||s.sku_pai)+'"><div>'+(s.nome||s.sku_pai)+'</div><div style="font-size:9px;color:var(--txt3);font-family:monospace;">'+s.sku_pai+'</div></td>'
         +'<td class="r val" style="font-weight:700;">'+fmt(s.receita)+'</td>'
+        +'<td class="r">'+(!hasPrevSku?'<span style="color:var(--txt3)">—</span>':(function(){var g=growthOf(s);return g===null?'<span style="color:#22c55e;font-size:10px;font-weight:700">novo</span>':deltaBadge(g);})())+'</td>'
         +'<td class="r val">'+fmtN(s.qtd)+'</td>'
         +'<td class="r val" style="font-weight:700;" title="devoluções reais por produto (ML+Site+TikTok+Shopee)">'+(dv.cnt>0?fmtN(dv.cnt)+'<span style="color:var(--txt3);font-size:9px;font-weight:600"> · '+fmtK(dv.valor)+'</span>':'<span style="color:var(--txt3)">—</span>')+'</td>'
         +'<td>'+bar+'</td>'
