@@ -387,6 +387,7 @@ async function carregar(force){
   document.getElementById('loader').style.display='none';
   carregarCurva();    // curva 90d (independe do período) — fire-and-forget
   carregarCriativo(); // saúde de criativo (snapshot mais recente) — fire-and-forget
+  carregarCross();    // orgânico (IG) + tráfego (GA4) pro analista cross-channel
 }
 
 // ---------- helpers de formato ----------
@@ -564,6 +565,19 @@ async function carregarCurva(){
   STATE.curva=computeCurva(cd.ads, trec>0?tcm2/trec:0.45);
   STATE.eficiencia=computeEficiencia(cd.ads);
   renderCurva(); renderEficiencia();
+}
+
+// ---------- cross-channel (orgânico IG + tráfego GA4) p/ o analista ----------
+async function carregarCross(){
+  try{
+    const since=somaDias(hojeSP(),-28);
+    const [conta,posts,traf]=await Promise.all([
+      buscarTudo('social_conta_dia','select=data,seguidores,reach,novos_seguidores&plataforma=eq.instagram&order=data.desc&limit=30'),
+      buscarTudo('social_posts','select=formato,reach,interactions,engagement_rate,caption&plataforma=eq.instagram&order=publicado_em.desc&limit=60'),
+      buscarTudo('web_trafego_dia','select=canal,source_medium,sessions,receita,transacoes&data=gte.'+since),
+    ]);
+    STATE.organico={conta,posts}; STATE.trafego=traf;
+  }catch(e){}
 }
 
 // ---------- saúde de criativo (Meta, nível anúncio) ----------
@@ -1025,7 +1039,26 @@ function buildAnalistaPayload(){
   if(il)incr={base:il.B,teste:il.T,controle:il.ctrl,gasto_base_dia:Math.round(il.r.sB),gasto_teste_dia:Math.round(il.r.sT),
     lift_did_pct:il.r.did!=null?Math.round(il.r.did*100):null,roas_incremental:il.r.incRoas!=null?+il.r.incRoas.toFixed(2):null,
     nota:'observacional (não geo-holdout); controle aproxima sazonalidade'};
-  return {periodo:{de:STATE.de,ate:STATE.ate},cascata_site:cascata,mer,curva_canal:curva,eficiencia_meta:eficiencia,saude_criativo:criativo,incrementalidade:incr,produtos,auditoria_agencia:aud};
+  // orgânico Instagram (cross-channel)
+  let organico=null; const og=STATE.organico;
+  if(og&&og.posts&&og.posts.length){
+    const p=og.posts.filter(x=>x.engagement_rate!=null), conta=(og.conta&&og.conta[0])||{};
+    const erF=reels=>{const a=p.filter(x=>(x.formato==='REELS')===reels);return a.length?a.reduce((s,x)=>s+ +x.engagement_rate,0)/a.length:0;};
+    organico={seguidores:conta.seguidores,reach_dia:conta.reach,n_posts:p.length,
+      er_reels_pct:+(erF(true)*100).toFixed(1),er_feed_pct:+(erF(false)*100).toFixed(1),
+      top_posts:[...p].sort((a,b)=>+b.engagement_rate-+a.engagement_rate).slice(0,4).map(x=>({formato:x.formato,reach:x.reach,er_pct:+(+x.engagement_rate*100).toFixed(1),trecho:(x.caption||'').replace(/\s+/g,' ').slice(0,50)}))};
+  }
+  // tráfego/atribuição (GA4 último clique, 28d)
+  let trafego=null; const tg=STATE.trafego;
+  if(tg&&tg.length){
+    const byC={},bySM={}; tg.forEach(r=>{byC[r.canal]=(byC[r.canal]||0)+(+r.receita||0);bySM[r.source_medium]=(bySM[r.source_medium]||0)+(+r.receita||0);});
+    const tot=Object.values(byC).reduce((s,v)=>s+v,0);
+    const paid=Object.entries(byC).filter(([c])=>/^Paid|Cross-network/.test(c)).reduce((s,[,v])=>s+v,0);
+    trafego={janela:'28d (GA4 último-clique, NÃO é caixa real)',receita_total:R(tot),pct_pago:Math.round(tot?paid/tot*100:0),
+      por_canal:Object.entries(byC).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([c,v])=>({canal:c,receita:R(v)})),
+      top_origens:Object.entries(bySM).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([s,v])=>({origem:s,receita:R(v)}))};
+  }
+  return {periodo:{de:STATE.de,ate:STATE.ate},cascata_site:cascata,mer,curva_canal:curva,eficiencia_meta:eficiencia,saude_criativo:criativo,incrementalidade:incr,organico,trafego,produtos,auditoria_agencia:aud};
 }
 function renderAnaliseMD(md){
   try{return DOMPurify.sanitize(marked.parse(md||''));}catch(e){return '<div class="muted">'+(md||'').replace(/</g,'&lt;')+'</div>';}
