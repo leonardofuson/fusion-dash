@@ -338,6 +338,8 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
       <div class="kpi"><div class="kpi-lbl">Carregando...</div><div class="spin"></div></div>
     </div>
 
+    <div id="recebimento-30d"></div>
+
     <div class="card" style="overflow:visible">
       <div class="gantt-sticky-head">
         <div class="card-header">
@@ -1058,7 +1060,106 @@ function corToColor(cor) {
   return '#6366f1';
 }
 
+// Previsão de recebimento dos próximos 30 dias, agrupada por SKU pai — topo do Pipeline.
+// "Quando" = data_prevista_entrega (real) OU data_envio_tecido + 45d (lead de produção do MRP,
+// estimado, marcado com ~). Inclui atrasados (data esperada já passou — recebimento iminente).
+// Pendente por OP = qtde_pecas − qtde_pecas_entregues. Clicar num produto filtra o cronograma abaixo.
+var LEAD_PRODUCAO_DIAS = 45;
+function renderRecebimento30d() {
+  var el = document.getElementById('recebimento-30d');
+  if (!el) return;
+  var hoje = new Date(); hoje.setHours(0,0,0,0);
+  var lim30 = new Date(hoje); lim30.setDate(lim30.getDate() + 30);
+  function expDate(o) {
+    if (o.data_prevista_entrega) return { d: new Date(o.data_prevista_entrega + 'T00:00:00'), est: false };
+    if (o.data_envio_tecido) { var d = new Date(o.data_envio_tecido + 'T00:00:00'); d.setDate(d.getDate() + LEAD_PRODUCAO_DIAS); return { d: d, est: true }; }
+    return null;
+  }
+  var porSku = {};
+  var buckets = [{lbl:'Atrasado',cor:'var(--red)',v:0},{lbl:'0–7 dias',cor:'var(--orange)',v:0},{lbl:'8–15 dias',cor:'var(--amber)',v:0},{lbl:'16–30 dias',cor:'var(--green)',v:0}];
+  var totalPend = 0, totalOPs = 0, semDataPend = 0;
+  (STATE.ops || []).forEach(function(o) {
+    if (['Entregue','Cancelado','Devolvido Fornecedor'].indexOf(o.status) >= 0) return;
+    var pend = (parseFloat(o.qtde_pecas) || 0) - (parseFloat(o.qtde_pecas_entregues) || 0);
+    if (pend <= 0) return;
+    var e = expDate(o);
+    if (!e) { semDataPend += pend; return; }
+    if (e.d > lim30) return; // além de 30 dias
+    totalPend += pend; totalOPs++;
+    var sku = o.sku_produto || '?';
+    if (!porSku[sku]) porSku[sku] = { sku: sku, nome: nomeProduto(sku) || sku, pend: 0, nOps: 0, minD: null, est: false };
+    var ps = porSku[sku]; ps.pend += pend; ps.nOps++;
+    if (e.est) ps.est = true;
+    if (!ps.minD || e.d < ps.minD) ps.minD = e.d;
+    var dias = Math.round((e.d - hoje) / 86400000);
+    if (dias < 0) buckets[0].v += pend; else if (dias <= 7) buckets[1].v += pend; else if (dias <= 15) buckets[2].v += pend; else buckets[3].v += pend;
+  });
+  var skus = Object.values(porSku).sort(function(a,b){ return b.pend - a.pend; });
+
+  if (!skus.length) {
+    el.innerHTML = '<div class="card" style="margin-bottom:14px"><div class="card-header"><span class="card-title">📦 Previsão de Recebimento <small style="color:var(--txt3)">· próximos 30 dias</small></span></div>' +
+      '<div class="empty" style="padding:18px;text-align:center;color:var(--txt3)">Nenhum recebimento previsto nos próximos 30 dias' + (semDataPend>0 ? ' · ' + fmt(Math.round(semDataPend)) + ' pç sem data (ver chip "Sem Data de Entrega")' : '') + '</div></div>';
+    return;
+  }
+  var maxPend = skus[0].pend || 1;
+  function fdata(d){ return ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2); }
+  var maxBucket = Math.max.apply(null, buckets.map(function(b){return b.v;})) || 1;
+
+  var bucketsHtml = buckets.map(function(b){
+    var h = Math.round((b.v / maxBucket) * 36) + 2;
+    return '<div style="display:flex;flex-direction:column;align-items:center;gap:3px;min-width:64px">' +
+      '<div style="font-size:12px;font-weight:700;color:'+b.cor+'">'+fmt(Math.round(b.v))+'</div>' +
+      '<div style="width:30px;height:'+h+'px;background:'+b.cor+';border-radius:3px;opacity:0.85"></div>' +
+      '<div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:0.03em">'+b.lbl+'</div>' +
+    '</div>';
+  }).join('');
+
+  var barsHtml = skus.slice(0,10).map(function(s){
+    var w = Math.round((s.pend / maxPend) * 100);
+    var nomeEsc = (s.nome||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+    return '<div onclick="filtrarPipelinePorProduto(\''+nomeEsc+'\')" style="cursor:pointer;display:flex;align-items:center;gap:10px;padding:5px 4px;border-radius:6px" onmouseover="this.style.background=\'var(--bg)\'" onmouseout="this.style.background=\'\'" title="Clique pra filtrar o cronograma neste produto">' +
+      '<div style="flex:0 0 200px;font-size:12px;font-weight:600;color:var(--txt1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(s.nome||s.sku)+'</div>' +
+      '<div style="flex:1;background:var(--bg);border-radius:5px;height:20px;position:relative;min-width:80px">' +
+        '<div style="width:'+w+'%;height:100%;background:linear-gradient(90deg,var(--indigo),var(--purple,#a855f7));border-radius:5px;min-width:2px"></div>' +
+      '</div>' +
+      '<div style="flex:0 0 80px;text-align:right;font-size:13px;font-weight:700;color:var(--txt1)">'+fmt(Math.round(s.pend))+'</div>' +
+      '<div style="flex:0 0 96px;text-align:right;font-size:11px;color:var(--txt3)">'+(s.est?'~':'')+'a partir '+fdata(s.minD)+'</div>' +
+    '</div>';
+  }).join('');
+
+  el.innerHTML =
+    '<div class="card" style="overflow:visible;margin-bottom:14px">' +
+      '<div class="card-header">' +
+        '<span class="card-title">📦 Previsão de Recebimento <small style="color:var(--txt3)">· próximos 30 dias</small></span>' +
+        '<small style="color:var(--txt3)">data prevista · ~ = estimada (envio + '+LEAD_PRODUCAO_DIAS+'d)</small>' +
+      '</div>' +
+      '<div style="padding:12px 14px">' +
+        '<div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--bdr)">' +
+          '<div><span style="font-size:30px;font-weight:800;color:var(--green)">'+fmt(Math.round(totalPend))+'</span> <span style="color:var(--txt2)">peças</span></div>' +
+          '<div style="font-size:12px;color:var(--txt3);line-height:1.5">'+skus.length+' produto'+(skus.length>1?'s':'')+'<br>'+totalOPs+' OPs ativas</div>' +
+          '<div style="margin-left:auto;display:flex;gap:14px;align-items:flex-end">'+bucketsHtml+'</div>' +
+        '</div>' +
+        barsHtml +
+        (skus.length > 10 ? '<div style="font-size:11px;color:var(--txt3);margin-top:6px">+ '+(skus.length-10)+' outros produtos</div>' : '') +
+        (semDataPend > 0 ? '<div style="font-size:11px;color:var(--orange);margin-top:8px">⚠ '+fmt(Math.round(semDataPend))+' pç em produção sem data de entrega — não dá pra prever (preencha a previsão na OP).</div>' : '') +
+      '</div>' +
+    '</div>';
+}
+
+function filtrarPipelinePorProduto(nome) {
+  var sel = document.getElementById('flt-produto-gantt');
+  if (sel) {
+    var achou = Array.prototype.some.call(sel.options, function(o){ return o.value === nome; });
+    if (!achou) { var opt = document.createElement('option'); opt.value = nome; opt.textContent = nome; sel.appendChild(opt); }
+    sel.value = nome;
+  }
+  renderGantt(); renderOPsLista();
+  var card = document.getElementById('gantt-scroll');
+  if (card && card.scrollIntoView) card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
 function renderPipeline() {
+  renderRecebimento30d();
   var ops = STATE.ops;
   var ativas = ops.filter(function(o) { return o.status !== 'Entregue'; });
   var entregues = ops.filter(function(o) { return o.status === 'Entregue'; });
