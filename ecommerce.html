@@ -1491,6 +1491,12 @@ function renderEcommSkuList(){
     if(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[canal])return;
     priBySku[r.sku_pai]=(priBySku[r.sku_pai]||0)+parseFloat(r.receita||0);});
   function growthOf(s){var pr=priBySku[s.sku_pai]||0;return pr>0?(s.receita-pr)/pr*100:(s.receita>0?null:0);}
+  // Ads do produto somando só os canais visíveis (respeita focusCanal, igual ao drawer).
+  function adsOf(s){return Object.keys(s.porCanal||{}).reduce(function(a,c){return a+(((STATE.adsBySkuPaiCanal||{})[s.sku_pai]||{})[c]||0);},0);}
+  function tacosOf(s){return s.receita>0?adsOf(s)/s.receita*100:0;}                       // TACoS = ads ÷ receita
+  function margemLiqOf(s){return s.receita-(s.custoTotal||0)-(s.fee||0)-(s.devolucao||0)-(s.freteSeller||0)-adsOf(s);}
+  function margemLiqPctOf(s){return s.receita>0?margemLiqOf(s)/s.receita*100:0;}
+  function devUnPctOf(s){var dv=(STATE.devBySkuPai||{})[s.sku_pai]||{cnt:0};return s.qtd>0?dv.cnt/s.qtd*100:0;}  // devolução em UNIDADES
   // Sort
   var sk=STATE.skuSort.key,sd=STATE.skuSort.dir==='asc'?1:-1;
   groups.sort(function(a,b){
@@ -1500,6 +1506,9 @@ function renderEcommSkuList(){
     if(sk==='devml'){va=((STATE.devBySkuPai||{})[a.sku_pai]||{}).valor||0;vb=((STATE.devBySkuPai||{})[b.sku_pai]||{}).valor||0;return (va-vb)*sd;}
     if(sk==='margem'){va=a.receita-a.custoTotal-a.fee-a.devolucao;vb=b.receita-b.custoTotal-b.fee-b.devolucao;return (va-vb)*sd;}
     if(sk==='crescimento'){va=growthOf(a);vb=growthOf(b);va=(va===null?-1e12:va);vb=(vb===null?-1e12:vb);return (va-vb)*sd;}
+    if(sk==='devun'){va=devUnPctOf(a);vb=devUnPctOf(b);return (va-vb)*sd;}
+    if(sk==='tacos'){va=tacosOf(a);vb=tacosOf(b);return (va-vb)*sd;}
+    if(sk==='margemliq'){va=margemLiqPctOf(a);vb=margemLiqPctOf(b);return (va-vb)*sd;}
     va=a[sk]||0;vb=b[sk]||0;return (va-vb)*sd;
   });
   if(countEl)countEl.textContent=groups.length+' produtos';
@@ -1527,8 +1536,10 @@ function renderEcommSkuList(){
     +'<th class="r sortable'+arrow('receita')+'" onclick="setEcommSkuSort(\'receita\')">Receita</th>'
     +'<th class="r sortable'+arrow('crescimento')+'" onclick="setEcommSkuSort(\'crescimento\')" title="crescimento da receita vs período anterior equivalente">Δ vs mês ant.</th>'
     +'<th class="r sortable'+arrow('qtd')+'" onclick="setEcommSkuSort(\'qtd\')">Qtd</th>'
-    +'<th class="r sortable'+arrow('devml')+'" onclick="setEcommSkuSort(\'devml\')">Devol. (un·R$)</th>'
-    +'<th style="min-width:220px;">Distribuição por canal</th>'
+    +'<th class="r sortable'+arrow('devun')+'" onclick="setEcommSkuSort(\'devun\')" title="taxa de devolução em unidades (un devolvidas ÷ un vendidas); qtd em letra menor">Devol. %</th>'
+    +'<th class="r sortable'+arrow('tacos')+'" onclick="setEcommSkuSort(\'tacos\')" title="TACoS: gasto em Ads (ML) ÷ receita do produto">TACoS</th>'
+    +'<th class="r sortable'+arrow('margemliq')+'" onclick="setEcommSkuSort(\'margemliq\')" title="margem líquida %: receita − CMV − comissão − devolução − frete − ads">Margem líq.</th>'
+    +'<th style="min-width:200px;">Distribuição por canal</th>'
     +'</tr>';
   listEl.innerHTML='<table class="tb"><thead>'+th+'</thead><tbody>'
     +lista.map(function(s){
@@ -1543,12 +1554,28 @@ function renderEcommSkuList(){
       });
       bar+='</div>';
       var dv=(STATE.devBySkuPai&&STATE.devBySkuPai[s.sku_pai])||{valor:0,cnt:0};
+      // Devolução em UNIDADES (% como métrica principal, qtd em letra menor)
+      var devUnPct=s.qtd>0?dv.cnt/s.qtd*100:0;
+      var devCor=devUnPct>=10?'#ef4444':(devUnPct>=5?'#eab308':'var(--txt1)');
+      var devCell=dv.cnt>0
+        ? '<span style="color:'+devCor+';font-weight:700">'+fmtD(devUnPct)+'%</span><span style="color:var(--txt3);font-size:9px;font-weight:600"> · '+fmtN(dv.cnt)+' un</span>'
+        : '<span style="color:var(--txt3)">—</span>';
+      // TACoS (ads ÷ receita)
+      var adsP=adsOf(s);var tacos=s.receita>0?adsP/s.receita*100:0;
+      var tacosCell=adsP>0
+        ? '<span style="color:'+(tacos<=8?'var(--txt1)':(tacos<=15?'#eab308':'#ef4444'))+';font-weight:700">'+fmtD(tacos)+'%</span>'
+        : '<span style="color:var(--txt3)">—</span>';
+      // Margem líquida % (receita − cmv − comissão − devolução − frete − ads)
+      var mlPct=margemLiqPctOf(s);
+      var mlCls=mlPct>=20?'good':(mlPct>=10?'mid':'bad');
       return '<tr '+sel+' onclick="selectEcommSku(\''+s.sku_pai.replace(/'/g,"\\'")+'\')">'
         +'<td style="font-weight:600;max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="'+(s.nome||s.sku_pai)+'"><div>'+(s.nome||s.sku_pai)+'</div><div style="font-size:9px;color:var(--txt3);font-family:monospace;">'+s.sku_pai+'</div></td>'
         +'<td class="r val" style="font-weight:700;">'+fmt(s.receita)+'</td>'
         +'<td class="r">'+(!hasPrevSku?'<span style="color:var(--txt3)">—</span>':(function(){var g=growthOf(s);return g===null?'<span style="color:#22c55e;font-size:10px;font-weight:700">novo</span>':deltaBadge(g);})())+'</td>'
         +'<td class="r val">'+fmtN(s.qtd)+'</td>'
-        +'<td class="r val" style="font-weight:700;" title="devoluções reais por produto (ML+Site+TikTok+Shopee)">'+(dv.cnt>0?fmtN(dv.cnt)+'<span style="color:var(--txt3);font-size:9px;font-weight:600"> · '+fmtK(dv.valor)+'</span>':'<span style="color:var(--txt3)">—</span>')+'</td>'
+        +'<td class="r" title="devolução em unidades (un devolvidas ÷ un vendidas)">'+devCell+'</td>'
+        +'<td class="r">'+tacosCell+'</td>'
+        +'<td class="r"><span class="margem-pill '+mlCls+'">'+Math.round(mlPct)+'%</span></td>'
         +'<td>'+bar+'</td>'
         +'</tr>';
     }).join('')+'</tbody></table>';
