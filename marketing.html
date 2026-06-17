@@ -180,6 +180,7 @@
     <div class="tab on" data-t="geral">Visão Geral</div>
     <div class="tab" data-t="sku">Lucro por SKU</div>
     <div class="tab" data-t="criativo">Saúde de Criativo</div>
+    <div class="tab" data-t="incr">Incrementalidade</div>
     <div class="tab" data-t="audit">Auditoria da Agência</div>
     <div class="tab" data-t="analista">🤖 Analista</div>
   </div>
@@ -270,6 +271,27 @@
         <th>Anúncio</th><th>Campanha</th><th>Qualidade</th><th>Engaj.</th><th>Conversão</th><th>Freq.</th><th>Retenção vídeo</th><th>Gasto</th><th>O que fazer</th>
       </tr></thead><tbody id="tb-criativo"></tbody></table>
     </div>
+  </section>
+
+  <!-- INCREMENTALIDADE -->
+  <section class="pane" id="pane-incr">
+    <div class="note">
+      <div class="note-lead">Quanto do faturamento o anúncio <b>realmente causou</b> — não o que a plataforma atribui.</div>
+      <div class="note-sub">Compara a variação do <b>site</b> (movido pelo Meta) com um <b>canal de controle</b> que NÃO é movido pelo Meta (lojas/marketplaces) entre dois períodos. A diferença das variações (<b>diff-in-diff</b>) é o efeito que sobra depois de descontar a sazonalidade geral. É a versão <b>causal</b> do "ponto ótimo" — a curva da Visão Geral é só correlação.</div>
+    </div>
+    <details class="gloss"><summary>Como rodar um teste de verba que vale (protocolo)</summary><div class="gbody">
+      <div class="gi"><b>O problema:</b> o gasto Meta foi subindo junto com o Dia dos Namorados — então o site cresceu por <b>verba</b> E por <b>estação</b> ao mesmo tempo. Olhar só o site não separa as duas coisas. Por isso usamos um <b>controle</b> (lojas/marketplaces) que pegou a mesma estação mas não a verba do Meta.</div>
+      <div class="gi"><b>Teste limpo (recomendado):</b> escolha um período de ~2 semanas e <b>mude a verba de propósito</b> (ex.: corte 30% ou dobre) mantendo o resto igual; compare com as 2 semanas anteriores. Quanto mais <b>deliberada e isolada</b> a mudança (não no meio de uma data sazonal), mais confiável o número. O padrão-ouro é <b>geo-holdout</b> (desligar o Meta em alguns estados e comparar com os outros) — dá pra montar quando quiser.</div>
+      <div class="gi"><b>Leitura:</b> <b>ROAS incremental</b> = receita a mais que o site ganhou (acima do controle) ÷ verba a mais gasta. Se &gt;1÷margem, a verba extra pagou. ⚠️ É observacional — trate como evidência direcional, confirme com teste limpo.</div>
+    </div></details>
+    <div class="filtros" style="flex-wrap:wrap;gap:10px">
+      <label class="muted" style="font-size:12px">Teste: <input type="date" id="x-tde"> a <input type="date" id="x-tate"></label>
+      <label class="muted" style="font-size:12px">Baseline: <input type="date" id="x-bde"> a <input type="date" id="x-bate"></label>
+      <select id="x-ctrl"><option value="lojas">controle: lojas</option><option value="marketplaces">controle: marketplaces</option><option value="ambos">controle: lojas+mkt</option></select>
+      <button id="btn-medir" class="btn primary">Medir incrementalidade</button>
+    </div>
+    <div id="incr-out"><div class="muted" style="padding:14px">Defina os períodos e clique <b>Medir</b>. Padrão: últimas 4 semanas vs as 4 anteriores.</div></div>
+    <div class="card" id="incr-saved-card" style="display:none"><h3>Testes salvos</h3><div id="incr-saved"></div></div>
   </section>
 
   <!-- AUDITORIA -->
@@ -576,6 +598,115 @@ function renderCriativo(){
       `<td class="${freq>=4?'neg':''}">${freq}</td><td>${hold}</td><td>${rs(r.spend)}</td>`+
       `<td><span class="badge ${a[1]}" style="font-size:10px" title="${(r.motivo||'').replace(/"/g,'&quot;')}">${a[0]}</span></td></tr>`;
   }).join('')||'<tr><td colspan="9" class="muted" style="padding:14px">Sem dados de criativo ainda (o cron diário popula).</td></tr>';
+}
+
+// ---------- incrementalidade (diff-in-diff: site vs controle não-Meta) ----------
+function initIncrDefaults(){
+  const ate=hojeSP();
+  const tde=somaDias(ate,-27), bate=somaDias(tde,-1), bde=somaDias(bate,-27);
+  const set=(id,v)=>{const el=document.getElementById(id); if(el&&!el.value)el.value=v;};
+  set('x-tde',tde); set('x-tate',ate); set('x-bde',bde); set('x-bate',bate);
+}
+function ctrlPred(sel){
+  if(sel==='lojas') return o=>o==='kwid';
+  if(sel==='marketplaces') return o=>['confeccoes','fio_e_trama','tiktok_shop'].includes(o);
+  return o=>['kwid','confeccoes','fio_e_trama','tiktok_shop'].includes(o);
+}
+function ndays(de,ate){return Math.round((new Date(ate+'T12:00')-new Date(de+'T12:00'))/86400000)+1;}
+async function medirIncr(){
+  const out=document.getElementById('incr-out'), btn=document.getElementById('btn-medir');
+  const T={de:document.getElementById('x-tde').value,ate:document.getElementById('x-tate').value};
+  const B={de:document.getElementById('x-bde').value,ate:document.getElementById('x-bate').value};
+  const ctrl=document.getElementById('x-ctrl').value;
+  if(!T.de||!T.ate||!B.de||!B.ate){out.innerHTML='<div class="muted" style="padding:14px;color:var(--red)">Preencha os 4 campos de data.</div>';return;}
+  btn.disabled=true;const lbl=btn.textContent;btn.textContent='medindo…';
+  out.innerHTML='<div class="muted" style="padding:14px">Calculando diff-in-diff…</div>';
+  try{
+    const de=B.de<T.de?B.de:T.de, ate=B.ate>T.ate?B.ate:T.ate;
+    const [site,rev,spend]=await Promise.all([
+      buscarTudo('mvw_marketing_canal_margem_dia','select=data,receita&canal_grupo=eq.site&data=gte.'+de+'&data=lte.'+ate+'&order=data.asc'),
+      buscarTudo('mvw_diretoria_dia','select=data_pedido,origem_conta,receita_bruta&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc'),
+      buscarTudo('ads_metrics','select=data,gasto&plataforma=eq.meta_ads&level=eq.campaign&data=gte.'+de+'&data=lte.'+ate+'&order=data.asc'),
+    ]);
+    const r=difDif(site,rev,spend,T,B,ctrl);
+    STATE.incrLast={T,B,ctrl,r};
+    renderIncr(r,T,B,ctrl);
+  }catch(e){out.innerHTML='<div class="muted" style="padding:14px;color:var(--red)">Falha: '+e+'</div>';}
+  finally{btn.disabled=false;btn.textContent=lbl;}
+}
+function difDif(site,rev,spend,T,B,ctrl){
+  const inw=(d,de,ate)=>d>=de&&d<=ate;
+  const cp=ctrlPred(ctrl);
+  const sumSite=(de,ate)=>site.filter(x=>inw(x.data,de,ate)).reduce((s,x)=>s+(+x.receita||0),0);  // site reconciliado
+  const sumR=(de,ate,pred)=>rev.filter(x=>inw(x.data_pedido,de,ate)&&pred(x.origem_conta)).reduce((s,x)=>s+(+x.receita_bruta||0),0);
+  const sumS=(de,ate)=>spend.filter(x=>inw(x.data,de,ate)).reduce((s,x)=>s+(+x.gasto||0),0);
+  const td=ndays(T.de,T.ate), bd=ndays(B.de,B.ate);
+  const tT=sumSite(T.de,T.ate)/td, tB=sumSite(B.de,B.ate)/bd;
+  const cT=sumR(T.de,T.ate,cp)/td, cB=sumR(B.de,B.ate,cp)/bd;
+  const sT=sumS(T.de,T.ate)/td, sB=sumS(B.de,B.ate)/bd;
+  const dTreat=tB>0?(tT-tB)/tB:null, dCtrl=cB>0?(cT-cB)/cB:null;
+  const did=(dTreat!=null&&dCtrl!=null)?dTreat-dCtrl:null;
+  const incRev=did!=null?did*tB:null, dSpend=sT-sB;
+  const incRoas=(incRev!=null&&Math.abs(dSpend)>1)?incRev/dSpend:null;
+  return {tT,tB,cT,cB,sT,sB,dTreat,dCtrl,did,incRev,dSpend,incRoas};
+}
+function renderIncr(r,T,B,ctrl){
+  const pc=v=>v==null?'—':(v>=0?'+':'')+Math.round(v*100)+'%';
+  const dir=r.dSpend>=0?'subiu':'caiu';
+  // guarda de confiabilidade: se o controle oscilou muito OU a verba quase não mudou OU o
+  // ROAS deu absurdo, a estação dominou → o número NÃO é confiável (típico de janela histórica).
+  const ctrlVol=r.dCtrl==null?1:Math.abs(r.dCtrl);
+  const spendCh=r.sB>0?Math.abs(r.dSpend)/r.sB:0;
+  const confiavel = r.incRoas!=null && ctrlVol<=0.15 && spendCh>=0.15 && Math.abs(r.incRoas)<=10;
+  let veredito;
+  if(!confiavel){
+    const motivo = spendCh<0.15 ? `a verba quase não mudou (${pc(r.dSpend/(r.sB||1))}) — sem contraste pra medir`
+      : ctrlVol>0.15 ? `o controle oscilou ${pc(r.dCtrl)} (a estação dominou a janela)`
+      : `o resultado saiu fora de faixa plausível`;
+    veredito=`<b style="color:var(--red)">⚠ Resultado NÃO confiável:</b> ${motivo}. Isso é esperado em <b>janelas históricas</b> (o gasto subiu junto com o Dia dos Namorados). Só um <b>teste deliberado e isolado</b> (mudar a verba de propósito numa janela estável, ou geo-holdout) dá um número em que dá pra confiar — veja o protocolo acima.`;
+  } else if(r.dSpend>0){
+    veredito=`Cada R$1 a mais de Meta trouxe <b>R$${r.incRoas.toFixed(2)}</b> de receita incremental no site (acima do controle). ${r.incRoas>2?'A verba extra <b>pagou</b>.':'A verba extra <b>rendeu pouco</b> — provável saturação.'}`;
+  } else {
+    veredito=`Ao cortar verba, o site perdeu <b>R$${Math.abs(r.incRoas).toFixed(2)}</b> por R$1 cortado. ${Math.abs(r.incRoas)>2?'O corte <b>custou caro</b> — a verba estava valendo.':'O corte <b>custou pouco</b> — a verba estava saturada.'}`;
+  }
+  const showRoas = confiavel ? r.incRoas.toFixed(2) : 'n/d';
+  document.getElementById('incr-out').innerHTML=
+    `<div class="card"><div class="curva-stats">`+
+    `<div class="cs"><span class="cl">Gasto Meta/dia</span><span class="cv">${rs(r.sB)}→${rs(r.sT)}</span></div>`+
+    `<div class="cs"><span class="cl">Site (tratamento)</span><span class="cv">${pc(r.dTreat)}</span></div>`+
+    `<div class="cs"><span class="cl">Controle (${ctrl})</span><span class="cv ${ctrlVol>0.15?'neg':''}">${pc(r.dCtrl)}</span></div>`+
+    `<div class="cs"><span class="cl">Lift diff-in-diff</span><span class="cv">${pc(r.did)}</span></div>`+
+    `<div class="cs"><span class="cl">ROAS incremental</span><span class="cv ${confiavel?((r.incRoas)>=2?'pos':'neg'):'muted'}">${showRoas}</span></div>`+
+    `</div>`+
+    `<div class="curva-frase">A verba ${dir} de ${rs(r.sB)} pra ${rs(r.sT)}/dia. O site variou <b>${pc(r.dTreat)}</b>; o controle (não-Meta, ${ctrl}) variou <b>${pc(r.dCtrl)}</b>. ${veredito} <span class="muted">Diff-in-diff = variação do site − variação do controle (desconta a estação que ambos pegaram). Site = receita reconciliada do módulo; observacional, não geo-holdout.</span></div>`+
+    `<div style="padding:10px 2px 2px"><input id="x-nome" placeholder="Nome do teste (ex.: corte 30% jun)" style="min-width:220px"> <button id="btn-salvar-exp" class="btn">Salvar teste</button></div>`+
+    `</div>`;
+  document.getElementById('btn-salvar-exp').onclick=salvarExp;
+}
+async function salvarExp(){
+  if(!STATE.incrLast)return;
+  const {T,B,ctrl,r}=STATE.incrLast;
+  const nome=(document.getElementById('x-nome').value||'').trim()||('teste '+T.de+'→'+T.ate);
+  const body={nome,tipo:'verba_temporal',canal:'site',controle:ctrl,teste_de:T.de,teste_ate:T.ate,base_de:B.de,base_ate:B.ate,
+    status:'medido',criado_por:(auth&&auth.email)||null,
+    resultado:{roas_incremental:r.incRoas,lift_did:r.did,d_treat:r.dTreat,d_ctrl:r.dCtrl,gasto_base:Math.round(r.sB),gasto_teste:Math.round(r.sT)}};
+  try{
+    const h=await authHeaders();
+    await fetch(SB+'/rest/v1/ads_experimentos',{method:'POST',headers:{...h,'Content-Type':'application/json'},body:JSON.stringify(body)});
+    document.getElementById('btn-salvar-exp').textContent='salvo ✓';
+    carregarExperimentos();
+  }catch(e){alert('Falha ao salvar: '+e);}
+}
+async function carregarExperimentos(){
+  const rows=await buscarTudo('ads_experimentos','select=*&order=criado_em.desc');
+  const card=document.getElementById('incr-saved-card'), box=document.getElementById('incr-saved');
+  if(!rows.length){card.style.display='none';return;}
+  card.style.display='';
+  box.innerHTML='<div class="hilist">'+rows.slice(0,12).map(e=>{
+    const ro=(e.resultado||{}).roas_incremental;
+    return `<div class="hi"><b>${e.nome}</b> <span class="muted">${e.teste_de}→${e.teste_ate} vs ${e.base_de}→${e.base_ate} · controle ${e.controle}</span> `+
+      `<span class="badge ${(ro||0)>=2?'b-escalar':'b-cortar'}" style="font-size:10px">ROAS inc. ${ro==null?'—':(+ro).toFixed(2)}</span></div>`;
+  }).join('')+'</div>';
 }
 // eficiência de mídia Meta (fadiga de criativo / pressão de leilão) — dado já ingerido, sem sync novo
 function effWindow(ads, dStart, dEnd){ // [dStart, dEnd)
@@ -889,7 +1020,12 @@ function buildAnalistaPayload(){
       anuncios_problema:cr.filter(r=>['fadiga_publico','corrigir_landing','renovar_criativo'].includes(r.veredito)).sort((a,b)=>(b.spend||0)-(a.spend||0)).slice(0,8)
         .map(r=>({anuncio:r.ad_name,campanha:r.campaign_name,veredito:r.veredito,qualidade:r.quality_ranking,engajamento:r.engagement_rate_ranking,conversao:r.conversion_rate_ranking,frequencia:+(+r.frequency||0).toFixed(1),gasto:R(r.spend)}))};
   }
-  return {periodo:{de:STATE.de,ate:STATE.ate},cascata_site:cascata,mer,curva_canal:curva,eficiencia_meta:eficiencia,saude_criativo:criativo,produtos,auditoria_agencia:aud};
+  // incrementalidade (diff-in-diff) — só se o usuário rodou um teste nesta sessão
+  let incr=null; const il=STATE.incrLast;
+  if(il)incr={base:il.B,teste:il.T,controle:il.ctrl,gasto_base_dia:Math.round(il.r.sB),gasto_teste_dia:Math.round(il.r.sT),
+    lift_did_pct:il.r.did!=null?Math.round(il.r.did*100):null,roas_incremental:il.r.incRoas!=null?+il.r.incRoas.toFixed(2):null,
+    nota:'observacional (não geo-holdout); controle aproxima sazonalidade'};
+  return {periodo:{de:STATE.de,ate:STATE.ate},cascata_site:cascata,mer,curva_canal:curva,eficiencia_meta:eficiencia,saude_criativo:criativo,incrementalidade:incr,produtos,auditoria_agencia:aud};
 }
 function renderAnaliseMD(md){
   try{return DOMPurify.sanitize(marked.parse(md||''));}catch(e){return '<div class="muted">'+(md||'').replace(/</g,'&lt;')+'</div>';}
@@ -981,8 +1117,10 @@ async function carregarTitulos(){
     document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===t));
     document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('on',p.id==='pane-'+t.dataset.t));
     if(t.dataset.t==='analista')mostrarAnalistaCache();
+    if(t.dataset.t==='incr'){initIncrDefaults();carregarExperimentos();}
   });
   document.getElementById('btn-analista').onclick=rodarAnalista;
+  document.getElementById('btn-medir').onclick=medirIncr;
   document.getElementById('ana-foco').addEventListener('keydown',e=>{if(e.key==='Enter')rodarAnalista();});
   // chips
   document.querySelectorAll('#chips .chip').forEach(c=>c.onclick=()=>setPeriodo(c.dataset.p));
