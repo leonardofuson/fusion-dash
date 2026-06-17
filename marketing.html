@@ -117,6 +117,16 @@
   .ev .plat{font-size:11px;padding:1px 7px;border-radius:5px;background:var(--panel2);color:var(--mut)}
   .ev .what{flex:1;color:var(--txt)}
   .ev .delta{color:var(--amber);font-size:12px}
+  .alertbox{border-radius:12px;border:1px solid var(--line);background:var(--panel);margin-bottom:14px;overflow:hidden}
+  .alertbox summary{cursor:pointer;padding:11px 15px;font-weight:700;list-style:none;display:flex;align-items:center;gap:9px}
+  .alertbox summary::-webkit-details-marker{display:none}
+  .alertbox.sev-alta{border-color:rgba(239,83,80,.5)}.alertbox.sev-alta summary{background:rgba(239,83,80,.12);color:#ffb4b2}
+  .alertbox.sev-media{border-color:rgba(245,166,35,.4)}.alertbox.sev-media summary{background:rgba(245,166,35,.1);color:#ffd591}
+  .alertbox .ab{padding:4px 15px 12px}
+  .alertbox .ai{padding:8px 0;border-top:1px solid var(--line);font-size:13px}
+  .alertbox .ai b{color:#fff}.alertbox .ai .d{color:var(--mut);font-size:12px;margin-top:2px}
+  .alertbox .pill{font-size:10px;padding:1px 7px;border-radius:20px;font-weight:700;margin-right:7px}
+  .pill-alta{background:rgba(239,83,80,.18);color:var(--red)}.pill-media{background:rgba(245,166,35,.18);color:var(--amber)}
   .curva-stats{display:flex;flex-wrap:wrap;gap:22px;margin:6px 0 12px}
   .curva-stats .cs{display:flex;flex-direction:column;gap:2px}
   .curva-stats .cs .cl{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.4px}
@@ -176,6 +186,7 @@
 </div>
 
 <main>
+  <div id="alertas-banner"></div>
   <div class="tabs">
     <div class="tab on" data-t="geral">Visão Geral</div>
     <div class="tab" data-t="sku">Lucro por SKU</div>
@@ -388,6 +399,7 @@ async function carregar(force){
   carregarCurva();    // curva 90d (independe do período) — fire-and-forget
   carregarCriativo(); // saúde de criativo (snapshot mais recente) — fire-and-forget
   carregarCross();    // orgânico (IG) + tráfego (GA4) pro analista cross-channel
+  carregarAlertas();  // alertas proativos (Módulo G) — banner
 }
 
 // ---------- helpers de formato ----------
@@ -565,6 +577,24 @@ async function carregarCurva(){
   STATE.curva=computeCurva(cd.ads, trec>0?tcm2/trec:0.45);
   STATE.eficiencia=computeEficiencia(cd.ads);
   renderCurva(); renderEficiencia();
+}
+
+// ---------- alertas proativos (Módulo G) ----------
+const CATEMOJI={gasto:'💸',criativo:'🎨',landing:'🔗',agencia:'🏢',produto:'📦',trafego:'🌐'};
+async function carregarAlertas(){
+  let rows=[]; try{rows=await buscarTudo('marketing_alertas','select=*&order=data_ref.desc,severidade.asc');}catch(e){}
+  const maxd=rows.length?rows[0].data_ref:null;
+  rows=rows.filter(r=>r.data_ref===maxd);
+  const el=document.getElementById('alertas-banner'); if(!el)return;
+  if(!rows.length){el.innerHTML='';return;}
+  const alta=rows.filter(r=>r.severidade==='alta'), media=rows.filter(r=>r.severidade!=='alta');
+  const sev=alta.length?'alta':'media';
+  const head=`⚠ ${rows.length} ${rows.length===1?'alerta':'alertas'}`+(alta.length?` · ${alta.length} de alta prioridade`:'');
+  el.innerHTML=`<details class="alertbox sev-${sev}" ${alta.length?'open':''}><summary>${head} <span class="muted" style="font-weight:400;font-size:12px;margin-left:auto">${maxd}</span></summary>`+
+    `<div class="ab">`+[...alta,...media].map(r=>
+      `<div class="ai"><span class="pill pill-${r.severidade==='alta'?'alta':'media'}">${r.severidade==='alta'?'alta':'média'}</span>`+
+      `${CATEMOJI[r.categoria]||'•'} <b>${r.titulo}</b><div class="d">${r.detalhe||''}</div></div>`).join('')+
+    `</div></details>`;
 }
 
 // ---------- cross-channel (orgânico IG + tráfego GA4) p/ o analista ----------
