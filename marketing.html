@@ -210,15 +210,17 @@
 
   <!-- AUDITORIA -->
   <section class="pane" id="pane-audit">
-    <div class="note">Log de tudo que a agência altera (Meta <i>/activities</i> + Google <i>change_event</i>): quem, o quê, quando, antes→depois. Fonte: <b>ads_changes</b>.</div>
+    <div class="note">Ações de <b>ADMIN da agência</b> nas contas (quem mexeu, o quê, quando, antes→depois). <span class="muted">Eventos de sistema/cobrança do próprio Meta (conta cobrada, anúncio exibido, status pós-análise) ficam de fora por padrão — não é o que você fiscaliza. Fonte: <b>ads_changes</b>.</span></div>
     <details class="gloss"><summary>Para que serve esta aba</summary><div class="gbody">
-      <div class="gi">Como a Fusion é <b>dona</b> das contas de anúncio, dá pra puxar via API <b>cada mudança</b> que a agência faz — coisa que ela não compartilha. Aqui você vê <b>quem</b> mexeu (ex.: Igor Rezende), <b>o quê</b> (orçamento, status, lance), <b>quando</b> e <b>antes→depois</b>.</div>
-      <div class="gi">Serve pra <b>fiscalizar e sustentar conversas</b> com a agência: pausas indevidas, cortes de orçamento, mudanças fora de hora. O KPI <b>Orçamento/lance</b> isola as mexidas que movem dinheiro.</div>
+      <div class="gi">Como a Fusion é <b>dona</b> das contas, dá pra puxar via API <b>cada mudança</b> que a agência faz — coisa que ela não compartilha. O foco é a <b>pessoa da agência</b> (ex.: Igor Rezende no Meta, o analista no Google) e o que ela altera: <span class="badge b-cortar" style="font-size:10px">Orçamento</span> <span class="badge b-revisar" style="font-size:10px">Lance</span> <span class="badge b-manter" style="font-size:10px">Status</span> <span class="badge b-escalar" style="font-size:10px">Segmentação</span> <span class="badge b-sem" style="font-size:10px">Criativo</span>.</div>
+      <div class="gi">Serve pra <b>fiscalizar e sustentar conversas</b> com a agência: pausas indevidas, cortes de orçamento, mudanças fora de hora. <b>Orçamento + lance</b> isola as mexidas que movem dinheiro. O Google aparece pouco porque a conta tem só 1 campanha ativa (o gasto está quase todo no Meta) e a API só guarda 30 dias.</div>
     </div></details>
     <div class="kpis" id="kpis-audit"></div>
     <div class="filtros">
       <select id="a-plat"><option value="">Todas plataformas</option><option value="meta_ads">Meta</option><option value="google_ads">Google</option></select>
-      <select id="a-actor"><option value="">Todos atores</option></select>
+      <select id="a-actor"><option value="">Todos atores (agência)</option></select>
+      <select id="a-cat"><option value="">Todas categorias</option><option>Orçamento</option><option>Lance</option><option>Status</option><option>Segmentação</option><option>Criativo</option></select>
+      <label class="muted" style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="a-sys" style="width:auto"> incluir eventos do Meta (cobrança/entrega/análise)</label>
     </div>
     <div class="card"><div class="timeline" id="tl-audit"></div></div>
   </section>
@@ -489,27 +491,44 @@ function renderSku(){
   document.getElementById('tb-sku').innerHTML=html;
 }
 
+// classifica o evento numa categoria de ADMIN + se é sistema do Meta
+function classCat(ev){
+  const e=(ev||'').toLowerCase();
+  if(/cobrad|billed|exibido|deliver|após a conclusão|análise do anúncio|review|status da conta|nome da conta|pessoa adicionada/.test(e)) return ['Sistema','b-sem'];
+  if(/orçament|budget/.test(e)) return ['Orçamento','b-cortar'];
+  if(/lance|bid|estratégia de lance/.test(e)) return ['Lance','b-revisar'];
+  if(/status/.test(e)) return ['Status','b-manter'];
+  if(/direcionament|público|target|audience|otimização|meta de otimiz/.test(e)) return ['Segmentação','b-escalar'];
+  if(/anúncio criado|anúncio atualizado|imagem|criativo|nome do conjunto|conjunto de anúncios criado|campanha criada/.test(e)) return ['Criativo','b-sem'];
+  return ['Outros','b-sem'];
+}
 function renderAudit(){
-  const c=STATE.changes;
-  const plat=document.getElementById('a-plat').value, actor=document.getElementById('a-actor').value;
-  // popula filtro de atores
-  const actors=[...new Set(c.map(r=>r.actor).filter(Boolean))];
+  const all=STATE.changes;
+  const incSys=document.getElementById('a-sys').checked;
+  const plat=document.getElementById('a-plat').value, actor=document.getElementById('a-actor').value, fcat=document.getElementById('a-cat').value;
+  // base = AÇÕES DA AGÊNCIA: exclui actor 'Meta' (sistema/cobrança) e categoria Sistema, salvo se incluir
+  let base=all.filter(r=>{ if(incSys) return true; return (r.actor&&r.actor!=='Meta') && classCat(r.evento)[0]!=='Sistema'; });
+  const actors=[...new Set(all.filter(r=>r.actor&&r.actor!=='Meta').map(r=>r.actor))];
   const sel=document.getElementById('a-actor');
   if(sel.options.length<=1)actors.forEach(a=>{const o=document.createElement('option');o.value=a;o.textContent=a;sel.appendChild(o);});
-  let rows=c.filter(r=>(!plat||r.plataforma===plat)&&(!actor||r.actor===actor));
-  const orc=rows.filter(r=>/orçament|budget|lance|bid/i.test(r.evento||'')).length;
+  let rows=base.filter(r=>(!plat||r.plataforma===plat)&&(!actor||r.actor===actor)&&(!fcat||classCat(r.evento)[0]===fcat));
+  const cats={}; rows.forEach(r=>{const c=classCat(r.evento)[0];cats[c]=(cats[c]||0)+1;});
+  const orc=(cats['Orçamento']||0)+(cats['Lance']||0);
   document.getElementById('kpis-audit').innerHTML=[
-    {l:'Mudanças',v:rows.length,s:'no período',t:'Quantas alterações a agência fez nas contas (orçamento, status de anúncio, etc.) no período.'},
-    {l:'Atores',v:actors.length,s:'pessoas/sistemas',t:'Quantas pessoas/sistemas distintos mexeram na conta — pra você ver quem está tocando o quê.'},
-    {l:'Orçamento/lance',v:orc,s:'mexidas sensíveis',t:'Quantas mudanças foram em ORÇAMENTO ou LANCE — as que mexem dinheiro diretamente. As mais sensíveis de fiscalizar.'},
+    {l:'Ações da agência',v:rows.length,s:incSys?'(incl. sistema)':'no período',t:'Mudanças de ADMIN feitas por pessoas da agência (orçamento, status, lance, segmentação, criativo). Eventos de sistema/cobrança do Meta ficam fora por padrão — marque o checkbox pra incluí-los.'},
+    {l:'Orçamento + lance',v:orc,s:'mexem dinheiro',cls:orc>0?'neg':'',t:'As mudanças que movem dinheiro: orçamento e estratégia de lance. As mais importantes de fiscalizar na agência.'},
+    {l:'Status',v:cats['Status']||0,s:'pausas/ativações',t:'Pausas e ativações de anúncio/conjunto/campanha — onde a agência liga e desliga coisas.'},
+    {l:'Atores',v:[...new Set(rows.map(r=>r.actor))].length,s:'pessoas da agência',t:'Quantas pessoas distintas da agência mexeram na conta no período.'},
   ].map(kpiHTML).join('');
   document.getElementById('tl-audit').innerHTML=rows.slice(0,300).map(r=>{
     const d=new Date(r.changed_at);const when=d.toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
     const delta=(r.valor_antes!=null||r.valor_depois!=null)?`<span class="delta">${r.valor_antes??'?'} → ${r.valor_depois??'?'}</span>`:'';
+    const [cat,cls]=classCat(r.evento);
     return `<div class="ev"><div class="when">${when}</div><div class="who">${r.actor||'—'}</div>
       <span class="plat">${r.plataforma==='meta_ads'?'Meta':'Google'}</span>
-      <div class="what">${r.evento||''} <span class="muted">${(r.objeto_nome||r.objeto_id||'').slice(0,46)}</span> ${delta}</div></div>`;
-  }).join('')||'<div class="muted" style="padding:14px">Nenhuma mudança no período.</div>';
+      <span class="badge ${cls}" style="font-size:10px">${cat}</span>
+      <div class="what">${r.evento||''} <span class="muted">${(r.objeto_nome||r.objeto_id||'').slice(0,40)}</span> ${delta}</div></div>`;
+  }).join('')||'<div class="muted" style="padding:14px">Nenhuma ação da agência no período.</div>';
 }
 
 // ---------- charts ----------
@@ -564,7 +583,8 @@ async function carregarTitulos(){
   document.querySelectorAll('#chips .chip').forEach(c=>c.onclick=()=>setPeriodo(c.dataset.p));
   // filtros SKU + audit
   ['f-plat','f-sinal','f-categoria','f-busca'].forEach(id=>document.getElementById(id).addEventListener('input',renderSku));
-  ['a-plat','a-actor'].forEach(id=>document.getElementById(id).addEventListener('input',renderAudit));
+  ['a-plat','a-actor','a-cat'].forEach(id=>document.getElementById(id).addEventListener('input',renderAudit));
+  document.getElementById('a-sys').addEventListener('change',renderAudit);
   // sort tabela
   document.querySelectorAll('#tbl-sku th').forEach(th=>th.onclick=()=>{
     const k=th.dataset.k;STATE.sort.dir=(STATE.sort.k===k)?-STATE.sort.dir:-1;STATE.sort.k=k;
