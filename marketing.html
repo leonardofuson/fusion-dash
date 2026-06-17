@@ -117,6 +117,12 @@
   .ev .plat{font-size:11px;padding:1px 7px;border-radius:5px;background:var(--panel2);color:var(--mut)}
   .ev .what{flex:1;color:var(--txt)}
   .ev .delta{color:var(--amber);font-size:12px}
+  .curva-stats{display:flex;flex-wrap:wrap;gap:22px;margin:6px 0 12px}
+  .curva-stats .cs{display:flex;flex-direction:column;gap:2px}
+  .curva-stats .cs .cl{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.4px}
+  .curva-stats .cs .cv{font-size:20px;font-weight:800}
+  .curva-frase{font-size:13px;line-height:1.55;color:var(--txt);background:var(--panel2);border-radius:9px;padding:10px 13px}
+  .curva-frase b{color:#fff}
   .mdbody{padding:6px 20px 16px;font-size:13.5px;line-height:1.62;color:var(--txt)}
   .mdbody h3{font-size:15px;margin:20px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--line);color:#fff}
   .mdbody h3:first-child,.mdbody h2:first-child{margin-top:6px}
@@ -193,6 +199,10 @@
     <div class="card">
       <h3>Demonstrativo de margem do site <span class="hint">canal Meta · todos os produtos · % da receita</span></h3>
       <div class="casc" id="cm-cascade"></div>
+    </div>
+    <div class="card" id="curva-card">
+      <h3>Ponto ótimo de gasto — Meta → site <span class="hint">curva de retornos decrescentes · 90 dias · referência, não meta dura</span></h3>
+      <div id="curva-body"><div class="muted" style="padding:6px 2px">Calculando…</div></div>
     </div>
     <div class="grid2">
       <div class="card"><h3>Gasto diário <span class="hint">Meta + Google</span></h3><canvas id="ch-spend"></canvas></div>
@@ -291,7 +301,7 @@ function inicioMesSP(){const d=spNow();return fmtD(new Date(d.getFullYear(),d.ge
 function hojeSP(){return fmtD(spNow());}
 
 // ---------- cache (TTL 5min) ----------
-function cacheKey(){return 'marketing_v10_'+STATE.de+'_'+STATE.ate;}
+function cacheKey(){return 'marketing_v11_'+STATE.de+'_'+STATE.ate;}
 function cacheGet(){try{const o=JSON.parse(localStorage.getItem(cacheKey()));if(o&&Date.now()-o.t<300000)return o.d;}catch(e){}return null;}
 function cacheSet(d){try{localStorage.setItem(cacheKey(),JSON.stringify({t:Date.now(),d}));}catch(e){}}
 
@@ -330,6 +340,7 @@ async function carregar(force){
   STATE.mer=data.mer;STATE.pnl=data.pnl;STATE.changes=data.changes;STATE.canal=data.canal||[];
   renderAll();
   document.getElementById('loader').style.display='none';
+  carregarCurva();  // curva 90d (independe do período) — fire-and-forget
 }
 
 // ---------- helpers de formato ----------
@@ -442,6 +453,70 @@ function renderCascade(c, meta){
     row('CM2 — margem de contribuição',c.cm2,'sub','#22d3ee')+
     row('Anúncios (Meta)',meta,'ded','#ef5350',true)+
     row('CM3 — lucro após anúncios',cm3,'tot',cm3>=0?'#2fbf71':'#ef5350');
+}
+
+// ---------- curva de retornos decrescentes (ponto ótimo de gasto, nível canal) ----------
+// fit OLS de y = a + b·ln(gasto+1) (mesmo modelo do Simulador/fit_curva_ads.py)
+function fitLog(points){
+  const pts=points.filter(p=>p.g>0&&p.y!=null&&isFinite(p.y));
+  const n=pts.length; if(n<8) return null;
+  const xs=pts.map(p=>Math.log(p.g+1)), ys=pts.map(p=>p.y);
+  const mx=xs.reduce((s,v)=>s+v,0)/n, my=ys.reduce((s,v)=>s+v,0)/n;
+  let sxy=0,sxx=0; for(let i=0;i<n;i++){sxy+=(xs[i]-mx)*(ys[i]-my);sxx+=(xs[i]-mx)*(xs[i]-mx);}
+  if(sxx<=0) return null;
+  const b=sxy/sxx, a=my-b*mx;
+  let ssr=0,sst=0; for(let i=0;i<n;i++){const yh=a+b*xs[i];ssr+=(ys[i]-yh)*(ys[i]-yh);sst+=(ys[i]-my)*(ys[i]-my);}
+  const r2=sst>0?1-ssr/sst:0;
+  const gmax=Math.max(...pts.map(p=>p.g)), gmean=pts.reduce((s,p)=>s+p.g,0)/n;
+  const otimo=Math.max(0,b-1);                 // dCM2/dgasto = b/(gasto+1) = 1 → gasto* = b−1
+  const margAtual=b/(gmean+1);                 // R$ de CM2 por R$ extra de gasto, no gasto médio atual
+  return {a,b,r2,n,gmax,gmean,otimo,margAtual,extrapola:otimo>gmax*1.5};
+}
+// fit na MARGEM ATRIBUÍDA (receita que a plataforma reivindica × margem%) — mesma base do
+// Simulador/fit_curva_ads.py. CM2 total não tem sinal (gasto diário varia pouco → R²≈0); a
+// receita atribuída correlaciona com gasto e captura os retornos decrescentes. Lente da plataforma.
+function computeCurva(adsMeta, cm2pct){
+  const byd={};
+  (adsMeta||[]).forEach(r=>{const d=r.data;(byd[d]||(byd[d]={g:0,rev:0}));byd[d].g+=+r.gasto||0;byd[d].rev+=+r.receita_total||0;});
+  const pts=Object.values(byd).map(o=>({g:o.g,y:o.rev*cm2pct}));
+  const f=fitLog(pts); if(f) f.cm2pct=cm2pct; return f;
+}
+function curvaStatus(g){
+  if(!g) return null;
+  if(g.b<=1) return {k:'fraca',cls:'b-sem',label:'curva fraca',frase:'A curva não mostra retorno crescente claro no período (coeficiente ≤ 1) — trate como sinal fraco, não baseie decisão de verba só nela.'};
+  if(g.gmean<g.otimo*0.8) return {k:'subinvestido',cls:'b-escalar',label:'subinvestido',frase:`No gasto médio atual cada R$ extra ainda adiciona <b>mais de R$1</b> de margem — há espaço pra <b>escalar</b> em direção a ~<b>${rs(g.otimo)}/dia</b>.`};
+  if(g.gmean>g.otimo*1.2) return {k:'saturado',cls:'b-cortar',label:'saturado',frase:`O gasto atual <b>passou</b> do ponto de retorno — cada R$ extra rende <b>menos de R$1</b> de margem. Considere <b>reduzir</b> em direção a ~<b>${rs(g.otimo)}/dia</b>.`};
+  return {k:'otimo',cls:'b-manter',label:'perto do ótimo',frase:`O gasto está <b>perto do ponto de retorno ótimo</b> (~<b>${rs(g.otimo)}/dia</b>) — mexer pouco.`};
+}
+function renderCurva(){
+  const el=document.getElementById('curva-body'); if(!el) return;
+  const g=STATE.curva;
+  if(!g){el.innerHTML='<div class="muted" style="padding:6px 2px">Dados insuficientes pra ajustar a curva (precisa de ≥8 dias com gasto Meta nos últimos 90d).</div>';return;}
+  const st=curvaStatus(g);
+  const r2cls=g.r2>=0.4?'pos':(g.r2>=0.2?'':'neg');
+  el.innerHTML=
+    `<div class="curva-stats">`+
+    `<div class="cs"><span class="cl">Gasto médio hoje</span><span class="cv">${rs(g.gmean)}<span class="muted" style="font-size:12px;font-weight:400">/dia</span></span></div>`+
+    `<div class="cs"><span class="cl">Ponto ótimo</span><span class="cv">${rs(g.otimo)}<span class="muted" style="font-size:12px;font-weight:400">/dia</span></span></div>`+
+    `<div class="cs"><span class="cl">Status</span><span class="cv"><span class="badge ${st.cls}" style="font-size:13px">${st.label}</span></span></div>`+
+    `<div class="cs"><span class="cl">Margem marginal</span><span class="cv ${g.margAtual>=1?'pos':'neg'}">${n2(g.margAtual)}<span class="muted" style="font-size:12px;font-weight:400"> R$/R$</span></span></div>`+
+    `<div class="cs"><span class="cl">Ajuste R²</span><span class="cv ${r2cls}">${n2(g.r2)}</span></div>`+
+    `</div>`+
+    `<div class="curva-frase">${st.frase} <span class="muted">Margem marginal = quanto de margem cada R$ extra de anúncio gera no gasto atual (>1 vale escalar). Estimado pela <b>lente da plataforma</b> (receita que o Meta atribui × margem do site) — como o Meta <b>sobre-atribui</b>, o ótimo real tende a ser <b>menor</b>; a forma rigorosa de confirmar é um <b>teste de verba</b> (subir/baixar e medir). ${g.extrapola?'<b>⚠ o ótimo extrapola além do gasto já testado ('+rs(g.gmax)+'/dia).</b> ':''}Ajuste R²=${n2(g.r2)} ${g.r2<0.2?'(baixo — referência grossa)':'(referência)'}; modelo log sobre ${g.n} dias.</span></div>`;
+}
+async function carregarCurva(){
+  const ate=hojeSP(), de=somaDias(ate,-90);
+  let cd=null; try{const o=JSON.parse(localStorage.getItem('mkt_curva_v2'));if(o&&Date.now()-o.t<3600000)cd=o.d;}catch(e){}
+  if(!cd){
+    const [ads,canal]=await Promise.all([
+      buscarTudo('ads_metrics','select=data,gasto,receita_total&plataforma=eq.meta_ads&level=eq.campaign&data=gte.'+de+'&data=lte.'+ate+'&order=data.asc'),
+      buscarTudo('mvw_marketing_canal_margem_dia','select=data,cm2,receita&canal_grupo=eq.site&data=gte.'+de+'&data=lte.'+ate+'&order=data.asc'),
+    ]);
+    cd={ads,canal}; try{localStorage.setItem('mkt_curva_v2',JSON.stringify({t:Date.now(),d:cd}));}catch(e){}
+  }
+  const tcm2=cd.canal.reduce((s,r)=>s+(+r.cm2||0),0), trec=cd.canal.reduce((s,r)=>s+(+r.receita||0),0);
+  STATE.curva=computeCurva(cd.ads, trec>0?tcm2/trec:0.45);
+  renderCurva();
 }
 
 const BADGE={escalar:'b-escalar',cortar:'b-cortar',manter:'b-manter',revisar:'b-revisar',sem_venda_no_canal:'b-sem'};
@@ -707,7 +782,12 @@ function buildAnalistaPayload(){
     if(cc.k==='orcamento'){const{o,n}=budgetVals(r);if(o!=null&&n!=null)det='R$'+Math.round(o/100)+'→R$'+Math.round(n/100)+'/dia';}
     else if((r.valor_antes||'').length<30&&(r.valor_depois||'').length<30&&(r.valor_antes||r.valor_depois))det=(r.valor_antes||'?')+'→'+(r.valor_depois||'?');
     return {tipo:cc.l,evento:r.evento,objeto:(r.objeto_nome||r.objeto_id||'').slice(0,40),detalhe:det,quem:r.actor,quando:new Date(r.changed_at).toLocaleDateString('pt-BR',{timeZone:'America/Sao_Paulo'})};});
-  return {periodo:{de:STATE.de,ate:STATE.ate},cascata_site:cascata,mer,produtos,auditoria_agencia:aud};
+  // curva de retornos decrescentes (nível canal Meta→site, 90d) — ponto ótimo de gasto
+  let curva=null; const gc=STATE.curva;
+  if(gc){const st=curvaStatus(gc);curva={modelo:'margem atribuída = a + b·ln(gasto+1), 90d',base:'lente da plataforma (receita atribuída × margem) — Meta sobre-atribui, ótimo real provavelmente menor; confirmar com teste de verba',
+    gasto_medio_dia:R(gc.gmean),gasto_max_testado_dia:R(gc.gmax),ponto_otimo_dia:R(gc.otimo),
+    margem_marginal_por_real:+gc.margAtual.toFixed(2),status:st?st.k:null,r2:+gc.r2.toFixed(2),amostra_dias:gc.n,extrapola:gc.extrapola};}
+  return {periodo:{de:STATE.de,ate:STATE.ate},cascata_site:cascata,mer,curva_canal:curva,produtos,auditoria_agencia:aud};
 }
 function renderAnaliseMD(md){
   try{return DOMPurify.sanitize(marked.parse(md||''));}catch(e){return '<div class="muted">'+(md||'').replace(/</g,'&lt;')+'</div>';}
