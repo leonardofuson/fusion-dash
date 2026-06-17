@@ -7,6 +7,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="auth.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
 <style>
   :root{
     --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --line:#2a2f3a;
@@ -115,6 +117,17 @@
   .ev .plat{font-size:11px;padding:1px 7px;border-radius:5px;background:var(--panel2);color:var(--mut)}
   .ev .what{flex:1;color:var(--txt)}
   .ev .delta{color:var(--amber);font-size:12px}
+  .mdbody{padding:6px 20px 16px;font-size:13.5px;line-height:1.62;color:var(--txt)}
+  .mdbody h3{font-size:15px;margin:20px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--line);color:#fff}
+  .mdbody h3:first-child,.mdbody h2:first-child{margin-top:6px}
+  .mdbody h2{font-size:16px;margin:18px 0 8px;color:#fff}
+  .mdbody p{margin:8px 0}
+  .mdbody ul,.mdbody ol{margin:8px 0;padding-left:22px}
+  .mdbody li{margin:5px 0}
+  .mdbody b,.mdbody strong{color:#fff}
+  .mdbody code{background:var(--panel2);padding:1px 6px;border-radius:5px;color:var(--accent2);font-size:12.5px}
+  .mdbody table{border-collapse:collapse;margin:10px 0;font-size:12.5px}
+  .mdbody th,.mdbody td{border:1px solid var(--line);padding:5px 9px;text-align:left}
   .catchips{display:flex;flex-wrap:wrap;gap:8px 14px}
   .catchip{font-size:12px;color:var(--mut);display:inline-flex;align-items:center;gap:5px}
   .catchip .val,.catchip span:last-child{font-weight:700;color:var(--txt)}
@@ -161,6 +174,7 @@
     <div class="tab on" data-t="geral">Visão Geral</div>
     <div class="tab" data-t="sku">Lucro por SKU</div>
     <div class="tab" data-t="audit">Auditoria da Agência</div>
+    <div class="tab" data-t="analista">🤖 Analista</div>
   </div>
 
   <!-- VISÃO GERAL -->
@@ -247,6 +261,20 @@
       <label class="muted" style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="a-sys" style="width:auto"> incluir sistema/revisão do Meta (cobrança/entrega/análise)</label>
     </div>
     <div class="card"><div class="timeline" id="tl-audit"></div></div>
+  </section>
+
+  <!-- ANALISTA (LLM) -->
+  <section class="pane" id="pane-analista">
+    <div class="note">
+      <div class="note-lead">🤖 O analista lê os números <b>deste período</b> — cascata de margem, MER, P&amp;L por produto e auditoria da agência — e diz o que <b>escalar, cortar e testar</b>.</div>
+      <div class="note-sub">Roda no Claude (Sonnet) com a camada semântica <b>MARKETING_METRICS.md</b> como base. Usa <b>só os números que estão na tela</b> (não inventa) e nunca manda cortar um <span class="badge b-revisar">revisar</span> sem propor teste. Gerar custa ~US$ 0,01 e o resultado fica em cache por período — clique pra atualizar.</div>
+    </div>
+    <div class="filtros" style="align-items:center">
+      <input id="ana-foco" placeholder="Foco opcional (ex.: foque nos Best Sellers, ou no que cortar este mês)" style="flex:1;min-width:240px">
+      <button id="btn-analista" class="btn primary">🤖 Analisar período</button>
+      <span id="ana-meta" class="muted" style="font-size:11px"></span>
+    </div>
+    <div class="card"><div id="analise-out" class="mdbody"><div class="muted" style="padding:14px">Clique em <b>Analisar período</b> para gerar a leitura do período pelo analista. Ele enxerga exatamente os mesmos números das outras abas.</div></div></div>
   </section>
 </main>
 
@@ -355,7 +383,13 @@ function vereditoSinal(a){
 }
 
 // ---------- render ----------
-function renderAll(){renderGeral();renderSku();renderAudit();}
+function renderAll(){renderGeral();renderSku();renderAudit();resetAnalista();}
+function resetAnalista(){
+  const out=document.getElementById('analise-out'); if(!out)return;
+  out.dataset.loaded=''; const meta=document.getElementById('ana-meta'); if(meta)meta.textContent='';
+  out.innerHTML='<div class="muted" style="padding:14px">Clique em <b>Analisar período</b> para gerar a leitura do período pelo analista. Ele enxerga exatamente os mesmos números das outras abas.</div>';
+  if(STATE.tab==='analista')mostrarAnalistaCache();
+}
 
 function renderGeral(){
   const m=STATE.mer;
@@ -634,6 +668,73 @@ function renderAudit(){
   }).join('')||'<div class="muted" style="padding:14px">Nenhuma ação da agência no período.</div>';
 }
 
+// ---------- analista (LLM) ----------
+const MAXCHAT='https://max-chat-2vs0.onrender.com';
+function anaCacheKey(){return 'mkt_analise_v1_'+STATE.de+'_'+STATE.ate;}
+// monta o MESMO estado que as outras abas mostram (nunca diverge da tela)
+function buildAnalistaPayload(){
+  const R=v=>v==null?null:Math.round(v);
+  // cascata do site + MER (idêntico a renderGeral)
+  const m=STATE.mer||[];
+  const meta=m.reduce((s,r)=>s+(+r.meta_spend||0),0), goog=m.reduce((s,r)=>s+(+r.google_spend||0),0);
+  const c=(STATE.canal||[]).reduce((a,r)=>{['receita','cogs','cm1','fee','frete','devolucao','cm2','unidades'].forEach(k=>a[k]=(a[k]||0)+(+r[k]||0));return a;},{receita:0,cogs:0,cm1:0,fee:0,frete:0,devolucao:0,cm2:0,unidades:0});
+  const rec=c.receita, cm2=c.cm2, cm3=cm2-meta;
+  const cascata={receita:R(rec),cmv:R(c.cogs),cm1:R(c.cm1),comissao:R(c.fee),frete:R(c.frete),devolucao:R(c.devolucao),cm2:R(cm2),gasto_meta:R(meta),cm3:R(cm3),
+    cm2_pct:rec>0?+(cm2/rec*100).toFixed(1):null,cm3_pct:rec>0?+(cm3/rec*100).toFixed(1):null,unidades:c.unidades||0,ticket:c.unidades>0?R(rec/c.unidades):null};
+  const mer={gasto_meta:R(meta),gasto_google:R(goog),receita_site:R(rec),mer_site:meta>0?+(rec/meta).toFixed(2):null,poas_canal:meta>0?+(cm2/meta).toFixed(2):null};
+  // produtos-pai (idêntico a renderSku, sem filtros de UI)
+  let variants=aggSku(); const g={};
+  variants.forEach(r=>{const k=parentOf(r.sku_raw).pid;(g[k]||(g[k]=[])).push(r);});
+  const parents=Object.entries(g).map(([pid,list])=>{const s=summarize(list);s.produto=parentOf(list[0].sku_raw).produto;s.nvar=new Set(list.map(x=>x.sku_raw)).size;return s;});
+  const prod=p=>({produto:p.produto,categoria:p.categoria||null,sinal:p.sinal,gasto:R(p.ad_spend),receita_canal:R(p.receita_canal),receita_total_canais:R(p.receita_total),
+    concentracao_canal_pct:p.conc==null?null:+(p.conc*100).toFixed(0),roas_plataforma:p.roas==null?null:+p.roas.toFixed(2),poas:p.poas==null?null:+p.poas.toFixed(2),cm3:R(p.cm3),unidades:p.unidades||0});
+  const cg=parents.filter(p=>p.ad_spend>0);
+  const cont=s=>cg.filter(p=>p.sinal===s).length;
+  const produtos={
+    resumo:{total_produtos:cg.length,escalar:cont('escalar'),cortar:cont('cortar'),revisar:cont('revisar'),manter:cont('manter'),sem_venda:cont('sem_venda_no_canal')},
+    top_por_gasto:[...cg].sort((a,b)=>b.ad_spend-a.ad_spend).slice(0,15).map(prod),
+    escalar:cg.filter(p=>p.sinal==='escalar').sort((a,b)=>b.cm3-a.cm3).slice(0,6).map(prod),
+    cortar:cg.filter(p=>p.sinal==='cortar').sort((a,b)=>a.cm3-b.cm3).slice(0,6).map(prod),
+    revisar:cg.filter(p=>p.sinal==='revisar').sort((a,b)=>b.ad_spend-a.ad_spend).slice(0,6).map(prod),
+  };
+  // auditoria (resumo + destaques, idêntico a renderAudit base)
+  const ch=(STATE.changes||[]).filter(r=>r.actor!=='Meta' && !['sistema','revisao'].includes(classCat(r).k));
+  const aud={total_acoes:ch.length};
+  ['orcamento','lance','novo','pausa','segmentacao','publico','imagem','texto','criativo','acesso'].forEach(k=>{const n=ch.filter(r=>classCat(r).k===k).length;if(n)aud[k]=n;});
+  let netB=0; ch.filter(r=>classCat(r).k==='orcamento').forEach(r=>{const{o,n}=budgetVals(r);if(o!=null&&n!=null)netB+=(n-o)/100;});
+  aud.orcamento_liquido_dia=Math.round(netB);
+  aud.destaques=ch.filter(r=>classCat(r).sig===2).slice(0,10).map(r=>{const cc=classCat(r);let det=null;
+    if(cc.k==='orcamento'){const{o,n}=budgetVals(r);if(o!=null&&n!=null)det='R$'+Math.round(o/100)+'→R$'+Math.round(n/100)+'/dia';}
+    else if((r.valor_antes||'').length<30&&(r.valor_depois||'').length<30&&(r.valor_antes||r.valor_depois))det=(r.valor_antes||'?')+'→'+(r.valor_depois||'?');
+    return {tipo:cc.l,evento:r.evento,objeto:(r.objeto_nome||r.objeto_id||'').slice(0,40),detalhe:det,quem:r.actor,quando:new Date(r.changed_at).toLocaleDateString('pt-BR',{timeZone:'America/Sao_Paulo'})};});
+  return {periodo:{de:STATE.de,ate:STATE.ate},cascata_site:cascata,mer,produtos,auditoria_agencia:aud};
+}
+function renderAnaliseMD(md){
+  try{return DOMPurify.sanitize(marked.parse(md||''));}catch(e){return '<div class="muted">'+(md||'').replace(/</g,'&lt;')+'</div>';}
+}
+function mostrarAnalistaCache(){
+  const out=document.getElementById('analise-out'); if(!out||out.dataset.loaded)return;
+  try{const o=JSON.parse(localStorage.getItem(anaCacheKey()));if(o&&o.html){out.innerHTML=o.html;out.dataset.loaded='1';document.getElementById('ana-meta').textContent=o.meta||'';}}catch(e){}
+}
+async function rodarAnalista(){
+  const out=document.getElementById('analise-out'), btn=document.getElementById('btn-analista'), meta=document.getElementById('ana-meta');
+  if(!(STATE.canal&&STATE.canal.length) || !(STATE.pnl&&STATE.pnl.length)){out.innerHTML='<div class="muted" style="padding:14px">Os dados do período ainda estão carregando — tente em alguns segundos.</div>';return;}
+  btn.disabled=true; const lbl=btn.textContent; btn.textContent='analisando…'; meta.textContent='';
+  out.innerHTML='<div class="muted" style="padding:18px">🤖 O analista está lendo os números do período…</div>';
+  try{
+    const foco=(document.getElementById('ana-foco').value||'').trim();
+    const dados=buildAnalistaPayload();
+    const r=await fetch(MAXCHAT+'/api/marketing/analista',{method:'POST',headers:{...(await authHeaders()),'Content-Type':'application/json'},body:JSON.stringify({dados,foco})});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok){out.innerHTML='<div class="muted" style="padding:18px;color:var(--red)">Erro: '+((j&&j.erro)||('HTTP '+r.status))+'</div>';return;}
+    const html=renderAnaliseMD(j.resposta); out.innerHTML=html; out.dataset.loaded='1';
+    const mtxt='Sonnet · ~US$ '+(+(j.custo_usd||0)).toFixed(4)+' · '+new Date().toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    meta.textContent=mtxt;
+    try{localStorage.setItem(anaCacheKey(),JSON.stringify({html,meta:mtxt}));}catch(e){}
+  }catch(e){out.innerHTML='<div class="muted" style="padding:18px;color:var(--red)">Falha de conexão com o analista: '+e+'</div>';}
+  finally{btn.disabled=false;btn.textContent=lbl.indexOf('Regenerar')<0?'↻ Regenerar análise':lbl;}
+}
+
 // ---------- charts ----------
 function drawLine(id,labels,series,single){
   if(CHARTS[id])CHARTS[id].destroy();
@@ -681,7 +782,10 @@ async function carregarTitulos(){
     STATE.tab=t.dataset.t;
     document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===t));
     document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('on',p.id==='pane-'+t.dataset.t));
+    if(t.dataset.t==='analista')mostrarAnalistaCache();
   });
+  document.getElementById('btn-analista').onclick=rodarAnalista;
+  document.getElementById('ana-foco').addEventListener('keydown',e=>{if(e.key==='Enter')rodarAnalista();});
   // chips
   document.querySelectorAll('#chips .chip').forEach(c=>c.onclick=()=>setPeriodo(c.dataset.p));
   // filtros SKU + audit
