@@ -122,9 +122,9 @@
   .hi{font-size:12.5px;color:var(--txt);display:flex;flex-wrap:wrap;align-items:center;gap:7px;padding-bottom:6px;border-bottom:1px solid var(--line)}
   .hi:last-child{border-bottom:none;padding-bottom:0}
   .muted{color:var(--mut)}
-  .note{background:linear-gradient(180deg,rgba(124,92,255,.10),rgba(124,92,255,.03));border:1px solid rgba(124,92,255,.25);border-radius:10px;padding:11px 14px 11px 40px;position:relative;font-size:12.5px;color:var(--txt);line-height:1.55;margin-bottom:14px}
-  .note::before{content:'💡';position:absolute;left:13px;top:10px;font-size:15px}
-  .note b{color:#fff}
+  .note{display:flex;gap:13px;align-items:flex-start;background:linear-gradient(135deg,rgba(124,92,255,.13),rgba(124,92,255,.035));border:1px solid rgba(124,92,255,.28);border-left:3px solid var(--accent);border-radius:12px;padding:14px 17px;font-size:13px;color:var(--txt);line-height:1.62;margin-bottom:16px}
+  .note::before{content:'💡';flex:0 0 auto;display:grid;place-items:center;width:30px;height:30px;margin-top:-1px;background:rgba(124,92,255,.2);border:1px solid rgba(124,92,255,.32);border-radius:9px;font-size:16px;line-height:1}
+  .note b{color:#fff;font-weight:700}
   canvas{max-height:300px}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
   @media(max-width:760px){.grid2{grid-template-columns:1fr}th,td{padding:6px}}
@@ -180,7 +180,7 @@
 
   <!-- LUCRO POR SKU -->
   <section class="pane" id="pane-sku">
-    <div class="note">⭐ A decisão é por <b>lucro real (POAS = CM2÷gasto)</b>, no <b>produto-pai</b> — não por variante e não por ROAS. <span class="muted">Produtos que vendem a maior parte <b>fora do canal do anúncio</b> viram <span class="badge b-revisar">revisar</span> (o Meta pode estar gerando venda no TikTok/loja) — abra "Como funciona esta aba". Clique num produto pra ver a cascata de custos + a concentração de canal.</span></div>
+    <div class="note">A decisão é por <b>lucro real (POAS = CM2÷gasto)</b>, no <b>produto-pai</b> — não por variante e não por ROAS. <span class="muted">Produtos que vendem a maior parte <b>fora do canal do anúncio</b> viram <span class="badge b-revisar">revisar</span> (o Meta pode estar gerando venda no TikTok/loja) — abra "Como funciona esta aba". Clique num produto pra ver a cascata de custos + a concentração de canal.</span></div>
     <details class="gloss"><summary>Como funciona esta aba</summary><div class="gbody">
       <div class="gi"><b>Cada linha é um PRODUTO, não uma variante.</b> Meta e Google anunciam por <b>catálogo</b>: cada cor/tamanho é um item do feed, e a plataforma atribui o gasto por variante. A variante que recebe mais gasto é a que o <b>algoritmo decidiu mostrar</b> — não uma escolha sua. Por isso o <b>veredito (escalar/cortar) fica SÓ no produto-pai</b>; clicar abre as variantes (informativo, sem veredito).</div>
       <div class="gi"><b>⚠ Cross-channel — o ponto mais importante.</b> O gasto do Meta mira o site e o do Google mira a loja, MAS <b>um anúncio do Meta pode gerar venda no TikTok, na loja física ou no ML</b> — a pessoa descobre o produto no anúncio e compra onde for mais fácil. Exemplo real: a Calça Alfaiataria vende <b>~5% no site e ~95% no TikTok</b>. Se olhássemos só a margem do site, mandaríamos <b>cortar um anúncio que pode estar vendendo fora</b>. Por isso medimos a <b>concentração de canal</b> (% que o produto vende no canal do anúncio) — aparece ao expandir o produto — e tratamos esses casos como <b>revisar</b>, não cortar.</div>
