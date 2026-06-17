@@ -122,8 +122,8 @@
   .hi{font-size:12.5px;color:var(--txt);display:flex;flex-wrap:wrap;align-items:center;gap:7px;padding-bottom:6px;border-bottom:1px solid var(--line)}
   .hi:last-child{border-bottom:none;padding-bottom:0}
   .muted{color:var(--mut)}
-  .note{display:flex;gap:13px;align-items:flex-start;background:linear-gradient(135deg,rgba(124,92,255,.13),rgba(124,92,255,.035));border:1px solid rgba(124,92,255,.28);border-left:3px solid var(--accent);border-radius:12px;padding:14px 17px;font-size:13px;color:var(--txt);line-height:1.62;margin-bottom:16px}
-  .note::before{content:'💡';flex:0 0 auto;display:grid;place-items:center;width:30px;height:30px;margin-top:-1px;background:rgba(124,92,255,.2);border:1px solid rgba(124,92,255,.32);border-radius:9px;font-size:16px;line-height:1}
+  .note{position:relative;background:linear-gradient(135deg,rgba(124,92,255,.13),rgba(124,92,255,.035));border:1px solid rgba(124,92,255,.28);border-left:3px solid var(--accent);border-radius:12px;padding:14px 17px 14px 56px;font-size:13px;color:var(--txt);line-height:1.62;margin-bottom:16px}
+  .note::before{content:'💡';position:absolute;left:15px;top:13px;display:grid;place-items:center;width:30px;height:30px;background:rgba(124,92,255,.2);border:1px solid rgba(124,92,255,.32);border-radius:9px;font-size:16px;line-height:1}
   .note b{color:#fff;font-weight:700}
   canvas{max-height:300px}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
