@@ -1590,7 +1590,11 @@ function renderEcommSkuDetail(){
   var freteSeller=s.freteSeller;
   var fretePct=receita>0?(freteSeller/receita*100):0;
   // Ads ML REAL deste SKU (anúncio→produto, sem rateio). Shopee não entra (shop-level).
-  var adsSku=(STATE.adsBySkuPai&&STATE.adsBySkuPai[s.sku_pai])||0;
+  // Soma sobre os canais VISÍVEIS do produto (s.porCanal) — respeita o foco de canal
+  // ativo e bate com a soma da coluna Ads do cross-canal. (Antes usava adsBySkuPai global,
+  // que ignorava o focusCanal: num view focado em ML Fio o header mostrava as ads das DUAS
+  // contas ML — Fio+Confecções — enquanto a tabela mostrava só Fio, e a margem invertia.)
+  var adsSku=Object.keys(s.porCanal||{}).reduce(function(a,c){return a+(((STATE.adsBySkuPaiCanal||{})[s.sku_pai]||{})[c]||0);},0);
   var adsPct=receita>0?(adsSku/receita*100):0;
   var dvSku=(STATE.devBySkuPai&&STATE.devBySkuPai[s.sku_pai])||{valor:0,cnt:0};  // devolução real por produto (todos canais)
   var margemLiq=receita-s.custoTotal-s.fee-s.devolucao-freteSeller-adsSku;
