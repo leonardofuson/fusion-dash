@@ -200,11 +200,11 @@
   <section class="pane on" id="pane-geral">
     <div class="note">
       <div class="note-lead">A métrica-norte é <b>margem de contribuição (CM3)</b> — não ROAS.</div>
-      <div class="note-sub"><b>MER_site</b> (Meta ÷ Shopify) é o indicador confiável. MER_loja (Google ÷ loja) é fraco: movimento espontâneo de loja não vem de anúncio. MER de equilíbrio ≈ 1 ÷ margem.</div>
+      <div class="note-sub"><b>MER_site = faturamento do site ÷ gasto Meta</b> (receita ÷ anúncio) — o indicador confiável. MER_loja (receita da loja ÷ gasto Google) é fraco: movimento espontâneo de loja não vem de anúncio. MER de equilíbrio ≈ 1 ÷ margem (com 50% de margem, MER 2 empata).</div>
     </div>
     <details class="gloss"><summary>Como ler este painel</summary><div class="gbody">
       <div class="gi"><b>A ideia central:</b> a maioria dos painéis mede <b>ROAS</b> (receita ÷ gasto) — mas receita não é lucro. Um produto pode ter ROAS lindo e <b>perder dinheiro</b> depois do custo de produzir, da comissão, do frete e da devolução. Aqui a pergunta é: <b>"depois de TODOS os custos, o anúncio deixou dinheiro no caixa?"</b> Isso é <b>margem de contribuição</b>.</div>
-      <div class="gi"><b>A cascata de custos:</b> Receita −CMV (custo de produzir) = <b>CM1</b> · −comissão/frete/devolução = <b>CM2</b> · −gasto de anúncios = <b>CM3</b>. <b>CM3 é o que importa</b>: positivo = ganhou; negativo = queimou.</div>
+      <div class="gi"><b>A cascata de custos:</b> Receita −CMV (custo de produzir) = <b>CM1</b> · −comissão/frete/devolução = <b>CM2</b> · −gasto de anúncios −comissões (agência 2% + gerente 0,65%) = <b>CM3</b>. <b>CM3 é o que importa</b>: positivo = ganhou; negativo = queimou.</div>
       <div class="gi"><b>Gasto Meta/Google</b> = quanto você investiu (Meta→site, Google→lojas). <b>Receita Site</b> = faturamento do Shopify. <b>MER_site</b> = receita do site ÷ gasto Meta (ponto de equilíbrio ≈2 com 50% de margem). <b>POAS médio</b> = margem dos anúncios ÷ gasto (>1 = lucrativo). <b>CM3 estimado</b> = o lucro em R$ que sobrou.</div>
       <div class="gi"><b>Por que não MER de loja aqui?</b> O gasto Google é minúsculo e a receita de loja é quase toda movimento espontâneo (gente que não veio de anúncio) → o número infla e mente. Fica na aba de dados, marcado como fraco.</div>
     </div></details>
@@ -236,7 +236,7 @@
     <details class="gloss"><summary>Como funciona esta aba</summary><div class="gbody">
       <div class="gi"><b>Cada linha é um PRODUTO, não uma variante.</b> Meta e Google anunciam por <b>catálogo</b>: cada cor/tamanho é um item do feed, e a plataforma atribui o gasto por variante. A variante que recebe mais gasto é a que o <b>algoritmo decidiu mostrar</b> — não uma escolha sua. Por isso o <b>veredito (escalar/cortar) fica SÓ no produto-pai</b>; clicar abre as variantes (informativo, sem veredito).</div>
       <div class="gi"><b>⚠ Cross-channel — o ponto mais importante.</b> O gasto do Meta mira o site e o do Google mira a loja, MAS <b>um anúncio do Meta pode gerar venda no TikTok, na loja física ou no ML</b> — a pessoa descobre o produto no anúncio e compra onde for mais fácil. Exemplo real: a Calça Alfaiataria vende <b>~5% no site e ~95% no TikTok</b>. Se olhássemos só a margem do site, mandaríamos <b>cortar um anúncio que pode estar vendendo fora</b>. Por isso medimos a <b>concentração de canal</b> (% que o produto vende no canal do anúncio) — aparece ao expandir o produto — e tratamos esses casos como <b>revisar</b>, não cortar.</div>
-      <div class="gi"><b>Os números</b>: <b>Receita</b> = venda real no canal do anúncio (base da margem) · <b>CM2%</b> = margem após CMV+comissão+frete+devolução · <b>POAS = CM2÷gasto</b> (>1 ⟺ CM3>0) · <b>CM3 = CM2−Anúncios</b> (fecha com a cascata) · <b>ROAS</b> = receita que a plataforma reivindica ÷ gasto — só diagnóstico (sobre-atribui).</div>
+      <div class="gi"><b>Os números</b>: <b>Receita</b> = venda real no canal do anúncio (base da margem) · <b>CM2%</b> = margem após CMV+comissão+frete+devolução · <b>POAS = CM2÷gasto</b> (>1 ⟺ CM3>0) · <b>CM3 = CM2−Anúncios</b> (no produto; as comissões de agência/gerente são custo de canal e entram só na cascata da Visão Geral) · <b>ROAS</b> = receita que a plataforma reivindica ÷ gasto — só diagnóstico (sobre-atribui).</div>
       <div class="gi"><b>Veredito (no produto-pai):</b> <span class="badge b-escalar">escalar</span> a margem cobre bem o anúncio · <span class="badge b-cortar">cortar</span> margem real não cobre <b>E</b> o produto vende no próprio canal · <span class="badge b-revisar">revisar</span> vende &lt;50% no canal do anúncio (provável cross-channel) OU o P&L e a plataforma discordam → <b>não corte às cegas: teste</b> (desligue o anúncio ~2 semanas e olhe a venda TOTAL, não só a do site) · <span class="badge b-manter">manter</span> · <span class="badge b-sem">sem venda</span>.</div>
     </div></details>
     <div class="kpis" id="kpis-sku"></div>
@@ -315,7 +315,7 @@
       <div class="gi">Como a Fusion é <b>dona</b> das contas, dá pra puxar via API <b>cada mudança</b> que a agência faz — coisa que ela não compartilha. O foco é a <b>pessoa da agência</b> (ex.: Igor Rezende no Meta, o analista no Google) e <b>o que ela alterou</b>, classificado em: <span class="badge b-cortar" style="font-size:10px">💰 Orçamento</span> <span class="badge b-cortar" style="font-size:10px">🎯 Lance</span> <span class="badge b-escalar" style="font-size:10px">🆕 Novo anúncio</span> <span class="badge b-revisar" style="font-size:10px">⏸️ Pausa</span> <span class="badge b-manter" style="font-size:10px">🖼️ Imagem</span> <span class="badge b-manter" style="font-size:10px">✍️ Texto</span> <span class="badge b-escalar" style="font-size:10px">👥 Segmentação</span> <span class="badge b-revisar" style="font-size:10px">👤 Acesso</span>.</div>
       <div class="gi"><b>O que destacar</b> (alto sinal, move dinheiro/estrutura): <b>mudança de orçamento</b> (mostra o antes→depois em R$/dia + %), <b>estratégia de lance</b>, <b>campanha/anúncio pausado</b> e <b>anúncio novo</b>. São o que sustenta conversa com a agência (corte de verba, pausa indevida, troca de criativo no meio de um teste). O bloco "Destaques" isola só esses.</div>
       <div class="gi"><b>De onde vem cada dado:</b><br>• <b>Meta</b> — API de Atividades (<code>/act_{id}/activities</code>): traz <b>quem</b> (actor), <b>o quê</b> (evento traduzido) e <b>antes→depois</b>. Orçamento vem em <b>centavos/dia</b> (convertemos pra R$); "Anúncio atualizado" traz imagem+título+texto, e <b>comparamos</b> pra dizer se mudou a <b>foto</b> ou o <b>texto</b>.<br>• <b>Google</b> — <code>change_event</code> (GAQL): traz o <b>e-mail</b> de quem mexeu e o campo alterado, mas só guarda <b>30 dias</b> de histórico.</div>
-      <div class="gi"><b>Por que o Google aparece tão pouco:</b> a conta do Google roda <b>1 campanha Performance Max (PMax)</b> pras lojas físicas. PMax é <b>automática</b> — o Google distribui sozinho o anúncio entre Pesquisa, Display, YouTube, Gmail e Maps e otimiza o lance com IA, então há <b>pouca mexida manual</b> pra auditar. Some-se a isso o cap de 30 dias da API. O grosso do investimento e das alterações está no <b>Meta</b> (site próprio).</div>
+      <div class="gi"><b>Por que o Google aparece tão pouco:</b> a conta do Google roda <b>1 campanha Performance Max (PMax)</b>. PMax é <b>automática</b> — o Google distribui sozinho o anúncio entre Pesquisa, Display, YouTube, Gmail e Maps e otimiza o lance com IA, então há <b>pouca mexida manual</b> pra auditar (+ cap de 30 dias da API). <b>Nota:</b> apesar de mirar lojas, descobrimos via GA4 que essa PMax também leva venda relevante pro <b>site</b> (~R$37k/28d) — não é só loja física. O grosso do investimento e das mexidas ainda está no <b>Meta</b>.</div>
       <div class="gi"><b>Esteira de revisão do Meta</b> (oculta por padrão): todo anúncio editado passa por <i>Processo pendente → Análise pendente → Ativo</i>. Essas transições aparecem com a pessoa que disparou a edição, mas são <b>automáticas</b> — não são pausas humanas. Por isso viram a categoria <span class="badge b-sem" style="font-size:10px">🔄 Revisão (auto)</span> e não contam como "Pausa". Marque o checkbox pra inspecioná-las.</div>
     </div></details>
     <div class="kpis" id="kpis-audit"></div>
@@ -332,7 +332,7 @@
   <!-- ANALISTA (LLM) -->
   <section class="pane" id="pane-analista">
     <div class="note">
-      <div class="note-lead">🤖 O analista lê os números <b>deste período</b> — cascata de margem, MER, P&amp;L por produto e auditoria da agência — e diz o que <b>escalar, cortar e testar</b>.</div>
+      <div class="note-lead">🤖 O analista lê <b>tudo deste período</b> — cascata de margem, MER, ponto ótimo de gasto, saúde de criativo, incrementalidade, orgânico, tráfego e auditoria — e diz o que <b>escalar, cortar, renovar e testar</b>.</div>
       <div class="note-sub">Roda no Claude (Sonnet) com a camada semântica <b>MARKETING_METRICS.md</b> como base. Usa <b>só os números que estão na tela</b> (não inventa) e nunca manda cortar um <span class="badge b-revisar">revisar</span> sem propor teste. Gerar custa ~US$ 0,02–0,04 e o resultado fica em cache por período — clique pra atualizar.</div>
     </div>
     <div class="filtros" style="align-items:center">
@@ -342,6 +342,18 @@
     </div>
     <div class="card"><div id="analise-out" class="mdbody"><div class="muted" style="padding:14px">Clique em <b>Analisar período</b> para gerar a leitura do período pelo analista. Ele enxerga exatamente os mesmos números das outras abas.</div></div></div>
   </section>
+
+  <!-- GLOSSÁRIO DE SIGLAS (fixo no rodapé, todas as abas) -->
+  <details class="gloss" id="glossario"><summary>Glossário — o que cada sigla significa</summary><div class="gbody">
+    <div class="gi"><b>ROAS</b> <span class="muted">(Return on Ad Spend)</span> = <b>Receita ÷ Gasto em anúncio</b>. Quanto a plataforma diz que voltou por R$ investido. <b>Só diagnóstico</b> — a plataforma sobre-atribui; ROAS alto ≠ lucro.</div>
+    <div class="gi"><b>POAS</b> <span class="muted">(Profit on Ad Spend)</span> = <b>CM2 ÷ Gasto</b>. Margem REAL por R$ de anúncio. >1 = o anúncio se paga (CM3>0). <b>É a métrica de decisão</b> (escalar/cortar).</div>
+    <div class="gi"><b>MER</b> <span class="muted">(Marketing Efficiency Ratio)</span> = <b>Faturamento ÷ Gasto em anúncio</b> (gross sales ÷ ad spend). Eficiência "blended" do canal inteiro. Equilíbrio ≈ 1 ÷ margem (50% de margem → MER 2 empata).</div>
+    <div class="gi"><b>CM1 / CM2 / CM3</b> <span class="muted">(Margem de Contribuição)</span> = a cascata: <b>CM1</b> = Receita − CMV · <b>CM2</b> = CM1 − comissão − frete − devolução · <b>CM3</b> = CM2 − anúncios − comissões (agência+gerente). <b>CM3 = lucro final do canal.</b></div>
+    <div class="gi"><b>CMV</b> <span class="muted">(Custo da Mercadoria Vendida)</span> = quanto custou produzir o que foi vendido. <b>CAC</b> = Custo de Aquisição de Cliente (gasto ÷ nº de compradores).</div>
+    <div class="gi"><b>CTR</b> <span class="muted">(Click-Through Rate)</span> = cliques ÷ impressões (% que viu e clicou). <b>CPM</b> = custo por 1.000 impressões. <b>CPC</b> = custo por clique. CTR caindo + CPM subindo = fadiga de criativo / leilão mais caro.</div>
+    <div class="gi"><b>Diff-in-diff</b> <span class="muted">(diferença das diferenças)</span> = variação do site − variação de um canal de controle; isola o efeito <b>causal</b> da verba, descontando a sazonalidade. <b>Frequência</b> = quantas vezes a mesma pessoa viu o anúncio (≥4 = saturação).</div>
+    <div class="gi"><b>PMax</b> <span class="muted">(Performance Max)</span> = campanha automática do Google (distribui sozinha entre Pesquisa/Display/YouTube/Maps). <b>ER</b> <span class="muted">(Engagement Rate, no Orgânico)</span> = interações ÷ alcance.</div>
+  </div></details>
 </main>
 
 <script>
