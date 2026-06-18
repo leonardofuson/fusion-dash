@@ -127,6 +127,10 @@
   .alertbox .ai b{color:#fff}.alertbox .ai .d{color:var(--mut);font-size:12px;margin-top:2px}
   .alertbox .pill{font-size:10px;padding:1px 7px;border-radius:20px;font-weight:700;margin-right:7px}
   .pill-alta{background:rgba(239,83,80,.18);color:var(--red)}.pill-media{background:rgba(245,166,35,.18);color:var(--amber)}
+  .custrange{display:inline-flex;align-items:center;gap:6px;margin-left:8px;font-size:12px;color:var(--mut)}
+  .custrange input[type=date]{padding:5px 8px;font-size:12px;color-scheme:dark}
+  .custrange .csep{color:var(--mut)}
+  .custrange #cust-go{padding:5px 11px;font-size:12px}
   .curva-stats{display:flex;flex-wrap:wrap;gap:22px;margin:6px 0 12px}
   .curva-stats .cs{display:flex;flex-direction:column;gap:2px}
   .curva-stats .cs .cl{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.4px}
@@ -177,6 +181,7 @@
     <div class="chip on" data-p="mtd">Este Mês</div>
     <div class="chip" data-p="m-1">Último Mês</div>
     <div class="chip" data-p="ytd">Este Ano</div>
+    <span class="custrange">📅 <input type="date" id="cust-de" title="Data inicial"><span class="csep">–</span><input type="date" id="cust-ate" title="Data final"><button class="btn" id="cust-go">Aplicar</button></span>
   </div>
   <div class="sep"></div>
   <span class="who" id="who"></span>
@@ -1195,6 +1200,19 @@ function setPeriodo(p){
   else if(p==='m-1'){const a=somaDias(inicioMesSP(),-1);STATE.de=a.slice(0,7)+'-01';STATE.ate=a;}
   else if(p==='ytd'){STATE.de=h.slice(0,4)+'-01-01';STATE.ate=h;}
   document.querySelectorAll('#chips .chip').forEach(c=>c.classList.toggle('on',c.dataset.p===p));
+  syncCustomInputs();
+  carregar(false);
+}
+function syncCustomInputs(){
+  const de=document.getElementById('cust-de'), ate=document.getElementById('cust-ate');
+  if(de)de.value=STATE.de; if(ate)ate.value=STATE.ate;
+}
+function aplicarCustom(){
+  const de=document.getElementById('cust-de').value, ate=document.getElementById('cust-ate').value;
+  if(!de||!ate){alert('Escolha as duas datas.');return;}
+  if(de>ate){alert('A data inicial não pode ser depois da final.');return;}
+  STATE.de=de;STATE.ate=ate;
+  document.querySelectorAll('#chips .chip').forEach(c=>c.classList.remove('on'));  // período custom → nenhum chip ativo
   carregar(false);
 }
 
@@ -1227,6 +1245,8 @@ async function carregarTitulos(){
   document.getElementById('ana-foco').addEventListener('keydown',e=>{if(e.key==='Enter')rodarAnalista();});
   // chips
   document.querySelectorAll('#chips .chip').forEach(c=>c.onclick=()=>setPeriodo(c.dataset.p));
+  document.getElementById('cust-go').onclick=aplicarCustom;
+  ['cust-de','cust-ate'].forEach(id=>document.getElementById(id).addEventListener('keydown',e=>{if(e.key==='Enter')aplicarCustom();}));
   // filtros SKU + audit
   ['f-plat','f-sinal','f-categoria','f-busca'].forEach(id=>document.getElementById(id).addEventListener('input',renderSku));
   ['a-plat','a-actor','a-cat'].forEach(id=>document.getElementById(id).addEventListener('input',renderAudit));
@@ -1246,7 +1266,7 @@ async function carregarTitulos(){
     try{await fetch(SB+'/rest/v1/rpc/refresh_marketing_mvs',{method:'POST',headers:{...(await authHeaders()),'Content-Type':'application/json'},body:'{}'});}catch(e){}
     await carregar(true);b.textContent='↻ Atualizar';b.disabled=false;
   };
-  STATE.de=inicioMesSP();STATE.ate=hojeSP();
+  STATE.de=inicioMesSP();STATE.ate=hojeSP();syncCustomInputs();
   await carregarTitulos();
   await carregar(false);
 })();
