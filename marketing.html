@@ -872,15 +872,20 @@ function renderSku(){
   const esc=parents.filter(r=>r.sinal==='escalar').length, cor=parents.filter(r=>r.sinal==='cortar').length, revi=parents.filter(r=>r.sinal==='revisar').length;
   const sp=parents.reduce((s,r)=>s+r.ad_spend,0), c3=parents.reduce((s,r)=>s+r.cm3,0);
   const rev=parents.reduce((s,r)=>s+(r.receita_canal||0),0), un=parents.reduce((s,r)=>s+(r.unidades||0),0);
+  // agregados do fluxo dinheiro→ação: POAS blended + R$ em jogo por veredito
+  const cm2tot=parents.reduce((s,r)=>s+(r.cm2||0),0), poasB=sp>0?cm2tot/sp:null;
+  const escCM3=parents.filter(r=>r.sinal==='escalar').reduce((s,r)=>s+(r.cm3||0),0);
+  const corGasto=parents.filter(r=>r.sinal==='cortar').reduce((s,r)=>s+(r.ad_spend||0),0);
+  const pcRec=rev>0?Math.round(c3/rev*100):0;
+  // KPIs como história linear: investi → gerou → sobrou → eficiência → AÇÃO (com R$ em jogo)
   document.getElementById('kpis-sku').innerHTML=[
-    {l:'Produtos',v:parents.length,s:variants.length+' variantes',t:'Produtos-pai com gasto de anúncio (cada um agrupa suas variantes de cor/tamanho). O veredito é por PRODUTO-pai, não por variante. Clique pra abrir as variantes.'},
-    {l:'Gasto total',v:rs(sp),t:'Soma do gasto de anúncios dos produtos filtrados.'},
-    {l:'Receita',v:rs(rev),s:'venda real do canal',t:'Receita REAL desses produtos NO CANAL do anúncio (anúncio + orgânica) — não é só o que a plataforma atribui. É a base de onde sai a margem (CM2/CM3).'},
-    {l:'Unidades',v:un.toLocaleString('pt-BR'),s:'peças vendidas',t:'Peças vendidas desses produtos no canal do anúncio no período.'},
-    {l:'CM3 total',v:rs(c3),cls:c3>=0?'pos':'neg',t:'Lucro real somado, após CMV + custos de canal + anúncios. Verde = lucrativo.'},
-    {l:'Escalar',v:esc,s:'POAS>1,2',t:'Nº de PRODUTOS onde a margem cobre bem o anúncio — vale investir mais.'},
-    {l:'Revisar',v:revi,s:'cross-channel',cls:revi>0?'':'',t:'Produtos que vendem <50% no canal do anúncio (o Meta/Google pode estar gerando venda em OUTRO canal — TikTok, lojas, ML) OU onde o P&L e a plataforma discordam. NÃO cortar às cegas — testar.'},
-    {l:'Cortar',v:cor,s:'POAS<0,8',t:'Nº de PRODUTOS onde a margem real não cobre o anúncio E que vendem no próprio canal — reduzir/parar.'},
+    {l:'Gasto em anúncios',v:rs(sp),s:'investido · '+parents.length+' produtos',t:'Soma do gasto de anúncios dos produtos filtrados (cada produto-pai agrupa suas variantes). É o INVESTIMENTO — o começo da história.'},
+    {l:'Receita no canal',v:rs(rev),s:un.toLocaleString('pt-BR')+' un · venda real',t:'Receita REAL desses produtos NO CANAL do anúncio (anúncio + orgânica) — não é só o que a plataforma atribui. É de onde sai a margem.'},
+    {l:'CM3 — lucro real',v:rs(c3),s:pcRec+'% da receita',cls:c3>=0?'pos':'neg',accent:true,t:'Lucro real somado, após CMV + comissão/frete/devolução + anúncios. É o que sobrou. Verde = lucrativo. (Não inclui as comissões de canal agência/gerente — essas estão na cascata da Visão Geral.)'},
+    {l:'POAS médio',v:n2(poasB),s:'margem ÷ gasto · >1 = paga',t:'CM2 total ÷ gasto total dos produtos filtrados. Quanto de margem cada R$ de anúncio gera. >1 = o anúncio se paga. É a eficiência que define os vereditos abaixo.'},
+    {l:'▲ Escalar',v:esc,s:'CM3 '+(escCM3>=0?'+':'−')+rs(Math.abs(escCM3)).replace('R$','R$'),cls:'pos',t:'Produtos onde a margem cobre bem o anúncio (POAS>1,2) — vale investir mais. O sub mostra o CM3 que esses produtos já geram.'},
+    {l:'◆ Revisar',v:revi,s:'vende fora do canal — testar',t:'Produtos que vendem <50% no canal do anúncio (provável cross-channel: TikTok/loja/ML) OU onde P&L e plataforma discordam. NÃO cortar às cegas — fazer holdout.'},
+    {l:'▼ Cortar',v:cor,s:rs(corGasto)+' de gasto a economizar',cls:cor>0?'neg':'',t:'Produtos onde a margem real não cobre o anúncio (POAS<0,8) E que vendem no próprio canal — reduzir/parar. O sub mostra o gasto que você economizaria cortando.'},
   ].map(kpiHTML).join('');
   document.getElementById('sku-count').textContent=parents.length+' produtos · '+variants.length+' variantes';
   let html='';
