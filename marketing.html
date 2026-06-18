@@ -223,7 +223,7 @@
     </div>
     <div class="grid2">
       <div class="card"><h3>Gasto diário <span class="hint">Meta + Google</span></h3><canvas id="ch-spend"></canvas></div>
-      <div class="card"><h3>MER_site <span class="hint">receita Shopify ÷ gasto Meta</span></h3><canvas id="ch-mer"></canvas></div>
+      <div class="card"><h3>MER_site <span class="hint">receita Shopify ÷ gasto Meta · dias de gasto incompleto excluídos (Meta assenta ~48h)</span></h3><canvas id="ch-mer"></canvas></div>
     </div>
   </section>
 
@@ -506,13 +506,18 @@ function renderGeral(){
     {l:'POAS canal',v:n2(poas),s:'margem ÷ Meta',t:'CM2 do site ÷ Gasto Meta. Quanto de margem o site gera por R$ de anúncio.'},
   ].map(kpiHTML).join('');
   renderCascade(c, meta, com);
+  // dias com gasto INCOMPLETO (Meta assenta ~48-72h) distorcem o MER (receita÷gasto explode
+  // quando o gasto ainda não entrou). Detecta pela mediana e exclui do gráfico de MER.
+  const spd=m.map(r=>+r.meta_spend||0).filter(v=>v>0).slice().sort((a,b)=>a-b);
+  const medSpd=spd.length?spd[Math.floor(spd.length/2)]:0;
+  const incompleto=g=>medSpd>0&&g<0.35*medSpd;
   idle(()=>{
     drawLine('ch-spend',m.map(r=>r.data),[
       {label:'Meta',data:m.map(r=>+r.meta_spend||0),color:'#7c5cff'},
       {label:'Google',data:m.map(r=>+r.google_spend||0),color:'#22d3ee'},
     ]);
     drawLine('ch-mer',m.map(r=>r.data),[
-      {label:'MER_site',data:m.map(r=>r.mer_site==null?null:+r.mer_site),color:'#2fbf71'},
+      {label:'MER_site',data:m.map(r=>{const g=+r.meta_spend||0;return (incompleto(g)||r.mer_site==null)?null:+r.mer_site;}),color:'#2fbf71'},
     ],true);
   });
 }
