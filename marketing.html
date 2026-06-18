@@ -387,6 +387,10 @@ function comissoes(rec,devolucao){
   const ps=paidShareSite();
   return {agencia: ps!=null?AGENCY_RATE*rec*ps:0, gerente: MANAGER_RATE*(rec-(devolucao||0)), paidShare:ps};
 }
+// Alinha a Receita do site com o dash de ECOMMERCE (fonte canônica): Receita = PRODUTO
+// (valor_bruto − frete do cliente). O frete já era descontado no CM2, então só sai da linha
+// de Receita — CM2/CM3 NÃO mudam. Sem isso a "Receita Site" ficava ~frete (R$26k/maio) acima.
+function alinhaReceitaSite(c){ const f=c.frete||0; c.receita-=f; c.cm1=(c.cm1||0)-f; c.frete=0; return c; }
 function cacheGet(){try{const o=JSON.parse(localStorage.getItem(cacheKey()));if(o&&Date.now()-o.t<300000)return o.d;}catch(e){}return null;}
 function cacheSet(d){try{localStorage.setItem(cacheKey(),JSON.stringify({t:Date.now(),d}));}catch(e){}}
 
@@ -495,7 +499,7 @@ function renderGeral(){
   const m=STATE.mer;
   const meta=m.reduce((s,r)=>s+(+r.meta_spend||0),0), goog=m.reduce((s,r)=>s+(+r.google_spend||0),0);
   // P&L do canal SITE (todos os produtos, DIÁRIO) — mesma fonte dos KPIs e da cascata (period-exact)
-  const c=(STATE.canal||[]).reduce((a,r)=>{['receita','cogs','cm1','fee','frete','devolucao','cm2','unidades'].forEach(k=>a[k]=(a[k]||0)+(+r[k]||0));return a;},{receita:0,cogs:0,cm1:0,fee:0,frete:0,devolucao:0,cm2:0,unidades:0});
+  const c=alinhaReceitaSite((STATE.canal||[]).reduce((a,r)=>{['receita','cogs','cm1','fee','frete','devolucao','cm2','unidades'].forEach(k=>a[k]=(a[k]||0)+(+r[k]||0));return a;},{receita:0,cogs:0,cm1:0,fee:0,frete:0,devolucao:0,cm2:0,unidades:0}));
   const com=comissoes(c.receita, c.devolucao);
   const rec=c.receita, cm2=c.cm2, cm3=cm2-meta-com.agencia-com.gerente;
   const unSite=c.unidades||0, ticket=unSite>0?rec/unSite:null;
@@ -504,7 +508,7 @@ function renderGeral(){
   // KPIs na ordem do fluxo de dinheiro: Investimento → Receita → Margem → Lucro → Eficiência
   document.getElementById('kpis-geral').innerHTML=[
     {l:'Gasto Meta',v:rs(meta),s:goog>0?'+ Google '+rs(goog):'investimento',t:'Total investido em Meta Ads no período (custo de marketing do site). O Google entra como contexto da loja.'},
-    {l:'Receita Site',v:rs(rec),s:unSite.toLocaleString('pt-BR')+' peças · ticket '+(ticket?rs(ticket):'—'),t:'Faturamento do Site Próprio (Shopify), todos os produtos, no período exato. É a base (100%) do demonstrativo abaixo.'},
+    {l:'Receita Site',v:rs(rec),s:unSite.toLocaleString('pt-BR')+' peças · ticket '+(ticket?rs(ticket):'—'),t:'Faturamento do Site Próprio (Shopify) = PRODUTO (valor_bruto − frete do cliente), igual à Receita Bruta do dash de ecommerce. O frete não entra na receita (era pass-through) — já estava descontado no CM2. Base (100%) do demonstrativo abaixo.'},
     {l:'CM2',v:rs(cm2),s:pc(cm2)+'% da receita',t:'Margem de contribuição do site = Receita − CMV − comissão − frete − devolução. O que sobra ANTES do anúncio.'},
     {l:'CM3',v:rs(cm3),s:pc(cm3)+'% · lucro final',cls:cm3>=0?'pos':'neg',accent:true,t:'Lucro final do site DEPOIS de Anúncios + comissão da agência (2% do bruto atribuído a ads) + comissão do gerente (0,65% do líquido). Verde = sobrou dinheiro.'},
     {l:'MER_site',v:n2(merSite),s:'equilíbrio ≈2',t:'Receita Site ÷ Gasto Meta. Eficiência blended do canal. Acima de ~2 = lucrativo.'},
@@ -516,13 +520,15 @@ function renderGeral(){
   const spd=m.map(r=>+r.meta_spend||0).filter(v=>v>0).slice().sort((a,b)=>a-b);
   const medSpd=spd.length?spd[Math.floor(spd.length/2)]:0;
   const incompleto=g=>medSpd>0&&g<0.35*medSpd;
+  // MER diário = receita PRODUTO do dia (valor_bruto − frete, = ecommerce) ÷ gasto do dia
+  const recProdDia={}; (STATE.canal||[]).forEach(r=>{recProdDia[r.data]=(recProdDia[r.data]||0)+((+r.receita||0)-(+r.frete||0));});
   idle(()=>{
     drawLine('ch-spend',m.map(r=>r.data),[
       {label:'Meta',data:m.map(r=>+r.meta_spend||0),color:'#7c5cff'},
       {label:'Google',data:m.map(r=>+r.google_spend||0),color:'#22d3ee'},
     ]);
     drawLine('ch-mer',m.map(r=>r.data),[
-      {label:'MER_site',data:m.map(r=>{const g=+r.meta_spend||0;return (incompleto(g)||r.mer_site==null)?null:+r.mer_site;}),color:'#2fbf71'},
+      {label:'MER_site',data:m.map(r=>{const g=+r.meta_spend||0,rp=recProdDia[r.data];return (incompleto(g)||g<=0||rp==null)?null:+(rp/g).toFixed(2);}),color:'#2fbf71'},
     ],true);
   });
 }
@@ -545,7 +551,7 @@ function renderCascade(c, meta, com){
     row('CMV (custo do produto)',c.cogs,'ded','#ef5350',true)+
     row('CM1 — margem bruta',c.cm1,'sub','#22d3ee')+
     row('Comissão',c.fee,'ded','#ef5350',true)+
-    row('Frete',c.frete,'ded','#ef5350',true)+
+    (c.frete>0?row('Frete',c.frete,'ded','#ef5350',true):'')+
     row('Devolução',c.devolucao,'ded','#ef5350',true)+
     row('CM2 — margem de contribuição',c.cm2,'sub','#22d3ee')+
     row('Anúncios (Meta)',meta,'ded','#ef5350',true)+
@@ -1057,7 +1063,7 @@ function buildAnalistaPayload(){
   // cascata do site + MER (idêntico a renderGeral)
   const m=STATE.mer||[];
   const meta=m.reduce((s,r)=>s+(+r.meta_spend||0),0), goog=m.reduce((s,r)=>s+(+r.google_spend||0),0);
-  const c=(STATE.canal||[]).reduce((a,r)=>{['receita','cogs','cm1','fee','frete','devolucao','cm2','unidades'].forEach(k=>a[k]=(a[k]||0)+(+r[k]||0));return a;},{receita:0,cogs:0,cm1:0,fee:0,frete:0,devolucao:0,cm2:0,unidades:0});
+  const c=alinhaReceitaSite((STATE.canal||[]).reduce((a,r)=>{['receita','cogs','cm1','fee','frete','devolucao','cm2','unidades'].forEach(k=>a[k]=(a[k]||0)+(+r[k]||0));return a;},{receita:0,cogs:0,cm1:0,fee:0,frete:0,devolucao:0,cm2:0,unidades:0}));
   const com=comissoes(c.receita,c.devolucao);
   const rec=c.receita, cm2=c.cm2, cm3=cm2-meta-com.agencia-com.gerente;
   const cascata={receita:R(rec),cmv:R(c.cogs),cm1:R(c.cm1),comissao:R(c.fee),frete:R(c.frete),devolucao:R(c.devolucao),cm2:R(cm2),gasto_meta:R(meta),
