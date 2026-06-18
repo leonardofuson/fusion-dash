@@ -357,7 +357,19 @@ function inicioMesSP(){const d=spNow();return fmtD(new Date(d.getFullYear(),d.ge
 function hojeSP(){return fmtD(spNow());}
 
 // ---------- cache (TTL 5min) ----------
-function cacheKey(){return 'marketing_v12_'+STATE.de+'_'+STATE.ate;}
+function cacheKey(){return 'marketing_v13_'+STATE.de+'_'+STATE.ate;}
+// comissões (custos novos): agência 2% sobre o BRUTO ATRIBUÍDO A ADS (share do GA4 × bruto real);
+// gerente 0,65% sobre o LÍQUIDO do site (bruto − devolução). Editáveis aqui.
+const AGENCY_RATE=0.02, MANAGER_RATE=0.0065;
+function paidShareSite(){
+  const t=STATE.trafego||[]; if(!t.length) return null;
+  let paid=0,tot=0; t.forEach(r=>{const v=+r.receita||0;tot+=v;if(/^Paid|Cross-network/.test(r.canal))paid+=v;});
+  return tot>0?paid/tot:null;
+}
+function comissoes(rec,devolucao){
+  const ps=paidShareSite();
+  return {agencia: ps!=null?AGENCY_RATE*rec*ps:0, gerente: MANAGER_RATE*(rec-(devolucao||0)), paidShare:ps};
+}
 function cacheGet(){try{const o=JSON.parse(localStorage.getItem(cacheKey()));if(o&&Date.now()-o.t<300000)return o.d;}catch(e){}return null;}
 function cacheSet(d){try{localStorage.setItem(cacheKey(),JSON.stringify({t:Date.now(),d}));}catch(e){}}
 
@@ -385,15 +397,16 @@ async function carregar(force){
   let data=force?null:cacheGet();
   if(!data){
     const ms=meses(STATE.de,STATE.ate);
-    const [mer,pnl,changes,canal]=await Promise.all([
+    const [mer,pnl,changes,canal,trafego]=await Promise.all([
       buscarTudo('mvw_marketing_mer_dia','select=*&data=gte.'+STATE.de+'&data=lte.'+STATE.ate+'&order=data.asc'),
       buscarTudo('mvw_marketing_sku_pnl','select=*&mes=in.('+ms.join(',')+')&order=mes.asc'),
       buscarTudo('ads_changes','select=plataforma,actor,evento,objeto_nome,objeto_id,valor_antes,valor_depois,changed_at&changed_at=gte.'+STATE.de+'&changed_at=lte.'+somaDias(STATE.ate,1)+'&order=changed_at.desc'),
       buscarTudo('mvw_marketing_canal_margem_dia','select=*&canal_grupo=eq.site&data=gte.'+STATE.de+'&data=lte.'+STATE.ate+'&order=data.asc'),
+      buscarTudo('web_trafego_dia','select=canal,source_medium,sessions,receita,transacoes&data=gte.'+STATE.de+'&data=lte.'+STATE.ate),
     ]);
-    data={mer,pnl,changes,canal};cacheSet(data);
+    data={mer,pnl,changes,canal,trafego};cacheSet(data);
   }
-  STATE.mer=data.mer;STATE.pnl=data.pnl;STATE.changes=data.changes;STATE.canal=data.canal||[];
+  STATE.mer=data.mer;STATE.pnl=data.pnl;STATE.changes=data.changes;STATE.canal=data.canal||[];STATE.trafego=data.trafego||[];
   renderAll();
   document.getElementById('loader').style.display='none';
   carregarCurva();    // curva 90d (independe do período) — fire-and-forget
@@ -466,7 +479,8 @@ function renderGeral(){
   const meta=m.reduce((s,r)=>s+(+r.meta_spend||0),0), goog=m.reduce((s,r)=>s+(+r.google_spend||0),0);
   // P&L do canal SITE (todos os produtos, DIÁRIO) — mesma fonte dos KPIs e da cascata (period-exact)
   const c=(STATE.canal||[]).reduce((a,r)=>{['receita','cogs','cm1','fee','frete','devolucao','cm2','unidades'].forEach(k=>a[k]=(a[k]||0)+(+r[k]||0));return a;},{receita:0,cogs:0,cm1:0,fee:0,frete:0,devolucao:0,cm2:0,unidades:0});
-  const rec=c.receita, cm2=c.cm2, cm3=cm2-meta;
+  const com=comissoes(c.receita, c.devolucao);
+  const rec=c.receita, cm2=c.cm2, cm3=cm2-meta-com.agencia-com.gerente;
   const unSite=c.unidades||0, ticket=unSite>0?rec/unSite:null;
   const merSite=meta>0?rec/meta:null, poas=meta>0?cm2/meta:null;
   const pc=v=>rec>0?Math.round(v/rec*100):0;
@@ -475,11 +489,11 @@ function renderGeral(){
     {l:'Gasto Meta',v:rs(meta),s:goog>0?'+ Google '+rs(goog):'investimento',t:'Total investido em Meta Ads no período (custo de marketing do site). O Google entra como contexto da loja.'},
     {l:'Receita Site',v:rs(rec),s:unSite.toLocaleString('pt-BR')+' peças · ticket '+(ticket?rs(ticket):'—'),t:'Faturamento do Site Próprio (Shopify), todos os produtos, no período exato. É a base (100%) do demonstrativo abaixo.'},
     {l:'CM2',v:rs(cm2),s:pc(cm2)+'% da receita',t:'Margem de contribuição do site = Receita − CMV − comissão − frete − devolução. O que sobra ANTES do anúncio.'},
-    {l:'CM3',v:rs(cm3),s:pc(cm3)+'% · lucro após Meta',cls:cm3>=0?'pos':'neg',accent:true,t:'Lucro do canal site DEPOIS do gasto Meta. CM3 = CM2 − Anúncios. Verde = o site deu lucro após o marketing.'},
+    {l:'CM3',v:rs(cm3),s:pc(cm3)+'% · lucro final',cls:cm3>=0?'pos':'neg',accent:true,t:'Lucro final do site DEPOIS de Anúncios + comissão da agência (2% do bruto atribuído a ads) + comissão do gerente (0,65% do líquido). Verde = sobrou dinheiro.'},
     {l:'MER_site',v:n2(merSite),s:'equilíbrio ≈2',t:'Receita Site ÷ Gasto Meta. Eficiência blended do canal. Acima de ~2 = lucrativo.'},
     {l:'POAS canal',v:n2(poas),s:'margem ÷ Meta',t:'CM2 do site ÷ Gasto Meta. Quanto de margem o site gera por R$ de anúncio.'},
   ].map(kpiHTML).join('');
-  renderCascade(c, meta);
+  renderCascade(c, meta, com);
   idle(()=>{
     drawLine('ch-spend',m.map(r=>r.data),[
       {label:'Meta',data:m.map(r=>+r.meta_spend||0),color:'#7c5cff'},
@@ -492,16 +506,18 @@ function renderGeral(){
 }
 
 // Cascata/waterfall de margem do canal site: Receita → −CMV → CM1 → −custos → CM2 → −Meta → CM3
-function renderCascade(c, meta){
+function renderCascade(c, meta, com){
   const el=document.getElementById('cm-cascade'); if(!el) return;
   const rec=c.receita||0;
   if(!rec){el.innerHTML='<div class="muted" style="padding:12px">Sem dados do canal no período.</div>';return;}
-  const cm3=c.cm2-meta, P=v=>rec>0?v/rec*100:0;
+  com=com||{agencia:0,gerente:0,paidShare:null};
+  const cm3=c.cm2-meta-com.agencia-com.gerente, P=v=>rec>0?v/rec*100:0;
   const bar=(v,col)=>`<span class="bar" style="width:${Math.round(Math.min(100,Math.abs(P(v)))*1.3)}px;background:${col}"></span>`;
   const row=(lbl,val,cls,col,neg)=>`<div class="casc-row ${cls}">`+
     `<div class="lbl2">${bar(val,col)}<span>${lbl}</span></div>`+
     `<div class="v ${neg?'neg':''}">${neg?'−':''}${rs(Math.abs(val))}</div>`+
     `<div class="p">${Math.round(P(val))}%</div></div>`;
+  const psTxt=com.paidShare!=null?Math.round(com.paidShare*100)+'% atrib. a ads':'sem dado GA4';
   el.innerHTML=
     row('Receita gerada',rec,'sub','#22d3ee')+
     row('CMV (custo do produto)',c.cogs,'ded','#ef5350',true)+
@@ -511,7 +527,9 @@ function renderCascade(c, meta){
     row('Devolução',c.devolucao,'ded','#ef5350',true)+
     row('CM2 — margem de contribuição',c.cm2,'sub','#22d3ee')+
     row('Anúncios (Meta)',meta,'ded','#ef5350',true)+
-    row('CM3 — lucro após anúncios',cm3,'tot',cm3>=0?'#2fbf71':'#ef5350');
+    row(`Comissão agência (2% · ${psTxt})`,com.agencia,'ded','#ef5350',true)+
+    row('Comissão gerente (0,65% do líquido)',com.gerente,'ded','#ef5350',true)+
+    row('CM3 — lucro final',cm3,'tot',cm3>=0?'#2fbf71':'#ef5350');
 }
 
 // ---------- curva de retornos decrescentes (ponto ótimo de gasto, nível canal) ----------
@@ -600,13 +618,11 @@ async function carregarAlertas(){
 // ---------- cross-channel (orgânico IG + tráfego GA4) p/ o analista ----------
 async function carregarCross(){
   try{
-    const since=somaDias(hojeSP(),-28);
-    const [conta,posts,traf]=await Promise.all([
+    const [conta,posts]=await Promise.all([
       buscarTudo('social_conta_dia','select=data,seguidores,reach,novos_seguidores&plataforma=eq.instagram&order=data.desc&limit=30'),
       buscarTudo('social_posts','select=formato,reach,interactions,engagement_rate,caption&plataforma=eq.instagram&order=publicado_em.desc&limit=60'),
-      buscarTudo('web_trafego_dia','select=canal,source_medium,sessions,receita,transacoes&data=gte.'+since),
     ]);
-    STATE.organico={conta,posts}; STATE.trafego=traf;
+    STATE.organico={conta,posts};  // STATE.trafego vem do fetch principal (período)
   }catch(e){}
 }
 
@@ -1015,8 +1031,10 @@ function buildAnalistaPayload(){
   const m=STATE.mer||[];
   const meta=m.reduce((s,r)=>s+(+r.meta_spend||0),0), goog=m.reduce((s,r)=>s+(+r.google_spend||0),0);
   const c=(STATE.canal||[]).reduce((a,r)=>{['receita','cogs','cm1','fee','frete','devolucao','cm2','unidades'].forEach(k=>a[k]=(a[k]||0)+(+r[k]||0));return a;},{receita:0,cogs:0,cm1:0,fee:0,frete:0,devolucao:0,cm2:0,unidades:0});
-  const rec=c.receita, cm2=c.cm2, cm3=cm2-meta;
-  const cascata={receita:R(rec),cmv:R(c.cogs),cm1:R(c.cm1),comissao:R(c.fee),frete:R(c.frete),devolucao:R(c.devolucao),cm2:R(cm2),gasto_meta:R(meta),cm3:R(cm3),
+  const com=comissoes(c.receita,c.devolucao);
+  const rec=c.receita, cm2=c.cm2, cm3=cm2-meta-com.agencia-com.gerente;
+  const cascata={receita:R(rec),cmv:R(c.cogs),cm1:R(c.cm1),comissao:R(c.fee),frete:R(c.frete),devolucao:R(c.devolucao),cm2:R(cm2),gasto_meta:R(meta),
+    comissao_agencia_2pct:R(com.agencia),comissao_gerente_065pct:R(com.gerente),cm3:R(cm3),
     cm2_pct:rec>0?+(cm2/rec*100).toFixed(1):null,cm3_pct:rec>0?+(cm3/rec*100).toFixed(1):null,unidades:c.unidades||0,ticket:c.unidades>0?R(rec/c.unidades):null};
   const mer={gasto_meta:R(meta),gasto_google:R(goog),receita_site:R(rec),mer_site:meta>0?+(rec/meta).toFixed(2):null,poas_canal:meta>0?+(cm2/meta).toFixed(2):null};
   // produtos-pai (idêntico a renderSku, sem filtros de UI)
@@ -1084,7 +1102,7 @@ function buildAnalistaPayload(){
     const byC={},bySM={}; tg.forEach(r=>{byC[r.canal]=(byC[r.canal]||0)+(+r.receita||0);bySM[r.source_medium]=(bySM[r.source_medium]||0)+(+r.receita||0);});
     const tot=Object.values(byC).reduce((s,v)=>s+v,0);
     const paid=Object.entries(byC).filter(([c])=>/^Paid|Cross-network/.test(c)).reduce((s,[,v])=>s+v,0);
-    trafego={janela:'28d (GA4 último-clique, NÃO é caixa real)',receita_total:R(tot),pct_pago:Math.round(tot?paid/tot*100:0),
+    trafego={janela:'período (GA4 último-clique, NÃO é caixa real)',receita_total:R(tot),pct_pago:Math.round(tot?paid/tot*100:0),
       por_canal:Object.entries(byC).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([c,v])=>({canal:c,receita:R(v)})),
       top_origens:Object.entries(bySM).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([s,v])=>({origem:s,receita:R(v)}))};
   }
