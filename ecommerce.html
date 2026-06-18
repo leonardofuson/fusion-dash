@@ -639,11 +639,13 @@ var SEL_PED='id,data_pedido,valor_bruto,canal_nome_raw,origem_conta,status,frete
 //   - Tiny:     vb = total_pedido (já com frete e desc aplicados)
 // Antes 25/05: incluía TikTok aqui também → contava frete 2x (~R$ 40k/mês inflado).
 function valorReceita(p){
-  // Receita = valor do PRODUTO (valor_bruto). O frete pago pelo CLIENTE não entra na
-  // receita (regra 18/06/2026). No ML o valor_bruto já é só item (frete fora) → bate com
-  // a "Vendas brutas" da plataforma; nos demais canais o frete cliente está embutido no
-  // valor_bruto (tratamento por-canal é decisão à parte). Frete = só custo (seller).
-  return parseFloat(p.valor_bruto||0);
+  // Receita = valor do PRODUTO. O frete pago pelo CLIENTE NUNCA é receita (regra 18/06/2026).
+  // ML: valor_bruto já é só item (frete fora) → usa direto. Demais canais (TikTok/Shopee/Site):
+  // o frete cliente está EMBUTIDO no valor_bruto → descontar. Frete = só custo (seller).
+  var vb=parseFloat(p.valor_bruto||0);
+  var ehML=(p.origem_conta==='fio_e_trama'||p.origem_conta==='confeccoes')
+            && (p.canal_nome_raw||'').indexOf('Mercado Livre')===0;
+  return ehML ? vb : vb-parseFloat(p.frete||0);
 }
 function buildFilt(de,ate,cols){
   return'select='+cols+'&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&origem_conta=in.(fio_e_trama,confeccoes,shopify,tiktok_shop)';
@@ -1085,11 +1087,9 @@ function calcPnL(pedidos,itens,adsVal){
     // Shopee embute o frete na comissão (Programa de Frete Grátis 2026): rebate + parte do
     // comprador cobrem 100% do envio → custo de frete do SELLER ≈ 0. NÃO cair no frete do
     // CLIENTE (p.frete ~12%, que NÃO é custo do seller) — inflava o custo Shopee ~8x.
-    var ehShopee=(p._nome||'').indexOf('Shopee')>=0;
-    // ML: frete_ml_seller=0 é ACORDO comercial (ML banca o envio) → custo R$0, NÃO cai no
-    // frete do cliente. Shopee: 0 (embutido na comissão). Demais sem seller: proxy = frete cliente.
-    var ehML=(p._nome||'').indexOf('ML')===0;
-    frete+=fSeller>0?fSeller:((ehShopee||ehML)?0:parseFloat(p.frete||0));
+    // Frete (custo) = SEMPRE o frete do SELLER (frete_ml_seller). O frete do cliente não entra
+    // (já saiu da receita). frete_ml_seller=0 = ML banca o envio (acordo) / embutido na comissão (Shopee).
+    frete+=fSeller;
     var fee=parseFloat(p.fee_canal||0);
     comissao+=fee>0?fee:v*custoPct(p._nome);
   });
@@ -1213,7 +1213,7 @@ function renderCanalTable(){
     var v=valorReceita(p);
     byCanal[n].r+=v;byCanal[n].ped++;
     byCanal[n].dev+=parseFloat(p.valor_devolucao||0)+parseFloat(p.valor_chargeback||0);
-    var fSel=parseFloat(p.frete_ml_seller||0);var ehSh=(n||'').indexOf('Shopee')>=0;var ehMl=(n||'').indexOf('ML')===0;byCanal[n].frete+=(fSel>0?fSel:((ehSh||ehMl)?0:parseFloat(p.frete||0)));
+    var fSel=parseFloat(p.frete_ml_seller||0);byCanal[n].frete+=fSel;  // frete = custo do SELLER sempre
     var f=parseFloat(p.fee_canal||0);byCanal[n].fee+=f>0?f:v*custoPct(n);
   });
   // CMV por canal dos itens carregados; fallback proporção real por canal (cmvPct).
