@@ -1194,11 +1194,33 @@ async function renderPremiacao(){
   }).join('');
 }
 
+// Escopo por produto: quando há SKU ou categoria selecionada, cada pedido passa a
+// valer a SOMA dos seus itens que casam (pedidos sem item da categoria saem). Faz
+// KPIs/hero/loja-cards refletirem o filtro de produto, não só as tabelas de item.
+// Limita-se à janela com itens disponíveis (M/M-1) — mesma limitação das tabelas.
+function escopoProduto(pedidos){
+  var itemMatch = STATE.skuSel ? function(it){return it._sku_pai===STATE.skuSel;}
+                : STATE.catSel ? function(it){return (it._cat||'OUTROS')===STATE.catSel;}
+                : null;
+  if(!itemMatch) return pedidos;
+  var porPed={};
+  STATE.itens.forEach(function(it){ if(itemMatch(it)) porPed[it.pedido_id]=(porPed[it.pedido_id]||0)+it._receita; });
+  var out=[];
+  pedidos.forEach(function(p){
+    var v=porPed[p.id];
+    if(v!=null){ var c=Object.assign({},p); c.valor_bruto=v; c._canc=false; out.push(c); }
+  });
+  return out;
+}
 function renderAll(){
   STATE.pedidos=filtrarPedidos(STATE.pedidosRaw);
   STATE.anteriores=filtrarPedidos(STATE.anterioresRaw);
-  STATE.pedidosEscopo=STATE.vendSel?STATE.pedidos.filter(function(p){return p._vend===STATE.vendSel;}):STATE.pedidos;
-  STATE.anterioresEscopo=STATE.vendSel?STATE.anteriores.filter(function(p){return p._vend===STATE.vendSel;}):STATE.anteriores;
+  var _baseCur=STATE.vendSel?STATE.pedidos.filter(function(p){return p._vend===STATE.vendSel;}):STATE.pedidos;
+  var _basePrev=STATE.vendSel?STATE.anteriores.filter(function(p){return p._vend===STATE.vendSel;}):STATE.anteriores;
+  var _prodFiltro=STATE.skuSel||STATE.catSel;
+  STATE.pedidosEscopo=_prodFiltro?escopoProduto(_baseCur):_baseCur;
+  // sem itens do período anterior → sem comparação confiável; deltas mostram "—"
+  STATE.anterioresEscopo=_prodFiltro?[]:_basePrev;
 
   // Critical render path — visualmente prioritário
   renderKPIs();
@@ -1274,6 +1296,8 @@ function renderKPIs(){
     var pedIds={},qtd=0;
     STATE.itens.forEach(function(it){
       if(STATE.vendSel && !pedVendMap[it.pedido_id]) return;
+      if(STATE.skuSel && it._sku_pai!==STATE.skuSel) return;
+      if(STATE.catSel && (it._cat||'OUTROS')!==STATE.catSel) return;
       if(STATE.lojasSel[it._loja] || Object.keys(STATE.lojasSel).every(function(k){return !STATE.lojasSel[k];})){
         qtd+=it._qtd;
         pedIds[it.pedido_id]=true;
@@ -2150,10 +2174,7 @@ function renderCatChips(){
 }
 function toggleCat(c){
   STATE.catSel=c;
-  renderCatChips();
-  renderSkuList();
-  renderVendedores();
-  renderHighlights();
+  renderAll();  // categoria reflete em TODOS os containers (KPIs, hero, lojas, pareto...)
   if(STATE.skuSel) renderSkuDetail();
 }
 
@@ -2282,10 +2303,8 @@ function renderSkuList(){
 function filtrarSku(){renderSkuList();}
 function selectSku(k){
   STATE.skuSel=STATE.skuSel===k?null:k;
-  renderSkuList();
+  renderAll();           // SKU reflete em todos os containers
   renderSkuDetail();
-  renderVendedores();
-  renderHighlights();
 }
 function selectVend(v){
   STATE.vendSel=STATE.vendSel===v?null:v;
