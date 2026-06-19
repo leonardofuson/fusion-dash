@@ -1087,9 +1087,10 @@ function calcPnL(pedidos,itens,adsVal){
     // Shopee embute o frete na comissão (Programa de Frete Grátis 2026): rebate + parte do
     // comprador cobrem 100% do envio → custo de frete do SELLER ≈ 0. NÃO cair no frete do
     // CLIENTE (p.frete ~12%, que NÃO é custo do seller) — inflava o custo Shopee ~8x.
-    // Frete (custo) = SEMPRE o frete do SELLER (frete_ml_seller). O frete do cliente não entra
-    // (já saiu da receita). frete_ml_seller=0 = ML banca o envio (acordo) / embutido na comissão (Shopee).
-    frete+=fSeller;
+    // Frete (custo) = frete do SELLER (frete_ml_seller). frete_ml_seller=0: ML banca o envio
+    // (acordo) e Shopee embute na comissão → custo real R$0. EXCEÇÃO Site (Shopify): a API não
+    // expõe o custo do carrier — só o frete que o CLIENTE pagou; usa esse como PROXY do custo.
+    frete+=fSeller>0?fSeller:(p.origem_conta==='shopify'?parseFloat(p.frete||0):0);
     var fee=parseFloat(p.fee_canal||0);
     comissao+=fee>0?fee:v*custoPct(p._nome);
   });
@@ -1213,7 +1214,7 @@ function renderCanalTable(){
     var v=valorReceita(p);
     byCanal[n].r+=v;byCanal[n].ped++;
     byCanal[n].dev+=parseFloat(p.valor_devolucao||0)+parseFloat(p.valor_chargeback||0);
-    var fSel=parseFloat(p.frete_ml_seller||0);byCanal[n].frete+=fSel;  // frete = custo do SELLER sempre
+    var fSel=parseFloat(p.frete_ml_seller||0);byCanal[n].frete+=fSel>0?fSel:(p.origem_conta==='shopify'?parseFloat(p.frete||0):0);  // Site: proxy = frete cliente
     var f=parseFloat(p.fee_canal||0);byCanal[n].fee+=f>0?f:v*custoPct(n);
   });
   // CMV por canal dos itens carregados; fallback proporção real por canal (cmvPct).
