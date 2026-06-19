@@ -219,7 +219,7 @@
       <div class="casc" id="cm-cascade"></div>
     </div>
     <div class="card" id="curva-card">
-      <h3>Ponto ótimo de gasto — Meta → site <span class="hint">curva de retornos decrescentes · 90 dias · referência, não meta dura</span></h3>
+      <h3>Ponto ótimo de gasto — Meta → site <span class="hint">curva de retornos decrescentes · histórico 24 meses · referência, não meta dura</span></h3>
       <div id="curva-body"><div class="muted" style="padding:6px 2px">Calculando…</div></div>
     </div>
     <div class="card" id="efic-card">
@@ -582,9 +582,18 @@ function fitLog(points){
 // receita atribuída correlaciona com gasto e captura os retornos decrescentes. Lente da plataforma.
 function computeCurva(adsMeta, cm2pct){
   const byd={};
-  (adsMeta||[]).forEach(r=>{const d=r.data;(byd[d]||(byd[d]={g:0,rev:0}));byd[d].g+=+r.gasto||0;byd[d].rev+=+r.receita_total||0;});
-  const pts=Object.values(byd).map(o=>({g:o.g,y:o.rev*cm2pct}));
-  const f=fitLog(pts); if(f) f.cm2pct=cm2pct; return f;
+  (adsMeta||[]).forEach(r=>{const d=r.data;(byd[d]||(byd[d]={g:0,rev:0,data:d}));byd[d].g+=+r.gasto||0;byd[d].rev+=+r.receita_total||0;});
+  const pts=Object.values(byd).map(o=>({g:o.g,y:o.rev*cm2pct,data:o.data}));
+  const f=fitLog(pts);
+  if(f){
+    f.cm2pct=cm2pct;
+    // O FIT usa os 24 meses (R² alto), mas a POSIÇÃO (gasto médio "hoje", margem marginal,
+    // status sub/saturado) usa os ÚLTIMOS 30 DIAS — senão a média de 24m (puxada por 2024)
+    // fingiria que estamos subinvestidos.
+    const rec=pts.filter(p=>p.data>=somaDias(hojeSP(),-30) && p.g>0);
+    if(rec.length){ f.gmean=rec.reduce((s,p)=>s+p.g,0)/rec.length; f.margAtual=f.b/(f.gmean+1); }
+  }
+  return f;
 }
 function curvaStatus(g){
   if(!g) return null;
@@ -610,14 +619,17 @@ function renderCurva(){
     `<div class="curva-frase">${st.frase} <span class="muted">Margem marginal = quanto de margem cada R$ extra de anúncio gera no gasto atual (>1 vale escalar). Estimado pela <b>lente da plataforma</b> (receita que o Meta atribui × margem do site) — como o Meta <b>sobre-atribui</b>, o ótimo real tende a ser <b>menor</b>; a forma rigorosa de confirmar é um <b>teste de verba</b> (subir/baixar e medir). ${g.extrapola?'<b>⚠ o ótimo extrapola além do gasto já testado ('+rs(g.gmax)+'/dia).</b> ':''}Ajuste R²=${n2(g.r2)} ${g.r2<0.2?'(baixo — referência grossa)':'(referência)'}; modelo log sobre ${g.n} dias.</span></div>`;
 }
 async function carregarCurva(){
-  const ate=hojeSP(), de=somaDias(ate,-90);
-  let cd=null; try{const o=JSON.parse(localStorage.getItem('mkt_curva_v3'));if(o&&Date.now()-o.t<3600000)cd=o.d;}catch(e){}
+  // janela LONGA (24 meses, backfill 18/06/2026): a curva de retornos decrescentes fica muito
+  // melhor com a faixa de gasto ampla (R$5k/mês em 2024 → ~R$77k/mês no pico) — mais leverage
+  // pra estimar a saturação. A eficiência (CTR/CPM) usa só os últimos 30d desta mesma série.
+  const ate=hojeSP(), de=somaDias(ate,-760);
+  let cd=null; try{const o=JSON.parse(localStorage.getItem('mkt_curva_v4'));if(o&&Date.now()-o.t<3600000)cd=o.d;}catch(e){}
   if(!cd){
     const [ads,canal]=await Promise.all([
       buscarTudo('ads_metrics','select=data,gasto,impressoes,cliques,receita_total&plataforma=eq.meta_ads&level=eq.campaign&data=gte.'+de+'&data=lte.'+ate+'&order=data.asc'),
       buscarTudo('mvw_marketing_canal_margem_dia','select=data,cm2,receita&canal_grupo=eq.site&data=gte.'+de+'&data=lte.'+ate+'&order=data.asc'),
     ]);
-    cd={ads,canal}; try{localStorage.setItem('mkt_curva_v3',JSON.stringify({t:Date.now(),d:cd}));}catch(e){}
+    cd={ads,canal}; try{localStorage.setItem('mkt_curva_v4',JSON.stringify({t:Date.now(),d:cd}));}catch(e){}
   }
   const tcm2=cd.canal.reduce((s,r)=>s+(+r.cm2||0),0), trec=cd.canal.reduce((s,r)=>s+(+r.receita||0),0);
   STATE.curva=computeCurva(cd.ads, trec>0?tcm2/trec:0.45);
@@ -1097,7 +1109,7 @@ function buildAnalistaPayload(){
     return {tipo:cc.l,evento:r.evento,objeto:(r.objeto_nome||r.objeto_id||'').slice(0,40),detalhe:det,quem:r.actor,quando:new Date(r.changed_at).toLocaleDateString('pt-BR',{timeZone:'America/Sao_Paulo'})};});
   // curva de retornos decrescentes (nível canal Meta→site, 90d) — ponto ótimo de gasto
   let curva=null; const gc=STATE.curva;
-  if(gc){const st=curvaStatus(gc);curva={modelo:'margem atribuída = a + b·ln(gasto+1), 90d',base:'lente da plataforma (receita atribuída × margem) — Meta sobre-atribui, ótimo real provavelmente menor; confirmar com teste de verba',
+  if(gc){const st=curvaStatus(gc);curva={modelo:'margem atribuída = a + b·ln(gasto+1), histórico 24m',base:'lente da plataforma (receita atribuída × margem) — Meta sobre-atribui, ótimo real provavelmente menor; confirmar com teste de verba',
     gasto_medio_dia:R(gc.gmean),gasto_max_testado_dia:R(gc.gmax),ponto_otimo_dia:R(gc.otimo),
     margem_marginal_por_real:+gc.margAtual.toFixed(2),status:st?st.k:null,r2:+gc.r2.toFixed(2),amostra_dias:gc.n,extrapola:gc.extrapola};}
   // eficiência de mídia Meta (fadiga de criativo) — últimos 30d vs 30d anteriores
