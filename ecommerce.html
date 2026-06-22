@@ -112,6 +112,15 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
 .canal-tbl th:first-child{text-align:left;}
 .canal-tbl th:hover{color:var(--blue);}
 .canal-tbl th.sorted::after{content:' ▼';color:var(--blue);}
+/* "i" tooltip nos headers da tabela de canais */
+.hdr-i{display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;border-radius:50%;border:1px solid var(--txt3);color:var(--txt3);font-size:9px;font-weight:700;font-style:normal;line-height:1;margin-left:4px;cursor:help;vertical-align:middle;opacity:.65;transition:opacity .15s,border-color .15s,color .15s,background .15s;user-select:none;text-transform:none;letter-spacing:0;}
+.hdr-i:hover{opacity:1;border-color:var(--blue);color:var(--blue);}
+.hdr-i.open{opacity:1;background:var(--blue);border-color:var(--blue);color:#fff;}
+#col-tip{position:fixed;z-index:2000;max-width:300px;background:var(--bg2);border:1px solid var(--bdr);border-radius:9px;padding:11px 13px;font-size:11.5px;line-height:1.55;color:var(--txt1);box-shadow:0 10px 30px rgba(0,0,0,.55);display:none;font-weight:400;text-align:left;white-space:normal;text-transform:none;letter-spacing:0;}
+#col-tip.show{display:block;}
+#col-tip b{color:#fff;font-weight:600;}
+#col-tip .tip-h{font-weight:700;color:#86efac;margin-bottom:5px;display:block;font-size:12px;}
+#col-tip .tip-row{margin-top:3px;}
 .canal-tbl th.sorted.asc::after{content:' ▲';}
 .canal-tbl tr.canal-row{background:var(--bg3);border-radius:10px;cursor:pointer;transition:all 0.15s;}
 .canal-tbl tr.canal-row:hover{background:rgba(99,102,241,0.1);}
@@ -390,15 +399,15 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
       <table class="canal-tbl" id="canal-table">
         <thead><tr>
           <th>Canal</th>
-          <th class="r">Pedidos</th>
-          <th class="r">Receita Bruta</th>
-          <th class="r">Comissão</th>
-          <th class="r">Devoluções</th>
-          <th class="r">Frete</th>
-          <th class="r">Receita Líquida</th>
-          <th class="r">Ads</th>
-          <th class="r">CMV</th>
-          <th class="r">Resultado</th>
+          <th class="r">Pedidos<span class="hdr-i" data-col="pedidos">i</span></th>
+          <th class="r">Receita Bruta<span class="hdr-i" data-col="receita_bruta">i</span></th>
+          <th class="r">Comissão<span class="hdr-i" data-col="comissao">i</span></th>
+          <th class="r">Devoluções<span class="hdr-i" data-col="devolucoes">i</span></th>
+          <th class="r">Frete<span class="hdr-i" data-col="frete">i</span></th>
+          <th class="r">Receita Líquida<span class="hdr-i" data-col="receita_liquida">i</span></th>
+          <th class="r">Ads<span class="hdr-i" data-col="ads">i</span></th>
+          <th class="r">CMV<span class="hdr-i" data-col="cmv">i</span></th>
+          <th class="r">Resultado<span class="hdr-i" data-col="resultado">i</span></th>
         </tr></thead>
         <tbody id="canal-tbody"></tbody>
       </table>
@@ -417,19 +426,8 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
         <b>3)</b> <b>devolução é medida pela data do pedido</b> (coorte) — meses recentes subestimam, pois ainda vão voltar devoluções. ·
         <b>4)</b> a <b>Receita Bruta é só o produto</b> — o frete pago pelo cliente <b>não</b> conta como receita em nenhum canal (no ML a API já manda só o item; nos demais o frete vem embutido e é descontado), então todos os canais ficam comparáveis entre si.
       </div>
-      <div>
-        <strong>Colunas</strong> <span style="opacity:.75">(na ordem da tabela · % exibido = sobre a Receita Bruta do canal)</span>
-        <div style="margin-top:7px;display:grid;gap:6px;">
-          <div><b>Pedidos</b> — nº de pedidos no período. Exclui <i>cancelados</i>; pedido <i>devolvido</i> conta como venda (e aparece em Devoluções).</div>
-          <div><b>Receita Bruta</b> — valor <b>faturado só dos produtos</b>, já <b>líquido de desconto</b> e <b>antes de devoluções</b>. O <b>frete pago pelo cliente NÃO é receita</b> (no ML a API já manda só o item; nos demais o frete vem embutido e é descontado) → todos os canais ficam comparáveis. ⚠️ <b>Não</b> é o <i>"Gross sales"</i> do Shopify/marketplace (que é pré-desconto, por isso aparece maior): desconto não é receita. Pra reconciliar, compare nossa <b>Receita Líquida</b> com o <i>"Net sales"</i> deles.</div>
-          <div><b>Comissão</b> — taxa real da API da plataforma; estimada só onde ainda não maturou.</div>
-          <div><b>Devoluções</b> — reembolso real (ML <i>claims</i> · Shopee <i>returns</i> · TikTok <i>statement</i> · Site <i>Shopify refunds</i>) + <i>chargeback</i> (só Site). Troca/vale-crédito do site <b>não</b> entra (não é perda de caixa).</div>
-          <div><b>Frete</b> — custo de frete do <b>seller</b> (o que pagamos pra enviar), via API. R$0 no <b>ML</b> = acordo comercial (ML banca o envio); na <b>Shopee</b> embutido na comissão; no <b>Site</b> usamos o frete do cliente como proxy (Shopify não expõe o custo do transportador).</div>
-          <div><b>Receita Líquida</b> — Receita Bruta − Comissão − Devoluções − Frete.</div>
-          <div><b>Ads</b> — mídia paga real (Mercado Ads + Shopee Ads + <b>Meta → Site Próprio</b>, via API). Google fica nas lojas físicas e TikTok ainda pendente.</div>
-          <div><b>CMV</b> — custo real do produto (item × custo) nos meses recentes; proporção real por canal nos meses antigos.</div>
-          <div><b>Resultado</b> — Receita Líquida − CMV (o resultado final do canal).</div>
-        </div>
+      <div style="opacity:.85">
+        Passe o mouse ou toque no <span class="hdr-i" style="cursor:default;opacity:1">i</span> ao lado de cada coluna pra ver o que ela mede e a <b>regra de cada marketplace</b>.
       </div>
     </div>
   </div>
@@ -2114,6 +2112,67 @@ function renderMensalPnL(M){
       +'<td class="r" style="font-weight:700;color:'+mc+'">'+fmtD(m.margem)+'%</td></tr>';
   }).join('');
 }
+
+// ── Tooltips "i" dos headers da tabela Performance por canal ──────────────────
+(function(){
+  var TIPS={
+    pedidos:{h:'Pedidos',b:'Nº de pedidos no período. Exclui <b>cancelados</b>; pedido <b>devolvido</b> conta como venda (e aparece em Devoluções).'},
+    receita_bruta:{h:'Receita Bruta',b:'Valor faturado <b>só dos produtos</b> — líquido de desconto, antes de devoluções. O <b>frete pago pelo cliente NÃO é receita</b>:'
+      +'<div class="tip-row">• <b>ML:</b> a API já manda só o item</div>'
+      +'<div class="tip-row">• <b>Shopee / TikTok / Site:</b> o frete vem embutido e é descontado</div>'
+      +'<div class="tip-row" style="margin-top:6px">⚠️ Não é o <i>"Gross sales"</i> do marketplace (pré-desconto, por isso maior). Pra reconciliar, compare nossa <b>Receita Líquida</b> com o <i>"Net sales"</i> deles.</div>'},
+    comissao:{h:'Comissão',b:'Taxa real cobrada pela plataforma, por pedido, via API:'
+      +'<div class="tip-row">• <b>ML:</b> sale_fee</div>'
+      +'<div class="tip-row">• <b>Shopee:</b> escrow (comissão + serviço + transação)</div>'
+      +'<div class="tip-row">• <b>TikTok:</b> statement</div>'
+      +'<div class="tip-row">• <b>Shein:</b> commission (~22%)</div>'
+      +'<div class="tip-row">• <b>Site:</b> Pagar.me</div>'
+      +'<div class="tip-row" style="margin-top:5px;opacity:.85">Estimada só onde ainda não maturou.</div>'},
+    devolucoes:{h:'Devoluções',b:'Reembolso real + chargeback, via API:'
+      +'<div class="tip-row">• <b>ML:</b> claims</div>'
+      +'<div class="tip-row">• <b>Shopee:</b> returns</div>'
+      +'<div class="tip-row">• <b>TikTok:</b> statement</div>'
+      +'<div class="tip-row">• <b>Site:</b> Shopify refunds + chargeback (Pagar.me)</div>'
+      +'<div class="tip-row" style="margin-top:5px">Troca / vale-crédito do site <b>não</b> entra (não é perda de caixa).</div>'},
+    frete:{h:'Frete',b:'Custo de frete do <b>seller</b> (o que pagamos pra enviar), via API:'
+      +'<div class="tip-row">• <b>ML:</b> R$0 = acordo comercial (ML banca o envio)</div>'
+      +'<div class="tip-row">• <b>Shopee:</b> embutido na comissão (~R$0)</div>'
+      +'<div class="tip-row">• <b>TikTok:</b> custo do seller no statement</div>'
+      +'<div class="tip-row">• <b>Site:</b> proxy do frete do cliente (Shopify não expõe o custo do transportador)</div>'},
+    receita_liquida:{h:'Receita Líquida',b:'<b>Receita Bruta − Comissão − Devoluções − Frete.</b> É o que sobra antes de Ads e CMV.'},
+    ads:{h:'Ads',b:'Mídia paga real, via API:'
+      +'<div class="tip-row">• <b>Mercado Ads</b> (ML)</div>'
+      +'<div class="tip-row">• <b>Shopee Ads</b></div>'
+      +'<div class="tip-row">• <b>Meta → Site Próprio</b></div>'
+      +'<div class="tip-row" style="margin-top:5px;opacity:.85">Google fica nas lojas físicas; TikTok Ads ainda pendente.</div>'},
+    cmv:{h:'CMV',b:'Custo da mercadoria vendida = <b>item × custo do produto</b> nos meses recentes. Meses antigos usam a <b>proporção real de CMV por canal</b>.'},
+    resultado:{h:'Resultado',b:'<b>Receita Líquida − CMV.</b> O resultado final do canal (antes de despesas fixas e rateios).'}
+  };
+  var current=null;
+  function tipEl(){var t=document.getElementById('col-tip');if(!t){t=document.createElement('div');t.id='col-tip';document.body.appendChild(t);}return t;}
+  function hide(){var t=document.getElementById('col-tip');if(t)t.classList.remove('show');if(current){current.classList.remove('open');current=null;}}
+  function show(el){
+    var d=TIPS[el.getAttribute('data-col')];if(!d)return;
+    var t=tipEl();t.innerHTML='<span class="tip-h">'+d.h+'</span>'+d.b;t.classList.add('show');
+    var r=el.getBoundingClientRect(),tw=t.offsetWidth,th=t.offsetHeight;
+    var left=Math.max(8,Math.min(r.left+r.width/2-tw/2,window.innerWidth-tw-8));
+    var top=r.bottom+6;if(top+th>window.innerHeight-8)top=r.top-th-6;
+    t.style.left=left+'px';t.style.top=Math.max(8,top)+'px';
+  }
+  function toggle(el){if(current===el){hide();return;}hide();el.classList.add('open');current=el;show(el);}
+  document.addEventListener('click',function(e){
+    var ic=e.target.closest?e.target.closest('.hdr-i[data-col]'):null;
+    if(ic){e.stopPropagation();toggle(ic);return;}
+    if(!e.target.closest||!e.target.closest('#col-tip'))hide();
+  });
+  if(window.matchMedia&&window.matchMedia('(hover:hover)').matches){
+    document.addEventListener('mouseover',function(e){var ic=e.target.closest?e.target.closest('.hdr-i[data-col]'):null;if(ic&&!current)show(ic);});
+    document.addEventListener('mouseout',function(e){var ic=e.target.closest?e.target.closest('.hdr-i[data-col]'):null;if(ic&&!current)hide();});
+  }
+  document.addEventListener('keydown',function(e){if(e.key==='Escape')hide();});
+  window.addEventListener('scroll',hide,true);
+  window.addEventListener('resize',hide);
+})();
 </script>
 </body>
 </html>
