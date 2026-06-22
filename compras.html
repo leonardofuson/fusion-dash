@@ -6335,13 +6335,30 @@ function coletarInsumosRows() {
 function onMetragemEditChange() {
   var inp = document.getElementById('f-edit-metragem'); if (!inp) return;
   var hint = document.getElementById('f-edit-metragem-hint'); if (!hint) return;
+  var op = STATE.editingOp || {};
   var orig = parseFloat(inp.dataset.original) || 0;
   var novo = parseFloat(inp.value) || 0;
-  var un = (STATE.editingOp && STATE.editingOp.unidade) || 'm';
+  var un = op.unidade || 'm';
+  var consumo = parseFloat(op.consumo_por_peca) || 0;
+  // Peças e metragem são ligadas pelo consumo/peça (peças = metragem ÷ consumo). Ao mudar os kg/m,
+  // recalcula as peças projetadas pra baterem com a nova metragem (e atualiza o campo na hora).
+  var pecaTxt = '';
+  if (consumo > 0 && novo > 0) {
+    var pecasNovas = Math.round(novo / consumo);
+    var pInp = document.getElementById('f-edit-pecas');
+    if (pInp) pInp.value = pecasNovas;
+    pecaTxt = ' · <span style="color:var(--indigo)">peças recalculadas: <strong>' + fmt(pecasNovas) + '</strong> (' + fmt(novo) + ' ÷ ' + consumo + '/pç)</span>';
+  } else if (consumo <= 0) {
+    pecaTxt = ' · <span style="color:var(--orange)">sem consumo/peça — peças não recalculadas</span>';
+  }
   var delta = orig - novo;
-  if (Math.abs(delta) < 0.001) { hint.textContent = ''; return; }
-  if (delta > 0) hint.innerHTML = '<span style="color:var(--green)">↓ Reduzindo ' + fmt(Math.round(delta*100)/100) + ' ' + un + ' → volta como saldo livre no costureiro.</span>';
-  else hint.innerHTML = '<span style="color:var(--orange)">↑ Aumentando ' + fmt(Math.round(-delta*100)/100) + ' ' + un + ' → compromete mais tecido (confirme que o costureiro tem).</span>';
+  var deltaTxt = '';
+  if (Math.abs(delta) >= 0.001) {
+    deltaTxt = (delta > 0)
+      ? '<span style="color:var(--green)">↓ Reduzindo ' + fmt(Math.round(delta*100)/100) + ' ' + un + ' → volta como saldo livre no costureiro.</span>'
+      : '<span style="color:var(--orange)">↑ Aumentando ' + fmt(Math.round(-delta*100)/100) + ' ' + un + ' → compromete mais tecido (confirme que o costureiro tem).</span>';
+  }
+  hint.innerHTML = deltaTxt + pecaTxt;
 }
 
 function buildEditOPForm(op) {
