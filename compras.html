@@ -2674,9 +2674,15 @@ async function excluirInsumo(insumoId) {
   } catch(e) { alert('Erro ao excluir: ' + e.message); }
 }
 
-function openDrawerEdit(opId) {
+async function openDrawerEdit(opId) {
   var op = STATE.ops.find(function(o) { return o.id === opId; });
   if (!op) return;
+  // Re-busca a OP fresca do banco (igual ao Registrar Entrega): editar sempre sobre o dado atual,
+  // sem depender de reload do dash. Atualiza o objeto em STATE.ops in-place.
+  try {
+    var fresh = await buscarTudo('ordens_producao', 'select=*&id=eq.' + opId);
+    if (fresh && fresh.length) Object.assign(op, fresh[0]);
+  } catch (e) { console.warn('Falha ao re-buscar OP fresca:', e); }
   STATE.drawerType = 'edit-op';
   STATE.editingOp = op;
 
