@@ -131,6 +131,14 @@
   .custrange input[type=date]{padding:5px 8px;font-size:12px;color-scheme:dark}
   .custrange .csep{color:var(--mut)}
   .custrange #cust-go{padding:5px 11px;font-size:12px}
+  .delta-badge{font-size:11px;font-weight:700;padding:1px 6px;border-radius:10px;margin-left:6px;white-space:nowrap}
+  .delta-badge.up{background:rgba(47,191,113,.16);color:var(--green)}
+  .delta-badge.down{background:rgba(239,83,80,.16);color:var(--red)}
+  .delta-badge.flat{background:rgba(154,163,178,.16);color:var(--mut)}
+  .kpi-spark{position:absolute;right:7px;bottom:7px;width:46%;height:26px;opacity:.5;pointer-events:none}
+  .gran-toggle{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .gran-toggle button{background:var(--panel2);border:none;color:var(--mut);padding:5px 13px;font-size:12px;cursor:pointer}
+  .gran-toggle button.on{background:var(--accent);color:#fff}
   .curva-stats{display:flex;flex-wrap:wrap;gap:22px;margin:6px 0 12px}
   .curva-stats .cs{display:flex;flex-direction:column;gap:2px}
   .curva-stats .cs .cl{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.4px}
@@ -226,9 +234,14 @@
       <h3>Eficiência de mídia — Meta <span class="hint">fadiga de criativo / pressão de leilão · últimos 30d vs 30d anteriores</span></h3>
       <div id="efic-body"><div class="muted" style="padding:6px 2px">Calculando…</div></div>
     </div>
+    <div style="display:flex;align-items:center;gap:10px;margin:2px 2px 10px">
+      <span class="muted" style="font-size:12px;font-weight:600">Tendência</span>
+      <span class="gran-toggle"><button id="gran-d" class="on" onclick="setGran('diario')">Diário</button><button id="gran-m" onclick="setGran('mensal')">Mensal</button></span>
+      <span class="muted" style="font-size:11px">— escolha um período longo (ex.: Este Ano ou datas custom) pra ver mais meses</span>
+    </div>
     <div class="grid2">
-      <div class="card"><h3>Gasto diário <span class="hint">Meta + Google</span></h3><canvas id="ch-spend"></canvas></div>
-      <div class="card"><h3>MER_site <span class="hint">receita Shopify ÷ gasto Meta · dias de gasto incompleto excluídos (Meta assenta ~48h)</span></h3><canvas id="ch-mer"></canvas></div>
+      <div class="card"><h3>Gasto <span class="hint">Meta + Google</span></h3><canvas id="ch-spend"></canvas></div>
+      <div class="card"><h3>MER_site <span class="hint">receita Shopify ÷ gasto Meta · no diário, dias de gasto incompleto são excluídos</span></h3><canvas id="ch-mer"></canvas></div>
     </div>
   </section>
 
@@ -364,7 +377,7 @@
 <script>
 let auth=null, SB='', ANON='';
 const CHARTS={};
-let STATE={de:'',ate:'',tab:'geral', mer:[], pnl:[], changes:[], skuTitles:{}, skuParent:{}, expanded:new Set(), sort:{k:'receita_canal',dir:-1}};
+let STATE={de:'',ate:'',tab:'geral', gran:'diario', mer:[], pnl:[], changes:[], skuTitles:{}, skuParent:{}, expanded:new Set(), sort:{k:'receita_canal',dir:-1}};
 
 // ---------- datas (America/Sao_Paulo) ----------
 function spNow(){return new Date(new Date().toLocaleString('en-US',{timeZone:'America/Sao_Paulo'}));}
@@ -374,18 +387,41 @@ function inicioMesSP(){const d=spNow();return fmtD(new Date(d.getFullYear(),d.ge
 function hojeSP(){return fmtD(spNow());}
 
 // ---------- cache (TTL 5min) ----------
-function cacheKey(){return 'marketing_v13_'+STATE.de+'_'+STATE.ate;}
+function cacheKey(){return 'marketing_v14_'+STATE.de+'_'+STATE.ate;}
 // comissões (custos novos): agência 2% sobre o BRUTO ATRIBUÍDO A ADS (share do GA4 × bruto real);
 // gerente 0,65% sobre o LÍQUIDO do site (bruto − devolução). Editáveis aqui.
 const AGENCY_RATE=0.02, MANAGER_RATE=0.0065;
-function paidShareSite(){
-  const t=STATE.trafego||[]; if(!t.length) return null;
+function paidShareFrom(t){
+  if(!t||!t.length) return null;
   let paid=0,tot=0; t.forEach(r=>{const v=+r.receita||0;tot+=v;if(/^Paid|Cross-network/.test(r.canal))paid+=v;});
   return tot>0?paid/tot:null;
 }
-function comissoes(rec,devolucao){
-  const ps=paidShareSite();
+function paidShareSite(){ return paidShareFrom(STATE.trafego); }
+function comissoesFrom(rec,devolucao,trafegoRows){
+  const ps=paidShareFrom(trafegoRows);
   return {agencia: ps!=null?AGENCY_RATE*rec*ps:0, gerente: MANAGER_RATE*(rec-(devolucao||0)), paidShare:ps};
+}
+function comissoes(rec,devolucao){ return comissoesFrom(rec,devolucao,STATE.trafego); }
+// agrega o set de KPIs do período a partir das linhas mer/canal/trafego (reusável p/ período anterior)
+function kpiSet(merRows,canalRows,trafegoRows){
+  const meta=(merRows||[]).reduce((s,r)=>s+(+r.meta_spend||0),0), goog=(merRows||[]).reduce((s,r)=>s+(+r.google_spend||0),0);
+  const c=alinhaReceitaSite((canalRows||[]).reduce((a,r)=>{['receita','cogs','cm1','fee','frete','devolucao','cm2','unidades'].forEach(k=>a[k]=(a[k]||0)+(+r[k]||0));return a;},{receita:0,cogs:0,cm1:0,fee:0,frete:0,devolucao:0,cm2:0,unidades:0}));
+  const com=comissoesFrom(c.receita,c.devolucao,trafegoRows);
+  const rec=c.receita, cm2=c.cm2, cm3=cm2-meta-com.agencia-com.gerente;
+  return {meta,goog,c,com,rec,cm2,cm3,un:c.unidades||0,ticket:c.unidades>0?rec/c.unidades:null,mer:meta>0?rec/meta:null,poas:meta>0?cm2/meta:null};
+}
+const pctDelta=(a,b)=>(b&&isFinite(b)&&b!==0)?(a-b)/b*100:null;
+function deltaBadge(d,neutral){
+  if(d==null||isNaN(d)) return '';
+  const cls=neutral?'flat':(d>=0.5?'up':(d<=-0.5?'down':'flat'));
+  return `<span class="delta-badge ${cls}" title="vs período anterior de mesma duração">${d>=0?'+':''}${d.toFixed(0)}%</span>`;
+}
+// série diária {data,gasto,goog,receita(net),cm2} juntando mer + canal — base de sparklines e do toggle mensal
+function dailySeries(merRows,canalRows){
+  const map={};
+  (merRows||[]).forEach(r=>{const d=r.data;(map[d]||(map[d]={data:d,gasto:0,goog:0,receita:0,cm2:0}));map[d].gasto+=+r.meta_spend||0;map[d].goog+=+r.google_spend||0;});
+  (canalRows||[]).forEach(r=>{const d=r.data;(map[d]||(map[d]={data:d,gasto:0,goog:0,receita:0,cm2:0}));map[d].receita+=(+r.receita||0)-(+r.frete||0);map[d].cm2+=+r.cm2||0;});
+  return Object.values(map).sort((a,b)=>a.data<b.data?-1:1);
 }
 // Alinha a Receita do site com o dash de ECOMMERCE (fonte canônica): Receita = PRODUTO
 // (valor_bruto − frete do cliente). O frete já era descontado no CM2, então só sai da linha
@@ -418,16 +454,22 @@ async function carregar(force){
   let data=force?null:cacheGet();
   if(!data){
     const ms=meses(STATE.de,STATE.ate);
+    // período ANTERIOR de mesma duração (pra Δ% nos KPIs): busca mer/canal/trafego cobrindo [priorDe..ate]
+    const dlen=ndays(STATE.de,STATE.ate), priorAte=somaDias(STATE.de,-1), priorDe=somaDias(STATE.de,-dlen);
     const [mer,pnl,changes,canal,trafego]=await Promise.all([
-      buscarTudo('mvw_marketing_mer_dia','select=*&data=gte.'+STATE.de+'&data=lte.'+STATE.ate+'&order=data.asc'),
+      buscarTudo('mvw_marketing_mer_dia','select=*&data=gte.'+priorDe+'&data=lte.'+STATE.ate+'&order=data.asc'),
       buscarTudo('mvw_marketing_sku_pnl','select=*&mes=in.('+ms.join(',')+')&order=mes.asc'),
       buscarTudo('ads_changes','select=plataforma,actor,evento,objeto_nome,objeto_id,valor_antes,valor_depois,changed_at&changed_at=gte.'+STATE.de+'&changed_at=lte.'+somaDias(STATE.ate,1)+'&order=changed_at.desc'),
-      buscarTudo('mvw_marketing_canal_margem_dia','select=*&canal_grupo=eq.site&data=gte.'+STATE.de+'&data=lte.'+STATE.ate+'&order=data.asc'),
-      buscarTudo('web_trafego_dia','select=canal,source_medium,sessions,receita,transacoes&data=gte.'+STATE.de+'&data=lte.'+STATE.ate),
+      buscarTudo('mvw_marketing_canal_margem_dia','select=*&canal_grupo=eq.site&data=gte.'+priorDe+'&data=lte.'+STATE.ate+'&order=data.asc'),
+      buscarTudo('web_trafego_dia','select=data,canal,source_medium,sessions,receita,transacoes&data=gte.'+priorDe+'&data=lte.'+STATE.ate),
     ]);
-    data={mer,pnl,changes,canal,trafego};cacheSet(data);
+    data={mer,pnl,changes,canal,trafego,priorDe,priorAte};cacheSet(data);
   }
-  STATE.mer=data.mer;STATE.pnl=data.pnl;STATE.changes=data.changes;STATE.canal=data.canal||[];STATE.trafego=data.trafego||[];
+  const inCur=d=>d>=STATE.de&&d<=STATE.ate, inPrev=d=>d>=data.priorDe&&d<=data.priorAte;
+  STATE.pnl=data.pnl;STATE.changes=data.changes;
+  STATE.mer=(data.mer||[]).filter(r=>inCur(r.data));   STATE.merPrev=(data.mer||[]).filter(r=>inPrev(r.data));
+  STATE.canal=(data.canal||[]).filter(r=>inCur(r.data)); STATE.canalPrev=(data.canal||[]).filter(r=>inPrev(r.data));
+  STATE.trafego=(data.trafego||[]).filter(r=>inCur(r.data)); STATE.trafegoPrev=(data.trafego||[]).filter(r=>inPrev(r.data));
   renderAll();
   document.getElementById('loader').style.display='none';
   carregarCurva();    // curva 90d (independe do período) — fire-and-forget
@@ -444,8 +486,10 @@ const pct=v=>(v==null||isNaN(v))?'—':(v*100).toFixed(0)+'%';
 const idle=window.requestIdleCallback||(f=>setTimeout(f,0));
 function kpiHTML(k){
   const tip=k.t?` <span class="info" data-tip="${(k.t||'').replace(/"/g,'&quot;')}">i</span>`:'';
-  return `<div class="kpi ${k.accent?'accent':''}"><div class="lbl">${k.l}${tip}</div>`+
-         `<div class="val ${k.cls||''}">${k.v}</div><div class="sub">${k.s||''}</div></div>`;
+  const dlt=k.d!=null?' '+deltaBadge(k.d,k.dn):'';
+  const spk=k.spark?`<canvas class="kpi-spark" id="${k.spark}"></canvas>`:'';
+  return `<div class="kpi ${k.accent?'accent':''}" style="position:relative;overflow:hidden"><div class="lbl">${k.l}${tip}</div>`+
+         `<div class="val ${k.cls||''}">${k.v}</div><div class="sub">${k.s||''}${dlt}</div>${spk}</div>`;
 }
 
 // ---------- agregação por SKU (a MV é mensal) ----------
@@ -497,40 +541,36 @@ function resetAnalista(){
 
 function renderGeral(){
   const m=STATE.mer;
-  const meta=m.reduce((s,r)=>s+(+r.meta_spend||0),0), goog=m.reduce((s,r)=>s+(+r.google_spend||0),0);
-  // P&L do canal SITE (todos os produtos, DIÁRIO) — mesma fonte dos KPIs e da cascata (period-exact)
-  const c=alinhaReceitaSite((STATE.canal||[]).reduce((a,r)=>{['receita','cogs','cm1','fee','frete','devolucao','cm2','unidades'].forEach(k=>a[k]=(a[k]||0)+(+r[k]||0));return a;},{receita:0,cogs:0,cm1:0,fee:0,frete:0,devolucao:0,cm2:0,unidades:0}));
-  const com=comissoes(c.receita, c.devolucao);
-  const rec=c.receita, cm2=c.cm2, cm3=cm2-meta-com.agencia-com.gerente;
-  const unSite=c.unidades||0, ticket=unSite>0?rec/unSite:null;
-  const merSite=meta>0?rec/meta:null, poas=meta>0?cm2/meta:null;
+  const K=kpiSet(STATE.mer,STATE.canal,STATE.trafego);          // período atual
+  const P=kpiSet(STATE.merPrev,STATE.canalPrev,STATE.trafegoPrev); // período anterior (p/ Δ%)
+  const temPrev=(STATE.merPrev&&STATE.merPrev.length)||(STATE.canalPrev&&STATE.canalPrev.length);
+  const meta=K.meta, goog=K.goog, c=K.c, com=K.com, rec=K.rec, cm2=K.cm2, cm3=K.cm3;
+  const unSite=K.un, ticket=K.ticket, merSite=K.mer, poas=K.poas;
   const pc=v=>rec>0?Math.round(v/rec*100):0;
-  // KPIs na ordem do fluxo de dinheiro: Investimento → Receita → Margem → Lucro → Eficiência
+  const dd=(a,b)=>temPrev?pctDelta(a,b):null;  // só mostra Δ se há período anterior
+  // sparks por dia (período atual)
+  const ds=dailySeries(STATE.mer,STATE.canal);
+  // KPIs como história linear: Investimento → Receita → Margem → Lucro → Eficiência, com Δ% vs anterior + sparkline
   document.getElementById('kpis-geral').innerHTML=[
-    {l:'Gasto Meta',v:rs(meta),s:goog>0?'+ Google '+rs(goog):'investimento',t:'Total investido em Meta Ads no período (custo de marketing do site). O Google entra como contexto da loja.'},
-    {l:'Receita Site',v:rs(rec),s:unSite.toLocaleString('pt-BR')+' peças · ticket '+(ticket?rs(ticket):'—'),t:'Faturamento do Site Próprio (Shopify) = PRODUTO (valor_bruto − frete do cliente), igual à Receita Bruta do dash de ecommerce. O frete não entra na receita (era pass-through) — já estava descontado no CM2. Base (100%) do demonstrativo abaixo.'},
-    {l:'CM2',v:rs(cm2),s:pc(cm2)+'% da receita',t:'Margem de contribuição do site = Receita − CMV − comissão − frete − devolução. O que sobra ANTES do anúncio.'},
-    {l:'CM3',v:rs(cm3),s:pc(cm3)+'% · lucro final',cls:cm3>=0?'pos':'neg',accent:true,t:'Lucro final do site DEPOIS de Anúncios + comissão da agência (2% do bruto atribuído a ads) + comissão do gerente (0,65% do líquido). Verde = sobrou dinheiro.'},
-    {l:'MER_site',v:n2(merSite),s:'equilíbrio ≈2',t:'Receita Site ÷ Gasto Meta. Eficiência blended do canal. Acima de ~2 = lucrativo.'},
-    {l:'POAS canal',v:n2(poas),s:'margem ÷ Meta',t:'CM2 do site ÷ Gasto Meta. Quanto de margem o site gera por R$ de anúncio.'},
+    {l:'Gasto Meta',v:rs(meta),s:goog>0?'+ Google '+rs(goog):'investimento',d:dd(meta,P.meta),dn:true,spark:'sk-gasto',t:'Total investido em Meta Ads no período (custo de marketing do site). O Google entra como contexto da loja. Δ = vs período anterior de mesma duração (cinza = só contexto, gasto subir não é bom nem ruim).'},
+    {l:'Receita Site',v:rs(rec),s:unSite.toLocaleString('pt-BR')+' peças · ticket '+(ticket?rs(ticket):'—'),d:dd(rec,P.rec),spark:'sk-rec',t:'Faturamento do Site Próprio (Shopify) = PRODUTO (valor_bruto − frete do cliente), igual à Receita Bruta do dash de ecommerce. Δ = vs período anterior.'},
+    {l:'CM2',v:rs(cm2),s:pc(cm2)+'% da receita',d:dd(cm2,P.cm2),spark:'sk-cm2',t:'Margem de contribuição do site = Receita − CMV − comissão − frete − devolução. O que sobra ANTES do anúncio.'},
+    {l:'CM3',v:rs(cm3),s:pc(cm3)+'% · lucro final',cls:cm3>=0?'pos':'neg',accent:true,d:dd(cm3,P.cm3),spark:'sk-cm3',t:'Lucro final do site DEPOIS de Anúncios + comissão da agência (2%) + comissão do gerente (0,65%). Verde = sobrou dinheiro. Δ = vs período anterior.'},
+    {l:'MER_site',v:n2(merSite),s:'equilíbrio ≈2',d:dd(merSite,P.mer),spark:'sk-mer',t:'Receita Site ÷ Gasto Meta. Eficiência blended do canal. Acima de ~2 = lucrativo. Δ = vs período anterior.'},
+    {l:'POAS canal',v:n2(poas),s:'margem ÷ Meta',d:dd(poas,P.poas),spark:'sk-poas',t:'CM2 do site ÷ Gasto Meta. Quanto de margem o site gera por R$ de anúncio. Δ = vs período anterior.'},
   ].map(kpiHTML).join('');
-  renderCascade(c, meta, com);
-  // dias com gasto INCOMPLETO (Meta assenta ~48-72h) distorcem o MER (receita÷gasto explode
-  // quando o gasto ainda não entrou). Detecta pela mediana e exclui do gráfico de MER.
-  const spd=m.map(r=>+r.meta_spend||0).filter(v=>v>0).slice().sort((a,b)=>a-b);
-  const medSpd=spd.length?spd[Math.floor(spd.length/2)]:0;
-  const incompleto=g=>medSpd>0&&g<0.35*medSpd;
-  // MER diário = receita PRODUTO do dia (valor_bruto − frete, = ecommerce) ÷ gasto do dia
-  const recProdDia={}; (STATE.canal||[]).forEach(r=>{recProdDia[r.data]=(recProdDia[r.data]||0)+((+r.receita||0)-(+r.frete||0));});
+  // desenha as sparklines (mini-tendência diária do período)
   idle(()=>{
-    drawLine('ch-spend',m.map(r=>r.data),[
-      {label:'Meta',data:m.map(r=>+r.meta_spend||0),color:'#7c5cff'},
-      {label:'Google',data:m.map(r=>+r.google_spend||0),color:'#22d3ee'},
-    ]);
-    drawLine('ch-mer',m.map(r=>r.data),[
-      {label:'MER_site',data:m.map(r=>{const g=+r.meta_spend||0,rp=recProdDia[r.data];return (incompleto(g)||g<=0||rp==null)?null:+(rp/g).toFixed(2);}),color:'#2fbf71'},
-    ],true);
+    const dts=ds.map(x=>x.data);
+    drawSpark('sk-gasto',dts,ds.map(x=>x.gasto),'#7c5cff');
+    drawSpark('sk-rec',dts,ds.map(x=>x.receita),'#22d3ee');
+    drawSpark('sk-cm2',dts,ds.map(x=>x.cm2),'#22d3ee');
+    drawSpark('sk-cm3',dts,ds.map(x=>x.cm2-x.gasto),'#2fbf71');
+    drawSpark('sk-mer',dts,ds.map(x=>x.gasto>0?x.receita/x.gasto:null),'#2fbf71');
+    drawSpark('sk-poas',dts,ds.map(x=>x.gasto>0?x.cm2/x.gasto:null),'#f5a623');
   });
+  renderCascade(c, meta, com);
+  idle(renderTrendCharts);
 }
 
 // Cascata/waterfall de margem do canal site: Receita → −CMV → CM1 → −custos → CM2 → −Meta → CM3
@@ -1196,10 +1236,43 @@ async function rodarAnalista(){
 }
 
 // ---------- charts ----------
+// gráficos de tendência (Gasto + MER), granularidade Diário ou Mensal (toggle)
+function renderTrendCharts(){
+  const ds=dailySeries(STATE.mer,STATE.canal);
+  if(!ds.length){return;}
+  if(STATE.gran==='mensal'){
+    const mm={}; ds.forEach(x=>{const k=x.data.slice(0,7);(mm[k]||(mm[k]={gasto:0,goog:0,receita:0}));mm[k].gasto+=x.gasto;mm[k].goog+=x.goog;mm[k].receita+=x.receita;});
+    const ks=Object.keys(mm).sort();
+    drawLine('ch-spend',ks,[
+      {label:'Meta',data:ks.map(k=>Math.round(mm[k].gasto)),color:'#7c5cff'},
+      {label:'Google',data:ks.map(k=>Math.round(mm[k].goog)),color:'#22d3ee'},
+    ]);
+    drawLine('ch-mer',ks,[
+      {label:'MER_site (mensal)',data:ks.map(k=>mm[k].gasto>0?+(mm[k].receita/mm[k].gasto).toFixed(2):null),color:'#2fbf71'},
+    ],true);
+  } else {
+    const spd=ds.map(x=>x.gasto).filter(v=>v>0).slice().sort((a,b)=>a-b);
+    const med=spd.length?spd[Math.floor(spd.length/2)]:0; const inc=g=>med>0&&g<0.35*med;
+    drawLine('ch-spend',ds.map(x=>x.data),[
+      {label:'Meta',data:ds.map(x=>Math.round(x.gasto)),color:'#7c5cff'},
+      {label:'Google',data:ds.map(x=>Math.round(x.goog)),color:'#22d3ee'},
+    ]);
+    drawLine('ch-mer',ds.map(x=>x.data),[
+      {label:'MER_site',data:ds.map(x=>(inc(x.gasto)||x.gasto<=0)?null:+(x.receita/x.gasto).toFixed(2)),color:'#2fbf71'},
+    ],true);
+  }
+}
+function setGran(g){STATE.gran=g;document.getElementById('gran-d').classList.toggle('on',g==='diario');document.getElementById('gran-m').classList.toggle('on',g==='mensal');renderTrendCharts();}
+function drawSpark(id,labels,data,color){
+  if(CHARTS[id])CHARTS[id].destroy();
+  const ctx=document.getElementById(id);if(!ctx)return;
+  CHARTS[id]=new Chart(ctx,{type:'line',data:{labels:labels,datasets:[{data:data,borderColor:color,backgroundColor:color+'22',fill:true,tension:.4,pointRadius:0,borderWidth:1.5,spanGaps:true}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{enabled:false}},scales:{x:{display:false},y:{display:false}},elements:{line:{borderJoinStyle:'round'}}}});
+}
 function drawLine(id,labels,series,single){
   if(CHARTS[id])CHARTS[id].destroy();
   const ctx=document.getElementById(id);if(!ctx)return;
-  CHARTS[id]=new Chart(ctx,{type:'line',data:{labels:labels.map(d=>d.slice(5)),
+  CHARTS[id]=new Chart(ctx,{type:'line',data:{labels:labels.map(d=>d.length===7?(d.slice(5)+'/'+d.slice(2,4)):d.slice(5)),
     datasets:series.map(s=>({label:s.label,data:s.data,borderColor:s.color,backgroundColor:s.color+'22',
       tension:.25,spanGaps:true,pointRadius:0,borderWidth:2,fill:!single}))},
     options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
