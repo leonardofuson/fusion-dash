@@ -415,18 +415,21 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
         <b>1)</b> aqui mostramos o <b>Resultado LÍQUIDO real</b> (Bruta − Comissão − Devolução − Frete − Ads − CMV), não só o faturamento bruto — por isso o resultado é bem menor que a "receita" que o marketplace exibe. ·
         <b>2)</b> cada plataforma <b>liquida em tempos diferentes</b> (escrow D+X, statement após entrega + hold ~15d): os <b>últimos dias ainda estão maturando</b> e sobem conforme os valores chegam. ·
         <b>3)</b> <b>devolução é medida pela data do pedido</b> (coorte) — meses recentes subestimam, pois ainda vão voltar devoluções. ·
-        <b>4)</b> ML/TikTok não incluem frete no bruto (a API manda só o valor dos itens); aqui o frete já é somado pra ficar comparável aos demais.
+        <b>4)</b> a <b>Receita Bruta é só o produto</b> — o frete pago pelo cliente <b>não</b> conta como receita em nenhum canal (no ML a API já manda só o item; nos demais o frete vem embutido e é descontado), então todos os canais ficam comparáveis entre si.
       </div>
       <div>
-        <strong>Colunas</strong> (% = sobre a Receita Bruta do canal):
-        <b>Receita Bruta</b> = valor <b>faturado</b> dos produtos — já <b>líquido de desconto</b> e <b>antes de devoluções</b> (exclui cancelados; devolvido conta como venda + entra na coluna Devoluções). ⚠️ <b>Não</b> é o <i>"Gross sales"</i> do Shopify/marketplace (que é pré-desconto, por isso aparece maior): desconto não é receita. Pra reconciliar, compare nossa <b>Receita Líquida</b> (Bruta − Devoluções −…) com o <i>"Net sales"</i> deles. ·
-        <b>Comissão</b> = taxa real da API; estimada só onde ainda não maturou. ·
-        <b>Devoluções</b> = reembolso real (ML <i>claims</i> · Shopee <i>returns</i> · TikTok <i>statement</i> · Site <i>Shopify refunds</i>) + <i>chargeback</i> (só Site). Troca/vale-crédito do site NÃO entra (não é perda de caixa). ·
-        <b>Frete</b> = custo do seller via API. ·
-        <b>Receita Líquida</b> = Bruta − Comissão − Devoluções − Frete. ·
-        <b>Ads</b> = mídia real (Mercado Ads + Shopee Ads + <b>Meta → Site Próprio</b>, via API); Google fica nas lojas físicas e TikTok ainda pendente. ·
-        <b>CMV</b> = custo real do produto (item × custo) nos meses recentes; proporção real por canal nos antigos. ·
-        <b>Resultado</b> = Líquida − CMV.
+        <strong>Colunas</strong> <span style="opacity:.75">(na ordem da tabela · % exibido = sobre a Receita Bruta do canal)</span>
+        <div style="margin-top:7px;display:grid;gap:6px;">
+          <div><b>Pedidos</b> — nº de pedidos no período. Exclui <i>cancelados</i>; pedido <i>devolvido</i> conta como venda (e aparece em Devoluções).</div>
+          <div><b>Receita Bruta</b> — valor <b>faturado só dos produtos</b>, já <b>líquido de desconto</b> e <b>antes de devoluções</b>. O <b>frete pago pelo cliente NÃO é receita</b> (no ML a API já manda só o item; nos demais o frete vem embutido e é descontado) → todos os canais ficam comparáveis. ⚠️ <b>Não</b> é o <i>"Gross sales"</i> do Shopify/marketplace (que é pré-desconto, por isso aparece maior): desconto não é receita. Pra reconciliar, compare nossa <b>Receita Líquida</b> com o <i>"Net sales"</i> deles.</div>
+          <div><b>Comissão</b> — taxa real da API da plataforma; estimada só onde ainda não maturou.</div>
+          <div><b>Devoluções</b> — reembolso real (ML <i>claims</i> · Shopee <i>returns</i> · TikTok <i>statement</i> · Site <i>Shopify refunds</i>) + <i>chargeback</i> (só Site). Troca/vale-crédito do site <b>não</b> entra (não é perda de caixa).</div>
+          <div><b>Frete</b> — custo de frete do <b>seller</b> (o que pagamos pra enviar), via API. R$0 no <b>ML</b> = acordo comercial (ML banca o envio); na <b>Shopee</b> embutido na comissão; no <b>Site</b> usamos o frete do cliente como proxy (Shopify não expõe o custo do transportador).</div>
+          <div><b>Receita Líquida</b> — Receita Bruta − Comissão − Devoluções − Frete.</div>
+          <div><b>Ads</b> — mídia paga real (Mercado Ads + Shopee Ads + <b>Meta → Site Próprio</b>, via API). Google fica nas lojas físicas e TikTok ainda pendente.</div>
+          <div><b>CMV</b> — custo real do produto (item × custo) nos meses recentes; proporção real por canal nos meses antigos.</div>
+          <div><b>Resultado</b> — Receita Líquida − CMV (o resultado final do canal).</div>
+        </div>
       </div>
     </div>
   </div>
