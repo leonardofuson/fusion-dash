@@ -1745,6 +1745,19 @@ function abrirSubgrupoOps(idsCsv) {
   document.getElementById('drawer-overlay').classList.add('open');
 }
 
+// Grade projetada em valor ABSOLUTO. grade_projetada às vezes é template de PROPORÇÃO em OPs antigas
+// (ex: {38:1,40:2,...} soma 13), não contagem real. Escala pra qtde_pecas quando a soma diverge.
+// Usado pra sugerir o pendente por tamanho na entrega — senão o teto travava a entrega da qtde real.
+function gradeProjAbsoluta(op) {
+  var gp = op.grade_projetada || {};
+  var soma = Object.keys(gp).reduce(function(s,k){ return s + (parseFloat(gp[k]) || 0); }, 0);
+  var qtde = parseFloat(op.qtde_pecas) || 0;
+  var abs = {};
+  var fator = (soma > 0 && qtde > 0 && Math.abs(soma - qtde) > 0.5) ? (qtde / soma) : 1;
+  Object.keys(gp).forEach(function(t){ abs[t] = Math.round((parseFloat(gp[t]) || 0) * fator); });
+  return abs;
+}
+
 // Drawer para registrar entrega parcial
 async function abrirRegistrarEntrega(opId) {
   var op = STATE.ops.find(function(o){return o.id===opId;});
@@ -1811,14 +1824,16 @@ async function abrirRegistrarEntrega(opId) {
     return a.localeCompare(b);
   });
 
+  // Teto do input = pendente TOTAL da OP (não o per-size do template) — a grade projetada pode ser
+  // proporção, então capar por tamanho travava a entrega real. A "sug" é a projeção escalada (guia).
+  var projAbs = gradeProjAbsoluta(op);
+  var pendTotalOP = Math.max(0, (parseFloat(op.qtde_pecas)||0) - (parseFloat(op.qtde_pecas_entregues)||0));
   var gradeInputs = tamanhos.map(function(t) {
-    var proj = gradeProj[t] || 0;
-    var ent = gradeEnt[t] || 0;
-    var pend = proj - ent;
+    var sug = Math.max(0, (projAbs[t] || 0) - (gradeEnt[t] || 0));
     return '<div class="grade-cell">' +
       '<label>' + t + '</label>' +
-      '<input type="number" min="0" max="' + pend + '" data-tamanho="' + t + '" class="grade-input-ent" value="0" oninput="atualizarEntregaTotal()">' +
-      '<div style="font-size:9px;color:var(--txt3);text-align:center;margin-top:2px">pend: '+pend+'</div>' +
+      '<input type="number" min="0" max="' + pendTotalOP + '" data-tamanho="' + t + '" class="grade-input-ent" value="0" oninput="atualizarEntregaTotal()">' +
+      '<div style="font-size:9px;color:var(--txt3);text-align:center;margin-top:2px">sug: '+sug+'</div>' +
     '</div>';
   }).join('');
 
@@ -1999,15 +2014,15 @@ function editarEntrega(entregaId, opId) {
 
   // Pendente "real" disponível pro tamanho = (projetado - já entregue total) + qtd_atual_dessa_entrega
   // (porque ao editar, a qtd dessa entrega volta pro pool e pode ser realocada)
+  var projAbsE = gradeProjAbsoluta(op);
+  var pendTotalOPe = Math.max(0, (parseFloat(op.qtde_pecas)||0) - (parseFloat(op.qtde_pecas_entregues)||0));
   var gradeInputs = tamanhos.map(function(t) {
-    var proj = gradeProj[t] || 0;
-    var jaTotal = gradeJa[t] || 0;
     var dessaEntrega = gradeAtual[t] || 0;
-    var pendDisp = (proj - jaTotal) + dessaEntrega;
+    var sugE = Math.max(0, (projAbsE[t] || 0) - (gradeJa[t] || 0)) + dessaEntrega;
     return '<div class="grade-cell">' +
       '<label>' + t + '</label>' +
-      '<input type="number" min="0" max="' + pendDisp + '" data-tamanho="' + t + '" class="grade-input-ent-edit" value="' + dessaEntrega + '" oninput="atualizarEntregaTotalEdit()">' +
-      '<div style="font-size:9px;color:var(--txt3);text-align:center;margin-top:2px">disp: '+pendDisp+'</div>' +
+      '<input type="number" min="0" max="' + (pendTotalOPe + dessaEntrega) + '" data-tamanho="' + t + '" class="grade-input-ent-edit" value="' + dessaEntrega + '" oninput="atualizarEntregaTotalEdit()">' +
+      '<div style="font-size:9px;color:var(--txt3);text-align:center;margin-top:2px">sug: '+sugE+'</div>' +
     '</div>';
   }).join('');
 
