@@ -33,7 +33,7 @@
     compras:    { titulo: 'Compras',     descricao: 'Ordens e fornecedores',     url: '/compras.html',    icone: '🧾' },
     financeiro: { titulo: 'Financeiro',  descricao: 'Contas a pagar, fluxo de caixa e DRE de resultado (multi-CNPJ)', url: 'https://fusion-financeiro.onrender.com', icone: '💰' },
     simulador:  { titulo: 'Simulador',   descricao: 'Margem por produto + curva ótima de ads', url: '/simulador.html', icone: '🎯' },
-    marketing:  { titulo: 'Marketing',   descricao: 'Mídia paga Meta + Google: lucro por SKU, MER, auditoria da agência', url: '/marketing.html', icone: '📣', restritoPara: ['leonardo@usefusion.com.br', 'allanjonnesj@gmail.com'] },
+    marketing:  { titulo: 'Marketing',   descricao: 'Mídia paga Meta + Google: lucro por SKU, MER, auditoria da agência', url: '/marketing.html', icone: '📣', restritoPara: ['leonardo@usefusion.com.br', 'allanjonnesj@gmail.com', 'tiago@usefusion.com.br', 'thiago.caleb@usefusion.com.br'] },
     social:     { titulo: 'Orgânico',    descricao: 'Instagram orgânico: crescimento, engajamento por formato, melhor horário', url: '/social.html', icone: '📲', restritoPara: ['leonardo@usefusion.com.br'] },
     trafego:    { titulo: 'Tráfego & Atribuição', descricao: 'GA4: tráfego e receita por canal (pago × orgânico), origens, link-in-bio', url: '/trafego.html', icone: '🌐', restritoPara: ['leonardo@usefusion.com.br'] },
   };
