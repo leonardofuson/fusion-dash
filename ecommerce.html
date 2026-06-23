@@ -544,14 +544,16 @@ var CMAP={
   'Mercado Livre Full Confec':{n:'ML Confecções',c:'#F97316'},'Mercado Livre Confeções':{n:'ML Confecções',c:'#F97316'},
   'Mercado Livre Confecções':{n:'ML Confecções',c:'#F97316'},'ML Full Confecções':{n:'ML Confecções',c:'#F97316'},
   'ML Confecções':{n:'ML Confecções',c:'#F97316'},'Mercado Livre (conta 3)':{n:'ML Confecções',c:'#F97316'},
-  'Shopee FIO':{n:'Shopee',c:'#EF4444'},'Shopee Fio':{n:'Shopee',c:'#EF4444'},
-  'Shopee Confecções':{n:'Shopee',c:'#EF4444'},'Shopee':{n:'Shopee',c:'#EF4444'},
+  'Shopee FIO':{n:'Shopee Fio',c:'#EF4444'},'Shopee Fio':{n:'Shopee Fio',c:'#EF4444'},
+  'Shopee Confecções':{n:'Shopee Confec',c:'#B91C1C'},'Shopee Confec':{n:'Shopee Confec',c:'#B91C1C'},'Shopee':{n:'Shopee Fio',c:'#EF4444'},
   'tiktok':{n:'TikTok Shop',c:'#EC4899'},'TikTok':{n:'TikTok Shop',c:'#EC4899'},'TikTok Shop':{n:'TikTok Shop',c:'#EC4899'},
   'Online Store':{n:'Site Próprio',c:'#3B82F6'},'web':{n:'Site Próprio',c:'#3B82F6'},'Site Próprio':{n:'Site Próprio',c:'#3B82F6'},
   'Shein Confecções':{n:'Shein',c:'#8B5CF6'},'Shein':{n:'Shein',c:'#8B5CF6'}
 };
 function getNome(raw,orig){
   var r=(raw||'').trim();
+  // 'Shopee' cru (legado Tiny, sem sufixo de conta) → desambigua por origem_conta
+  if(r.toLowerCase()==='shopee') return orig==='confeccoes'?'Shopee Confec':'Shopee Fio';
   if(r&&CMAP[r]) return CMAP[r].n;
   if(!r){if(orig==='shopify')return 'Site Próprio';if(orig==='confeccoes')return 'ML Confecções';if(orig==='fio_e_trama')return 'ML Fio';return 'Outros';}
   return r;
@@ -572,7 +574,7 @@ function shouldDedup(p){
 // ainda não maturou (fee_canal NULL) — e p/ histórico Shein-Tiny (fev-mai) sem fee real.
 // Valores = comissão REAL medida (fee_canal/valor_bruto, abr-jun): ML 8,6-10,3% · Shopee ~30%
 // · Shein 22,3% (18% + R$5/item, via API desde 11/06; era 16% chutado) · TikTok 19,5% · Site 7,3%.
-var CANAL_CUSTO={'ML Fio':0.1043,'ML Confecções':0.0890,'Shopee':0.2967,'Shein':0.2229,'TikTok Shop':0.1941,'Site Próprio':0.0727,'Outros':0.0};
+var CANAL_CUSTO={'ML Fio':0.1043,'ML Confecções':0.0890,'Shopee Fio':0.2967,'Shopee Confec':0.2967,'Shopee':0.2967,'Shein':0.2229,'TikTok Shop':0.1941,'Site Próprio':0.0727,'Outros':0.0};
 // CMV% REAL por canal (medido abr-jun 2026, item-level: custo_unit*qtd / receita_itens).
 // Usado como proporção pra pedidos SEM detalhe de item carregado (meses antigos / first-paint),
 // substituindo o antigo 45% chutado. Pra meses com item carregado (recente), usa CMV REAL.
