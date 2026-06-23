@@ -615,7 +615,7 @@ async function buscarTudo(tab,filtro){
   return todos;
 }
 
-var SEL_PED='id,data_pedido,valor_bruto,loja_nome,origem_conta,status,vendedor';
+var SEL_PED='id,data_pedido,valor_bruto,loja_nome,origem_conta,status,vendedor,crm_cliente_id';
 var SEL_HIST='id,id_tiny_origem,data_pedido,valor_bruto,loja_nome,origem_conta,status,vendedor';
 
 function buildFilt(de,ate,cols){
@@ -1968,6 +1968,16 @@ function renderLojaCards(){
     fatMesPorLoja[nm]=(fatMesPorLoja[nm]||0)+parseFloat(p2.valor_bruto||0);
   });
 
+  // Clientes cadastrados (vendas com cliente identificado no Linx — crm_cliente_id,
+  // exclui consumidor padrão). Por loja: nº de clientes distintos + % das vendas.
+  var crmPorLoja={};
+  pedidosUse.forEach(function(p){
+    if(p._canc) return;
+    if(!crmPorLoja[p._nome]) crmPorLoja[p._nome]={ident:0,total:0,cli:{}};
+    crmPorLoja[p._nome].total++;
+    if(p.crm_cliente_id){ crmPorLoja[p._nome].ident++; crmPorLoja[p._nome].cli[p.crm_cliente_id]=1; }
+  });
+
   var cardId=0;
   var html=nomes.map(function(n){
     var c=cur[n], p=prev[n]||{fat:0,ped:0};
@@ -2012,6 +2022,7 @@ function renderLojaCards(){
       '</div>'+
       '<div class="cc-bar-wrap"><div class="cc-bar-fill" style="width:'+pct.toFixed(1)+'%"></div></div>'+
       '<div class="cc-bar-lbl">'+Math.round(pct)+'% do fat total das lojas</div>'+
+      (function(){var crm=crmPorLoja[n]||{ident:0,total:0,cli:{}};var nc=Object.keys(crm.cli).length;var pi=crm.total>0?crm.ident/crm.total*100:0;var cor=pi>=20?'var(--green)':(pi>=5?'var(--amber)':'var(--txt3)');return '<div style="font-size:11px;font-weight:600;color:var(--txt2);margin:8px 0 2px;display:flex;align-items:center;gap:6px;" title="Vendas com cliente identificado no Linx (exclui consumidor padrão)">👤 <b style="color:var(--txt1);">'+fmtN(nc)+'</b> clientes cadastrados <span style="color:'+cor+';font-weight:700;">· '+pi.toFixed(0)+'% das vendas</span></div>';})()+
       '<div class="cc-stats">'+
         '<div class="cc-stat"><div class="cc-stat-lbl">Pedidos</div><div class="cc-stat-val">'+fmtN(c.ped)+'</div></div>'+
         '<div class="cc-stat"><div class="cc-stat-lbl">Ticket</div><div class="cc-stat-val">'+fmt(tm)+'</div></div>'+
