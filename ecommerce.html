@@ -572,10 +572,11 @@ function shouldDedup(p){
 //   Site Próprio: Pagar.me payables (fee+anticipation_fee+fraud_coverage)
 // CANAL_CUSTO mantido só como safety-net pra pedidos novos onde captura
 // ainda não maturou (fee_canal NULL) — e p/ histórico Shein-Tiny (fev-mai) sem fee real.
-// Valores = comissão REAL medida (fee_canal/valorReceita, abr-jun): ML 8,6-10,3% · Shopee ~20% NET
-// (a Shopee cobra ~30% bruto mas reembolsa cupom Shopee+Pix via seller_product_rebate → net real ~20%)
+// Valores = comissão REAL medida (fee_canal/valorReceita, abr-jun): ML 8,6-10,3% · Shopee ~24-27% NET
+// (a Shopee cobra ~30% bruto mas reembolsa cupom Shopee+Pix via seller_product_rebate → net real ~24%
+//  na base do que o comprador pagou). TikTok ~19% NET (platform_discount abatido do fee).
 // · Shein 22,3% (18% + R$5/item, via API desde 11/06; era 16% chutado) · TikTok 19,5% · Site 7,3%.
-var CANAL_CUSTO={'ML Fio':0.1043,'ML Confecções':0.0890,'Shopee Fio':0.20,'Shopee Confec':0.20,'Shopee':0.20,'Shein':0.2229,'TikTok Shop':0.1941,'Site Próprio':0.0727,'Outros':0.0};
+var CANAL_CUSTO={'ML Fio':0.1043,'ML Confecções':0.0890,'Shopee Fio':0.24,'Shopee Confec':0.27,'Shopee':0.24,'Shein':0.2229,'TikTok Shop':0.1941,'Site Próprio':0.0727,'Outros':0.0};
 // CMV% REAL por canal (medido abr-jun 2026, item-level: custo_unit*qtd / receita_itens).
 // Usado como proporção pra pedidos SEM detalhe de item carregado (meses antigos / first-paint),
 // substituindo o antigo 45% chutado. Pra meses com item carregado (recente), usa CMV REAL.
