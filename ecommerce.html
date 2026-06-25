@@ -620,19 +620,20 @@ var UF_CORES={'SP':'#6366f1','RJ':'#8b5cf6','MG':'#a855f7','PR':'#22c55e','RS':'
 function corUF(u){return UF_CORES[u]||'#6b7280';}
 
 // ── Fetch ──
-async function buscarTudo(tab,filtro){
+async function buscarTudo(tab,filtro,maxPagesOverride){
   // PERF (09/06): busca a página 0; se vier CHEIA (multi-página, ex: vw_pedidos_full),
   // pagina o resto em ondas PARALELAS (era serial — 13 páginas em fila = ~7s). Se a
   // página 0 já vier < tam (caso comum: 1 batch de itens), retorna em 1 request só.
-  var tam=1000,WAVE=6;
+  // maxPagesOverride: teto maior pra MVs agregadas leves em período longo (ex: sku_dia ~110k linhas/ano).
+  var tam=1000,WAVE=6,capPag=maxPagesOverride||MAX_PAGES;
   if(filtro.indexOf('order=')<0) filtro+='&order=id.asc';
   function pega(off){return fetch(SB_URL+'/rest/v1/'+tab+'?'+filtro+'&limit='+tam+'&offset='+off,{headers:AUTH_HEADERS}).then(function(r){if(!r.ok)throw new Error(tab+' HTTP '+r.status);return r.json();});}
   var p0=await pega(0);
   if(!Array.isArray(p0)||p0.length<tam) return p0||[];
   var todos=p0.slice(),pag=1;
-  while(pag<MAX_PAGES){
+  while(pag<capPag){
     var ps=[];
-    for(var w=0;w<WAVE && pag<MAX_PAGES;w++,pag++) ps.push(pega(pag*tam));
+    for(var w=0;w<WAVE && pag<capPag;w++,pag++) ps.push(pega(pag*tam));
     var lotes=await Promise.all(ps),fim=false;
     for(var i=0;i<lotes.length;i++){var lote=lotes[i];if(!Array.isArray(lote)||lote.length===0){fim=true;break;}todos=todos.concat(lote);if(lote.length<tam)fim=true;}
     if(fim)break;
@@ -884,11 +885,16 @@ async function carregar(){
   }
   try{
     var usarComp=document.getElementById('chk-compare').checked;var ant=periodoAnterior(DE,ATE);
+    // Período longo (>50 dias ≈ >50k pedidos = teto do fetch detalhado): renderiza pela MV
+    // agregada (KPIs/waterfall/canais/hero/geo/pgto/produtos) e PULA o fetch de pedidos detalhado,
+    // que truncava em 50k linhas e subcontava YTD/QTD/12m. Pega QTD(90d)/YTD/12m; MTD/30d/m-1 seguem normal.
+    var diasP=Math.round((new Date(ATE+'T00:00:00')-new Date(DE+'T00:00:00'))/86400000);
+    var bigPeriod=diasP>50;
     // Ads (custo de mídia, só ML hoje) em paralelo — pronto antes do renderAll detalhado.
     var pAds=fetchAds(DE,ATE).then(adsRowsToByCanal).catch(function(){return{};});
     var pAdsPrev=usarComp?fetchAds(ant.de,ant.ate).then(adsRowsToByCanal).catch(function(){return{};}):Promise.resolve({});
     var pDev=fetchDevItem(DE,ATE).then(devRowsToBySkuPai).catch(function(){return{};});
-    var pSkuMV=fetchSkuMV(DE,ATE).catch(function(){return[];});      // PERF: lista de produtos no paint imediato
+    var pSkuMV=fetchSkuMV(DE,ATE,bigPeriod).catch(function(){return[];});      // PERF: lista de produtos no paint imediato
     var pAdsItem=fetchAdsItem(DE,ATE).catch(function(){return[];});  // PERF: em paralelo (era serial após itens)
     // PERF (09/06): geo + pagamentos no paint imediato via MV — pinta assim que a MV
     // chega (antes do fetch detalhado). renderAll() depois sobrescreve com dado idêntico.
@@ -911,6 +917,27 @@ async function carregar(){
     }).catch(function(e){console.warn('MV falhou (vai cair em pedidos detalhados):',e);return null;});
     var pMVprev=usarComp?fetchAgregadoMV(ant.de,ant.ate).catch(function(){return null;}):Promise.resolve(null);
     var pSkuMVprev=usarComp?fetchSkuMV(ant.de,ant.ate).catch(function(){return[];}):Promise.resolve([]);  // prior p/ "o que mudou"
+    // ── PERÍODO LONGO: render 100% pela MV, sem fetch detalhado (que truncaria em 50k) ──
+    if(bigPeriod){
+      STATE.adsByCanal=await pAds;STATE.adsByCanalPrev=await pAdsPrev;STATE.mvRowsPrev=await pMVprev;STATE.devBySkuPai=await pDev;
+      var mvBig=await pMV;STATE.skuMVRows=await pSkuMV;
+      if(seq!==LOAD_SEQ)return;
+      STATE.pedidosRaw=[];STATE.pedidos=[];STATE.itens=[];STATE.itensFocus=[];STATE.adsBySkuPai={};STATE.adsBySkuPaiCanal={};
+      if(STATE.canais.length===0&&mvBig){var seen={};mvBig.forEach(function(r){var n=getNome(r.canal_nome_raw,r.origem_conta);if(!seen[n]){seen[n]=true;STATE.canaisSel[n]=true;}});STATE.canais=Object.keys(seen).sort();renderCanalChips();}
+      try{
+        var cB=calcPnLFromMV(mvBig,adsFiltrado(STATE.adsByCanal));
+        var pB=calcPnLFromMV(STATE.mvRowsPrev||[],adsFiltrado(STATE.adsByCanalPrev));
+        renderKPIsImediato(cB,pB);renderWaterfallImediato(cB,pB);renderCanalTableFromMV(mvBig);
+        montarSkuGroups();renderTopProdutos();renderPareto();renderEcommSkuList();renderHero();
+        // geo/pgto pintam sozinhos nos .then das suas MVs. DOW/alerts/PA dependem de pedido → off no longo.
+        var dw=document.getElementById('canal-dow-heat');if(dw)dw.innerHTML='<div style="padding:24px;text-align:center;color:var(--txt3);font-size:12px">Indisponível em período longo (precisa de detalhe por pedido).</div>';
+        var al=document.getElementById('alerts');if(al)al.innerHTML='<div style="padding:16px;text-align:center;color:var(--txt3);font-size:12px">Alertas operacionais usam detalhe por pedido — disponíveis em janelas ≤ 50 dias.</div>';
+      }catch(e){console.warn('big period render:',e);}
+      bannerLongo(true,diasP);
+      document.getElementById('upd').textContent='Atualizado '+new Date().toLocaleTimeString('pt-BR')+' · período longo ('+diasP+'d · visão agregada)';
+      return;
+    }
+    bannerLongo(false);
     // PERF (08/06): NÃO busca os pedidos detalhados do período anterior (fetch mais pesado, duplicado).
     // Os Δ% vêm da MV anterior (mvRowsPrev, ~centenas de linhas vs 10-115k). Corta o load ~pela metade.
     var fetches=[fetchPedidos(DE,ATE)];
@@ -1243,6 +1270,15 @@ function renderCanalTable(){
 
 // ── HERO STACKED AREA ──
 function setMetric(m){STATE.dailyMetric=m;document.getElementById('met-rev').classList.toggle('on',m==='rev');document.getElementById('met-un').classList.toggle('on',m==='un');renderHero();}
+// Banner de "período longo" — avisa que a visão é agregada (sem detalhe por pedido).
+function bannerLongo(show,dias){
+  var el=document.getElementById('banner-longo');
+  if(show){
+    if(!el){el=document.createElement('div');el.id='banner-longo';el.style.cssText='margin:0 0 12px;padding:9px 13px;border-radius:8px;background:rgba(99,102,241,.10);border:1px solid rgba(99,102,241,.35);color:#c7d2fe;font-size:12px;line-height:1.5;';var g=document.getElementById('kpis');if(g&&g.parentNode)g.parentNode.insertBefore(el,g);}
+    el.innerHTML='📊 <b>Período longo ('+dias+' dias)</b> — visão <b>agregada</b> (KPIs, canais, geografia, pagamentos e produtos via dados consolidados). Detalhe por pedido (PA, unidades, heatmap dia-da-semana, alertas) fica desativado acima de 50 dias pra não truncar a carga.';
+    el.style.display='block';
+  }else if(el){el.style.display='none';}
+}
 function renderHero(){
   var isUn=STATE.dailyMetric==='un';
   var valf=function(p){return isUn?(parseFloat(p.quantidade)||0):valorReceita(p);};
@@ -1255,8 +1291,11 @@ function renderHero(){
     // Unidades vêm dos ITENS carregados (vw_pedidos_full não expõe quantidade).
     // Só disponível no período com itens (~130d); fora disso o gráfico fica vazio.
     (STATE.itensFocus||[]).forEach(function(it){var st=it._canc||'';if(st==='cancelado'||st==='devolvido')return;var d=(it._data||'').slice(0,10);var n=it._canal;if(!d||!n||!selOk(n))return;if(!diario[d])diario[d]={};diario[d][n]=(diario[d][n]||0)+(it._qtd||0);canais[n]=getCor(n);});
-  }else{
+  }else if(STATE.pedidos&&STATE.pedidos.length){
     STATE.pedidos.forEach(function(p){if(p._canc)return;var d=(p.data_pedido||'').slice(0,10);if(!d)return;if(!diario[d])diario[d]={};diario[d][p._nome]=(diario[d][p._nome]||0)+valf(p);canais[p._nome]=p._cor;});
+  }else{
+    // Período longo (sem pedidos detalhados): série diária da MV canal_dia (receita_bruta por dia/canal).
+    (STATE.mvRows||[]).forEach(function(r){var d=(r.data_pedido||'').slice(0,10);if(!d)return;var n=getNome(r.canal_nome_raw,r.origem_conta);if(!selOk(n))return;if(STATE.focusCanal&&n!==STATE.focusCanal)return;if(!diario[d])diario[d]={};diario[d][n]=(diario[d][n]||0)+parseFloat(r.receita_bruta||0);canais[n]=getCor(n);});
   }
   var dias=Object.keys(diario).sort();
   var canaisL=Object.keys(canais).sort(function(a,b){var sa=0,sb=0;dias.forEach(function(d){sa+=diario[d][a]||0;sb+=diario[d][b]||0;});return sb-sa;});
@@ -1399,8 +1438,9 @@ function pintarDowHeat(matrix){
 // PERF (09/06): lista de produtos + Unidades vêm da MV mvw_ecommerce_sku_dia (centenas de
 // linhas) no paint imediato — antes esperavam o fetch de TODOS os itens (13k×, ~6s). Os itens
 // continuam carregando em background pra enriquecer o drawer (variantes/fee/dev/frete) e o CMV real.
-async function fetchSkuMV(de,ate){
-  return buscarTudo('mvw_ecommerce_sku_dia','select=sku_pai,nome,cat,canal_nome_raw,origem_conta,receita,qtd,cmv&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc');
+async function fetchSkuMV(de,ate,big){
+  // big period (YTD/12m): sku_dia pode passar de 50k linhas → teto maior (250k) pra não truncar.
+  return buscarTudo('mvw_ecommerce_sku_dia','select=sku_pai,nome,cat,canal_nome_raw,origem_conta,receita,qtd,cmv&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc', big?250:undefined);
 }
 // PERF (09/06): geo (UF/cidade) e pagamentos (método/parcelas) vêm de MV no paint imediato —
 // antes ficavam vazios até o fetch de 10-115k pedidos chegar. Validado A/B (0 divergências).
