@@ -123,6 +123,11 @@ Helpers padronizados: `cacheKey()`, `cacheGet()`, `cacheSet()` no início do `<s
 - **lojas.html** `renderAll()`: critical = renderKPIs + renderHighlights + renderCatChips + renderSkuList + renderVendedores; deferred = renderHero + renderLojaCards + renderPareto.
 - **ecommerce.html** `renderAll()`: critical = renderWaterfall + renderKPIs + renderCanalTable + renderTopProdutos; deferred = renderHero + renderGeo + renderPayments + renderDowHeat + renderPareto + renderAds + renderAlerts.
 
+### ⚠️ Teto de 50k linhas no `buscarTudo` → período longo (YTD/QTD/12m) trunca (25/06/2026)
+`buscarTudo` (ecommerce.html) pagina até `MAX_PAGES=50 × 1000 = 50.000 linhas` e **para sem avisar**. O fetch detalhado de `vw_pedidos_full` para YTD (~167k pedidos) carregava só os primeiros 50k → **Receita Bruta R$4,65M em vez de R$17M (27%)**. QTD/12m idem (bug pré-existente, latente até o YTD passar de 50k pedidos em jun/26). Sintoma: chip de período "não funciona" / número muito baixo, **sem erro no console**.
+- **Fix**: `carregar()` detecta `bigPeriod = diasP>50` (≈ >50k pedidos) e renderiza **100% pela MV agregada** (KPIs/waterfall/canais/hero/geo/pgto/produtos), **pulando o fetch detalhado**. `mvw_ecommerce_canal_dia` estendida **120→365d** (`sql/2026-06-25_mvw_ecommerce_canal_365d.sql`); as outras MVs (sku/geo/pgto) já cobriam todo o histórico. `renderHero` ganhou fallback pela canal_dia MV; `fetchSkuMV(de,ate,big)` usa teto 250k em período longo (sku_dia ~110k/ano). DOW/alertas/PA/unidades ficam off no longo (precisam de detalhe por pedido) + banner "visão agregada". `buscarTudo(tab,filtro,maxPagesOverride)` aceita teto custom.
+- Régua: presets ≤50d (Hoje/7d/30d/MTD/Último Mês) seguem o caminho detalhado normal; QTD/YTD/12m caem no agregado.
+
 ### ⚠️ Armadilha do PostgREST: fetch de MV precisa `order` explícito
 
 `buscarTudo()` injeta `&order=id.asc` por default se nenhuma order foi passada. **Materialized views não têm coluna `id`** → PostgREST devolve 400 silencioso e o KPI imediato nunca pinta. Sempre passar order explícito ao fetchar MV:
