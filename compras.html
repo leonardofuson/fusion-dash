@@ -5478,6 +5478,13 @@ function costureiroIdPorNome(nome) {
   return c ? c.id : null;
 }
 
+// Override de grade por SKU específico — vence a grade da categoria.
+// Usado quando um produto foge da grade padrão da categoria (ex.: Camisa Indiano
+// usa grade numérica 1–7, não P–G1). Chave = sku_pai (uppercase).
+var GRADE_POR_SKU = {
+  'CMINDIANO': ['1','2','3','4','5','6','7']  // Camisa Ml Indiano — grade infantil numérica (26/06/2026)
+};
+
 // Grade oficial por categoria (definida pelo Leo em 04/05/2026 — ordem fixa, ignora variantes cadastradas).
 // Pra Calça/Bermuda: 38–52. Pra Camisa: P–G1 (letras na ordem). Pra Terno: 44–64.
 // Aplica em todos os forms: Nova OP, Editar OP, Registrar Entrega, Editar Entrega.
@@ -5495,6 +5502,9 @@ function gradeOficialDaCategoria(cat) {
 
 function tamanhosDoSKU(skuPai) {
   if (!skuPai) return [];
+  // Override por SKU específico vence a grade da categoria (ex.: CMINDIANO → 1–7)
+  var override = GRADE_POR_SKU[String(skuPai).trim().toUpperCase()];
+  if (override) return override;
   // Prefere a grade oficial da categoria — não depende de variantes cadastradas
   var oficial = gradeOficialDaCategoria(categoriaProduto(skuPai));
   if (oficial) return oficial;
