@@ -488,6 +488,20 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
     <div class="card"><div class="card-title">P&amp;L mensal — comparativo (últimos meses)</div><div style="overflow-x:auto;"><table class="canal-tbl" id="mensal-pnl"><thead></thead><tbody></tbody></table></div></div>
     <div class="card"><div class="card-title">Mix de canais ao longo dos meses (% da receita)</div><div class="chart-hero"><canvas id="chart-mensal-mix"></canvas></div></div>
 
+    <!-- EVOLUÇÃO POR PRODUTO — chips dos principais produtos + Receita/Unidades -->
+    <div class="card">
+      <div class="card-title">
+        <span>Evolução por produto</span>
+        <span style="display:inline-flex;gap:6px;margin-left:auto;">
+          <button class="chip-sm on" id="mprod-rev" onclick="setMensalProdMetric('rev')">Receita</button>
+          <button class="chip-sm" id="mprod-un" onclick="setMensalProdMetric('un')">Unidades</button>
+        </span>
+      </div>
+      <div style="font-size:11px;color:var(--txt3);margin:-4px 0 8px;">Clique nos chips pra ligar/desligar produtos (top 15 por receita na janela).</div>
+      <div id="mensal-prod-chips" style="margin-bottom:12px;display:flex;flex-wrap:wrap;gap:6px;"></div>
+      <div class="chart-hero"><canvas id="chart-mensal-prod"></canvas></div>
+    </div>
+
     <div style="font-size:11px;color:var(--txt3);margin:4px 2px 10px;">Todas as análises abaixo (geografia, pagamentos, pareto, dia da semana) refletem a <b>janela selecionada acima</b>.</div>
 
     <!-- GEOGRAFIA -->
@@ -809,7 +823,7 @@ async function fetchProdutos(){
 
 // ── State ──
 var DE=null,ATE=null;
-var STATE={pedidos:[],pedidosFull:[],itens:[],itensFocus:[],canais:[],canaisSel:{},stackMode:'abs',focusCanal:null,skuGroups:[],skuSel:null,skuSort:{key:'receita',dir:'desc'},adsByCanal:{},adsByCanalPrev:{},adsBySkuPai:{},adsBySkuPaiCanal:{},devBySkuPai:{},skuMVRows:[],geoMVRows:[],pgtoMVRows:[],dailyMetric:'rev',mensalMeses:12,mensalRows:null,mensalDe:null,mensalAte:null,mensalYTD:false,mensalSkuRows:[]};
+var STATE={pedidos:[],pedidosFull:[],itens:[],itensFocus:[],canais:[],canaisSel:{},stackMode:'abs',focusCanal:null,skuGroups:[],skuSel:null,skuSort:{key:'receita',dir:'desc'},adsByCanal:{},adsByCanalPrev:{},adsBySkuPai:{},adsBySkuPaiCanal:{},devBySkuPai:{},skuMVRows:[],geoMVRows:[],pgtoMVRows:[],dailyMetric:'rev',mensalMeses:12,mensalRows:null,mensalDe:null,mensalAte:null,mensalYTD:false,mensalSkuRows:[],mensalProdSel:{},mensalProdMetric:'rev',mensalYms:[]};
 
 // ── TABS (Diário · Mensal) ──
 function setTab(t){
@@ -1453,7 +1467,8 @@ async function fetchPgtoMV(de,ate){
 // Como fetchSkuMV, mas inclui data_pedido — usado pela aba Mensal pra alimentar Pareto
 // (via agruparSkusMV) E o heatmap dia-da-semana (renderDowHeatMV) com uma só leitura.
 async function fetchSkuMVData(de,ate){
-  return buscarTudo('mvw_ecommerce_sku_dia','select=sku_pai,nome,cat,canal_nome_raw,origem_conta,receita,qtd,cmv,data_pedido&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc');
+  // aba Mensal = janela longa (6-24m); sku_dia ~110k linhas/ano → teto 250k pra não truncar.
+  return buscarTudo('mvw_ecommerce_sku_dia','select=sku_pai,nome,cat,canal_nome_raw,origem_conta,receita,qtd,cmv,data_pedido&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc', 250);
 }
 function agruparSkusMV(rows){
   var map={};
@@ -2059,7 +2074,7 @@ async function carregarMensal(){
 async function carregarMensalDetalhe(de,ate){
   try{var g=await fetchGeoMV(de,ate);STATE.geoMVRows=g;renderGeoMV(g);}catch(e){console.warn('mensal geo',e);}
   try{var p=await fetchPgtoMV(de,ate);STATE.pgtoMVRows=p;renderPaymentsMV(p);}catch(e){console.warn('mensal pgto',e);}
-  try{var s=await fetchSkuMVData(de,ate);STATE.mensalSkuRows=s;agruparSkusMV(s);renderPareto();renderDowHeatMV(s);}catch(e){console.warn('mensal sku',e);}
+  try{var s=await fetchSkuMVData(de,ate);STATE.mensalSkuRows=s;agruparSkusMV(s);renderPareto();renderDowHeatMV(s);renderMensalProdEvol();}catch(e){console.warn('mensal sku',e);}
 }
 // Agrega a MV canal_dia por mês. Receita/Comissão/Devol/Frete = REAIS da MV;
 // CMV = estimativa pela proporção real por canal (cmvPct) — meses não têm item carregado.
@@ -2114,10 +2129,11 @@ function renderMensal(){
   k+='<div class="kpi" style="--kpi-accent:'+mmc+'"><div class="kpi-lbl">Margem líquida %</div><div class="kpi-val" style="color:'+mmc+'">'+fmtD(cur.margem)+'%</div>'+dlt(cur.margem,prev.margem)+'</div>';
   document.getElementById('mensal-kpis').innerHTML=k;
   renderMensalRev(M);renderMensalPnL(M);renderMensalMix(M);
+  STATE.mensalYms=M.map(function(m){return m.ym;});renderMensalProdEvol();
   // Charts criados logo após a aba ficar visível podem nascer com width estreito
   // (layout ainda não estabilizado) → dados colados à esquerda. Resize no próximo
   // frame força o Chart.js a recalcular o chartArea com a largura final.
-  var fixar=function(){['mensalRev','mensalMix'].forEach(function(k){var c=CHARTS[k];if(c&&c.resize){try{c.resize();}catch(e){}}});};
+  var fixar=function(){['mensalRev','mensalMix','mensalProd'].forEach(function(k){var c=CHARTS[k];if(c&&c.resize){try{c.resize();}catch(e){}}});};
   requestAnimationFrame(fixar);setTimeout(fixar,150);
 }
 function optsMensal(dual,stk){
@@ -2152,6 +2168,43 @@ function renderMensalMix(M){
   var canais={};M.forEach(function(m){Object.keys(m.porCanal).forEach(function(c){canais[c]=getCor(c);});});
   var ds=Object.keys(canais).map(function(c){return {label:c,data:M.map(function(m){return +((m.porCanal[c]||0)/(m.receita||1)*100).toFixed(1);}),backgroundColor:canais[c]};});
   CHARTS.mensalMix=new Chart(ctx,{type:'bar',data:{labels:M.map(function(m){return ymLabel(m.ym);}),datasets:ds},options:optsMensal(false,true)});
+}
+// ── EVOLUÇÃO POR PRODUTO (aba Mensal) ──────────────────────────────────────────
+var PROD_CORES=['#6366f1','#22c55e','#eab308','#ef4444','#06b6d4','#a78bfa','#f97316','#ec4899','#14b8a6','#84cc16','#f43f5e','#0ea5e9','#d946ef','#65a30d','#fb923c'];
+function setMensalProdMetric(m){STATE.mensalProdMetric=m;var r=document.getElementById('mprod-rev'),u=document.getElementById('mprod-un');if(r)r.classList.toggle('on',m==='rev');if(u)u.classList.toggle('on',m==='un');renderMensalProdEvol();}
+function toggleMensalProd(sku){STATE.mensalProdSel[sku]=!STATE.mensalProdSel[sku];renderMensalProdEvol();}
+function renderMensalProdEvol(){
+  var yms=STATE.mensalYms||[];var rows=STATE.mensalSkuRows||[];
+  var chips=document.getElementById('mensal-prod-chips');var ctx=document.getElementById('chart-mensal-prod');
+  if(!chips||!ctx)return;
+  var eh=function(s){return String(s||'').replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});};
+  // agrega por sku_pai × mês (todos os canais)
+  var prod={};
+  rows.forEach(function(r){var sk=r.sku_pai;if(!sk)return;var ym=(r.data_pedido||'').slice(0,7);
+    if(!prod[sk])prod[sk]={sku:sk,nome:r.nome||sk,tot:0,by:{}};
+    var p=prod[sk];if(!p.by[ym])p.by[ym]={rev:0,un:0};
+    p.by[ym].rev+=parseFloat(r.receita||0);p.by[ym].un+=parseFloat(r.qtd||0);p.tot+=parseFloat(r.receita||0);
+  });
+  var top=Object.values(prod).sort(function(a,b){return b.tot-a.tot;}).slice(0,15);
+  // 1ª vez: seleciona os 5 maiores por default
+  var nSel=Object.keys(STATE.mensalProdSel).filter(function(k){return STATE.mensalProdSel[k];}).length;
+  if(top.length&&nSel===0)top.slice(0,5).forEach(function(p){STATE.mensalProdSel[p.sku]=true;});
+  // chips (cor = posição no ranking, igual à linha)
+  chips.innerHTML=top.map(function(p,i){var on=STATE.mensalProdSel[p.sku];var cor=PROD_CORES[i%PROD_CORES.length];
+    return '<button class="chip-sm'+(on?' on':'')+'" onclick="toggleMensalProd(\''+p.sku.replace(/'/g,"\\'")+'\')"'+(on?' style="border-color:'+cor+';color:'+cor+'"':'')+'>'+eh(p.nome)+'</button>';
+  }).join('')||'<span style="color:var(--txt3);font-size:12px">Carregando produtos…</span>';
+  // chart
+  var metric=STATE.mensalProdMetric||'rev';
+  var ds=top.filter(function(p){return STATE.mensalProdSel[p.sku];}).map(function(p){var i=top.indexOf(p);var cor=PROD_CORES[i%PROD_CORES.length];
+    return {label:p.nome,data:yms.map(function(ym){return Math.round((p.by[ym]||{})[metric]||0);}),borderColor:cor,backgroundColor:cor+'33',tension:.3,borderWidth:2,pointRadius:2,pointHoverRadius:5,fill:false};
+  });
+  if(CHARTS.mensalProd)CHARTS.mensalProd.destroy();
+  CHARTS.mensalProd=new Chart(ctx,{type:'line',data:{labels:yms.map(ymLabel),datasets:ds},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{labels:{color:'#cbd5e1',font:{size:11},boxWidth:12,padding:10}},datalabels:{display:false},
+        tooltip:{callbacks:{label:function(c){return c.dataset.label+': '+(metric==='un'?fmtN(c.parsed.y)+' un':fmt(c.parsed.y));}}}},
+      scales:{x:{grid:{display:false},ticks:{color:'#94a3b8',font:{size:10}}},
+        y:{grid:{color:'rgba(148,163,184,.08)'},ticks:{color:'#94a3b8',font:{size:10},callback:function(v){return metric==='un'?fmtN(v):fmtK(v);}}}}}});
 }
 function renderMensalPnL(M){
   var tbl=document.getElementById('mensal-pnl');if(!tbl)return;
