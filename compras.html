@@ -4141,7 +4141,7 @@ function renderHistorico() {
 
   var filtered = historico.filter(function(c) {
     if (fSt && c.status !== fSt) return false;
-    if (fProd && (c.produto||'').trim() !== fProd) return false;
+    if (fProd && (c.produto||'').trim().toUpperCase() !== fProd) return false;
     if (fCost && String(c.costureiro_id) !== fCost) return false;
     if (fForn && (c.fornecedor||'').trim() !== fForn) return false;
     if (fAno && (c.data || '').slice(0, 4) !== fAno) return false;
@@ -4523,7 +4523,10 @@ function populateHistoricoFilters() {
   (STATE.ops || []).forEach(function(o) {
     var apareceNoHist = !!opIdsComEntrega[o.id] || o.status === 'Entregue' || o.status === 'Cancelado';
     if (!apareceNoHist) return;
-    if (o.produto) prods[o.produto.trim()] = 1;
+    // Dedupe por chave normalizada (UPPERCASE) — o campo produto tem grafias divergentes
+    // no banco (ex: "CALÇA DE MALHA" vs "Calça De Malha"). Sem isso, viram 2 opções e o
+    // filtro (case-sensitive) exclui metade das entregas. Value = chave norm; label = 1ª grafia vista.
+    if (o.produto) { var pn = o.produto.trim(); if (pn) prods[pn.toUpperCase()] = prods[pn.toUpperCase()] || pn; }
     if (o.costureiro_id) costIds[o.costureiro_id] = 1;
   });
   // Fornecedores e anos: das OCs vinculadas
@@ -4536,7 +4539,7 @@ function populateHistoricoFilters() {
     if (e.data_entrega) anos[e.data_entrega.slice(0,4)] = 1;
   });
   var selP = document.getElementById('flt-hist-produto');
-  if (selP) selP.innerHTML = '<option value="">Todos produtos</option>' + Object.keys(prods).sort().map(function(p){return '<option value="'+p+'">'+p+'</option>';}).join('');
+  if (selP) selP.innerHTML = '<option value="">Todos produtos</option>' + Object.keys(prods).sort(function(a,b){return prods[a].localeCompare(prods[b]);}).map(function(k){return '<option value="'+k+'">'+prods[k]+'</option>';}).join('');
   var selC = document.getElementById('flt-hist-costureiro');
   if (selC) {
     var costOpts = Object.keys(costIds).map(function(id){ return { id: id, nome: costuName(parseInt(id)) }; })
