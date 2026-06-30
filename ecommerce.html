@@ -483,6 +483,12 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
       <label class="toggle"><input type="checkbox" id="chk-mensal-yoy" checked onchange="carregarMensal()"> vs ano passado</label>
       <span id="upd-mensal" style="margin-left:auto;font-size:11px;color:var(--txt3);"></span>
     </div>
+    <div class="filtros" style="margin-bottom:14px;">
+      <span class="filter-label">Canais:</span>
+      <div class="chips" id="mensal-canal-chips"></div>
+      <button class="chip-sm" onclick="selAllMensalCanais()">Todos</button>
+      <button class="chip-sm" onclick="clearMensalCanais()">Limpar</button>
+    </div>
     <div id="mensal-kpis" class="kpi-grid"><div class="kpi"><div class="kpi-lbl">Carregando…</div><div class="spin"></div></div></div>
     <div class="card"><div class="card-title">Receita &amp; margem mês a mês</div><div class="chart-hero"><canvas id="chart-mensal-rev"></canvas></div></div>
     <div class="card"><div class="card-title">P&amp;L mensal — comparativo (últimos meses)</div><div style="overflow-x:auto;"><table class="canal-tbl" id="mensal-pnl"><thead></thead><tbody></tbody></table></div></div>
@@ -823,7 +829,7 @@ async function fetchProdutos(){
 
 // ── State ──
 var DE=null,ATE=null;
-var STATE={pedidos:[],pedidosFull:[],itens:[],itensFocus:[],canais:[],canaisSel:{},stackMode:'abs',focusCanal:null,skuGroups:[],skuSel:null,skuSort:{key:'receita',dir:'desc'},adsByCanal:{},adsByCanalPrev:{},adsBySkuPai:{},adsBySkuPaiCanal:{},devBySkuPai:{},skuMVRows:[],geoMVRows:[],pgtoMVRows:[],dailyMetric:'rev',mensalMeses:12,mensalRows:null,mensalDe:null,mensalAte:null,mensalYTD:false,mensalSkuRows:[],mensalProdSel:{},mensalProdMetric:'rev',mensalYms:[]};
+var STATE={pedidos:[],pedidosFull:[],itens:[],itensFocus:[],canais:[],canaisSel:{},stackMode:'abs',focusCanal:null,skuGroups:[],skuSel:null,skuSort:{key:'receita',dir:'desc'},adsByCanal:{},adsByCanalPrev:{},adsBySkuPai:{},adsBySkuPaiCanal:{},devBySkuPai:{},skuMVRows:[],geoMVRows:[],pgtoMVRows:[],dailyMetric:'rev',mensalMeses:12,mensalRows:null,mensalDe:null,mensalAte:null,mensalYTD:false,mensalSkuRows:[],mensalProdSel:{},mensalProdMetric:'rev',mensalYms:[],mensalCanalSel:{}};
 
 // ── TABS (Diário · Mensal) ──
 function setTab(t){
@@ -2083,6 +2089,7 @@ function aggMensal(rows){
   (rows||[]).forEach(function(r){
     var ym=(r.mes||'').slice(0,7);if(!ym)return;
     var canal=getNome(r.canal_nome_raw,r.origem_conta);
+    if(STATE.mensalCanalSel&&STATE.mensalCanalSel[canal]===false)return;   // chip de marketplace desmarcado
     if(!bm[ym])bm[ym]={ym:ym,receita:0,comissao:0,dev:0,frete:0,cmv:0,pedidos:0,porCanal:{}};
     var m=bm[ym],rb=parseFloat(r.receita_bruta||0);
     m.receita+=rb;m.comissao+=parseFloat(r.comissao||0);m.dev+=parseFloat(r.devolucoes||0);
@@ -2099,7 +2106,20 @@ function subMeses(ymd,n){var y=+ymd.slice(0,4),m=+ymd.slice(5,7);m-=n;while(m<1)
 function sumWin(arr){var a={receita:0,liquida:0,resultado:0,pedidos:0,cmv:0};
   (arr||[]).forEach(function(m){a.receita+=m.receita;a.liquida+=m.liquida;a.resultado+=m.resultado;a.pedidos+=m.pedidos;a.cmv+=m.cmv;});
   a.margem=a.receita>0?a.resultado/a.receita*100:0;a.ticket=a.pedidos>0?a.receita/a.pedidos:0;a.cmvPct=a.receita>0?a.cmv/a.receita*100:0;return a;}
+// Chips de marketplace da aba Mensal — filtram KPIs/charts/P&L/produto pro canal selecionado.
+function renderMensalCanalChips(){
+  var box=document.getElementById('mensal-canal-chips');if(!box)return;
+  var seen={};(STATE.mensalRows||[]).forEach(function(r){seen[getNome(r.canal_nome_raw,r.origem_conta)]=true;});
+  var canais=Object.keys(seen).sort();
+  box.innerHTML=canais.map(function(n){var on=STATE.mensalCanalSel[n]!==false;var cor=getCor(n);
+    return '<button class="chip'+(on?' on':'')+'" onclick="toggleMensalCanal(\''+n.replace(/'/g,"\\'")+'\')"'+(on?' style="border-color:'+cor+';color:'+cor+'"':'')+'>'+n+'</button>';
+  }).join('');
+}
+function toggleMensalCanal(n){STATE.mensalCanalSel[n]=(STATE.mensalCanalSel[n]===false);renderMensal();}
+function selAllMensalCanais(){var seen={};(STATE.mensalRows||[]).forEach(function(r){seen[getNome(r.canal_nome_raw,r.origem_conta)]=true;});Object.keys(seen).forEach(function(n){STATE.mensalCanalSel[n]=true;});renderMensal();}
+function clearMensalCanais(){var seen={};(STATE.mensalRows||[]).forEach(function(r){seen[getNome(r.canal_nome_raw,r.origem_conta)]=true;});Object.keys(seen).forEach(function(n){STATE.mensalCanalSel[n]=false;});renderMensal();}
 function renderMensal(){
+  renderMensalCanalChips();
   var de=(STATE.mensalDe||inicioJanelaMensal(STATE.mensalMeses||12)).slice(0,7);
   var ate=(STATE.mensalAte||hojeSP()).slice(0,7);
   var all=aggMensal(STATE.mensalRows);                                  // todos os meses
@@ -2181,6 +2201,7 @@ function renderMensalProdEvol(){
   // agrega por sku_pai × mês (todos os canais)
   var prod={};
   rows.forEach(function(r){var sk=r.sku_pai;if(!sk)return;var ym=(r.data_pedido||'').slice(0,7);
+    if(STATE.mensalCanalSel&&STATE.mensalCanalSel[getNome(r.canal_nome_raw,r.origem_conta)]===false)return;   // respeita chips de marketplace
     if(!prod[sk])prod[sk]={sku:sk,nome:r.nome||sk,tot:0,by:{}};
     var p=prod[sk];if(!p.by[ym])p.by[ym]={rev:0,un:0};
     p.by[ym].rev+=parseFloat(r.receita||0);p.by[ym].un+=parseFloat(r.qtd||0);p.tot+=parseFloat(r.receita||0);
