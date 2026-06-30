@@ -352,6 +352,15 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
     <span class="tabbar-hint">Diário = pulso operacional · Mensal = análise (geo, pagamentos, pareto, tendências)</span>
   </div>
 
+  <!-- FILTRO GLOBAL DE PRODUTO (cruza todos os containers) -->
+  <div class="filtros" id="filtro-produto" style="margin-bottom:14px;align-items:center;gap:8px;">
+    <span class="filter-label">Produto:</span>
+    <input type="text" id="prod-filter-input" class="dinput" list="prod-datalist" placeholder="Buscar produto por nome ou SKU…" style="min-width:300px;" oninput="onProdFilterInput()">
+    <datalist id="prod-datalist"></datalist>
+    <button class="chip-sm" id="prod-filter-clear" onclick="clearFocusProduto()" style="display:none;">✕ Limpar</button>
+    <span id="prod-filter-badge" style="font-size:12px;color:var(--green);font-weight:700;"></span>
+  </div>
+
   <div id="tab-diario" class="tab-panel">
 
   <!-- 0. FATURAMENTO POR MARKETPLACE (cards) -->
@@ -829,7 +838,7 @@ async function fetchProdutos(){
 
 // ── State ──
 var DE=null,ATE=null;
-var STATE={pedidos:[],pedidosFull:[],itens:[],itensFocus:[],canais:[],canaisSel:{},stackMode:'abs',focusCanal:null,skuGroups:[],skuSel:null,skuSort:{key:'receita',dir:'desc'},adsByCanal:{},adsByCanalPrev:{},adsBySkuPai:{},adsBySkuPaiCanal:{},devBySkuPai:{},skuMVRows:[],geoMVRows:[],pgtoMVRows:[],dailyMetric:'rev',mensalMeses:12,mensalRows:null,mensalDe:null,mensalAte:null,mensalYTD:false,mensalSkuRows:[],mensalProdSel:{},mensalProdMetric:'rev',mensalYms:[],mensalCanalSel:{}};
+var STATE={pedidos:[],pedidosFull:[],itens:[],itensFocus:[],canais:[],canaisSel:{},stackMode:'abs',focusCanal:null,skuGroups:[],skuSel:null,skuSort:{key:'receita',dir:'desc'},adsByCanal:{},adsByCanalPrev:{},adsBySkuPai:{},adsBySkuPaiCanal:{},devBySkuPai:{},skuMVRows:[],geoMVRows:[],pgtoMVRows:[],dailyMetric:'rev',mensalMeses:12,mensalRows:null,mensalDe:null,mensalAte:null,mensalYTD:false,mensalSkuRows:[],mensalProdSel:{},mensalProdMetric:'rev',mensalYms:[],mensalCanalSel:{},focusProduto:null};
 
 // ── TABS (Diário · Mensal) ──
 function setTab(t){
@@ -1099,8 +1108,9 @@ function renderWaterfallImediato(cur,prev){
 
 // ── P&L WATERFALL (full, com itens detalhados) ──
 function renderWaterfall(){
-  var cur=calcPnL(STATE.pedidos,STATE.itensFocus,adsFiltrado(STATE.adsByCanal));
-  var prev=calcPnLFromMV(STATE.mvRowsPrev||[],adsFiltrado(STATE.adsByCanalPrev));
+  var fp=STATE.focusProduto, gp=fp?pnlProduto():null;
+  var cur=gp||calcPnL(STATE.pedidos,STATE.itensFocus,adsFiltrado(STATE.adsByCanal));
+  var prev=fp?{receita:0,liquida:0,lucro:0,comissao:0,devolucoes:0,frete:0,cmv:0,ads:0,impostos:0,pedidos:0}:calcPnLFromMV(STATE.mvRowsPrev||[],adsFiltrado(STATE.adsByCanalPrev));
   var items=[
     {lbl:'Receita Bruta',val:cur.receita,color:'#22c55e',prev:prev.receita},
     {lbl:'− Comissão',val:-cur.comissao,color:'#f97316',prev:-prev.comissao},
@@ -1181,17 +1191,70 @@ function projecaoMes(receita){
     return receita/dia*diasNoMes;
   }catch(e){return null;}
 }
+// ── FILTRO GLOBAL DE PRODUTO ────────────────────────────────────────────────
+// P&L do produto focado, do skuGroups (rateio de fee/dev/frete já pronto). Respeita focusCanal.
+function pnlProduto(){
+  var g=(STATE.skuGroups||[]).find(function(s){return s.sku_pai===STATE.focusProduto;});
+  if(!g)return null;
+  var receita=0,fee=0,dev=0,frete=0,cmv=0,qtd=0;
+  Object.keys(g.porCanal||{}).forEach(function(c){
+    if(STATE.focusCanal&&c!==STATE.focusCanal)return;
+    var pc=g.porCanal[c];receita+=pc.receita;fee+=pc.fee;dev+=pc.devolucao;frete+=pc.freteSeller;cmv+=pc.custoTotal;qtd+=pc.qtd;
+  });
+  var ads=0,abp=(STATE.adsBySkuPaiCanal||{})[STATE.focusProduto]||{};
+  Object.keys(abp).forEach(function(c){if(STATE.focusCanal&&c!==STATE.focusCanal)return;ads+=abp[c]||0;});
+  var imp=TAX_RATE*(receita-dev),liquida=receita-fee-dev-frete;
+  return {receita:receita,comissao:fee,devolucoes:dev,frete:frete,cmv:cmv,ads:ads,impostos:imp,liquida:liquida,lucro:liquida-ads-cmv-imp,pedidos:Object.keys(g.pedidoIds||{}).length,unidades:qtd};
+}
+function popularProdDatalist(){
+  var dl=document.getElementById('prod-datalist');if(!dl)return;
+  var fonte=(STATE.skuGroups&&STATE.skuGroups.length)?STATE.skuGroups:[];
+  var seen={};window.PROD_IDX={};var html='';
+  fonte.forEach(function(g){if(seen[g.sku_pai])return;seen[g.sku_pai]=1;
+    var label=(g.nome||g.sku_pai)+' — '+g.sku_pai;
+    window.PROD_IDX[label.toLowerCase()]=g.sku_pai;window.PROD_IDX[(g.nome||'').toLowerCase()]=g.sku_pai;window.PROD_IDX[(g.sku_pai||'').toLowerCase()]=g.sku_pai;
+    html+='<option value="'+label.replace(/"/g,'')+'"></option>';});
+  dl.innerHTML=html;
+}
+function onProdFilterInput(){
+  var v=(document.getElementById('prod-filter-input').value||'').trim().toLowerCase();
+  if(!v){if(STATE.focusProduto)clearFocusProduto();return;}
+  var sku=(window.PROD_IDX||{})[v];if(sku&&sku!==STATE.focusProduto)setFocusProduto(sku);
+}
+function setFocusProduto(sku){
+  STATE.focusProduto=sku;
+  var g=(STATE.skuGroups||[]).find(function(s){return s.sku_pai===sku;});
+  var b=document.getElementById('prod-filter-badge');if(b)b.textContent=g?('▸ '+(g.nome||sku)):'';
+  var cl=document.getElementById('prod-filter-clear');if(cl)cl.style.display='';
+  reRenderAtivo();
+}
+function clearFocusProduto(){
+  STATE.focusProduto=null;
+  var inp=document.getElementById('prod-filter-input');if(inp)inp.value='';
+  var b=document.getElementById('prod-filter-badge');if(b)b.textContent='';
+  var cl=document.getElementById('prod-filter-clear');if(cl)cl.style.display='none';
+  reRenderAtivo();
+}
+function reRenderAtivo(){
+  var mensal=document.getElementById('tab-mensal').style.display!=='none';
+  try{
+    if(mensal){renderMensal();}
+    else if((STATE.itens||[]).length>0){renderAll();}   // período curto (itens carregados): filtro aplica na hora
+    else{carregar();}   // período longo (só MV, sem itens): recarrega pra não zerar os KPIs
+  }catch(e){console.warn('reRenderAtivo',e);}
+}
 function renderKPIs(){
-  var cur=calcPnL(STATE.pedidos,STATE.itensFocus,adsFiltrado(STATE.adsByCanal));
-  var prev=calcPnLFromMV(STATE.mvRowsPrev||[],adsFiltrado(STATE.adsByCanalPrev));
-  var pedAtivos=STATE.pedidos.filter(function(p){return!p._canc;});
+  var fp=STATE.focusProduto, gp=fp?pnlProduto():null;
+  var cur=gp||calcPnL(STATE.pedidos,STATE.itensFocus,adsFiltrado(STATE.adsByCanal));
+  var prev=fp?{receita:0,liquida:0,lucro:0,comissao:0,devolucoes:0,frete:0,cmv:0,ads:0,impostos:0,pedidos:0}:calcPnLFromMV(STATE.mvRowsPrev||[],adsFiltrado(STATE.adsByCanalPrev));
+  var nPed=fp?(gp?gp.pedidos:0):STATE.pedidos.filter(function(p){return!p._canc;}).length;
   var pedAntN=prev.pedidos||0;   // prev vem da MV (sem fetch detalhado anterior)
-  var tm=pedAtivos.length>0?cur.receita/pedAtivos.length:0;
+  var tm=nPed>0?cur.receita/nPed:0;
   var tmAnt=pedAntN>0?prev.receita/pedAntN:0;
   var mp=cur.receita>0?cur.lucro/cur.receita*100:0;
-  var proj=projecaoMes(cur.receita);
+  var proj=fp?null:projecaoMes(cur.receita);
   var devPct=cur.receita>0?cur.devolucoes/cur.receita*100:0, prevDevP=prev.receita>0?prev.devolucoes/prev.receita*100:0;
-  var temItens=(STATE.itens||[]).length>0;var un=totUnidades();var pa=(temItens&&pedAtivos.length>0)?un/pedAtivos.length:0;
+  var temItens=fp?(gp&&gp.unidades>0):((STATE.itens||[]).length>0);var un=fp?(gp?gp.unidades:0):totUnidades();var pa=(temItens&&nPed>0)?un/nPed:0;
   var prevMp=prev.receita>0?prev.lucro/prev.receita*100:0;
   var tacos=cur.receita>0?cur.ads/cur.receita*100:0, prevTac=prev.receita>0?prev.ads/prev.receita*100:0;
   var mc=mp>=20?'#22c55e':(mp>=10?'#eab308':'#f43f5e'), dc=devPct<=5?'#22c55e':(devPct<=10?'#eab308':'#f43f5e'), ac=tacos<=8?'#22c55e':(tacos<=15?'#eab308':'#f43f5e');
@@ -1203,7 +1266,7 @@ function renderKPIs(){
   html+='<div class="kpi" style="--kpi-accent:'+mc+'"><div class="kpi-lbl">Margem líquida %</div><div class="kpi-val" style="color:'+mc+'">'+fmtD(mp)+'%</div><div class="kpi-delta">'+deltaBadge(delta(mp,prevMp))+'</div></div>';
   html+='<div class="kpi" style="--kpi-accent:#06b6d4"><div class="kpi-lbl">Ticket Médio</div><div class="kpi-val">'+fmt(tm)+'</div><div class="kpi-delta">'+deltaBadge(delta(tm,tmAnt))+'</div></div>';
   // LINHA 2 — Pedidos · Unidades · PA · Devolução % · Ads %
-  html+='<div class="kpi" style="--kpi-accent:#22c55e"><div class="kpi-lbl">Pedidos</div><div class="kpi-val">'+fmtN(pedAtivos.length)+'</div><div class="kpi-delta">'+deltaBadge(delta(pedAtivos.length,pedAntN))+'</div></div>';
+  html+='<div class="kpi" style="--kpi-accent:#22c55e"><div class="kpi-lbl">'+(fp?'Pedidos c/ produto':'Pedidos')+'</div><div class="kpi-val">'+fmtN(nPed)+'</div><div class="kpi-delta">'+deltaBadge(delta(nPed,pedAntN))+'</div></div>';
   html+='<div class="kpi" style="--kpi-accent:#a78bfa"><div class="kpi-lbl">Unidades</div><div class="kpi-val">'+(temItens?fmtN(un):'—')+'</div><div class="kpi-sub">'+(temItens?'itens vendidos':'indisp. p/ período antigo')+'</div></div>';
   html+='<div class="kpi" style="--kpi-accent:#a78bfa"><div class="kpi-lbl">PA · peças/pedido</div><div class="kpi-val">'+(temItens?fmtD(pa):'—')+'</div><div class="kpi-sub">unid. ÷ pedidos</div></div>';
   html+='<div class="kpi" style="--kpi-accent:'+dc+'"><div class="kpi-lbl">Devolução %</div><div class="kpi-val" style="color:'+dc+'">'+fmtD(devPct)+'%</div><div class="kpi-sub">'+fmtK(cur.devolucoes)+' · ant. '+fmtD(prevDevP)+'%</div></div>';
@@ -1266,7 +1329,22 @@ function renderCanalTableFromMV(rows){
   });
   try{document.getElementById('canal-tbody').innerHTML=_canalTbodyHTML(_canalRowsArr(byCanal,null));}catch(e){console.error('canalMV:',e);}
 }
+// Linhas da tabela de canais para 1 produto focado (P&L por canal vem do skuGroups + ads por sku/canal).
+function _canalRowsProduto(g){
+  var abp=(STATE.adsBySkuPaiCanal||{})[g.sku_pai]||{};
+  var canais=Object.keys(g.porCanal||{}).filter(function(c){return !STATE.focusCanal||c===STATE.focusCanal;});
+  var totalR=canais.reduce(function(s,c){return s+g.porCanal[c].receita;},0);
+  return canais.map(function(n){var pc=g.porCanal[n];var ads=abp[n]||0;var cmv=pc.custoTotal;
+    var imp=TAX_RATE*(pc.receita-pc.devolucao);var liquida=pc.receita-pc.fee-pc.devolucao-pc.freteSeller;
+    return{nome:n,cor:getCor(n),r:pc.receita,ped:pc.qtd,fee:pc.fee,dev:pc.devolucao,frete:pc.freteSeller,
+      liquida:liquida,ads:ads,cmv:cmv,impostos:imp,resultado:liquida-ads-cmv-imp,share:totalR>0?pc.receita/totalR*100:0};
+  }).sort(function(a,b){return b.r-a.r;});
+}
 function renderCanalTable(){
+  if(STATE.focusProduto){
+    var gP=(STATE.skuGroups||[]).find(function(s){return s.sku_pai===STATE.focusProduto;});
+    document.getElementById('canal-tbody').innerHTML=gP?_canalTbodyHTML(_canalRowsProduto(gP)):'';return;
+  }
   var ped=STATE.pedidosFull||STATE.pedidos;
   var byCanal={};
   // Mesma lógica do P&L (calcPnL): só `cancelado` fora; `devolvido` conta como bruta + devolução.
@@ -1307,7 +1385,10 @@ function renderHero(){
   var fTot=function(v){return isUn?fmtN(v)+' un':fmt(v);};
   var diario={};var canais={};
   var selOk=function(n){return !(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[n]);};
-  if(isUn){
+  if(STATE.focusProduto){
+    // Produto focado: série diária do produto (receita ou unidades) por canal, dos itens.
+    (STATE.itensFocus||[]).filter(function(it){return it._sku_pai===STATE.focusProduto;}).forEach(function(it){var st=it._canc||'';if(st==='cancelado'||st==='devolvido')return;var d=(it._data||'').slice(0,10);var n=it._canal;if(!d||!n||!selOk(n))return;if(!diario[d])diario[d]={};diario[d][n]=(diario[d][n]||0)+(isUn?(it._qtd||0):(it._receita||0));canais[n]=getCor(n);});
+  }else if(isUn){
     // Unidades vêm dos ITENS carregados (vw_pedidos_full não expõe quantidade).
     // Só disponível no período com itens (~130d); fora disso o gráfico fica vazio.
     (STATE.itensFocus||[]).forEach(function(it){var st=it._canc||'';if(st==='cancelado'||st==='devolvido')return;var d=(it._data||'').slice(0,10);var n=it._canal;if(!d||!n||!selOk(n))return;if(!diario[d])diario[d]={};diario[d][n]=(diario[d][n]||0)+(it._qtd||0);canais[n]=getCor(n);});
@@ -1540,6 +1621,7 @@ function selectEcommSku(k){
 }
 
 function renderEcommSkuList(){
+  popularProdDatalist();   // alimenta o autocomplete do filtro global de produto
   var listEl=document.getElementById('ecomm-sku-list');
   var legEl=document.getElementById('ecomm-sku-legend');
   var countEl=document.getElementById('ecomm-sku-count');
