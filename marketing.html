@@ -297,7 +297,7 @@
     <div class="kpis" id="kpis-criativo"></div>
     <div class="card" style="padding:0;overflow:auto">
       <table id="tbl-criativo"><thead><tr>
-        <th>Anúncio</th><th>Campanha</th><th>Qualidade</th><th>Engaj.</th><th>Conversão</th><th>Freq.</th><th>Retenção vídeo</th><th>Gasto</th><th>O que fazer</th>
+        <th>Campanha / Anúncio <span class="muted" style="font-weight:400">(clique p/ abrir)</span></th><th>Qualidade</th><th>Engaj.</th><th>Conversão</th><th>Freq.</th><th>Retenção vídeo</th><th>Gasto</th><th>O que fazer</th>
       </tr></thead><tbody id="tb-criativo"></tbody></table>
     </div>
   </section>
@@ -377,7 +377,7 @@
 <script>
 let auth=null, SB='', ANON='';
 const CHARTS={};
-let STATE={de:'',ate:'',tab:'geral', gran:'diario', mer:[], pnl:[], changes:[], skuTitles:{}, skuParent:{}, expanded:new Set(), sort:{k:'receita_canal',dir:-1}};
+let STATE={de:'',ate:'',tab:'geral', gran:'diario', mer:[], pnl:[], changes:[], skuTitles:{}, skuParent:{}, expanded:new Set(), expandedCamp:new Set(), sort:{k:'receita_canal',dir:-1}};
 
 // ---------- datas (America/Sao_Paulo) ----------
 function spNow(){return new Date(new Date().toLocaleString('en-US',{timeZone:'America/Sao_Paulo'}));}
@@ -729,15 +729,28 @@ function renderCriativo(){
     {l:'Gasto p/ corrigir landing',v:rs(gBy('corrigir_landing')),s:'conversão baixa',cls:gBy('corrigir_landing')>0?'neg':'',t:'Gasto em anúncios cuja conversão pós-clique está abaixo da média — o problema é página/oferta, não o criativo.'},
     {l:'Gasto p/ renovar criativo',v:rs(gBy('renovar_criativo')),s:'qualidade/engaj. baixos',cls:gBy('renovar_criativo')>0?'neg':'',t:'Gasto em anúncios com qualidade ou engajamento abaixo da concorrência — trocar o criativo.'},
   ].map(kpiHTML).join('');
-  document.getElementById('tb-criativo').innerHTML=rows.map(r=>{
-    const a=VERDC[r.veredito]||VERDC.sem_dado;
-    const hold=r.hold_rate!=null?Math.round(r.hold_rate*100)+'%':'—';
-    const freq=(+r.frequency||0).toFixed(1);
-    return `<tr><td>${(r.ad_name||'').slice(0,34)}</td><td class="muted">${(r.campaign_name||'').slice(0,22)}</td>`+
+  // consolida por CAMPANHA (dropdown): campanha = linha-pai clicável; anúncios = filhos
+  const g={}; rows.forEach(r=>{const k=r.campaign_name||'(sem campanha)';(g[k]||(g[k]=[])).push(r);});
+  const camps=Object.entries(g).map(([nome,ads])=>({nome,ads,
+    gasto:ads.reduce((s,a)=>s+(+a.spend||0),0),
+    cont:ads.reduce((m,a)=>{m[a.veredito]=(m[a.veredito]||0)+1;return m;},{})})).sort((a,b)=>b.gasto-a.gasto);
+  const adRow=(r,child)=>{
+    const a=VERDC[r.veredito]||VERDC.sem_dado, hold=r.hold_rate!=null?Math.round(r.hold_rate*100)+'%':'—', freq=(+r.frequency||0).toFixed(1);
+    return `<tr class="${child?'camp-ad':''}"><td${child?' style="padding-left:28px"':''}>${(r.ad_name||'').slice(0,40)}</td>`+
       `<td>${rchip(r.quality_ranking)}</td><td>${rchip(r.engagement_rate_ranking)}</td><td>${rchip(r.conversion_rate_ranking)}</td>`+
       `<td class="${freq>=4?'neg':''}">${freq}</td><td>${hold}</td><td>${rs(r.spend)}</td>`+
       `<td><span class="badge ${a[1]}" style="font-size:10px" title="${(r.motivo||'').replace(/"/g,'&quot;')}">${a[0]}</span></td></tr>`;
-  }).join('')||'<tr><td colspan="9" class="muted" style="padding:14px">Sem dados de criativo ainda (o cron diário popula).</td></tr>';
+  };
+  let html='';
+  camps.forEach(cp=>{
+    const open=STATE.expandedCamp.has(cp.nome);
+    const roll=['renovar_criativo','corrigir_landing','fadiga_publico','ok','sem_dado'].filter(v=>cp.cont[v]).map(v=>{
+      const a=VERDC[v]; return `<span class="badge ${a[1]}" style="font-size:10px">${a[0]} ${cp.cont[v]}</span>`;}).join(' ');
+    html+=`<tr class="parent camp-row" data-camp="${(cp.nome||'').replace(/"/g,'&quot;')}"><td colspan="6"><span class="exp">${open?'▾':'▸'}</span> <b>${(cp.nome||'').slice(0,44)}</b> <span class="muted">· ${cp.ads.length} anúncio${cp.ads.length>1?'s':''}</span></td>`+
+      `<td><b>${rs(cp.gasto)}</b></td><td>${roll}</td></tr>`;
+    if(open) cp.ads.slice().sort((a,b)=>(+b.spend||0)-(+a.spend||0)).forEach(r=>{html+=adRow(r,true);});
+  });
+  document.getElementById('tb-criativo').innerHTML=html||'<tr><td colspan="8" class="muted" style="padding:14px">Sem dados de criativo ainda (o cron diário popula).</td></tr>';
 }
 
 // ---------- incrementalidade (diff-in-diff: site vs controle não-Meta) ----------
@@ -1351,6 +1364,9 @@ async function carregarTitulos(){
   // clicar numa linha de produto expande/colapsa suas variantes
   document.getElementById('tb-sku').onclick=e=>{const tr=e.target.closest('tr.parent');if(!tr)return;
     const pid=tr.dataset.pid;if(STATE.expanded.has(pid))STATE.expanded.delete(pid);else STATE.expanded.add(pid);renderSku();};
+  // Saúde de Criativo: clicar na campanha abre/fecha os anúncios dela
+  document.getElementById('tb-criativo').onclick=e=>{const tr=e.target.closest('tr.camp-row');if(!tr)return;
+    const k=tr.dataset.camp;if(STATE.expandedCamp.has(k))STATE.expandedCamp.delete(k);else STATE.expandedCamp.add(k);renderCriativo();};
   // refresh button → RPC + recarrega
   document.getElementById('btnRefresh').onclick=async()=>{
     const b=document.getElementById('btnRefresh');b.textContent='atualizando…';b.disabled=true;
