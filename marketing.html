@@ -228,7 +228,7 @@
     <details class="gloss"><summary>Como ler este painel</summary><div class="gbody">
       <div class="gi"><b>A ideia central:</b> a maioria dos painéis mede <b>ROAS</b> (receita ÷ gasto) — mas receita não é lucro. Um produto pode ter ROAS lindo e <b>perder dinheiro</b> depois do custo de produzir, da comissão, do frete e da devolução. Aqui a pergunta é: <b>"depois de TODOS os custos, o anúncio deixou dinheiro no caixa?"</b> Isso é <b>margem de contribuição</b>.</div>
       <div class="gi"><b>A cascata de custos:</b> Receita −CMV (custo de produzir) = <b>CM1</b> · −comissão/frete/devolução = <b>CM2</b> · −gasto de anúncios −comissões (agência 2% + gerente 0,65%) = <b>CM3</b>. <b>CM3 é o que importa</b>: positivo = ganhou; negativo = queimou.</div>
-      <div class="gi"><b>Gasto Meta/Google</b> = quanto você investiu (Meta→site, Google→lojas). <b>Receita Site</b> = faturamento do Shopify. <b>MER_site</b> = receita do site ÷ gasto Meta (ponto de equilíbrio ≈2 com 50% de margem). <b>POAS médio</b> = margem dos anúncios ÷ gasto (>1 = lucrativo). <b>CM3 estimado</b> = o lucro em R$ que sobrou.</div>
+      <div class="gi"><b>Gasto Meta/Google</b> = quanto você investiu (Meta→site, Google→lojas). <b>Receita Site</b> = faturamento do Shopify. <b>MER_site</b> = receita do site ÷ gasto Meta (ponto de equilíbrio ≈2 com 50% de margem). <b>nPOAS (ROI)</b> = margem dos anúncios ÷ gasto (net Profit on Ad Spend; >1 = lucrativo; nPOAS − 1 = ROI %). <b>CM3 estimado</b> = o lucro em R$ que sobrou.</div>
       <div class="gi"><b>Por que não MER de loja aqui?</b> O gasto Google é minúsculo e a receita de loja é quase toda movimento espontâneo (gente que não veio de anúncio) → o número infla e mente. Fica na aba de dados, marcado como fraco.</div>
     </div></details>
     <div class="kpis" id="kpis-geral"></div>
@@ -288,13 +288,13 @@
   <!-- LUCRO POR SKU -->
   <section class="pane" id="pane-sku">
     <div class="note">
-      <div class="note-lead">A decisão é por <b>lucro real (POAS = CM2 ÷ gasto)</b>, no <b>produto-pai</b> — não por variante e não por ROAS.</div>
+      <div class="note-lead">A decisão é por <b>lucro real (nPOAS = CM2 ÷ gasto)</b>, no <b>produto-pai</b> — não por variante e não por ROAS.</div>
       <div class="note-sub">Produtos que vendem a maior parte <b>fora do canal do anúncio</b> viram <span class="badge b-revisar">revisar</span> (o Meta pode estar gerando venda no TikTok/loja). Clique num produto pra ver a cascata de custos + a concentração de canal.</div>
     </div>
     <details class="gloss"><summary>Como funciona esta aba</summary><div class="gbody">
       <div class="gi"><b>Cada linha é um PRODUTO, não uma variante.</b> Meta e Google anunciam por <b>catálogo</b>: cada cor/tamanho é um item do feed, e a plataforma atribui o gasto por variante. A variante que recebe mais gasto é a que o <b>algoritmo decidiu mostrar</b> — não uma escolha sua. Por isso o <b>veredito (escalar/cortar) fica SÓ no produto-pai</b>; clicar abre as variantes (informativo, sem veredito).</div>
       <div class="gi"><b>⚠ Cross-channel — o ponto mais importante.</b> O gasto do Meta mira o site e o do Google mira a loja, MAS <b>um anúncio do Meta pode gerar venda no TikTok, na loja física ou no ML</b> — a pessoa descobre o produto no anúncio e compra onde for mais fácil. Exemplo real: a Calça Alfaiataria vende <b>~5% no site e ~95% no TikTok</b>. Se olhássemos só a margem do site, mandaríamos <b>cortar um anúncio que pode estar vendendo fora</b>. Por isso medimos a <b>concentração de canal</b> (% que o produto vende no canal do anúncio) — aparece ao expandir o produto — e tratamos esses casos como <b>revisar</b>, não cortar.</div>
-      <div class="gi"><b>Os números</b>: <b>Receita</b> = venda real no canal do anúncio (base da margem) · <b>CM2%</b> = margem após CMV+comissão+frete+devolução · <b>POAS = CM2÷gasto</b> (>1 ⟺ CM3>0) · <b>CM3 = CM2−Anúncios</b> (no produto; as comissões de agência/gerente são custo de canal e entram só na cascata da Visão Geral) · <b>ROAS</b> = receita que a plataforma reivindica ÷ gasto — só diagnóstico (sobre-atribui).</div>
+      <div class="gi"><b>Os números</b>: <b>Receita</b> = venda real no canal do anúncio (base da margem) · <b>CM2%</b> = margem após CMV+comissão+frete+devolução · <b>nPOAS (ROI) = CM2÷gasto</b> (>1 ⟺ CM3>0; nPOAS−1 = ROI %) · <b>CM3 = CM2−Anúncios</b> (no produto; as comissões de agência/gerente são custo de canal e entram só na cascata da Visão Geral) · <b>ROAS</b> = receita que a plataforma reivindica ÷ gasto — só diagnóstico (sobre-atribui).</div>
       <div class="gi"><b>Veredito (no produto-pai):</b> <span class="badge b-escalar">escalar</span> a margem cobre bem o anúncio · <span class="badge b-cortar">cortar</span> margem real não cobre <b>E</b> o produto vende no próprio canal · <span class="badge b-revisar">revisar</span> vende &lt;50% no canal do anúncio (provável cross-channel) OU o P&L e a plataforma discordam → <b>não corte às cegas: teste</b> (desligue o anúncio ~2 semanas e olhe a venda TOTAL, não só a do site) · <span class="badge b-manter">manter</span> · <span class="badge b-sem">sem venda</span>.</div>
     </div></details>
     <div class="kpis" id="kpis-sku"></div>
@@ -314,10 +314,10 @@
           <th data-k="receita_canal" class="sorted" title="Receita REAL do canal desses produtos (venda real — anúncio + orgânica, não incremental). A base de onde sai a margem. Ordem padrão: por aqui (desc), desempate por Gasto.">Receita</th>
           <th data-k="roas" title="Receita atribuída pela plataforma ÷ gasto. SÓ DIAGNÓSTICO — a plataforma sobre-atribui. ROAS alto ≠ lucro.">ROAS</th>
           <th data-k="cm2_pct" title="Margem real do produto (após CMV + comissão + frete + devolução), antes dos anúncios. A 'qualidade econômica' do SKU.">CM2%</th>
-          <th data-k="poas" title="CM2 ÷ gasto = margem real do produto por R$ de anúncio. >1 = a margem cobre o anúncio (CM3>0). ESTA é a métrica de decisão. (Blended: margem total do canal, não incremental.)">POAS</th>
+          <th data-k="poas" title="nPOAS (net Profit on Ad Spend) = CM2 ÷ gasto = margem real do produto por R$ de anúncio. É o ROI do anúncio em múltiplo (nPOAS − 1 = ROI %). >1 = a margem cobre o anúncio (CM3>0). ESTA é a métrica de decisão. (Blended: margem total do canal, não incremental.)">nPOAS (ROI)</th>
           <th data-k="cm3" title="Lucro real (R$) após o gasto de anúncios. Negativo = esse SKU perde dinheiro com anúncio.">CM3 est.</th>
           <th data-k="unidades" title="Unidades vendidas do SKU no canal">Un.</th>
-          <th data-k="sinal" title="Veredito: escalar (POAS>1,2) / cortar (POAS<0,8) / manter / sem venda">Sinal</th>
+          <th data-k="sinal" title="Veredito: escalar (nPOAS>1,2) / cortar (nPOAS<0,8) / manter / sem venda">Sinal</th>
         </tr></thead>
         <tbody id="tb-sku"></tbody>
       </table>
@@ -404,7 +404,7 @@
   <!-- GLOSSÁRIO DE SIGLAS (fixo no rodapé, todas as abas) -->
   <details class="gloss" id="glossario"><summary>Glossário — o que cada sigla significa</summary><div class="gbody">
     <div class="gi"><b>ROAS</b> <span class="muted">(Return on Ad Spend)</span> = <b>Receita ÷ Gasto em anúncio</b>. Quanto a plataforma diz que voltou por R$ investido. <b>Só diagnóstico</b> — a plataforma sobre-atribui; ROAS alto ≠ lucro.</div>
-    <div class="gi"><b>POAS</b> <span class="muted">(Profit on Ad Spend)</span> = <b>CM2 ÷ Gasto</b>. Margem REAL por R$ de anúncio. >1 = o anúncio se paga (CM3>0). <b>É a métrica de decisão</b> (escalar/cortar).</div>
+    <div class="gi"><b>nPOAS (ROI)</b> <span class="muted">(net Profit on Ad Spend)</span> = <b>CM2 ÷ Gasto</b>. Margem REAL por R$ de anúncio = o ROI do anúncio em múltiplo (<b>nPOAS − 1 = ROI %</b>: nPOAS 2 = +100% de ROI). >1 = o anúncio se paga (CM3>0). <b>É a métrica de decisão</b> (escalar/cortar).</div>
     <div class="gi"><b>MER</b> <span class="muted">(Marketing Efficiency Ratio)</span> = <b>Faturamento ÷ Gasto em anúncio</b> (gross sales ÷ ad spend). Eficiência "blended" do canal inteiro. Equilíbrio ≈ 1 ÷ margem (50% de margem → MER 2 empata).</div>
     <div class="gi"><b>CM1 / CM2 / CM3</b> <span class="muted">(Margem de Contribuição)</span> = a cascata: <b>CM1</b> = Receita − CMV · <b>CM2</b> = CM1 − comissão − frete − devolução · <b>CM3</b> = CM2 − anúncios − comissões (agência+gerente). <b>CM3 = lucro final do canal.</b></div>
     <div class="gi"><b>CMV</b> <span class="muted">(Custo da Mercadoria Vendida)</span> = quanto custou produzir o que foi vendido. <b>CAC</b> = Custo de Aquisição de Cliente (gasto ÷ nº de compradores).</div>
@@ -598,7 +598,7 @@ function renderGeral(){
     {l:'CM2',v:rs(cm2),s:pc(cm2)+'% da receita',d:dd(cm2,P.cm2),spark:'sk-cm2',t:'Margem de contribuição do site = Receita − CMV − comissão − frete − devolução. O que sobra ANTES do anúncio.'},
     {l:'CM3',v:rs(cm3),s:pc(cm3)+'% · lucro final',cls:cm3>=0?'pos':'neg',accent:true,d:dd(cm3,P.cm3),spark:'sk-cm3',t:'Lucro final do site DEPOIS de Anúncios + comissão da agência (2%) + comissão do gerente (0,65%). Verde = sobrou dinheiro. Δ = vs período anterior.'},
     {l:'MER_site',v:n2(merSite),s:'equilíbrio ≈2',d:dd(merSite,P.mer),spark:'sk-mer',t:'Receita Site ÷ Gasto Meta. Eficiência blended do canal. Acima de ~2 = lucrativo. Δ = vs período anterior.'},
-    {l:'POAS canal',v:n2(poas),s:'margem ÷ Meta',d:dd(poas,P.poas),spark:'sk-poas',t:'CM2 do site ÷ Gasto Meta. Quanto de margem o site gera por R$ de anúncio. Δ = vs período anterior.'},
+    {l:'nPOAS canal (ROI)',v:n2(poas),s:'margem ÷ Meta',d:dd(poas,P.poas),spark:'sk-poas',t:'nPOAS (net Profit on Ad Spend) = CM2 do site ÷ Gasto Meta. Quanto de margem o site gera por R$ de anúncio — é o ROI em múltiplo (nPOAS − 1 = ROI %). Δ = vs período anterior.'},
   ].map(kpiHTML).join('');
   // desenha as sparklines (mini-tendência diária do período)
   idle(()=>{
@@ -1044,10 +1044,10 @@ function renderSku(){
     {l:'Gasto em anúncios',v:rs(sp),s:'investido · '+parents.length+' produtos',t:'Soma do gasto de anúncios dos produtos filtrados (cada produto-pai agrupa suas variantes). É o INVESTIMENTO — o começo da história.'},
     {l:'Receita no canal',v:rs(rev),s:un.toLocaleString('pt-BR')+' un · venda real',t:'Receita REAL desses produtos NO CANAL do anúncio (anúncio + orgânica) — não é só o que a plataforma atribui. É de onde sai a margem.'},
     {l:'CM3 — lucro real',v:rs(c3),s:pcRec+'% da receita',cls:c3>=0?'pos':'neg',accent:true,t:'Lucro real somado, após CMV + comissão/frete/devolução + anúncios. É o que sobrou. Verde = lucrativo. (Não inclui as comissões de canal agência/gerente — essas estão na cascata da Visão Geral.)'},
-    {l:'POAS médio',v:n2(poasB),s:'margem ÷ gasto · >1 = paga',t:'CM2 total ÷ gasto total dos produtos filtrados. Quanto de margem cada R$ de anúncio gera. >1 = o anúncio se paga. É a eficiência que define os vereditos abaixo.'},
-    {l:'▲ Escalar',v:esc,s:'CM3 '+(escCM3>=0?'+':'−')+rs(Math.abs(escCM3)).replace('R$','R$'),cls:'pos',t:'Produtos onde a margem cobre bem o anúncio (POAS>1,2) — vale investir mais. O sub mostra o CM3 que esses produtos já geram.'},
+    {l:'nPOAS médio (ROI)',v:n2(poasB),s:'margem ÷ gasto · >1 = paga',t:'nPOAS (net Profit on Ad Spend) = CM2 total ÷ gasto total dos produtos filtrados. Quanto de margem cada R$ de anúncio gera — é o ROI em múltiplo (nPOAS − 1 = ROI %). >1 = o anúncio se paga. É a eficiência que define os vereditos abaixo.'},
+    {l:'▲ Escalar',v:esc,s:'CM3 '+(escCM3>=0?'+':'−')+rs(Math.abs(escCM3)).replace('R$','R$'),cls:'pos',t:'Produtos onde a margem cobre bem o anúncio (nPOAS>1,2) — vale investir mais. O sub mostra o CM3 que esses produtos já geram.'},
     {l:'◆ Revisar',v:revi,s:'vende fora do canal — testar',t:'Produtos que vendem <50% no canal do anúncio (provável cross-channel: TikTok/loja/ML) OU onde P&L e plataforma discordam. NÃO cortar às cegas — fazer holdout.'},
-    {l:'▼ Cortar',v:cor,s:rs(corGasto)+' de gasto a economizar',cls:cor>0?'neg':'',t:'Produtos onde a margem real não cobre o anúncio (POAS<0,8) E que vendem no próprio canal — reduzir/parar. O sub mostra o gasto que você economizaria cortando.'},
+    {l:'▼ Cortar',v:cor,s:rs(corGasto)+' de gasto a economizar',cls:cor>0?'neg':'',t:'Produtos onde a margem real não cobre o anúncio (nPOAS<0,8) E que vendem no próprio canal — reduzir/parar. O sub mostra o gasto que você economizaria cortando.'},
   ].map(kpiHTML).join('');
   document.getElementById('sku-count').textContent=parents.length+' produtos · '+variants.length+' variantes';
   let html='';
