@@ -297,7 +297,7 @@
     <div class="kpis" id="kpis-criativo"></div>
     <div class="card" style="padding:0;overflow:auto">
       <table id="tbl-criativo"><thead><tr>
-        <th>Campanha / Anúncio <span class="muted" style="font-weight:400">(clique p/ abrir)</span></th><th>Qualidade</th><th>Engaj.</th><th>Conversão</th><th>Freq.</th><th>Retenção vídeo</th><th>Gasto</th><th>O que fazer</th>
+        <th>Campanha / Anúncio <span class="muted" style="font-weight:400">(clique p/ abrir)</span></th><th>Qualidade</th><th>Engaj.</th><th title="Taxa de conversão = compras ÷ cliques no link. Passe o mouse p/ ver compras + CPA + ranking Meta.">Conversão (CVR)</th><th>Freq.</th><th>Retenção vídeo</th><th>Gasto</th><th>O que fazer</th>
       </tr></thead><tbody id="tb-criativo"></tbody></table>
     </div>
   </section>
@@ -720,6 +720,16 @@ function numPond(ads,key){ // média ponderada por gasto de um campo numérico (
   let w=0,sum=0; ads.forEach(a=>{const v=a[key]; if(v!=null&&isFinite(+v)){const p=+a.spend||0; if(p>0){sum+=(+v)*p; w+=p;}}});
   return w>0?sum/w:null;
 }
+// conversão NUMÉRICA: CVR = compras ÷ cliques no link (post-clique) + CPA, sobre um conjunto de linhas
+function convOf(rows){
+  let p=0,d=0,sp=0; rows.forEach(r=>{p+=+r.purchases||0; d+=(+r.link_clicks||+r.clicks||0); sp+=+r.spend||0;});
+  return {cvr:d>0?p/d:null, purchases:p, cpa:p>0?sp/p:null};
+}
+function convCellHTML(cv,rank){
+  const txt=cv.cvr!=null?(cv.cvr*100).toFixed(1)+'%':'—';
+  const tip=`${Math.round(cv.purchases||0)} compra${Math.round(cv.purchases||0)===1?'':'s'} · CPA ${cv.cpa!=null?rs(cv.cpa):'—'}`+(rank&&rank!=='unknown'?' · ranking Meta '+(RANKCHIP[rank]||['?'])[0]:'');
+  return `<td title="${tip.replace(/"/g,'&quot;')}">${txt}</td>`;
+}
 // veredito consolidado a partir dos rankings/freq ponderados (mesma lógica do sync)
 function vereditoPond(q,e,cv,freq){
   if([q,e,cv].every(x=>x==='unknown')) return 'sem_dado';
@@ -734,13 +744,13 @@ function consolidaAd(rows){
   const freq=numPond(rows,'frequency'),hold=numPond(rows,'hold_rate');
   return {ad_name:rows[0].ad_name, publicos:new Set(rows.map(r=>r.adset_name||r.ad_id)).size,
     spend:rows.reduce((s,r)=>s+(+r.spend||0),0), quality_ranking:q,engagement_rate_ranking:e,conversion_rate_ranking:cv,
-    frequency:freq,hold_rate:hold, veredito:vereditoPond(q,e,cv,freq), motivo:'Consolidado de '+rows.length+' públicos (ponderado por gasto).'};
+    conv:convOf(rows), frequency:freq,hold_rate:hold, veredito:vereditoPond(q,e,cv,freq), motivo:'Consolidado de '+rows.length+' públicos (ponderado por gasto).'};
 }
 async function carregarCriativo(){
-  let rows=null; try{const o=JSON.parse(localStorage.getItem('mkt_criativo_v2'));if(o&&Date.now()-o.t<3600000)rows=o.d;}catch(e){}
+  let rows=null; try{const o=JSON.parse(localStorage.getItem('mkt_criativo_v3'));if(o&&Date.now()-o.t<3600000)rows=o.d;}catch(e){}
   if(!rows){
-    rows=await buscarTudo('ads_criativo_saude','select=ad_name,adset_name,campaign_name,quality_ranking,engagement_rate_ranking,conversion_rate_ranking,frequency,hold_rate,spend,impressions,veredito,motivo,data_ref&order=data_ref.desc,spend.desc');
-    try{localStorage.setItem('mkt_criativo_v2',JSON.stringify({t:Date.now(),d:rows}));}catch(e){}
+    rows=await buscarTudo('ads_criativo_saude','select=ad_name,adset_name,campaign_name,quality_ranking,engagement_rate_ranking,conversion_rate_ranking,frequency,hold_rate,spend,impressions,clicks,link_clicks,purchases,purchase_value,veredito,motivo,data_ref&order=data_ref.desc,spend.desc');
+    try{localStorage.setItem('mkt_criativo_v3',JSON.stringify({t:Date.now(),d:rows}));}catch(e){}
   }
   const maxd=rows.length?rows[0].data_ref:null;
   STATE.criativo=rows.filter(r=>r.data_ref===maxd);
@@ -764,7 +774,7 @@ function renderCriativo(){
     const a=VERDC[r.veredito]||VERDC.sem_dado, hold=r.hold_rate!=null?Math.round(r.hold_rate*100)+'%':'—', freq=r.frequency!=null?(+r.frequency).toFixed(1):'—';
     const pub=r.publicos>1?` <span class="muted" style="font-size:11px">· ${r.publicos} públicos</span>`:'';
     return `<tr class="${child?'camp-ad':''}"><td${child?' style="padding-left:28px"':''}>${(r.ad_name||'').slice(0,40)}${pub}</td>`+
-      `<td>${rchip(r.quality_ranking)}</td><td>${rchip(r.engagement_rate_ranking)}</td><td>${rchip(r.conversion_rate_ranking)}</td>`+
+      `<td>${rchip(r.quality_ranking)}</td><td>${rchip(r.engagement_rate_ranking)}</td>${convCellHTML(r.conv||convOf([r]),r.conversion_rate_ranking)}`+
       `<td class="${(+r.frequency||0)>=4?'neg':''}">${freq}</td><td>${hold}</td><td>${rs(r.spend)}</td>`+
       `<td><span class="badge ${a[1]}" style="font-size:10px" title="${(r.motivo||'').replace(/"/g,'&quot;')}">${a[0]}</span></td></tr>`;
   };
@@ -777,7 +787,7 @@ function renderCriativo(){
     const fqTxt=fq!=null?fq.toFixed(1):'—', hrTxt=hr!=null?Math.round(hr*100)+'%':'—';
     html+=`<tr class="parent camp-row" data-camp="${(cp.nome||'').replace(/"/g,'&quot;')}">`+
       `<td><span class="exp">${open?'▾':'▸'}</span> <b>${(cp.nome||'').slice(0,40)}</b> <span class="muted">· ${cp.ads.length} anúncio${cp.ads.length>1?'s':''}</span></td>`+
-      `<td>${rchip(rankPond(cp.ads,'quality_ranking'))}</td><td>${rchip(rankPond(cp.ads,'engagement_rate_ranking'))}</td><td>${rchip(rankPond(cp.ads,'conversion_rate_ranking'))}</td>`+
+      `<td>${rchip(rankPond(cp.ads,'quality_ranking'))}</td><td>${rchip(rankPond(cp.ads,'engagement_rate_ranking'))}</td>${convCellHTML(convOf(cp.ads),rankPond(cp.ads,'conversion_rate_ranking'))}`+
       `<td class="${fq>=4?'neg':''}">${fqTxt}</td><td>${hrTxt}</td>`+
       `<td><b>${rs(cp.gasto)}</b></td><td>${roll}</td></tr>`;
     if(open){  // anúncios CONSOLIDADOS por nome (mesmo criativo dividido por público vira 1 linha)
