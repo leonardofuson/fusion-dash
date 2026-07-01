@@ -260,6 +260,7 @@
     <div class="note">
       <div class="note-lead">Performance do <b>Site Próprio (Shopify)</b> + o <b>tráfego pago</b> que o alimenta.</div>
       <div class="note-sub">É o outro lado da mesma história das outras abas: aqui você vê a <b>loja</b> (receita, pedidos, ticket, conversão, sessões) e como o anúncio se converte em venda no site. Receita = produto sem frete (igual ao ecommerce). Sessões via GA4 (último clique, atraso ~1-2 dias).</div>
+      <div class="note-sub"><b>Novos clientes</b> = quem fez a <b>1ª compra no site</b> no período, identificado pelo <b>CPF do checkout</b> (o mesmo CPF liga site ↔ loja física). No Top Produtos, a coluna <b>Novos</b> mostra quais produtos <b>trazem gente nova</b> (estavam na 1ª compra). <span class="muted">⚠️ Hoje o CPF cobre os últimos ~60 dias (limite da API Shopify); clientes cuja 1ª compra é anterior a isso ainda podem contar como "novos" — o número afina conforme o histórico de CPF acumula.</span></div>
       <div class="note-sub"><b>Dois CPAs — por que são diferentes:</b> <b>CPA Meta</b> = gasto da Meta ÷ compras que <b>a própria Meta atribui</b> (pixel). É o número do Gerenciador de Anúncios — <b>otimista</b>, porque a Meta reivindica compras que talvez viessem sozinhas. <b>CPA Shopify</b> = <b>todo</b> o gasto em ads ÷ <b>todos os pedidos reais</b> do site. Costuma ficar <b>mais baixo</b> aqui porque o denominador inclui pedidos orgânicos/diretos que o anúncio não pagou. <b>A verdade fica entre os dois</b> — o custo real por pedido incremental só um teste de holdout mede. Use o CPA Meta pra otimizar campanha e o CPA Shopify pra saber o custo de aquisição real do caixa.</div>
     </div>
     <div class="secTitle">🛍️ Loja — performance</div>
@@ -281,8 +282,8 @@
       </div>
       <div class="card"><h3>Pago × Orgânico <span class="hint">share da receita (GA4)</span></h3><canvas id="sh-ch-mix" style="max-height:220px"></canvas></div>
     </div>
-    <div class="card"><h3>Top produtos do site <span class="hint">por receita · bestsellers da loja</span></h3>
-      <table><thead><tr><th class="l">Produto</th><th class="l">Categoria</th><th>Receita</th><th>Unidades</th><th>Margem bruta</th></tr></thead><tbody id="sh-tb-prod"></tbody></table>
+    <div class="card"><h3>Top produtos do site <span class="hint">por receita · bestsellers · aquisição de novos clientes · CPA</span></h3>
+      <table><thead><tr><th class="l">Produto</th><th class="l">Categoria</th><th>Receita</th><th>Unidades</th><th>Margem bruta</th><th title="Clientes cuja 1ª compra no site (por CPF) incluiu este produto — o que traz gente nova">Novos</th><th title="Gasto de ads atribuído ao produto ÷ unidades vendidas">CPA</th></tr></thead><tbody id="sh-tb-prod"></tbody></table>
     </div>
   </section>
 
@@ -1387,15 +1388,23 @@ async function carregarShopify(){
   if(STATE.shop && STATE.shop.key===STATE.de+'_'+STATE.ate){ renderShopify(); return; }
   const site='canal_nome_raw=eq.Site%20Pr%C3%B3prio';
   const dlen=ndays(STATE.de,STATE.ate), priorAte=somaDias(STATE.de,-1), priorDe=somaDias(STATE.de,-dlen);
-  const [ec,sku,adsMeta]=await Promise.all([
+  const ms=meses(STATE.de,STATE.ate);
+  const [ec,sku,adsMeta,novos,novosSku,skuPnl]=await Promise.all([
     buscarTudo('mvw_ecommerce_canal_dia','select=data_pedido,pedidos,receita_bruta,devolucoes&'+site+'&data_pedido=gte.'+priorDe+'&data_pedido=lte.'+STATE.ate+'&order=data_pedido.asc'),
     buscarTudo('mvw_ecommerce_sku_dia','select=data_pedido,sku_pai,nome,cat,receita,qtd,cmv&'+site+'&data_pedido=gte.'+STATE.de+'&data_pedido=lte.'+STATE.ate+'&order=data_pedido.asc'),
     // Meta: gasto + compras ATRIBUÍDAS pela Meta (unidades_diretas=omni_purchase) → CPA reportado pela plataforma
     buscarTudo('ads_metrics','select=data,gasto,unidades_diretas&plataforma=eq.meta_ads&level=eq.campaign&data=gte.'+priorDe+'&data=lte.'+STATE.ate+'&order=data.asc'),
+    // Novos clientes (1ª compra no site, por CPF do checkout)
+    buscarTudo('mvw_site_novos_dia','select=data_pedido,novos_clientes&data_pedido=gte.'+priorDe+'&data_pedido=lte.'+STATE.ate+'&order=data_pedido.asc'),
+    buscarTudo('mvw_site_novos_sku_dia','select=data_pedido,sku_pai,novos_clientes&data_pedido=gte.'+STATE.de+'&data_pedido=lte.'+STATE.ate+'&order=data_pedido.asc'),
+    // gasto de ads por SKU (site) p/ o CPA por produto
+    buscarTudo('mvw_marketing_sku_pnl','select=sku_raw,ad_spend,unidades_canal&canal_grupo=eq.site&mes=in.('+ms.join(',')+')'),
   ]);
   const inCur=d=>d>=STATE.de&&d<=STATE.ate, inPrev=d=>d>=priorDe&&d<=priorAte;
   STATE.shop={key:STATE.de+'_'+STATE.ate, ecCur:ec.filter(r=>inCur(r.data_pedido)), ecPrev:ec.filter(r=>inPrev(r.data_pedido)), sku,
-    adsMetaCur:adsMeta.filter(r=>inCur(r.data)), adsMetaPrev:adsMeta.filter(r=>inPrev(r.data))};
+    adsMetaCur:adsMeta.filter(r=>inCur(r.data)), adsMetaPrev:adsMeta.filter(r=>inPrev(r.data)),
+    novosCur:novos.filter(r=>inCur(r.data_pedido)), novosPrev:novos.filter(r=>inPrev(r.data_pedido)),
+    novosSku, skuPnl};
   renderShopify();
 }
 // store KPIs: receita/pedidos/devol da MV de ecommerce; sessões do GA4 (STATE.trafego); gasto do STATE.mer;
@@ -1423,11 +1432,14 @@ function renderShopify(){
   const P=shAgg(STATE.shop.ecPrev, STATE.trafegoPrev, STATE.merPrev, STATE.shop.adsMetaPrev);
   const hasP=STATE.shop.ecPrev.length||(STATE.trafegoPrev||[]).length;
   const dd=(a,b)=>hasP?pctDelta(a,b):null;
-  const byd={}; const put=(d,k,v)=>{(byd[d]||(byd[d]={rec:0,ped:0,sess:0,meta:0}));byd[d][k]+=v;};
+  const novosCur=(STATE.shop.novosCur||[]).reduce((s,r)=>s+(+r.novos_clientes||0),0);
+  const novosPrev=(STATE.shop.novosPrev||[]).reduce((s,r)=>s+(+r.novos_clientes||0),0);
+  const byd={}; const put=(d,k,v)=>{(byd[d]||(byd[d]={rec:0,ped:0,sess:0,meta:0,novos:0}));byd[d][k]+=v;};
   STATE.shop.ecCur.forEach(r=>{put(r.data_pedido,'rec',+r.receita_bruta||0);put(r.data_pedido,'ped',+r.pedidos||0);});
   (STATE.trafego||[]).forEach(r=>put(r.data,'sess',+r.sessions||0));
   (STATE.mer||[]).forEach(r=>put(r.data,'meta',+r.meta_spend||0));
-  const days=Object.keys(byd).sort(), ser=k=>days.map(d=>byd[d][k]);
+  (STATE.shop.novosCur||[]).forEach(r=>put(r.data_pedido,'novos',+r.novos_clientes||0));
+  const days=Object.keys(byd).sort(), ser=k=>days.map(d=>byd[d][k]||0);
   document.getElementById('sh-kpis-loja').innerHTML=[
     {l:'Receita',v:rs(K.receita),s:'produto (sem frete)',accent:true,d:dd(K.receita,P.receita),spark:'sh-s-rec'},
     {l:'Pedidos',v:(K.pedidos).toLocaleString('pt-BR'),s:'no site',d:dd(K.pedidos,P.pedidos),spark:'sh-s-ped'},
@@ -1435,6 +1447,7 @@ function renderShopify(){
     {l:'Taxa de conversão',v:pct1(K.conv),s:'pedidos ÷ sessões',d:dd(K.conv,P.conv)},
     {l:'Sessões',v:(K.sessions).toLocaleString('pt-BR'),s:'visitas (GA4)',d:dd(K.sessions,P.sessions),spark:'sh-s-sess'},
     {l:'Devoluções',v:rs(K.devol),s:(K.receita>0?Math.round(K.devol/K.receita*100):0)+'% da receita',d:dd(K.devol,P.devol),dn:true},
+    {l:'Novos clientes',v:(novosCur).toLocaleString('pt-BR'),s:'1ª compra no site (por CPF)',accent:true,d:dd(novosCur,novosPrev),spark:'sh-s-novos'},
   ].map(kpiHTML).join('');
   document.getElementById('sh-kpis-paid').innerHTML=[
     {l:'Gasto Meta',v:rs(K.meta),s:K.goog>0?'+ Google '+rs(K.goog):'paga o site',d:dd(K.meta,P.meta),dn:true,spark:'sh-s-meta'},
@@ -1447,6 +1460,7 @@ function renderShopify(){
   requestAnimationFrame(()=>{
     drawSpark('sh-s-rec',days,ser('rec'),'#22d3ee'); drawSpark('sh-s-ped',days,ser('ped'),'#7c5cff');
     drawSpark('sh-s-sess',days,ser('sess'),'#2fbf71'); drawSpark('sh-s-meta',days,ser('meta'),'#f5a623');
+    drawSpark('sh-s-novos',days,ser('novos'),'#7c5cff');
   });
   renderShopifyTrend(); renderShopifyCanais(); renderShopifyProdutos();
 }
@@ -1493,10 +1507,17 @@ function renderShopifyCanais(){
 }
 function renderShopifyProdutos(){
   const by={}; (STATE.shop.sku||[]).forEach(r=>{const k=r.sku_pai;(by[k]||(by[k]={pai:k,nome:r.nome,cat:r.cat,rec:0,qtd:0,cmv:0}));by[k].rec+=+r.receita||0;by[k].qtd+=+r.qtd||0;by[k].cmv+=+r.cmv||0;});
+  // novos clientes por produto (sku_pai)
+  const novosByPai={}; (STATE.shop.novosSku||[]).forEach(r=>{novosByPai[r.sku_pai]=(novosByPai[r.sku_pai]||0)+(+r.novos_clientes||0);});
+  // gasto de ads por sku_pai (agrega variantes CLMALHA-74 → CLMALHA)
+  const skuBase=s=>String(s||'').replace(/-[^-]*$/,'');
+  const adByPai={}; (STATE.shop.skuPnl||[]).forEach(r=>{const k=skuBase(r.sku_raw);adByPai[k]=(adByPai[k]||0)+(+r.ad_spend||0);});
   document.getElementById('sh-tb-prod').innerHTML=Object.values(by).sort((a,b)=>b.rec-a.rec).slice(0,12).map(p=>{
     const mb=p.rec>0?(p.rec-p.cmv)/p.rec:null;
-    return `<tr><td class="l">${(p.nome||p.pai||'').slice(0,40)}</td><td class="l muted">${p.cat||'—'}</td><td>${rs(p.rec)}</td><td>${(p.qtd).toLocaleString('pt-BR')}</td><td>${mb!=null?Math.round(mb*100)+'%':'—'}</td></tr>`;
-  }).join('')||'<tr><td colspan="5" class="l muted" style="padding:12px">Sem produtos no período.</td></tr>';
+    const nov=novosByPai[p.pai]||0;
+    const ad=adByPai[p.pai]||0; const cpa=(ad>0&&p.qtd>0)?ad/p.qtd:null;
+    return `<tr><td class="l">${(p.nome||p.pai||'').slice(0,38)}</td><td class="l muted">${p.cat||'—'}</td><td>${rs(p.rec)}</td><td>${(p.qtd).toLocaleString('pt-BR')}</td><td>${mb!=null?Math.round(mb*100)+'%':'—'}</td><td>${nov>0?nov.toLocaleString('pt-BR'):'—'}</td><td>${cpa!=null?rs(cpa):'—'}</td></tr>`;
+  }).join('')||'<tr><td colspan="7" class="l muted" style="padding:12px">Sem produtos no período.</td></tr>';
 }
 function setSGran(g){STATE.sgran=g;document.getElementById('sgran-d').classList.toggle('on',g==='diario');document.getElementById('sgran-m').classList.toggle('on',g==='mensal');renderShopifyTrend();}
 
