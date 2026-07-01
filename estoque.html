@@ -1513,6 +1513,15 @@ function renderProd(pai, locF, modoQuebrada, nivel) {
       const rt = tams.reduce((s, t) => s + ((pai.cores[c][t] || {})[l.key] || 0), 0);
       return `<tr><td class="tdc"><span class="cor-dot" style="background:${corV(c)}"></span>${c}</td>${cells}<td class="tot">${rt > 0 ? fmt(rt) : '—'}</td></tr>`;
     }).join('');
+    // Totalizador por tamanho: soma cada coluna de tamanho entre as cores (só faz sentido com >1 cor)
+    let tfoot = '';
+    if (cors.length > 1) {
+      const tfCells = tams.map(t => {
+        const q = cors.reduce((s, c) => s + ((pai.cores[c][t] || {})[l.key] || 0), 0);
+        return `<td>${q === 0 ? '—' : fmt(q)}</td>`;
+      }).join('');
+      tfoot = `<tfoot><tr><td class="tdc">TOTAL</td>${tfCells}<td class="tot">${v > 0 ? fmt(v) : '—'}</td></tr></tfoot>`;
+    }
     return `<div class="ch-item" style="--ch-cor:${l.cor}">
       <div class="ch-item-head" onclick="toggleCanalItem('${lid}')">
         <span class="ch-item-arrow${isItemOpen ? ' open' : ''}" id="carrow-${lid}">▶</span>
@@ -1525,6 +1534,7 @@ function renderProd(pai, locF, modoQuebrada, nivel) {
         <div class="mwrap"><table class="mtz">
           <thead><tr><th class="thc">Cor</th>${thTams}<th>Total</th></tr></thead>
           <tbody>${lins}</tbody>
+          ${tfoot}
         </table></div>
       </div>
     </div>`;
