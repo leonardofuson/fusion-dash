@@ -1418,8 +1418,16 @@ function renderHero(){
 }
 
 // ── GEOGRAPHY ──
+// Mapa pedido_id → {uf,cidade,metodo,parcelas} — pra atribuir geo/pgto aos itens de um produto.
+function _pedInfo(){var m={};(STATE.pedidos||[]).forEach(function(p){m[p.id]={uf:p.uf,cidade:p.cidade,metodo:p.metodo_pagamento,parcelas:p.parcelas};});return m;}
+function _itensProduto(){return (STATE.itensFocus||[]).filter(function(it){return it._sku_pai===STATE.focusProduto&&it._canc!=='cancelado'&&it._canc!=='devolvido';});}
 function renderGeo(){
   var byUF={},byCity={};
+  if(STATE.focusProduto){var pm=_pedInfo();
+    _itensProduto().forEach(function(it){var o=pm[it.pedido_id];if(!o)return;var uf=(o.uf||'').trim().toUpperCase();if(!uf||uf.length!==2)return;var cidade=(o.cidade||'').trim();var v=it._receita||0;
+      if(!byUF[uf])byUF[uf]={r:0,n:0};byUF[uf].r+=v;byUF[uf].n++;
+      if(cidade){var ck=uf+'|'+cidade;if(!byCity[ck])byCity[ck]={uf:uf,cidade:cidade,r:0,n:0};byCity[ck].r+=v;byCity[ck].n++;}
+    });pintarGeo(byUF,byCity);return;}
   STATE.pedidos.forEach(function(p){if(p._canc)return;var uf=(p.uf||'').trim().toUpperCase();if(!uf||uf.length!==2)return;var cidade=(p.cidade||'').trim();var v=valorReceita(p);
     if(!byUF[uf])byUF[uf]={r:0,n:0};byUF[uf].r+=v;byUF[uf].n++;
     if(cidade){var ck=uf+'|'+cidade;if(!byCity[ck])byCity[ck]={uf:uf,cidade:cidade,r:0,n:0};byCity[ck].r+=v;byCity[ck].n++;}
@@ -1460,6 +1468,11 @@ function geoSelectUF(uf){GEO_UF_SEL=GEO_UF_SEL===uf?null:uf;renderGeo();}
 // ── PAYMENTS ──
 function renderPayments(){
   var methods={},installments={};
+  if(STATE.focusProduto){var pm=_pedInfo();
+    _itensProduto().forEach(function(it){var o=pm[it.pedido_id];if(!o)return;var m=o.metodo||'';var parc=parseInt(o.parcelas||0);var v=it._receita||0;
+      if(m){if(!methods[m])methods[m]={r:0,n:0};methods[m].r+=v;methods[m].n++;}
+      if(parc>0){var faixa=parc===1?'1x':(parc<=3?'2-3x':(parc<=6?'4-6x':'7-12x'));if(!installments[faixa])installments[faixa]={r:0,n:0};installments[faixa].r+=v;installments[faixa].n++;}
+    });pintarPayments(methods,installments);return;}
   STATE.pedidos.forEach(function(p){if(p._canc)return;var m=p.metodo_pagamento||'';var parc=parseInt(p.parcelas||0);var v=valorReceita(p);
     if(m){if(!methods[m])methods[m]={r:0,n:0};methods[m].r+=v;methods[m].n++;}
     if(parc>0){var faixa=parc===1?'1x':(parc<=3?'2-3x':(parc<=6?'4-6x':'7-12x'));if(!installments[faixa])installments[faixa]={r:0,n:0};installments[faixa].r+=v;installments[faixa].n++;}
@@ -1501,7 +1514,12 @@ function pintarPayments(methods,installments){
 var DIAS_SEM=['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
 function dowIdx(dstr){var dt=new Date(dstr+'T12:00:00Z');return(dt.getUTCDay()+6)%7;}
 function renderDowHeat(){
-  var ped=STATE.pedidosFull||STATE.pedidos;var matrix={};
+  var matrix={};
+  if(STATE.focusProduto){
+    _itensProduto().forEach(function(it){var d=(it._data||'').slice(0,10);if(!d)return;var n=it._canal;if(!matrix[n])matrix[n]=new Array(7).fill(0);matrix[n][dowIdx(d)]+=it._receita||0;});
+    pintarDowHeat(matrix);return;
+  }
+  var ped=STATE.pedidosFull||STATE.pedidos;
   ped.forEach(function(p){if(p._canc)return;var d=(p.data_pedido||'').slice(0,10);if(!d)return;if(!matrix[p._nome])matrix[p._nome]=new Array(7).fill(0);matrix[p._nome][dowIdx(d)]+=valorReceita(p);});
   pintarDowHeat(matrix);
 }
@@ -2162,7 +2180,7 @@ async function carregarMensal(){
 async function carregarMensalDetalhe(de,ate){
   try{var g=await fetchGeoMV(de,ate);STATE.geoMVRows=g;renderGeoMV(g);}catch(e){console.warn('mensal geo',e);}
   try{var p=await fetchPgtoMV(de,ate);STATE.pgtoMVRows=p;renderPaymentsMV(p);}catch(e){console.warn('mensal pgto',e);}
-  try{var s=await fetchSkuMVData(de,ate);STATE.mensalSkuRows=s;agruparSkusMV(s);renderPareto();renderDowHeatMV(s);renderMensalProdEvol();}catch(e){console.warn('mensal sku',e);}
+  try{var s=await fetchSkuMVData(de,ate);STATE.mensalSkuRows=s;agruparSkusMV(s);renderPareto();renderDowHeatMV(s);renderMensalProdEvol();if(STATE.focusProduto)renderMensal();}catch(e){console.warn('mensal sku',e);}
 }
 // Agrega a MV canal_dia por mês. Receita/Comissão/Devol/Frete = REAIS da MV;
 // CMV = estimativa pela proporção real por canal (cmvPct) — meses não têm item carregado.
@@ -2177,6 +2195,25 @@ function aggMensal(rows){
     m.receita+=rb;m.comissao+=parseFloat(r.comissao||0);m.dev+=parseFloat(r.devolucoes||0);
     m.frete+=parseFloat(r.frete_seller||0);m.cmv+=rb*cmvPct(canal);
     m.pedidos+=parseInt(r.pedidos||0)-parseInt(r.cancelados||0);
+    m.porCanal[canal]=(m.porCanal[canal]||0)+rb;
+  });
+  return Object.keys(bm).sort().map(function(k){var m=bm[k];
+    m.liquida=m.receita-m.comissao-m.dev-m.frete;m.impostos=TAX_RATE*(m.receita-m.dev);m.resultado=m.liquida-m.cmv-m.impostos;
+    m.margem=m.receita>0?m.resultado/m.receita*100:0;m.ticket=m.pedidos>0?m.receita/m.pedidos:0;return m;});
+}
+// Mensal para 1 produto focado: receita/unidades/CMV REAIS da MV de sku; comissão estimada por
+// canal (custoPct); frete/devolução não existem por produto/mês → 0 (limitação, sinalizada).
+// "pedidos" carrega UNIDADES (não há contagem de pedido por produto/mês na MV).
+function aggMensalProduto(){
+  var bm={};
+  (STATE.mensalSkuRows||[]).forEach(function(r){
+    if(r.sku_pai!==STATE.focusProduto)return;
+    var canal=getNome(r.canal_nome_raw,r.origem_conta);
+    if(STATE.mensalCanalSel&&STATE.mensalCanalSel[canal]===false)return;
+    var ym=(r.data_pedido||'').slice(0,7);if(!ym)return;
+    if(!bm[ym])bm[ym]={ym:ym,receita:0,comissao:0,dev:0,frete:0,cmv:0,pedidos:0,porCanal:{}};
+    var m=bm[ym],rb=parseFloat(r.receita||0);
+    m.receita+=rb;m.cmv+=parseFloat(r.cmv||0);m.comissao+=rb*custoPct(canal);m.pedidos+=parseFloat(r.qtd||0);
     m.porCanal[canal]=(m.porCanal[canal]||0)+rb;
   });
   return Object.keys(bm).sort().map(function(k){var m=bm[k];
@@ -2204,7 +2241,7 @@ function renderMensal(){
   renderMensalCanalChips();
   var de=(STATE.mensalDe||inicioJanelaMensal(STATE.mensalMeses||12)).slice(0,7);
   var ate=(STATE.mensalAte||hojeSP()).slice(0,7);
-  var all=aggMensal(STATE.mensalRows);                                  // todos os meses
+  var all=STATE.focusProduto?aggMensalProduto():aggMensal(STATE.mensalRows);   // produto focado usa a MV de sku
   var M=all.filter(function(m){return m.ym>=de&&m.ym<=ate;});          // janela selecionada
   if(!M.length){document.getElementById('mensal-kpis').innerHTML='<div class="kpi"><div class="kpi-lbl">Sem dados</div></div>';return;}
   // KPIs = TOTAIS da janela. Comparação (igual ao dash Lojas): YoY = mesmo período do
@@ -2223,7 +2260,7 @@ function renderMensal(){
   var k='';
   k+='<div class="kpi" style="--kpi-accent:#6366f1"><div class="kpi-lbl">Receita Bruta</div><div class="kpi-val">'+fmt(cur.receita)+'</div>'+dlt(cur.receita,prev.receita)+'</div>';
   k+='<div class="kpi" style="--kpi-accent:#06b6d4"><div class="kpi-lbl">Receita Líquida</div><div class="kpi-val">'+fmt(cur.liquida)+'</div>'+dlt(cur.liquida,prev.liquida)+'</div>';
-  k+='<div class="kpi" style="--kpi-accent:#22c55e"><div class="kpi-lbl">Pedidos</div><div class="kpi-val">'+fmtN(cur.pedidos)+'</div>'+dlt(cur.pedidos,prev.pedidos)+'</div>';
+  k+='<div class="kpi" style="--kpi-accent:#22c55e"><div class="kpi-lbl">'+(STATE.focusProduto?'Unidades':'Pedidos')+'</div><div class="kpi-val">'+fmtN(cur.pedidos)+'</div>'+dlt(cur.pedidos,prev.pedidos)+'</div>';
   k+='<div class="kpi" style="--kpi-accent:#06b6d4"><div class="kpi-lbl">Ticket Médio</div><div class="kpi-val">'+fmt(cur.ticket)+'</div>'+dlt(cur.ticket,prev.ticket)+'</div>';
   k+='<div class="kpi" style="--kpi-accent:#ec4899"><div class="kpi-lbl">CMV % (ACGS)</div><div class="kpi-val">'+fmtD(cur.cmvPct)+'%</div><div class="kpi-sub">'+fmtK(cur.cmv)+' custo</div>'+dlt(cur.cmvPct,prev.cmvPct)+'</div>';
   k+='<div class="kpi" style="--kpi-accent:'+(cur.resultado>=0?"#22c55e":"#f43f5e")+'"><div class="kpi-lbl">Resultado</div><div class="kpi-val" style="color:'+(cur.resultado>=0?"#22c55e":"#f43f5e")+'">'+fmt(cur.resultado)+'</div><div class="kpi-sub">margem '+fmtD(cur.margem)+'%</div>'+dlt(cur.resultado,prev.resultado)+'</div>';
