@@ -1245,6 +1245,30 @@ function weekLabel(d) {
   return (dt.getDate() < 10 ? '0' : '') + dt.getDate() + '/' + (dt.getMonth() < 9 ? '0' : '') + (dt.getMonth()+1);
 }
 
+// Previsão ESTIMADA de entrega = data de cadastro (criado_em) + 45 dias.
+// Só pra EXIBIÇÃO quando a analista ainda não confirmou data_prevista_entrega.
+// NÃO é gravada no banco — o próprio null é o sinal de "não confirmada".
+function previsaoEstimadaStr(o) {
+  var base = (o.criado_em || '').slice(0, 10);
+  if (!base) return null;
+  var d = new Date(base + 'T00:00:00');
+  if (isNaN(d.getTime())) return null;
+  d.setDate(d.getDate() + 45);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+// Célula de "Data Prevista" na lista de ordens: confirmada = normal; não confirmada
+// = estimada (+45d do cadastro) em amarelo com nota. Ao salvar a data no Editar OP,
+// o campo vira não-null e a célula volta ao normal automaticamente.
+function celulaPrevEntrega(o) {
+  if (o.data_prevista_entrega) return '<td class="dim">' + formatDate(o.data_prevista_entrega) + '</td>';
+  var est = previsaoEstimadaStr(o);
+  if (!est) return '<td class="dim">—</td>';
+  return '<td style="color:var(--amber);white-space:nowrap" title="Estimada: data de cadastro + 45 dias. Ainda não confirmada pela analista de compras.">' +
+    formatDate(est) +
+    '<div style="font-size:10px;color:var(--amber);opacity:.85;font-weight:500">não confirmada</div></td>';
+}
+
 function renderOPsLista() {
   // Lista de Ordens mostra apenas OPs ATIVAS (Em Produção / Devolvido Fornecedor)
   var ops = STATE.ops.filter(function(o) {
@@ -1297,7 +1321,7 @@ function renderOPsLista() {
       '<td class="r" style="color:var(--indigo);font-weight:600">'+(o.quantidade_tecido_usada ? fmt(Math.round(o.quantidade_tecido_usada))+' '+(o.unidade||'m') : '—')+'</td>' +
       '<td class="r">'+fmt(entregues)+' <span style="color:var(--txt3);font-size:11px">('+pct+'%)</span></td>' +
       '<td class="dim">'+(o.data_envio_tecido?formatDate(o.data_envio_tecido):'—')+'</td>' +
-      '<td class="dim">'+(o.data_prevista_entrega?formatDate(o.data_prevista_entrega):'—')+'</td>' +
+      celulaPrevEntrega(o) +
       '<td>'+statusPill(o.status)+'</td></tr>';
   }).join('');
   document.getElementById('tbody-ops-lista').innerHTML = html || '<tr><td colspan="9" class="empty">Nenhuma ordem</td></tr>';
@@ -1720,7 +1744,9 @@ function abrirSubgrupoOps(idsCsv) {
     var entregues = Math.round(o.qtde_pecas_entregues || 0);
     var pendente = pecas - entregues;
     var pct = pecas > 0 ? Math.round(entregues/pecas*100) : 0;
-    var prevData = o.data_prevista_entrega ? formatDate(o.data_prevista_entrega) : '—';
+    var estPrev = o.data_prevista_entrega ? null : previsaoEstimadaStr(o);
+    var prevData = o.data_prevista_entrega ? formatDate(o.data_prevista_entrega)
+      : (estPrev ? '<span style="color:var(--amber)">' + formatDate(estPrev) + ' (não confirmada)</span>' : '—');
     return '<div style="padding:14px;background:var(--bg3);border:1px solid var(--bdr);border-radius:10px;">' +
       '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">' +
         '<span style="width:16px;height:16px;border-radius:3px;background:'+corToColor(cor)+';flex-shrink:0"></span>' +
