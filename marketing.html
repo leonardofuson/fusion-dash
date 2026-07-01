@@ -283,7 +283,7 @@
       <div class="card"><h3>Pago × Orgânico <span class="hint">share da receita (GA4)</span></h3><canvas id="sh-ch-mix" style="max-height:220px"></canvas></div>
     </div>
     <div class="card"><h3>Top produtos do site <span class="hint">por receita · bestsellers · aquisição de novos clientes · CPA</span></h3>
-      <table><thead><tr><th class="l">Produto</th><th class="l">Categoria</th><th>Receita</th><th>Unidades</th><th title="Conversão da página do produto (GA4): compras ÷ views. Só produtos mapeados ao GA4 (~86% das views).">Conversão</th><th>Margem bruta</th><th title="Clientes cuja 1ª compra no site (por CPF) incluiu este produto — o que traz gente nova">Novos</th><th title="Gasto de ads atribuído ao produto ÷ unidades vendidas">CPA</th></tr></thead><tbody id="sh-tb-prod"></tbody></table>
+      <table><thead><tr><th class="l">Produto</th><th class="l">Categoria</th><th>Receita</th><th>Unidades</th><th title="Conversão da página do produto (GA4): compras ÷ views. Só produtos mapeados ao GA4 (~86% das views).">Conversão</th><th>Margem bruta</th><th title="Clientes cuja 1ª compra no site (por CPF) incluiu este produto — o que traz gente nova">Novos</th><th title="CAC: gasto real de ads do produto (Meta+Google, por SKU) ÷ novos clientes que ele trouxe. Custo pra adquirir 1 cliente novo via este produto. (Blended/real — a aba Saúde de Criativo mostra o CPA por conversão atribuída pela Meta, que é maior.)">CPA (CAC)</th></tr></thead><tbody id="sh-tb-prod"></tbody></table>
     </div>
   </section>
 
@@ -1397,8 +1397,8 @@ async function carregarShopify(){
     // Novos clientes (1ª compra no site, por CPF do checkout)
     buscarTudo('mvw_site_novos_dia','select=data_pedido,novos_clientes&data_pedido=gte.'+priorDe+'&data_pedido=lte.'+STATE.ate+'&order=data_pedido.asc'),
     buscarTudo('mvw_site_novos_sku_dia','select=data_pedido,sku_pai,novos_clientes&data_pedido=gte.'+STATE.de+'&data_pedido=lte.'+STATE.ate+'&order=data_pedido.asc'),
-    // gasto de ads por SKU (site) p/ o CPA por produto
-    buscarTudo('mvw_marketing_sku_pnl','select=sku_raw,ad_spend,unidades_canal&canal_grupo=eq.site&mes=in.('+ms.join(',')+')'),
+    // gasto REAL de ads por sku_pai (ads_metrics item, meta+google) p/ o CPA/CAC por produto
+    buscarTudo('mvw_site_ads_sku_dia','select=data_pedido,sku_pai,gasto&data_pedido=gte.'+STATE.de+'&data_pedido=lte.'+STATE.ate),
     // conversão por produto (GA4 item-scope: views + compras por sku_pai)
     buscarTudo('web_produto_dia','select=sku_pai,views,compras&data=gte.'+STATE.de+'&data=lte.'+STATE.ate),
   ]);
@@ -1406,7 +1406,7 @@ async function carregarShopify(){
   STATE.shop={key:STATE.de+'_'+STATE.ate, ecCur:ec.filter(r=>inCur(r.data_pedido)), ecPrev:ec.filter(r=>inPrev(r.data_pedido)), sku,
     adsMetaCur:adsMeta.filter(r=>inCur(r.data)), adsMetaPrev:adsMeta.filter(r=>inPrev(r.data)),
     novosCur:novos.filter(r=>inCur(r.data_pedido)), novosPrev:novos.filter(r=>inPrev(r.data_pedido)),
-    novosSku, skuPnl, conv};
+    novosSku, adsSku:skuPnl, conv};
   renderShopify();
 }
 // store KPIs: receita/pedidos/devol da MV de ecommerce; sessões do GA4 (STATE.trafego); gasto do STATE.mer;
@@ -1511,15 +1511,15 @@ function renderShopifyProdutos(){
   const by={}; (STATE.shop.sku||[]).forEach(r=>{const k=r.sku_pai;(by[k]||(by[k]={pai:k,nome:r.nome,cat:r.cat,rec:0,qtd:0,cmv:0}));by[k].rec+=+r.receita||0;by[k].qtd+=+r.qtd||0;by[k].cmv+=+r.cmv||0;});
   // novos clientes por produto (sku_pai)
   const novosByPai={}; (STATE.shop.novosSku||[]).forEach(r=>{novosByPai[r.sku_pai]=(novosByPai[r.sku_pai]||0)+(+r.novos_clientes||0);});
-  // gasto de ads por sku_pai (agrega variantes CLMALHA-74 → CLMALHA)
-  const skuBase=s=>String(s||'').replace(/-[^-]*$/,'');
-  const adByPai={}; (STATE.shop.skuPnl||[]).forEach(r=>{const k=skuBase(r.sku_raw);adByPai[k]=(adByPai[k]||0)+(+r.ad_spend||0);});
+  // gasto REAL de ads por sku_pai (mvw_site_ads_sku_dia, meta+google, já resolvido)
+  const adByPai={}; (STATE.shop.adsSku||[]).forEach(r=>{adByPai[r.sku_pai]=(adByPai[r.sku_pai]||0)+(+r.gasto||0);});
   // conversão por produto (GA4): compras ÷ views por sku_pai
   const convByPai={}; (STATE.shop.conv||[]).forEach(r=>{const k=r.sku_pai;(convByPai[k]||(convByPai[k]={v:0,c:0}));convByPai[k].v+=+r.views||0;convByPai[k].c+=+r.compras||0;});
   document.getElementById('sh-tb-prod').innerHTML=Object.values(by).sort((a,b)=>b.rec-a.rec).slice(0,12).map(p=>{
     const mb=p.rec>0?(p.rec-p.cmv)/p.rec:null;
     const nov=novosByPai[p.pai]||0;
-    const ad=adByPai[p.pai]||0; const cpa=(ad>0&&p.qtd>0)?ad/p.qtd:null;
+    // CPA = CAC: gasto real de ads do produto ÷ clientes novos adquiridos por ele
+    const ad=adByPai[p.pai]||0; const cpa=(ad>0&&nov>0)?ad/nov:null;
     const cv=convByPai[p.pai]; const conv=(cv&&cv.v>0)?cv.c/cv.v:null;
     return `<tr><td class="l">${(p.nome||p.pai||'').slice(0,38)}</td><td class="l muted">${p.cat||'—'}</td><td>${rs(p.rec)}</td><td>${(p.qtd).toLocaleString('pt-BR')}</td><td>${conv!=null?(conv*100).toFixed(1)+'%':'—'}</td><td>${mb!=null?Math.round(mb*100)+'%':'—'}</td><td>${nov>0?nov.toLocaleString('pt-BR'):'—'}</td><td>${cpa!=null?rs(cpa):'—'}</td></tr>`;
   }).join('')||'<tr><td colspan="8" class="l muted" style="padding:12px">Sem produtos no período.</td></tr>';
