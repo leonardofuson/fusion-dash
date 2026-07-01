@@ -519,7 +519,13 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
   </div>
 
   <div class="card c-pareto">
-    <div class="card-title" id="pareto-title">Mix de Produtos no fat — Pareto 80/20</div>
+    <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+      <span id="pareto-title">Mix de Produtos no fat — Pareto 80/20</span>
+      <div class="chips" style="gap:4px;">
+        <button class="chip-sm on" id="par-rs" onclick="setParetoMode('receita')">R$</button>
+        <button class="chip-sm" id="par-qt" onclick="setParetoMode('qtd')">Qtd</button>
+      </div>
+    </div>
     <div class="chart-sm" style="height:280px"><canvas id="chart-pareto"></canvas></div>
   </div>
 
@@ -711,7 +717,7 @@ async function fetchProdutos(){
 
 // ---- State ----
 var DE=null, ATE=null;
-var STATE={pedidos:[],anteriores:[],pedidosEscopo:[],anterioresEscopo:[],itens:[],prods:null,lojas:[],lojasSel:{},stackMode:'abs',skuGroups:[],skuSel:null,vendSel:null,totLoja:{},metas:{},metasVend:{},metasLoaded:false,freshness:null,lojaHighlight:null,catSel:null,vendSort:{key:'fat',dir:'desc'},skuSort:{key:'receita',dir:'desc'},viewMode:'diario'};
+var STATE={pedidos:[],anteriores:[],pedidosEscopo:[],anterioresEscopo:[],itens:[],prods:null,lojas:[],lojasSel:{},stackMode:'abs',skuGroups:[],skuSel:null,vendSel:null,totLoja:{},metas:{},metasVend:{},metasLoaded:false,freshness:null,lojaHighlight:null,catSel:null,vendSort:{key:'fat',dir:'desc'},skuSort:{key:'receita',dir:'desc'},viewMode:'diario',paretoMode:'receita'};
 var CHARTS={hero:null,pareto:null,sparkPed:null,sparkTM:null,sparkPA:null,lojaSparklines:[]};
 
 function setPeriodo(preset,el){
@@ -799,6 +805,12 @@ function setStack(m){
   document.getElementById('stk-abs').classList.toggle('on',m==='abs');
   document.getElementById('stk-pct').classList.toggle('on',m==='pct');
   renderHero();
+}
+function setParetoMode(m){
+  STATE.paretoMode=m;
+  document.getElementById('par-rs').classList.toggle('on',m==='receita');
+  document.getElementById('par-qt').classList.toggle('on',m==='qtd');
+  renderPareto();
 }
 
 function periodoAnterior(de,ate){
@@ -2143,20 +2155,23 @@ function renderPareto(){
     var f=itensFiltrados();
     grupos=gruparSkusFromItens(f.itens);
   }
-  // ordena desc por receita (defensivo) e calcula o corte 80% sobre TODOS os produtos
-  var sorted=grupos.slice().sort(function(a,b){return b.receita-a.receita;});
-  var totAll=sorted.reduce(function(s,x){return s+x.receita;},0);
+  // métrica selecionada: receita (R$) ou qtd (unidades)
+  var qtdMode=STATE.paretoMode==='qtd';
+  var val=function(s){return qtdMode?(s.qtd||0):(s.receita||0);};
+  // ordena desc pela métrica e calcula o corte 80% sobre TODOS os produtos
+  var sorted=grupos.slice().sort(function(a,b){return val(b)-val(a);});
+  var totAll=sorted.reduce(function(s,x){return s+val(x);},0);
   var acc=0,n80=0;
-  for(var i=0;i<sorted.length;i++){acc+=sorted[i].receita;n80++;if(totAll>0&&acc>=0.8*totAll)break;}
+  for(var i=0;i<sorted.length;i++){acc+=val(sorted[i]);n80++;if(totAll>0&&acc>=0.8*totAll)break;}
   var ptit=document.getElementById('pareto-title');
-  if(ptit) ptit.textContent='Mix de Produtos — Pareto 80/20 · '+n80+' de '+sorted.length+' produtos = 80% da receita';
+  if(ptit) ptit.textContent='Mix de Produtos — Pareto 80/20 · '+n80+' de '+sorted.length+' produtos = 80% '+(qtdMode?'das unidades':'da receita');
   var top=sorted.slice(0,20);
   var labels=top.map(function(s){
     var nome=s.nome||s.sku_pai;
     return nome.length>26?nome.slice(0,24)+'…':nome;
   });
   var fullNames=top.map(function(s){return s.nome||s.sku_pai;});
-  var receita=top.map(function(s){return s.receita;});
+  var receita=top.map(function(s){return val(s);});   // "receita" = métrica escolhida
   var tot=totAll;
   var cum=0;
   var cumPct=receita.map(function(v){cum+=v;return tot>0?cum/tot*100:0;});
@@ -2167,7 +2182,7 @@ function renderPareto(){
   CHARTS.pareto=new Chart(document.getElementById('chart-pareto'),{
     plugins:[paretoLabelsPlugin],
     data:{labels:labels,datasets:[
-      {type:'bar',label:'Receita',data:receita,backgroundColor:barCor,borderRadius:4,borderSkipped:false,yAxisID:'y'},
+      {type:'bar',label:qtdMode?'Unidades':'Receita',data:receita,backgroundColor:barCor,borderRadius:4,borderSkipped:false,yAxisID:'y'},
       {type:'line',label:'Cumulativo %',data:cumPct,borderColor:'#eab308',backgroundColor:'rgba(234,179,8,0.08)',tension:0.35,
         pointRadius:3,pointBackgroundColor:'#eab308',pointBorderColor:'#09090b',pointBorderWidth:1.5,pointHoverRadius:6,borderWidth:2.5,yAxisID:'y1'},
       {type:'line',label:'Corte 80%',data:linha80,borderColor:'rgba(255,255,255,0.45)',borderDash:[5,4],borderWidth:1.5,
@@ -2178,11 +2193,11 @@ function renderPareto(){
       tooltip:{backgroundColor:'rgba(24,24,27,0.96)',titleColor:'#fafafa',bodyColor:'#fafafa',borderColor:'#2a2a2e',borderWidth:1,padding:12,cornerRadius:10,boxPadding:6,usePointStyle:true,
         callbacks:{
           title:function(ctx){return fullNames[ctx[0].dataIndex];},
-          label:function(ctx){var v=ctx.parsed.y;return ' '+ctx.dataset.label+': '+(ctx.dataset.yAxisID==='y1'?fmtD(v)+'%':fmt(v));}
+          label:function(ctx){var v=ctx.parsed.y;return ' '+ctx.dataset.label+': '+(ctx.dataset.yAxisID==='y1'?fmtD(v)+'%':(qtdMode?fmtN(v)+' un':fmt(v)));}
         }}},
       scales:{
         x:{ticks:{color:'#d4d4d8',font:{size:10,weight:'600',lineHeight:1.5},maxRotation:55,minRotation:40},grid:{display:false}},
-        y:{ticks:{color:'#a1a1aa',font:{size:11,weight:'400',lineHeight:1.6},padding:6,callback:function(v){return fmtK(v);}},grid:{color:'rgba(255,255,255,0.03)'}},
+        y:{ticks:{color:'#a1a1aa',font:{size:11,weight:'400',lineHeight:1.6},padding:6,callback:function(v){return qtdMode?fmtN(v):fmtK(v);}},grid:{color:'rgba(255,255,255,0.03)'}},
         y1:{position:'right',min:0,max:100,ticks:{color:'#eab308',font:{size:11,weight:'400',lineHeight:1.6},padding:6,callback:function(v){return v+'%';}},grid:{display:false}}
       }}
   });
