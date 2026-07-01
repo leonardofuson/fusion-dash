@@ -1,0 +1,245 @@
+<!doctype html><html lang="pt-BR"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Shopify — Fusion BI</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="auth.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root{--bg:#0f1115;--panel:#171a21;--panel2:#1e222b;--line:#2a2f3a;--txt:#e7ebf2;--mut:#9aa3b2;--accent:#7c5cff;--accent2:#22d3ee;--green:#2fbf71;--red:#ef5350;--amber:#f5a623;--shop:#95bf47}
+  *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:14px}
+  .topbar{display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5;flex-wrap:wrap}
+  .topbar b{font-weight:800}.topbar .sh{color:var(--shop)}
+  .btn{background:var(--panel2);border:1px solid var(--line);color:var(--txt);padding:7px 12px;border-radius:8px;cursor:pointer;font-size:13px;text-decoration:none}
+  .btn:hover{border-color:var(--accent)}.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .chip{background:var(--panel2);border:1px solid var(--line);padding:6px 12px;border-radius:20px;cursor:pointer;font-size:12px;color:var(--mut)}
+  .chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .custrange{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--mut)}
+  .custrange input[type=date]{background:var(--panel2);border:1px solid var(--line);color:var(--txt);padding:5px 8px;border-radius:8px;font-size:12px;color-scheme:dark}
+  main{padding:18px;max-width:1240px;margin:0 auto}
+  .secTitle{font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--mut);margin:20px 2px 8px;display:flex;align-items:center;gap:8px}
+  .secTitle::before{content:'';width:8px;height:8px;border-radius:2px;background:var(--accent)}
+  .secTitle.paid::before{background:var(--amber)}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;position:relative;overflow:hidden}
+  .kpi.accent{border-color:rgba(124,92,255,.4)}.kpi.paid{border-color:rgba(245,166,35,.35)}
+  .kpi .lbl{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.4px}
+  .kpi .val{font-size:23px;font-weight:800;margin-top:6px;white-space:nowrap}
+  .kpi.accent .val{color:var(--accent2)}.kpi .sub{color:var(--mut);font-size:12px;margin-top:2px}
+  .kpi .val.pos{color:var(--green)}.kpi .val.neg{color:var(--red)}
+  .kpi-spark{position:absolute;right:7px;bottom:7px;width:44%;height:26px;opacity:.5;pointer-events:none}
+  .delta-badge{font-size:11px;font-weight:700;padding:1px 6px;border-radius:10px;margin-left:6px;white-space:nowrap}
+  .delta-badge.up{background:rgba(47,191,113,.16);color:var(--green)}.delta-badge.down{background:rgba(239,83,80,.16);color:var(--red)}.delta-badge.flat{background:rgba(154,163,178,.16);color:var(--mut)}
+  .grid2{display:grid;grid-template-columns:1.5fr 1fr;gap:14px}@media(max-width:820px){.grid2{grid-template-columns:1fr}}
+  .grid2b{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:820px){.grid2b{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
+  .card h3{margin:0 0 10px;font-size:14px}.card h3 .hint{color:var(--mut);font-weight:400;font-size:12px}
+  table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line)}
+  th{color:var(--mut);font-weight:600}td.r,th.r{text-align:right}td a{color:var(--accent2);text-decoration:none}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:middle}
+  .gran-toggle{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-left:auto}
+  .gran-toggle button{background:var(--panel2);border:none;color:var(--mut);padding:5px 12px;font-size:12px;cursor:pointer}
+  .gran-toggle button.on{background:var(--accent);color:#fff}
+  .note{background:linear-gradient(135deg,rgba(149,191,71,.13),rgba(149,191,71,.04));border:1px solid rgba(149,191,71,.3);border-left:3px solid var(--shop);border-radius:12px;padding:13px 16px;margin-bottom:16px;font-size:13px;line-height:1.6}
+  .note b{color:#fff}.muted{color:var(--mut)}
+  #loader{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;color:var(--mut)}
+</style></head>
+<body>
+<div class="topbar"><b>FUSION <span class="sh">Shopify</span></b><span class="muted" style="font-size:12px">Site Próprio</span>
+  <span class="chip" data-p="7d">7 dias</span><span class="chip on" data-p="30d">30 dias</span><span class="chip" data-p="mtd">Este Mês</span><span class="chip" data-p="m-1">Último Mês</span><span class="chip" data-p="ytd">Este Ano</span>
+  <span class="custrange">📅 <input type="date" id="c-de"><span>–</span><input type="date" id="c-ate"><button class="btn" id="c-go" style="padding:5px 11px;font-size:12px">Aplicar</button></span>
+  <span style="flex:1"></span><span class="muted" id="who" style="font-size:12px"></span>
+  <button class="btn" id="btnRefresh">↻ Atualizar</button><a class="btn" href="/index.html">Menu</a><button class="btn" id="btnOut">Sair</button></div>
+<main>
+  <div class="note">Performance do <b>Site Próprio (Shopify)</b> e do <b>tráfego pago</b> (paid traffic) que o alimenta — vendas, conversão, e o retorno dos anúncios que trazem gente pro site. <span class="muted">Receita = produto (sem frete), igual ao dash de ecommerce. Sessões via GA4 (último clique, pode ter atraso de ~2 dias). Δ = vs período anterior de mesma duração.</span></div>
+
+  <div class="secTitle">🛍️ Loja — performance</div>
+  <div class="kpis" id="kpis-loja"></div>
+
+  <div class="secTitle paid">📣 Tráfego pago — anúncios que levam ao site</div>
+  <div class="kpis" id="kpis-paid"></div>
+
+  <div style="display:flex;align-items:center;gap:10px;margin:16px 2px 10px">
+    <span class="muted" style="font-size:12px;font-weight:600">Tendência</span>
+    <span class="gran-toggle"><button id="g-d" class="on" onclick="setGran('diario')">Diário</button><button id="g-m" onclick="setGran('mensal')">Mensal</button></span>
+    <span class="muted" style="font-size:11px">— pegue um período longo (Este Ano / datas custom) pra ver mais meses</span>
+  </div>
+  <div class="grid2b">
+    <div class="card"><h3>Receita × Sessões</h3><canvas id="ch-rev" height="150"></canvas></div>
+    <div class="card"><h3>Gasto em ads × MER <span class="hint">receita ÷ gasto</span></h3><canvas id="ch-mer" height="150"></canvas></div>
+  </div>
+
+  <div class="grid2">
+    <div class="card"><h3>De onde vem o tráfego <span class="hint">canais GA4 · pago × orgânico</span></h3>
+      <table><thead><tr><th>Canal</th><th class="r">Sessões</th><th class="r">Receita</th><th class="r">% rec.</th></tr></thead><tbody id="tb-canais"></tbody></table>
+    </div>
+    <div class="card"><h3>Pago × Orgânico <span class="hint">share da receita (GA4)</span></h3><canvas id="ch-mix" height="170"></canvas></div>
+  </div>
+
+  <div class="card"><h3>Top produtos <span class="hint">no site, por receita</span></h3>
+    <table><thead><tr><th>Produto</th><th>Categoria</th><th class="r">Receita</th><th class="r">Unidades</th><th class="r">Margem bruta</th></tr></thead><tbody id="tb-prod"></tbody></table>
+  </div>
+</main>
+<div id="loader">Carregando…</div>
+<script>
+let SB='',ANON='',STATE={de:'',ate:'',gran:'diario'};
+const CHARTS={};
+const rs=v=>'R$'+(Math.round(v||0)).toLocaleString('pt-BR');
+const ri=v=>(Math.round(v||0)).toLocaleString('pt-BR');
+const n2=v=>v==null?'—':(+v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const pct=v=>v==null?'—':(v*100).toFixed(1)+'%';
+// datas SP
+function spNow(){return new Date(new Date().toLocaleString('en-US',{timeZone:'America/Sao_Paulo'}))}
+function fmtD(d){return d.toISOString().slice(0,10)}
+function somaDias(s,n){const d=new Date(s+'T12:00:00');d.setDate(d.getDate()+n);return fmtD(d)}
+function inicioMes(){const d=spNow();return fmtD(new Date(d.getFullYear(),d.getMonth(),1))}
+function hoje(){return fmtD(spNow())}
+function ndays(de,ate){return Math.round((new Date(ate+'T12:00')-new Date(de+'T12:00'))/86400000)+1}
+const COR={'Paid Social':'#7c5cff','Cross-network':'#a78bfa','Paid Search':'#f5a623','Paid Shopping':'#f59e0b','Paid Other':'#fbbf24','Direct':'#9aa3b2','Referral':'#22d3ee','Organic Search':'#2fbf71','Organic Social':'#14b8a6','Organic Shopping':'#34d399','Unassigned':'#6b7280','AI Assistant':'#ec4899'};
+const cor=c=>COR[c]||'#6b7280';
+const isPaid=c=>/^Paid|Cross-network/.test(c);
+
+async function authHeaders(){const s=await fusionAuth.getSession();return{apikey:ANON,Authorization:'Bearer '+(s?s.access_token:'')}}
+async function api(tab,q){const h=await authHeaders();let out=[],pg=0;while(true){const r=await fetch(SB+'/rest/v1/'+tab+'?'+q+'&limit=1000&offset='+(pg*1000),{headers:h});if(!r.ok)break;const j=await r.json();out=out.concat(j);if(j.length<1000)break;pg++;if(pg>30)break}return out}
+
+// ---------- helpers de render ----------
+const pctDelta=(a,b)=>(b&&isFinite(b)&&b!==0)?(a-b)/b*100:null;
+function deltaBadge(d,neutral,inverse){
+  if(d==null||isNaN(d))return '';
+  let cls='flat'; if(!neutral){const good=inverse?d<0:d>0; cls=Math.abs(d)<0.5?'flat':(good?'up':'down');}
+  return `<span class="delta-badge ${cls}" title="vs período anterior de mesma duração">${d>=0?'+':''}${d.toFixed(0)}%</span>`;
+}
+function kpiHTML(k){
+  const dlt=k.d!=null?' '+deltaBadge(k.d,k.dn,k.inv):'';
+  const spk=k.spark?`<canvas class="kpi-spark" id="${k.spark}"></canvas>`:'';
+  return `<div class="kpi ${k.cls||''}"><div class="lbl">${k.l}</div><div class="val ${k.vc||''}">${k.v}</div><div class="sub">${k.s||''}${dlt}</div>${spk}</div>`;
+}
+function drawSpark(id,data,color){if(CHARTS[id])CHARTS[id].destroy();const el=document.getElementById(id);if(!el)return;
+  CHARTS[id]=new Chart(el,{type:'line',data:{labels:data.map((_,i)=>i),datasets:[{data,borderColor:color,backgroundColor:color+'22',fill:true,tension:.4,pointRadius:0,borderWidth:1.5,spanGaps:true}]},options:{plugins:{legend:{display:false},tooltip:{enabled:false}},scales:{x:{display:false},y:{display:false}}}})}
+function fmtLbl(d){return d.length===7?(d.slice(5)+'/'+d.slice(2,4)):d.slice(5)}
+
+// agrega os KPIs de um período a partir das linhas (ecommerce canal, ga4, ads, sku)
+function agg(ec,ga,ad,sk){
+  const receita=ec.reduce((s,r)=>s+(+r.receita_bruta||0),0);
+  const pedidos=ec.reduce((s,r)=>s+(+r.pedidos||0),0);
+  const devol=ec.reduce((s,r)=>s+(+r.devolucoes||0),0);
+  const sessions=ga.reduce((s,r)=>s+(+r.sessions||0),0);
+  const gaRec=ga.reduce((s,r)=>s+(+r.receita||0),0);
+  const gaPaid=ga.filter(r=>isPaid(r.canal)).reduce((s,r)=>s+(+r.receita||0),0);
+  const meta=ad.filter(r=>r.plataforma==='meta_ads').reduce((s,r)=>s+(+r.gasto||0),0);
+  const goog=ad.filter(r=>r.plataforma==='google_ads').reduce((s,r)=>s+(+r.gasto||0),0);
+  const un=sk.reduce((s,r)=>s+(+r.qtd||0),0);
+  const cmv=sk.reduce((s,r)=>s+(+r.cmv||0),0), recSku=sk.reduce((s,r)=>s+(+r.receita||0),0);
+  return {receita,pedidos,devol,sessions,gaRec,gaPaid,meta,goog,un,
+    aov:pedidos>0?receita/pedidos:null, conv:sessions>0?pedidos/sessions:null,
+    mer:meta>0?receita/meta:null, pctPago:gaRec>0?gaPaid/gaRec:null,
+    cpa:pedidos>0?(meta+goog)/pedidos:null, margemBruta:recSku>0?(recSku-cmv)/recSku:null};
+}
+function render(){
+  const K=agg(D.ecC,D.gaC,D.adC,D.skC), P=agg(D.ecP,D.gaP,D.adP,D.skP);
+  const hasP=D.ecP.length||D.gaP.length;
+  const dd=(a,b)=>hasP?pctDelta(a,b):null;
+  // séries diárias p/ sparklines
+  const byd={}; const put=(d,k,v)=>{(byd[d]||(byd[d]={rec:0,ped:0,sess:0,meta:0}));byd[d][k]+=v};
+  D.ecC.forEach(r=>{put(r.data_pedido,'rec',+r.receita_bruta||0);put(r.data_pedido,'ped',+r.pedidos||0)});
+  D.gaC.forEach(r=>{put(r.data,'sess',+r.sessions||0)});
+  D.adC.forEach(r=>{if(r.plataforma==='meta_ads')put(r.data,'meta',+r.gasto||0)});
+  const days=Object.keys(byd).sort(), ser=k=>days.map(d=>byd[d][k]);
+
+  document.getElementById('kpis-loja').innerHTML=[
+    {l:'Receita',v:rs(K.receita),s:'produto (sem frete)',cls:'accent',d:dd(K.receita,P.receita),spark:'s-rec'},
+    {l:'Pedidos',v:ri(K.pedidos),s:'no site',d:dd(K.pedidos,P.pedidos),spark:'s-ped'},
+    {l:'Ticket médio',v:rs(K.aov),s:'AOV = receita ÷ pedidos',d:dd(K.aov,P.aov)},
+    {l:'Taxa de conversão',v:pct(K.conv),s:'pedidos ÷ sessões',d:dd(K.conv,P.conv)},
+    {l:'Sessões',v:ri(K.sessions),s:'visitas (GA4)',d:dd(K.sessions,P.sessions),spark:'s-sess'},
+    {l:'Devoluções',v:rs(K.devol),s:(K.receita>0?Math.round(K.devol/K.receita*100):0)+'% da receita',d:dd(K.devol,P.devol),inv:true},
+  ].map(kpiHTML).join('');
+  document.getElementById('kpis-paid').innerHTML=[
+    {l:'Gasto em ads',v:rs(K.meta),s:K.goog>0?'+ Google '+rs(K.goog):'Meta (paga o site)',cls:'paid',d:dd(K.meta,P.meta),dn:true,spark:'s-meta'},
+    {l:'MER / ROAS',v:n2(K.mer),s:'receita ÷ gasto Meta · equilíbrio ≈2',cls:'paid',d:dd(K.mer,P.mer)},
+    {l:'% receita de pago',v:pct(K.pctPago),s:'via GA4 (último clique)',cls:'paid',d:dd(K.pctPago,P.pctPago)},
+    {l:'CPA (por pedido)',v:rs(K.cpa),s:'gasto total ads ÷ pedidos',cls:'paid',d:dd(K.cpa,P.cpa),inv:true},
+  ].map(kpiHTML).join('');
+  requestAnimationFrame(()=>{
+    drawSpark('s-rec',ser('rec'),'#22d3ee');drawSpark('s-ped',ser('ped'),'#7c5cff');
+    drawSpark('s-sess',ser('sess'),'#2fbf71');drawSpark('s-meta',ser('meta'),'#f5a623');
+  });
+  renderTrend(); renderCanais(K); renderProdutos();
+}
+function renderTrend(){
+  const byd={}; const put=(d,k,v)=>{(byd[d]||(byd[d]={rec:0,sess:0,meta:0}));byd[d][k]+=v};
+  D.ecC.forEach(r=>put(r.data_pedido,'rec',+r.receita_bruta||0));
+  D.gaC.forEach(r=>put(r.data,'sess',+r.sessions||0));
+  D.adC.forEach(r=>{if(r.plataforma==='meta_ads')put(r.data,'meta',+r.gasto||0)});
+  let keys=Object.keys(byd).sort(), agr=byd;
+  if(STATE.gran==='mensal'){const mm={};keys.forEach(d=>{const k=d.slice(0,7);(mm[k]||(mm[k]={rec:0,sess:0,meta:0}));mm[k].rec+=byd[d].rec;mm[k].sess+=byd[d].sess;mm[k].meta+=byd[d].meta});keys=Object.keys(mm).sort();agr=mm}
+  const L=keys.map(fmtLbl);
+  if(CHARTS.rev)CHARTS.rev.destroy();
+  CHARTS.rev=new Chart(document.getElementById('ch-rev'),{data:{labels:L,datasets:[
+    {type:'bar',label:'Receita',data:keys.map(k=>Math.round(agr[k].rec)),backgroundColor:'#22d3ee55',borderColor:'#22d3ee',yAxisID:'y'},
+    {type:'line',label:'Sessões',data:keys.map(k=>agr[k].sess),borderColor:'#2fbf71',tension:.3,pointRadius:0,yAxisID:'y1'}]},
+    options:{plugins:{legend:{labels:{color:'#9aa3b2',boxWidth:12}}},scales:{y:{position:'left',ticks:{color:'#9aa3b2',callback:v=>'R$'+(v/1000)+'k'},grid:{color:'#23262e'}},y1:{position:'right',ticks:{color:'#9aa3b2'},grid:{display:false}},x:{ticks:{color:'#9aa3b2',maxTicksLimit:12},grid:{display:false}}}}});
+  if(CHARTS.mer)CHARTS.mer.destroy();
+  CHARTS.mer=new Chart(document.getElementById('ch-mer'),{data:{labels:L,datasets:[
+    {type:'bar',label:'Gasto Meta',data:keys.map(k=>Math.round(agr[k].meta)),backgroundColor:'#f5a62355',borderColor:'#f5a623',yAxisID:'y'},
+    {type:'line',label:'MER',data:keys.map(k=>agr[k].meta>0?+(agr[k].rec/agr[k].meta).toFixed(2):null),borderColor:'#7c5cff',tension:.3,pointRadius:0,yAxisID:'y1'}]},
+    options:{plugins:{legend:{labels:{color:'#9aa3b2',boxWidth:12}}},scales:{y:{position:'left',ticks:{color:'#9aa3b2',callback:v=>'R$'+(v/1000)+'k'},grid:{color:'#23262e'}},y1:{position:'right',ticks:{color:'#9aa3b2'},grid:{display:false}},x:{ticks:{color:'#9aa3b2',maxTicksLimit:12},grid:{display:false}}}}});
+}
+function renderCanais(K){
+  const by={}; D.gaC.forEach(r=>{const c=r.canal||'(outro)';(by[c]||(by[c]={c,sess:0,rec:0}));by[c].sess+=+r.sessions||0;by[c].rec+=+r.receita||0});
+  const arr=Object.values(by).sort((a,b)=>b.rec-a.rec), tot=arr.reduce((s,x)=>s+x.rec,0);
+  document.getElementById('tb-canais').innerHTML=arr.slice(0,8).map(x=>
+    `<tr><td><span class="dot" style="background:${cor(x.c)}"></span>${x.c}</td><td class="r">${ri(x.sess)}</td><td class="r">${rs(x.rec)}</td><td class="r">${Math.round(tot?x.rec/tot*100:0)}%</td></tr>`).join('')
+    ||'<tr><td colspan="4" class="muted" style="padding:12px">Sem dado GA4 no período (pode estar em atraso).</td></tr>';
+  const paid=arr.filter(x=>isPaid(x.c)).reduce((s,x)=>s+x.rec,0);
+  if(CHARTS.mix)CHARTS.mix.destroy();
+  CHARTS.mix=new Chart(document.getElementById('ch-mix'),{type:'doughnut',data:{labels:['Pago','Orgânico/Direto/Ref'],datasets:[{data:[paid,tot-paid],backgroundColor:['#f5a623','#2fbf71'],borderWidth:0}]},options:{plugins:{legend:{labels:{color:'#9aa3b2',boxWidth:12}}},cutout:'62%'}});
+}
+function renderProdutos(){
+  const by={}; D.skC.forEach(r=>{const k=r.sku_pai;(by[k]||(by[k]={pai:k,nome:r.nome,cat:r.cat,rec:0,qtd:0,cmv:0}));by[k].rec+=+r.receita||0;by[k].qtd+=+r.qtd||0;by[k].cmv+=+r.cmv||0});
+  document.getElementById('tb-prod').innerHTML=Object.values(by).sort((a,b)=>b.rec-a.rec).slice(0,12).map(p=>{
+    const mb=p.rec>0?(p.rec-p.cmv)/p.rec:null;
+    return `<tr><td>${(p.nome||p.pai||'').slice(0,38)}</td><td class="muted">${p.cat||'—'}</td><td class="r">${rs(p.rec)}</td><td class="r">${ri(p.qtd)}</td><td class="r">${mb!=null?Math.round(mb*100)+'%':'—'}</td></tr>`;
+  }).join('')||'<tr><td colspan="5" class="muted" style="padding:12px">Sem produtos no período.</td></tr>';
+}
+
+// ---------- período + fetch ----------
+let D={ecC:[],ecP:[],gaC:[],gaP:[],adC:[],adP:[],skC:[],skP:[]};
+function setGran(g){STATE.gran=g;document.getElementById('g-d').classList.toggle('on',g==='diario');document.getElementById('g-m').classList.toggle('on',g==='mensal');renderTrend()}
+function setPeriodo(p){const h=hoje();
+  if(p==='7d'){STATE.de=somaDias(h,-6);STATE.ate=h}
+  else if(p==='30d'){STATE.de=somaDias(h,-29);STATE.ate=h}
+  else if(p==='mtd'){STATE.de=inicioMes();STATE.ate=h}
+  else if(p==='m-1'){const a=somaDias(inicioMes(),-1);STATE.de=a.slice(0,7)+'-01';STATE.ate=a}
+  else if(p==='ytd'){STATE.de=h.slice(0,4)+'-01-01';STATE.ate=h}
+  document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on',c.dataset.p===p));
+  document.getElementById('c-de').value=STATE.de;document.getElementById('c-ate').value=STATE.ate;
+  carregar()}
+async function carregar(){
+  document.getElementById('loader').style.display='flex';
+  const dlen=ndays(STATE.de,STATE.ate), pAte=somaDias(STATE.de,-1), pDe=somaDias(STATE.de,-dlen);
+  const site="canal_nome_raw=eq.Site%20Pr%C3%B3prio";
+  const [ec,ga,ad,sk]=await Promise.all([
+    api('mvw_ecommerce_canal_dia','select=data_pedido,pedidos,receita_bruta,devolucoes&'+site+'&data_pedido=gte.'+pDe+'&data_pedido=lte.'+STATE.ate+'&order=data_pedido.asc'),
+    api('web_trafego_dia','select=data,canal,sessions,receita&data=gte.'+pDe+'&data=lte.'+STATE.ate),
+    api('ads_metrics','select=data,plataforma,gasto&level=eq.campaign&plataforma=in.(meta_ads,google_ads)&data=gte.'+pDe+'&data=lte.'+STATE.ate),
+    api('mvw_ecommerce_sku_dia','select=data_pedido,sku_pai,nome,cat,receita,qtd,cmv&'+site+'&data_pedido=gte.'+STATE.de+'&data_pedido=lte.'+STATE.ate),
+  ]);
+  const cur=(rows,f)=>rows.filter(r=>r[f]>=STATE.de&&r[f]<=STATE.ate), prev=(rows,f)=>rows.filter(r=>r[f]>=pDe&&r[f]<=pAte);
+  D={ecC:cur(ec,'data_pedido'),ecP:prev(ec,'data_pedido'),gaC:cur(ga,'data'),gaP:prev(ga,'data'),adC:cur(ad,'data'),adP:prev(ad,'data'),skC:sk,skP:[]};
+  render();
+  document.getElementById('loader').style.display='none';
+}
+(async()=>{
+  const auth=await fusionAuth.requireAuth('shopify');
+  document.getElementById('who').textContent=(auth.role&&auth.role.email)||'';
+  SB=fusionAuth.SUPABASE_URL;ANON=fusionAuth.SUPABASE_ANON_KEY;
+  document.getElementById('btnOut').onclick=()=>fusionAuth.signOut();
+  document.getElementById('btnRefresh').onclick=()=>carregar();
+  document.querySelectorAll('.chip').forEach(c=>c.onclick=()=>setPeriodo(c.dataset.p));
+  document.getElementById('c-go').onclick=()=>{const de=document.getElementById('c-de').value,ate=document.getElementById('c-ate').value;if(!de||!ate||de>ate){alert('Datas inválidas');return}STATE.de=de;STATE.ate=ate;document.querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));carregar()};
+  STATE.de=somaDias(hoje(),-29);STATE.ate=hoje();
+  document.getElementById('c-de').value=STATE.de;document.getElementById('c-ate').value=STATE.ate;
+  await carregar();
+})();
+</script>
+</body></html>
