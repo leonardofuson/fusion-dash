@@ -568,6 +568,10 @@ function avatarHtml(nome,corFallback,rank){
     '<span>'+ini+'</span></div></div>';
 }
 var IGNORAR_LOJA=['Atacado WhatsApp'];
+// Lojas físicas canônicas — SEMPRE aparecem (com R$0 quando não venderam no período),
+// pra não "sumir" em dia parado / início de mês. Outras lojas que aparecerem nos dados
+// (ex: Atacado Lojas) entram por cima.
+var LOJAS_CANONICAS=['Marcolina','Oriente','Polo Plaza','Vautier','São Bernardo'];
 
 function getLoja(loja_nome,origem){
   if(origem==='flecha') return 'Atacado WhatsApp';
@@ -960,6 +964,7 @@ async function carregar(){
 
     if(STATE.lojas.length===0){
       var seen={};
+      LOJAS_CANONICAS.forEach(function(n){seen[n]=true;STATE.lojasSel[n]=true;});  // 5 lojas sempre presentes
       STATE.pedidosRaw.forEach(function(p){
         var n=getLoja(p.loja_nome,p.origem_conta);
         if(IGNORAR_LOJA.indexOf(n)>=0) return;
@@ -1944,7 +1949,10 @@ function renderLojaCards(){
   var cur=calcKPIs(pedidosUse).porLoja;
   var prev=calcKPIs(anterioresUse).porLoja;
   var fatTotal=Object.values(cur).reduce(function(s,c){return s+c.fat;},0);
-  var nomes=Object.keys(cur).sort(function(a,b){return cur[b].fat-cur[a].fat;});
+  // Sempre mostra as lojas conhecidas/selecionadas (com R$0 se não venderam no período) — não some em dia parado.
+  var nomes=(STATE.lojas||[]).filter(function(n){return IGNORAR_LOJA.indexOf(n)<0 && n!==REDISTRIBUIR_LOJA && (!STATE.lojasSel||STATE.lojasSel[n]);});
+  Object.keys(cur).forEach(function(n){if(nomes.indexOf(n)<0 && IGNORAR_LOJA.indexOf(n)<0 && n!==REDISTRIBUIR_LOJA) nomes.push(n);});
+  nomes.sort(function(a,b){return (cur[b]?cur[b].fat:0)-(cur[a]?cur[a].fat:0);});
   var paLoja=calcPALoja();
   var projMes=calcProjMesLoja();
 
@@ -1980,7 +1988,7 @@ function renderLojaCards(){
 
   var cardId=0;
   var html=nomes.map(function(n){
-    var c=cur[n], p=prev[n]||{fat:0,ped:0};
+    var c=cur[n]||{fat:0,ped:0}, p=prev[n]||{fat:0,ped:0};
     var tm=c.ped>0?c.fat/c.ped:0;
     var pct=fatTotal>0?c.fat/fatTotal*100:0;
     var dlt=p.fat?((c.fat-p.fat)/p.fat*100):null;
