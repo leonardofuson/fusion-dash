@@ -710,6 +710,16 @@ async function carregarCross(){
 const RANKCHIP={above:['alta','b-escalar'],average:['média','b-sem'],below:['baixa','b-cortar'],unknown:['—','b-sem']};
 const VERDC={renovar_criativo:['renovar criativo','b-cortar'],corrigir_landing:['corrigir landing','b-revisar'],fadiga_publico:['fadiga','b-manter'],ok:['ok','b-escalar'],sem_dado:['sem dado','b-sem']};
 function rchip(v){const a=RANKCHIP[v]||RANKCHIP.unknown;return `<span class="badge ${a[1]}" style="font-size:10px">${a[0]}</span>`;}
+// agregados no nível de campanha, PONDERADOS POR GASTO (onde está o dinheiro manda no veredito)
+function rankPond(ads,key){ // ranking ponderado → above/average/below/unknown
+  let w=0,sum=0; ads.forEach(a=>{const rk=a[key]; if(rk&&rk!=='unknown'){const p=+a.spend||0; if(p>0){sum+=(rk==='above'?1:rk==='below'?-1:0)*p; w+=p;}}});
+  if(w===0) return 'unknown';
+  const avg=sum/w; return avg>0.25?'above':(avg<-0.25?'below':'average');
+}
+function numPond(ads,key){ // média ponderada por gasto de um campo numérico (só ads com valor)
+  let w=0,sum=0; ads.forEach(a=>{const v=a[key]; if(v!=null&&isFinite(+v)){const p=+a.spend||0; if(p>0){sum+=(+v)*p; w+=p;}}});
+  return w>0?sum/w:null;
+}
 async function carregarCriativo(){
   let rows=null; try{const o=JSON.parse(localStorage.getItem('mkt_criativo_v1'));if(o&&Date.now()-o.t<3600000)rows=o.d;}catch(e){}
   if(!rows){
@@ -746,7 +756,12 @@ function renderCriativo(){
     const open=STATE.expandedCamp.has(cp.nome);
     const roll=['renovar_criativo','corrigir_landing','fadiga_publico','ok','sem_dado'].filter(v=>cp.cont[v]).map(v=>{
       const a=VERDC[v]; return `<span class="badge ${a[1]}" style="font-size:10px">${a[0]} ${cp.cont[v]}</span>`;}).join(' ');
-    html+=`<tr class="parent camp-row" data-camp="${(cp.nome||'').replace(/"/g,'&quot;')}"><td colspan="6"><span class="exp">${open?'▾':'▸'}</span> <b>${(cp.nome||'').slice(0,44)}</b> <span class="muted">· ${cp.ads.length} anúncio${cp.ads.length>1?'s':''}</span></td>`+
+    const fq=numPond(cp.ads,'frequency'), hr=numPond(cp.ads,'hold_rate');   // ponderados por gasto
+    const fqTxt=fq!=null?fq.toFixed(1):'—', hrTxt=hr!=null?Math.round(hr*100)+'%':'—';
+    html+=`<tr class="parent camp-row" data-camp="${(cp.nome||'').replace(/"/g,'&quot;')}">`+
+      `<td><span class="exp">${open?'▾':'▸'}</span> <b>${(cp.nome||'').slice(0,40)}</b> <span class="muted">· ${cp.ads.length} anúncio${cp.ads.length>1?'s':''}</span></td>`+
+      `<td>${rchip(rankPond(cp.ads,'quality_ranking'))}</td><td>${rchip(rankPond(cp.ads,'engagement_rate_ranking'))}</td><td>${rchip(rankPond(cp.ads,'conversion_rate_ranking'))}</td>`+
+      `<td class="${fq>=4?'neg':''}">${fqTxt}</td><td>${hrTxt}</td>`+
       `<td><b>${rs(cp.gasto)}</b></td><td>${roll}</td></tr>`;
     if(open) cp.ads.slice().sort((a,b)=>(+b.spend||0)-(+a.spend||0)).forEach(r=>{html+=adRow(r,true);});
   });
