@@ -1428,7 +1428,7 @@ function renderShopify(){
   ].map(kpiHTML).join('');
   document.getElementById('sh-kpis-paid').innerHTML=[
     {l:'Gasto Meta',v:rs(K.meta),s:K.goog>0?'+ Google '+rs(K.goog):'paga o site',d:dd(K.meta,P.meta),dn:true,spark:'sh-s-meta'},
-    {l:'MER / ROAS',v:n2(K.mer),s:'receita ÷ gasto · equilíbrio ≈2',d:dd(K.mer,P.mer)},
+    {l:'MER',v:n2(K.mer),s:'faturamento do site ÷ gasto Meta · equilíbrio ≈2',d:dd(K.mer,P.mer)},
     {l:'% receita de pago',v:pct(K.pctPago),s:'via GA4 (último clique)',d:dd(K.pctPago,P.pctPago)},
     {l:'CPA (por pedido)',v:rs(K.cpa),s:'gasto total ads ÷ pedidos',d:dd(K.cpa,P.cpa),dn:true},
   ].map(kpiHTML).join('');
