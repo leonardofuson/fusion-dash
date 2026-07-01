@@ -202,7 +202,7 @@
   </div>
   <div class="sep"></div>
   <span class="who" id="who"></span>
-  <button class="btn" id="btnRefresh">↻ Atualizar</button>
+  <button class="btn" id="btnRefresh" title="Atualiza os dados de TODAS as abas (refresca as MVs + re-busca tudo). A ingestão de anúncios/GA4 roda 1x/dia às 04h.">↻ Atualizar</button>
   <a class="btn" href="/index.html">Menu</a>
   <button class="btn" id="btnOut">Sair</button>
 </div>
@@ -1564,9 +1564,16 @@ async function carregarTitulos(){
   document.getElementById('tb-criativo').onclick=e=>{const tr=e.target.closest('tr.camp-row');if(!tr)return;
     const k=tr.dataset.camp;if(STATE.expandedCamp.has(k))STATE.expandedCamp.delete(k);else STATE.expandedCamp.add(k);renderCriativo();};
   // refresh button → RPC + recarrega
+  // Botão "Atualizar" (topbar, visível em TODAS as abas): refresca as 3 MVs do
+  // dash (1 RPC por MV — cada REFRESH < 8s cabe no statement_timeout do PostgREST;
+  // a versão em lote estourava o cap) e re-busca tudo (todas as abas), bypassando cache.
   document.getElementById('btnRefresh').onclick=async()=>{
     const b=document.getElementById('btnRefresh');b.textContent='atualizando…';b.disabled=true;
-    try{await fetch(SB+'/rest/v1/rpc/refresh_marketing_mvs',{method:'POST',headers:{...(await authHeaders()),'Content-Type':'application/json'},body:'{}'});}catch(e){}
+    const h={...(await authHeaders()),'Content-Type':'application/json'};
+    for(const mv of ['mvw_marketing_mer_dia','mvw_marketing_sku_pnl','mvw_marketing_canal_margem_dia']){
+      try{await fetch(SB+'/rest/v1/rpc/refresh_marketing_mv',{method:'POST',headers:h,body:JSON.stringify({p_mv:mv})});}catch(e){}
+    }
+    STATE.shop=null;  // invalida cache da aba Loja → refetch
     await carregar(true);b.textContent='↻ Atualizar';b.disabled=false;
   };
   STATE.de=inicioMesSP();STATE.ate=hojeSP();syncCustomInputs();
