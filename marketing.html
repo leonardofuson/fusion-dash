@@ -283,7 +283,7 @@
       <div class="card"><h3>Pago × Orgânico <span class="hint">share da receita (GA4)</span></h3><canvas id="sh-ch-mix" style="max-height:220px"></canvas></div>
     </div>
     <div class="card"><h3>Top produtos do site <span class="hint">por receita · bestsellers · aquisição de novos clientes · CPA</span></h3>
-      <table><thead><tr><th class="l">Produto</th><th class="l">Categoria</th><th>Receita</th><th>Unidades</th><th>Margem bruta</th><th title="Clientes cuja 1ª compra no site (por CPF) incluiu este produto — o que traz gente nova">Novos</th><th title="Gasto de ads atribuído ao produto ÷ unidades vendidas">CPA</th></tr></thead><tbody id="sh-tb-prod"></tbody></table>
+      <table><thead><tr><th class="l">Produto</th><th class="l">Categoria</th><th>Receita</th><th>Unidades</th><th title="Conversão da página do produto (GA4): compras ÷ views. Só produtos mapeados ao GA4 (~86% das views).">Conversão</th><th>Margem bruta</th><th title="Clientes cuja 1ª compra no site (por CPF) incluiu este produto — o que traz gente nova">Novos</th><th title="Gasto de ads atribuído ao produto ÷ unidades vendidas">CPA</th></tr></thead><tbody id="sh-tb-prod"></tbody></table>
     </div>
   </section>
 
@@ -1389,7 +1389,7 @@ async function carregarShopify(){
   const site='canal_nome_raw=eq.Site%20Pr%C3%B3prio';
   const dlen=ndays(STATE.de,STATE.ate), priorAte=somaDias(STATE.de,-1), priorDe=somaDias(STATE.de,-dlen);
   const ms=meses(STATE.de,STATE.ate);
-  const [ec,sku,adsMeta,novos,novosSku,skuPnl]=await Promise.all([
+  const [ec,sku,adsMeta,novos,novosSku,skuPnl,conv]=await Promise.all([
     buscarTudo('mvw_ecommerce_canal_dia','select=data_pedido,pedidos,receita_bruta,devolucoes&'+site+'&data_pedido=gte.'+priorDe+'&data_pedido=lte.'+STATE.ate+'&order=data_pedido.asc'),
     buscarTudo('mvw_ecommerce_sku_dia','select=data_pedido,sku_pai,nome,cat,receita,qtd,cmv&'+site+'&data_pedido=gte.'+STATE.de+'&data_pedido=lte.'+STATE.ate+'&order=data_pedido.asc'),
     // Meta: gasto + compras ATRIBUÍDAS pela Meta (unidades_diretas=omni_purchase) → CPA reportado pela plataforma
@@ -1399,12 +1399,14 @@ async function carregarShopify(){
     buscarTudo('mvw_site_novos_sku_dia','select=data_pedido,sku_pai,novos_clientes&data_pedido=gte.'+STATE.de+'&data_pedido=lte.'+STATE.ate+'&order=data_pedido.asc'),
     // gasto de ads por SKU (site) p/ o CPA por produto
     buscarTudo('mvw_marketing_sku_pnl','select=sku_raw,ad_spend,unidades_canal&canal_grupo=eq.site&mes=in.('+ms.join(',')+')'),
+    // conversão por produto (GA4 item-scope: views + compras por sku_pai)
+    buscarTudo('web_produto_dia','select=sku_pai,views,compras&data=gte.'+STATE.de+'&data=lte.'+STATE.ate),
   ]);
   const inCur=d=>d>=STATE.de&&d<=STATE.ate, inPrev=d=>d>=priorDe&&d<=priorAte;
   STATE.shop={key:STATE.de+'_'+STATE.ate, ecCur:ec.filter(r=>inCur(r.data_pedido)), ecPrev:ec.filter(r=>inPrev(r.data_pedido)), sku,
     adsMetaCur:adsMeta.filter(r=>inCur(r.data)), adsMetaPrev:adsMeta.filter(r=>inPrev(r.data)),
     novosCur:novos.filter(r=>inCur(r.data_pedido)), novosPrev:novos.filter(r=>inPrev(r.data_pedido)),
-    novosSku, skuPnl};
+    novosSku, skuPnl, conv};
   renderShopify();
 }
 // store KPIs: receita/pedidos/devol da MV de ecommerce; sessões do GA4 (STATE.trafego); gasto do STATE.mer;
@@ -1512,12 +1514,15 @@ function renderShopifyProdutos(){
   // gasto de ads por sku_pai (agrega variantes CLMALHA-74 → CLMALHA)
   const skuBase=s=>String(s||'').replace(/-[^-]*$/,'');
   const adByPai={}; (STATE.shop.skuPnl||[]).forEach(r=>{const k=skuBase(r.sku_raw);adByPai[k]=(adByPai[k]||0)+(+r.ad_spend||0);});
+  // conversão por produto (GA4): compras ÷ views por sku_pai
+  const convByPai={}; (STATE.shop.conv||[]).forEach(r=>{const k=r.sku_pai;(convByPai[k]||(convByPai[k]={v:0,c:0}));convByPai[k].v+=+r.views||0;convByPai[k].c+=+r.compras||0;});
   document.getElementById('sh-tb-prod').innerHTML=Object.values(by).sort((a,b)=>b.rec-a.rec).slice(0,12).map(p=>{
     const mb=p.rec>0?(p.rec-p.cmv)/p.rec:null;
     const nov=novosByPai[p.pai]||0;
     const ad=adByPai[p.pai]||0; const cpa=(ad>0&&p.qtd>0)?ad/p.qtd:null;
-    return `<tr><td class="l">${(p.nome||p.pai||'').slice(0,38)}</td><td class="l muted">${p.cat||'—'}</td><td>${rs(p.rec)}</td><td>${(p.qtd).toLocaleString('pt-BR')}</td><td>${mb!=null?Math.round(mb*100)+'%':'—'}</td><td>${nov>0?nov.toLocaleString('pt-BR'):'—'}</td><td>${cpa!=null?rs(cpa):'—'}</td></tr>`;
-  }).join('')||'<tr><td colspan="7" class="l muted" style="padding:12px">Sem produtos no período.</td></tr>';
+    const cv=convByPai[p.pai]; const conv=(cv&&cv.v>0)?cv.c/cv.v:null;
+    return `<tr><td class="l">${(p.nome||p.pai||'').slice(0,38)}</td><td class="l muted">${p.cat||'—'}</td><td>${rs(p.rec)}</td><td>${(p.qtd).toLocaleString('pt-BR')}</td><td>${conv!=null?(conv*100).toFixed(1)+'%':'—'}</td><td>${mb!=null?Math.round(mb*100)+'%':'—'}</td><td>${nov>0?nov.toLocaleString('pt-BR'):'—'}</td><td>${cpa!=null?rs(cpa):'—'}</td></tr>`;
+  }).join('')||'<tr><td colspan="8" class="l muted" style="padding:12px">Sem produtos no período.</td></tr>';
 }
 function setSGran(g){STATE.sgran=g;document.getElementById('sgran-d').classList.toggle('on',g==='diario');document.getElementById('sgran-m').classList.toggle('on',g==='mensal');renderShopifyTrend();}
 
