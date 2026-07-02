@@ -713,6 +713,23 @@ async function fetchTroqueSite(de,ate){
         '&dia=gte.'+de+'&dia=lte.'+ate+'&order=dia.asc';
   return buscarTudo('vw_devolucao_site_dia',f);
 }
+// Frete REVERSO do Site (Troque) = tracking.price (etiqueta Correios da devolução/troca) por data
+// da reversa. Custo real que a loja paga; entra no frete do Site (à parte do fretegratis de ida).
+async function fetchFreteReversoSite(de,ate){
+  var rows=await buscarTudo('vw_frete_reverso_site_dia','select=dia,frete_reverso&dia=gte.'+de+'&dia=lte.'+ate+'&order=dia.asc');
+  var tot=0,porMes={};
+  (rows||[]).forEach(function(r){var v=parseFloat(r.frete_reverso||0);tot+=v;var ym=(r.dia||'').slice(0,7);porMes[ym]=(porMes[ym]||0)+v;});
+  STATE.freteReversoSite=round2(tot);STATE.freteReversoMes=porMes;
+  return rows;
+}
+function round2(x){return Math.round(x*100)/100;}
+// Reversa do Site só entra se o canal Site Próprio está no escopo atual (chips/focusCanal).
+function freteReversoNoEscopo(){
+  var v=STATE.freteReversoSite||0;if(!v)return 0;
+  if(STATE.focusCanal)return STATE.focusCanal==='Site Próprio'?v:0;
+  if(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel['Site Próprio'])return 0;
+  return v;
+}
 // Ads (custo de mídia). HOJE só Mercado Ads (ML) — Meta/Google/TikTok/Shopee pendentes de
 // credenciais. Soma só level=campaign (item duplica exatamente o mesmo gasto). Coorte por data.
 async function fetchAds(de,ate){
@@ -742,15 +759,48 @@ async function fetchAdsItem(de,ate){
 // devolucoes_item, todos os canais com item-level (ML+Site+TikTok+Shopee; Shein sem API).
 // Dá "produtos mais devolvidos" de verdade, sem rateio.
 async function fetchDevItem(de,ate){
-  return buscarTudo('devolucoes_item','select=sku_pai,valor_devolucao&data_pedido=gte.'+de+'&data_pedido=lte.'+ate);
+  return buscarTudo('devolucoes_item','select=sku_pai,valor_devolucao,origem_conta,plataforma&data_pedido=gte.'+de+'&data_pedido=lte.'+ate);
+}
+// origem_conta+plataforma → nome do canal (igual aos chips). devolucoes_item não tem canal_nome_raw.
+function canalDaDevolucao(oc,plat){
+  plat=(plat||'').toLowerCase();
+  if(plat==='ml')return oc==='confeccoes'?'ML Confecções':'ML Fio';
+  if(plat==='shopee')return oc==='confeccoes'?'Shopee Confec':'Shopee Fio';
+  if(plat==='tiktok')return'TikTok Shop';
+  if(plat==='site'||oc==='shopify')return'Site Próprio';
+  return'Outros';
 }
 function devRowsToBySkuPai(rows){
   var by={};
   (rows||[]).forEach(function(r){
-    var sp=r.sku_pai||'?';if(!by[sp])by[sp]={valor:0,cnt:0};
-    by[sp].valor+=parseFloat(r.valor_devolucao||0);by[sp].cnt++;
+    var sp=r.sku_pai||'?';if(!by[sp])by[sp]={valor:0,cnt:0,porCanal:{}};
+    var v=parseFloat(r.valor_devolucao||0);by[sp].valor+=v;by[sp].cnt++;
+    var cn=canalDaDevolucao(r.origem_conta,r.plataforma);
+    if(!by[sp].porCanal[cn])by[sp].porCanal[cn]={valor:0,cnt:0};
+    by[sp].porCanal[cn].valor+=v;by[sp].porCanal[cn].cnt++;
   });
   return by;
+}
+// Item passa no escopo de canal atual: focusCanal (clique) tem prioridade; senão, chips (canaisSel).
+// Antes o itensFocus só aplicava focusCanal → product profitability ignorava os chips. (fix 02/07)
+function canalItemOk(c){
+  if(STATE.focusCanal)return c===STATE.focusCanal;
+  if(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[c])return false;
+  return true;
+}
+// Devolução de 1 produto no escopo de canal atual (focusCanal/chips). Filtra por canal. (fix 02/07)
+function devDoProduto(sku_pai){
+  var d=(STATE.devBySkuPai||{})[sku_pai];if(!d)return{valor:0,cnt:0};
+  var pc=d.porCanal;
+  if(!pc)return{valor:d.valor||0,cnt:d.cnt||0};  // compat cache antigo sem porCanal
+  var sel=STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0;
+  var out={valor:0,cnt:0};
+  Object.keys(pc).forEach(function(cn){
+    if(STATE.focusCanal){if(cn!==STATE.focusCanal)return;}
+    else if(sel&&!STATE.canaisSel[cn])return;
+    out.valor+=pc[cn].valor;out.cnt+=pc[cn].cnt;
+  });
+  return out;
 }
 // Soma o ads respeitando o filtro de canais + focusCanal atual (mesma lógica do resto do P&L).
 function adsFiltrado(byCanal){
@@ -797,6 +847,7 @@ function calcPnLFromMV(rows,adsVal){
     cmv+=rb*cmvPct(_nome);   // CMV pela proporção REAL por canal (first-paint; calcPnL real sobrescreve no recente)
     ped+=parseInt(r.pedidos||0)-parseInt(r.cancelados||0);
   });
+  frete+=freteReversoNoEscopo();  // reversa/troca do Site (Troque), agregado do período
   liquida=receita-com-afiliados-dev-frete;
   var impostos=TAX_RATE*(receita-dev);   // imposto sobre venda líquida (Bruta − Devoluções)
   return{receita:receita,devolucoes:dev,frete:frete,comissao:com,afiliados:afiliados,cmv:cmv,ads:adsVal,impostos:impostos,liquida:liquida,lucro:liquida-adsVal-cmv-impostos,pedidos:ped};
@@ -976,6 +1027,7 @@ async function carregar(){
     if(seq!==LOAD_SEQ)return;   // período mudou durante o fetch — aborta este load
     STATE.pedidosRaw=res[0];
     fetchTroqueSite(DE,ATE).then(function(rows){STATE.troqueSite=rows;try{renderAlerts();}catch(e){}}).catch(function(){STATE.troqueSite=null;});
+    fetchFreteReversoSite(DE,ATE).then(function(){_pnlMemo=null;try{renderWaterfall();renderKPIs();renderCanalTable();}catch(e){}}).catch(function(){STATE.freteReversoSite=0;});
     if(STATE.canais.length===0){var seen={};STATE.pedidosRaw.forEach(function(p){if(shouldDedup(p))return;var n=getNome(p.canal_nome_raw,p.origem_conta);if(!seen[n]){seen[n]=true;STATE.canaisSel[n]=true;}});STATE.canais=Object.keys(seen).sort();renderCanalChips();}
 
     // RENDER IMEDIATO — sem itens (waterfall, canais, geo, pagamentos, alertas)
@@ -1029,7 +1081,7 @@ async function carregar(){
     // (waterfall/KPIs/tabela canal). Antes só re-renderizava Top Produtos/Pareto, então
     // CMV/frete ficavam no valor do render-sem-itens (ou no da MV, o que vencesse a corrida)
     // → coluna vinha vazia/0 de forma intermitente ao trocar período. (fix 02/06)
-    STATE.itensFocus=STATE.focusCanal?STATE.itens.filter(function(it){return it._canal===STATE.focusCanal;}):STATE.itens;
+    STATE.itensFocus=STATE.itens.filter(function(it){return canalItemOk(it._canal);});
     agruparSkus(STATE.itensFocus);
     [renderWaterfall,renderKPIs,renderCanalTable,renderTopProdutos,renderPareto].forEach(function(fn){
       try{fn();}catch(e){console.error(fn.name+':',e);}});
@@ -1054,8 +1106,8 @@ function renderAll(){
   STATE.pedidosFull=STATE.pedidos;   // prev vem da MV (mvRowsPrev); STATE.anteriores removido (vestigial pós-otimização)
   if(STATE.focusCanal){
     STATE.pedidos=STATE.pedidos.filter(function(p){return p._nome===STATE.focusCanal;});
-    STATE.itensFocus=STATE.itens.filter(function(it){return it._canal===STATE.focusCanal;});
-  }else{STATE.itensFocus=STATE.itens;}
+  }
+  STATE.itensFocus=STATE.itens.filter(function(it){return canalItemOk(it._canal);});  // focusCanal + chips
   montarSkuGroups();
   // Critical render path — visualmente prioritário (KPIs + tabela canais + Top Produtos)
   var criticos=[renderWaterfall,renderKPIs,renderCanalTable,renderTopProdutos,renderCanalCards,renderProdutosDestaque];
@@ -1158,14 +1210,12 @@ function calcPnL(pedidos,itens,adsVal){
     // valor_devolucao: refund parcial (faturado) ou reversão total (devolvido — no site é assim).
     // + valor_chargeback (estorno por contestação, perda total) na mesma linha de perdas.
     devolucoes+=parseFloat(p.valor_devolucao||0)+parseFloat(p.valor_chargeback||0);
-    var fSeller=parseFloat(p.frete_ml_seller||0);
-    // Shopee embute o frete na comissão (Programa de Frete Grátis 2026): rebate + parte do
-    // comprador cobrem 100% do envio → custo de frete do SELLER ≈ 0. NÃO cair no frete do
-    // CLIENTE (p.frete ~12%, que NÃO é custo do seller) — inflava o custo Shopee ~8x.
-    // Frete (custo) = frete do SELLER (frete_ml_seller). frete_ml_seller=0: ML banca o envio
-    // (acordo) e Shopee embute na comissão → custo real R$0. EXCEÇÃO Site (Shopify): a API não
-    // expõe o custo do carrier — só o frete que o CLIENTE pagou; usa esse como PROXY do custo.
-    frete+=fSeller>0?fSeller:(p.origem_conta==='shopify'?parseFloat(p.frete||0):0);
+    // Frete (custo) = frete do SELLER (frete_ml_seller). Real de API em todos os canais:
+    // ML=0 (acordo), Shopee≈0 (embutido na comissão), TikTok=líquido (comprador reembolsa),
+    // Site=subsídio de FRETE GRÁTIS (Σ price−discounted; o cliente paga o normal, repasse ~0).
+    // Reversa/troca do Site (Troque tracking.price) entra à parte via freteReversoNoEscopo().
+    // Antes o Site caía no frete do CLIENTE (p.frete) como proxy → superestimava ~2x (02/07/2026).
+    frete+=parseFloat(p.frete_ml_seller||0);
     var fee=parseFloat(p.fee_canal||0);
     comissao+=fee>0?fee:v*custoPct(p._nome);
   });
@@ -1174,6 +1224,7 @@ function calcPnL(pedidos,itens,adsVal){
   var iniItens=janelaItens(DE);
   if(itens&&itens.length>0){itens.forEach(function(it){cmv+=(it._custoUn||0)*it._qtd;});}
   pedidos.forEach(function(p){if(p._cancelado)return;if((p.data_pedido||'')>=iniItens)return;cmv+=valorReceita(p)*cmvPct(p._nome);});
+  frete+=freteReversoNoEscopo();  // reversa/troca do Site (Troque tracking.price), agregado do período
   // P&L: Bruta − Comissão − Afiliados − Devoluções − Frete = Líquida; − CMV = Resultado
   var liquida=receita-comissao-afiliados-devolucoes-frete;
   var impostos=TAX_RATE*(receita-devolucoes);   // imposto sobre venda líquida (Bruta − Devoluções)
@@ -1208,7 +1259,7 @@ function pnlProduto(){
     var pc=g.porCanal[c];receita+=pc.receita;fee+=pc.fee;afiliados+=(pc.afiliado||0);dev+=pc.devolucao;frete+=pc.freteSeller;cmv+=pc.custoTotal;qtd+=pc.qtd;
   });
   var ads=0,abp=(STATE.adsBySkuPaiCanal||{})[STATE.focusProduto]||{};
-  Object.keys(abp).forEach(function(c){if(STATE.focusCanal&&c!==STATE.focusCanal)return;ads+=abp[c]||0;});
+  Object.keys(abp).forEach(function(c){if(!canalItemOk(c))return;ads+=abp[c]||0;});  // respeita focusCanal + chips
   var imp=TAX_RATE*(receita-dev),liquida=receita-fee-afiliados-dev-frete;
   return {receita:receita,comissao:fee,afiliados:afiliados,devolucoes:dev,frete:frete,cmv:cmv,ads:ads,impostos:imp,liquida:liquida,lucro:liquida-ads-cmv-imp,pedidos:Object.keys(g.pedidoIds||{}).length,unidades:qtd};
 }
@@ -1289,8 +1340,9 @@ function _canalRowsArr(byCanal,cmvByCanal){
     var ads=(STATE.adsByCanal&&STATE.adsByCanal[n])||0;
     var impostos=TAX_RATE*(c.r-c.dev);   // imposto sobre venda líquida (Bruta − Devoluções)
     var afiliado=c.afiliado||0;
-    var liquida=c.r-c.fee-afiliado-c.dev-c.frete;var resultado=liquida-ads-cmv-impostos;
-    return{nome:n,cor:c.cor||getCor(n),r:c.r,ped:c.ped,fee:c.fee,afiliado:afiliado,dev:c.dev,frete:c.frete,
+    var frete=c.frete+(n==='Site Próprio'?(STATE.freteReversoSite||0):0);  // Site: + reversa Troque
+    var liquida=c.r-c.fee-afiliado-c.dev-frete;var resultado=liquida-ads-cmv-impostos;
+    return{nome:n,cor:c.cor||getCor(n),r:c.r,ped:c.ped,fee:c.fee,afiliado:afiliado,dev:c.dev,frete:frete,
       liquida:liquida,ads:ads,cmv:cmv,impostos:impostos,resultado:resultado,share:totalR>0?c.r/totalR*100:0};
   }).sort(function(a,b){return b.r-a.r;});
 }
@@ -1364,7 +1416,7 @@ function renderCanalTable(){
     byCanal[n].r+=v;byCanal[n].ped++;
     byCanal[n].dev+=parseFloat(p.valor_devolucao||0)+parseFloat(p.valor_chargeback||0);
     byCanal[n].afiliado+=parseFloat(p.comissao_afiliado||0);
-    var fSel=parseFloat(p.frete_ml_seller||0);byCanal[n].frete+=fSel>0?fSel:(p.origem_conta==='shopify'?parseFloat(p.frete||0):0);  // Site: proxy = frete cliente
+    byCanal[n].frete+=parseFloat(p.frete_ml_seller||0);  // Site = subsídio frete grátis; reversa Troque à parte
     var f=parseFloat(p.fee_canal||0);byCanal[n].fee+=f>0?f:v*custoPct(n);
   });
   // CMV por canal dos itens carregados; fallback proporção real por canal (cmvPct).
@@ -1685,14 +1737,14 @@ function renderEcommSkuList(){
   function tacosOf(s){return s.receita>0?adsOf(s)/s.receita*100:0;}                       // TACoS = ads ÷ receita
   function margemLiqOf(s){return s.receita-(s.custoTotal||0)-(s.fee||0)-(s.devolucao||0)-(s.freteSeller||0)-adsOf(s);}
   function margemLiqPctOf(s){return s.receita>0?margemLiqOf(s)/s.receita*100:0;}
-  function devUnPctOf(s){var dv=(STATE.devBySkuPai||{})[s.sku_pai]||{cnt:0};return s.qtd>0?dv.cnt/s.qtd*100:0;}  // devolução em UNIDADES
+  function devUnPctOf(s){var dv=devDoProduto(s.sku_pai);return s.qtd>0?dv.cnt/s.qtd*100:0;}  // devolução em UNIDADES (canal no escopo)
   // Sort
   var sk=STATE.skuSort.key,sd=STATE.skuSort.dir==='asc'?1:-1;
   groups.sort(function(a,b){
     var va,vb;
     if(sk==='nome'){va=(a.nome||a.sku_pai).toLowerCase();vb=(b.nome||b.sku_pai).toLowerCase();return va.localeCompare(vb)*sd;}
     if(sk==='devPct'){va=a.receita>0?a.devolucao/a.receita:0;vb=b.receita>0?b.devolucao/b.receita:0;return (va-vb)*sd;}
-    if(sk==='devml'){va=((STATE.devBySkuPai||{})[a.sku_pai]||{}).valor||0;vb=((STATE.devBySkuPai||{})[b.sku_pai]||{}).valor||0;return (va-vb)*sd;}
+    if(sk==='devml'){va=devDoProduto(a.sku_pai).valor;vb=devDoProduto(b.sku_pai).valor;return (va-vb)*sd;}
     if(sk==='margem'){va=a.receita-a.custoTotal-a.fee-a.devolucao;vb=b.receita-b.custoTotal-b.fee-b.devolucao;return (va-vb)*sd;}
     if(sk==='crescimento'){va=growthOf(a);vb=growthOf(b);va=(va===null?-1e12:va);vb=(vb===null?-1e12:vb);return (va-vb)*sd;}
     if(sk==='devun'){va=devUnPctOf(a);vb=devUnPctOf(b);return (va-vb)*sd;}
@@ -1748,7 +1800,7 @@ function renderEcommSkuList(){
         bar+='<div onclick="event.stopPropagation();focusCanal(\''+c.replace(/'/g,"\\'")+'\')" style="width:'+pct+'%;background:'+cor+';display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;font-weight:700;text-shadow:0 1px 2px rgba(0,0,0,0.5);cursor:pointer;" title="'+c+': '+Math.round(pct)+'% — clique p/ filtrar">'+label+'</div>';
       });
       bar+='</div>';
-      var dv=(STATE.devBySkuPai&&STATE.devBySkuPai[s.sku_pai])||{valor:0,cnt:0};
+      var dv=devDoProduto(s.sku_pai);
       // Devolução em UNIDADES (% como métrica principal, qtd em letra menor)
       var devUnPct=s.qtd>0?dv.cnt/s.qtd*100:0;
       var devCor=devUnPct>=10?'#ef4444':(devUnPct>=5?'#eab308':'var(--txt1)');
@@ -1818,7 +1870,7 @@ function renderEcommSkuDetail(){
   // contas ML — Fio+Confecções — enquanto a tabela mostrava só Fio, e a margem invertia.)
   var adsSku=Object.keys(s.porCanal||{}).reduce(function(a,c){return a+(((STATE.adsBySkuPaiCanal||{})[s.sku_pai]||{})[c]||0);},0);
   var adsPct=receita>0?(adsSku/receita*100):0;
-  var dvSku=(STATE.devBySkuPai&&STATE.devBySkuPai[s.sku_pai])||{valor:0,cnt:0};  // devolução real por produto (todos canais)
+  var dvSku=devDoProduto(s.sku_pai);  // devolução real por produto, FILTRADA pelo canal no escopo (fix 02/07)
   var margemLiq=receita-s.custoTotal-s.fee-s.devolucao-freteSeller-adsSku;
   var margemPct=receita>0?(margemLiq/receita*100):0;
   // Velocidade
@@ -2182,6 +2234,11 @@ async function carregarMensal(){
   // e ainda calcula a janela anterior equivalente pros Δ% dos KPIs.
   var rows=await buscarTudo('mvw_ecommerce_canal_mes','select=*&order=mes.asc').catch(function(){return[];});
   STATE.mensalRows=rows;
+  // Frete reverso do Site por mês (todo histórico) — somado no frete do Site no aggMensal.
+  buscarTudo('vw_frete_reverso_site_dia','select=dia,frete_reverso&order=dia.asc').then(function(rr){
+    var pm={};(rr||[]).forEach(function(r){var ym=(r.dia||'').slice(0,7);pm[ym]=(pm[ym]||0)+parseFloat(r.frete_reverso||0);});
+    STATE.freteReversoMesAll=pm;try{renderMensal();}catch(e){}
+  }).catch(function(){});
   try{renderMensal();}catch(e){console.error('renderMensal',e);}
   if(u)u.textContent='Atualizado '+new Date().toLocaleTimeString('pt-BR');
 }
@@ -2207,7 +2264,9 @@ function aggMensal(rows){
     m.pedidos+=parseInt(r.pedidos||0)-parseInt(r.cancelados||0);
     m.porCanal[canal]=(m.porCanal[canal]||0)+rb;
   });
+  var siteOn=!(STATE.mensalCanalSel&&STATE.mensalCanalSel['Site Próprio']===false);
   return Object.keys(bm).sort().map(function(k){var m=bm[k];
+    if(siteOn)m.frete+=((STATE.freteReversoMesAll||{})[m.ym]||0);  // + reversa Troque do Site no mês
     m.liquida=m.receita-m.comissao-m.afiliado-m.dev-m.frete;m.impostos=TAX_RATE*(m.receita-m.dev);m.resultado=m.liquida-m.cmv-m.impostos;
     m.margem=m.receita>0?m.resultado/m.receita*100:0;m.ticket=m.pedidos>0?m.receita/m.pedidos:0;return m;});
 }
@@ -2399,8 +2458,8 @@ function renderMensalPnL(M){
     frete:{h:'Frete',b:'Custo de frete do <b>seller</b> (o que pagamos pra enviar), via API:'
       +'<div class="tip-row">• <b>ML:</b> R$0 = acordo comercial (ML banca o envio)</div>'
       +'<div class="tip-row">• <b>Shopee:</b> embutido na comissão (~R$0)</div>'
-      +'<div class="tip-row">• <b>TikTok:</b> custo do seller no statement</div>'
-      +'<div class="tip-row">• <b>Site:</b> proxy do frete do cliente (Shopify não expõe o custo do transportador)</div>'},
+      +'<div class="tip-row">• <b>TikTok:</b> custo líquido (comprador reembolsa o frete → ~R$0)</div>'
+      +'<div class="tip-row">• <b>Site:</b> subsídio de <b>frete grátis</b> (Olist Envios, ida que a loja banca) + <b>reversa/troca</b> do Troque (etiqueta Correios). O frete que o cliente paga é repasse (~R$0), não entra.</div>'},
     receita_liquida:{h:'Receita Líquida',b:'<b>Receita Bruta − Comissão − Afiliados − Devoluções − Frete.</b> É o que sobra antes de Ads e CMV.'},
     ads:{h:'Ads',b:'Mídia paga real, via API:'
       +'<div class="tip-row">• <b>Mercado Ads</b> (ML)</div>'
