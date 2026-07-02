@@ -28,15 +28,15 @@
   <div id="load">Abrindo CRM…</div>
   <iframe id="frame" title="CRM" allow="clipboard-read; clipboard-write"></iframe>
   <script>
-    // Renderiza o CRM (app fusion-financeiro, rota /crm) DENTRO do Fusion BI, passando a
-    // sessão já ativa do BI via hash (#sso=) → sem segundo login. O App.tsx lê o hash em
-    // qualquer rota, aplica a sessão e limpa o hash. Re-injetado a cada visita.
+    // Renderiza o CRM (app STANDALONE fusion-crm) DENTRO do Fusion BI, passando a sessão
+    // já ativa do BI via hash (#sso=) → sem segundo login. O App.tsx lê o hash, aplica a
+    // sessão e limpa o hash. Re-injetado a cada visita.
     (async function () {
       const auth = await fusionAuth.requireAuth('crm');
       if (!auth) return; // requireAuth já redirecionou (sem sessão ou sem permissão)
       const s = auth.session;
-      const FIN_URL = 'https://fusion-financeiro.onrender.com';
-      const src = FIN_URL + '/crm#sso=' + encodeURIComponent(s.access_token) + '|' + encodeURIComponent(s.refresh_token);
+      const CRM_URL = 'https://fusion-crm.onrender.com';
+      const src = CRM_URL + '/#sso=' + encodeURIComponent(s.access_token) + '|' + encodeURIComponent(s.refresh_token);
       const frame = document.getElementById('frame');
       frame.onload = function () { const l = document.getElementById('load'); if (l) l.remove(); };
       frame.src = src;
