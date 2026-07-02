@@ -411,6 +411,7 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
           <th class="r">Pedidos<span class="hdr-i" data-col="pedidos">i</span></th>
           <th class="r">Receita Bruta<span class="hdr-i" data-col="receita_bruta">i</span></th>
           <th class="r">Comissão<span class="hdr-i" data-col="comissao">i</span></th>
+          <th class="r">Afiliados<span class="hdr-i" data-col="afiliados">i</span></th>
           <th class="r">Devoluções<span class="hdr-i" data-col="devolucoes">i</span></th>
           <th class="r">Frete<span class="hdr-i" data-col="frete">i</span></th>
           <th class="r">Receita Líquida<span class="hdr-i" data-col="receita_liquida">i</span></th>
@@ -669,7 +670,7 @@ async function buscarTudo(tab,filtro,maxPagesOverride){
   }
   return todos;
 }
-var SEL_PED='id,data_pedido,valor_bruto,canal_nome_raw,origem_conta,status,frete,frete_ml_seller,uf,cidade,fee_canal,valor_devolucao,valor_chargeback,devolucao_pipeline,metodo_pagamento,parcelas';
+var SEL_PED='id,data_pedido,valor_bruto,canal_nome_raw,origem_conta,status,frete,frete_ml_seller,uf,cidade,fee_canal,comissao_afiliado,valor_devolucao,valor_chargeback,devolucao_pipeline,metodo_pagamento,parcelas';
 // Receita inclui frete cliente APENAS pra ML (vb ML = total_amount = só itens, frete fora).
 // Demais canais: vb JÁ INCLUI frete cliente (validado empiricamente 25/05):
 //   - TikTok:   vb = itens + frete (payment.total_amount)
@@ -782,8 +783,8 @@ function cacheSet(de,ate,data){
 var idle = window.requestIdleCallback || function(fn){return setTimeout(fn,0);};
 function calcPnLFromMV(rows,adsVal){
   adsVal=adsVal||0;
-  if(!rows||!rows.length)return{receita:0,devolucoes:0,frete:0,comissao:0,cmv:0,ads:0,liquida:0,lucro:0,pedidos:0};
-  var receita=0,dev=0,frete=0,com=0,liquida=0,ped=0,cmv=0;
+  if(!rows||!rows.length)return{receita:0,devolucoes:0,frete:0,comissao:0,afiliados:0,cmv:0,ads:0,liquida:0,lucro:0,pedidos:0};
+  var receita=0,dev=0,frete=0,com=0,afiliados=0,liquida=0,ped=0,cmv=0;
   rows.forEach(function(r){
     var n=r.canal_nome_raw, _nome=getNome(n,r.origem_conta);
     if(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[_nome])return;
@@ -792,12 +793,13 @@ function calcPnLFromMV(rows,adsVal){
     dev+=parseFloat(r.devolucoes||0);
     frete+=parseFloat(r.frete_seller||0);
     com+=parseFloat(r.comissao||0);
+    afiliados+=parseFloat(r.afiliado||0);
     cmv+=rb*cmvPct(_nome);   // CMV pela proporção REAL por canal (first-paint; calcPnL real sobrescreve no recente)
     ped+=parseInt(r.pedidos||0)-parseInt(r.cancelados||0);
   });
-  liquida=receita-com-dev-frete;
+  liquida=receita-com-afiliados-dev-frete;
   var impostos=TAX_RATE*(receita-dev);   // imposto sobre venda líquida (Bruta − Devoluções)
-  return{receita:receita,devolucoes:dev,frete:frete,comissao:com,cmv:cmv,ads:adsVal,impostos:impostos,liquida:liquida,lucro:liquida-adsVal-cmv-impostos,pedidos:ped};
+  return{receita:receita,devolucoes:dev,frete:frete,comissao:com,afiliados:afiliados,cmv:cmv,ads:adsVal,impostos:impostos,liquida:liquida,lucro:liquida-adsVal-cmv-impostos,pedidos:ped};
 }
 async function fetchItensForIds(ids,tabela){
   if(!ids.length)return[];
@@ -1017,6 +1019,7 @@ async function carregar(){
         // Receita do pedido base = valorReceita(ped) (já inclui frete cliente p/ ML).
         var recPed=valorReceita(ped); var share=recPed>0?(it._receita/recPed):0;
         it._fee=(parseFloat(ped.fee_canal)||0)*share;
+        it._afiliado=(parseFloat(ped.comissao_afiliado)||0)*share;
         it._devolucao=(parseFloat(ped.valor_devolucao)||0)*share;
         it._freteSeller=(parseFloat(ped.frete_ml_seller)||0)*share;
       });
@@ -1088,6 +1091,7 @@ function renderWaterfallImediato(cur,prev){
   var items=[
     {lbl:'Receita Bruta',val:cur.receita,color:'#22c55e',prev:prev.receita},
     {lbl:'− Comissão',val:-cur.comissao,color:'#f97316',prev:-prev.comissao},
+    {lbl:'− Afiliados',val:-(cur.afiliados||0),color:'#fb923c',prev:-(prev.afiliados||0)},
     {lbl:'− Devoluções',val:-cur.devolucoes,color:'#f43f5e',prev:-prev.devolucoes},
     {lbl:'− Frete',val:-cur.frete,color:'#8b5cf6',prev:-prev.frete},
     {lbl:'= Receita Líquida',val:cur.liquida,color:cur.liquida>=0?'#06b6d4':'#f43f5e',prev:prev.liquida},
@@ -1110,10 +1114,11 @@ function renderWaterfallImediato(cur,prev){
 function renderWaterfall(){
   var fp=STATE.focusProduto, gp=fp?pnlProduto():null;
   var cur=gp||calcPnL(STATE.pedidos,STATE.itensFocus,adsFiltrado(STATE.adsByCanal));
-  var prev=fp?{receita:0,liquida:0,lucro:0,comissao:0,devolucoes:0,frete:0,cmv:0,ads:0,impostos:0,pedidos:0}:calcPnLFromMV(STATE.mvRowsPrev||[],adsFiltrado(STATE.adsByCanalPrev));
+  var prev=fp?{receita:0,liquida:0,lucro:0,comissao:0,afiliados:0,devolucoes:0,frete:0,cmv:0,ads:0,impostos:0,pedidos:0}:calcPnLFromMV(STATE.mvRowsPrev||[],adsFiltrado(STATE.adsByCanalPrev));
   var items=[
     {lbl:'Receita Bruta',val:cur.receita,color:'#22c55e',prev:prev.receita},
     {lbl:'− Comissão',val:-cur.comissao,color:'#f97316',prev:-prev.comissao},
+    {lbl:'− Afiliados',val:-(cur.afiliados||0),color:'#fb923c',prev:-(prev.afiliados||0)},
     {lbl:'− Devoluções',val:-cur.devolucoes,color:'#f43f5e',prev:-prev.devolucoes},
     {lbl:'− Frete',val:-cur.frete,color:'#8b5cf6',prev:-prev.frete},
     {lbl:'= Receita Líquida',val:cur.liquida,color:cur.liquida>=0?'#06b6d4':'#f43f5e',prev:prev.liquida},
@@ -1144,11 +1149,12 @@ function calcPnL(pedidos,itens,adsVal){
   // "valor de cancelados". Cancelados ficam fora da receita (filtro _canc).
   // fee_canal real de API (Fase 1-4); fallback custoPct só pra pedidos onde a
   // captura ainda não maturou (escrow Shopee D+X, statement TikTok D+15, etc).
-  var receita=0,devolucoes=0,frete=0,comissao=0,cmv=0;
+  var receita=0,devolucoes=0,frete=0,comissao=0,cmv=0,afiliados=0;
   pedidos.forEach(function(p){
     var v=valorReceita(p);
     if(p._cancelado) return;  // só cancelado fora; devolvido conta como venda bruta + devolução
     receita+=v;
+    afiliados+=parseFloat(p.comissao_afiliado||0);
     // valor_devolucao: refund parcial (faturado) ou reversão total (devolvido — no site é assim).
     // + valor_chargeback (estorno por contestação, perda total) na mesma linha de perdas.
     devolucoes+=parseFloat(p.valor_devolucao||0)+parseFloat(p.valor_chargeback||0);
@@ -1168,11 +1174,11 @@ function calcPnL(pedidos,itens,adsVal){
   var iniItens=janelaItens(DE);
   if(itens&&itens.length>0){itens.forEach(function(it){cmv+=(it._custoUn||0)*it._qtd;});}
   pedidos.forEach(function(p){if(p._cancelado)return;if((p.data_pedido||'')>=iniItens)return;cmv+=valorReceita(p)*cmvPct(p._nome);});
-  // P&L: Bruta − Comissão − Devoluções − Frete = Líquida; − CMV = Resultado
-  var liquida=receita-comissao-devolucoes-frete;
+  // P&L: Bruta − Comissão − Afiliados − Devoluções − Frete = Líquida; − CMV = Resultado
+  var liquida=receita-comissao-afiliados-devolucoes-frete;
   var impostos=TAX_RATE*(receita-devolucoes);   // imposto sobre venda líquida (Bruta − Devoluções)
   var lucro=liquida-adsVal-cmv-impostos;
-  var _r={receita:receita,devolucoes:devolucoes,comissao:comissao,cmv:cmv,frete:frete,ads:adsVal,impostos:impostos,liquida:liquida,lucro:lucro};
+  var _r={receita:receita,devolucoes:devolucoes,comissao:comissao,afiliados:afiliados,cmv:cmv,frete:frete,ads:adsVal,impostos:impostos,liquida:liquida,lucro:lucro};
   _pnlMemo={p:pedidos,i:itens,a:adsVal,r:_r};
   return _r;
 }
@@ -1196,15 +1202,15 @@ function projecaoMes(receita){
 function pnlProduto(){
   var g=(STATE.skuGroups||[]).find(function(s){return s.sku_pai===STATE.focusProduto;});
   if(!g)return null;
-  var receita=0,fee=0,dev=0,frete=0,cmv=0,qtd=0;
+  var receita=0,fee=0,afiliados=0,dev=0,frete=0,cmv=0,qtd=0;
   Object.keys(g.porCanal||{}).forEach(function(c){
     if(STATE.focusCanal&&c!==STATE.focusCanal)return;
-    var pc=g.porCanal[c];receita+=pc.receita;fee+=pc.fee;dev+=pc.devolucao;frete+=pc.freteSeller;cmv+=pc.custoTotal;qtd+=pc.qtd;
+    var pc=g.porCanal[c];receita+=pc.receita;fee+=pc.fee;afiliados+=(pc.afiliado||0);dev+=pc.devolucao;frete+=pc.freteSeller;cmv+=pc.custoTotal;qtd+=pc.qtd;
   });
   var ads=0,abp=(STATE.adsBySkuPaiCanal||{})[STATE.focusProduto]||{};
   Object.keys(abp).forEach(function(c){if(STATE.focusCanal&&c!==STATE.focusCanal)return;ads+=abp[c]||0;});
-  var imp=TAX_RATE*(receita-dev),liquida=receita-fee-dev-frete;
-  return {receita:receita,comissao:fee,devolucoes:dev,frete:frete,cmv:cmv,ads:ads,impostos:imp,liquida:liquida,lucro:liquida-ads-cmv-imp,pedidos:Object.keys(g.pedidoIds||{}).length,unidades:qtd};
+  var imp=TAX_RATE*(receita-dev),liquida=receita-fee-afiliados-dev-frete;
+  return {receita:receita,comissao:fee,afiliados:afiliados,devolucoes:dev,frete:frete,cmv:cmv,ads:ads,impostos:imp,liquida:liquida,lucro:liquida-ads-cmv-imp,pedidos:Object.keys(g.pedidoIds||{}).length,unidades:qtd};
 }
 function popularProdDatalist(){
   var dl=document.getElementById('prod-datalist');if(!dl)return;
@@ -1282,8 +1288,9 @@ function _canalRowsArr(byCanal,cmvByCanal){
     var c=byCanal[n];var cmv=(cmvByCanal&&cmvByCanal[n])||c.r*cmvPct(n);
     var ads=(STATE.adsByCanal&&STATE.adsByCanal[n])||0;
     var impostos=TAX_RATE*(c.r-c.dev);   // imposto sobre venda líquida (Bruta − Devoluções)
-    var liquida=c.r-c.fee-c.dev-c.frete;var resultado=liquida-ads-cmv-impostos;
-    return{nome:n,cor:c.cor||getCor(n),r:c.r,ped:c.ped,fee:c.fee,dev:c.dev,frete:c.frete,
+    var afiliado=c.afiliado||0;
+    var liquida=c.r-c.fee-afiliado-c.dev-c.frete;var resultado=liquida-ads-cmv-impostos;
+    return{nome:n,cor:c.cor||getCor(n),r:c.r,ped:c.ped,fee:c.fee,afiliado:afiliado,dev:c.dev,frete:c.frete,
       liquida:liquida,ads:ads,cmv:cmv,impostos:impostos,resultado:resultado,share:totalR>0?c.r/totalR*100:0};
   }).sort(function(a,b){return b.r-a.r;});
 }
@@ -1298,6 +1305,7 @@ function _canalTbodyHTML(rows){
       '<td class="r">'+fmtN(r.ped)+'</td>'+
       '<td class="r">'+fmtK(r.r)+' <span style="opacity:.55;font-size:.82em">('+fmtD(r.share)+'% do total)</span></td>'+
       '<td class="r">'+vp(r.fee,r.r)+'</td>'+
+      '<td class="r">'+vp(r.afiliado||0,r.r)+'</td>'+
       '<td class="r">'+vp(r.dev,r.r)+'</td>'+
       '<td class="r">'+vp(r.frete,r.r)+'</td>'+
       '<td class="r">'+vp(r.liquida,r.r)+'</td>'+
@@ -1319,11 +1327,12 @@ function renderCanalTableFromMV(rows){
     var n=getNome(r.canal_nome_raw,r.origem_conta);
     if(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[n])return;
     if(STATE.focusCanal&&n!==STATE.focusCanal)return;
-    if(!byCanal[n])byCanal[n]={r:0,ped:0,dev:0,frete:0,fee:0,cor:getCor(n)};
+    if(!byCanal[n])byCanal[n]={r:0,ped:0,dev:0,frete:0,fee:0,afiliado:0,cor:getCor(n)};
     var c=byCanal[n];
     c.r+=parseFloat(r.receita_bruta||0);
     c.ped+=(parseInt(r.pedidos||0)-parseInt(r.cancelados||0));
     c.fee+=parseFloat(r.comissao||0);
+    c.afiliado+=parseFloat(r.afiliado||0);
     c.frete+=parseFloat(r.frete_seller||0);
     c.dev+=parseFloat(r.devolucoes||0);
   });
@@ -1334,9 +1343,9 @@ function _canalRowsProduto(g){
   var abp=(STATE.adsBySkuPaiCanal||{})[g.sku_pai]||{};
   var canais=Object.keys(g.porCanal||{}).filter(function(c){return !STATE.focusCanal||c===STATE.focusCanal;});
   var totalR=canais.reduce(function(s,c){return s+g.porCanal[c].receita;},0);
-  return canais.map(function(n){var pc=g.porCanal[n];var ads=abp[n]||0;var cmv=pc.custoTotal;
-    var imp=TAX_RATE*(pc.receita-pc.devolucao);var liquida=pc.receita-pc.fee-pc.devolucao-pc.freteSeller;
-    return{nome:n,cor:getCor(n),r:pc.receita,ped:pc.qtd,fee:pc.fee,dev:pc.devolucao,frete:pc.freteSeller,
+  return canais.map(function(n){var pc=g.porCanal[n];var ads=abp[n]||0;var cmv=pc.custoTotal;var afil=pc.afiliado||0;
+    var imp=TAX_RATE*(pc.receita-pc.devolucao);var liquida=pc.receita-pc.fee-afil-pc.devolucao-pc.freteSeller;
+    return{nome:n,cor:getCor(n),r:pc.receita,ped:pc.qtd,fee:pc.fee,afiliado:afil,dev:pc.devolucao,frete:pc.freteSeller,
       liquida:liquida,ads:ads,cmv:cmv,impostos:imp,resultado:liquida-ads-cmv-imp,share:totalR>0?pc.receita/totalR*100:0};
   }).sort(function(a,b){return b.r-a.r;});
 }
@@ -1349,11 +1358,12 @@ function renderCanalTable(){
   var byCanal={};
   // Mesma lógica do P&L (calcPnL): só `cancelado` fora; `devolvido` conta como bruta + devolução.
   ped.forEach(function(p){
-    var n=p._nome;if(!byCanal[n])byCanal[n]={r:0,ped:0,dev:0,frete:0,fee:0,cor:p._cor};
+    var n=p._nome;if(!byCanal[n])byCanal[n]={r:0,ped:0,dev:0,frete:0,fee:0,afiliado:0,cor:p._cor};
     if(p._cancelado)return;
     var v=valorReceita(p);
     byCanal[n].r+=v;byCanal[n].ped++;
     byCanal[n].dev+=parseFloat(p.valor_devolucao||0)+parseFloat(p.valor_chargeback||0);
+    byCanal[n].afiliado+=parseFloat(p.comissao_afiliado||0);
     var fSel=parseFloat(p.frete_ml_seller||0);byCanal[n].frete+=fSel>0?fSel:(p.origem_conta==='shopify'?parseFloat(p.frete||0):0);  // Site: proxy = frete cliente
     var f=parseFloat(p.fee_canal||0);byCanal[n].fee+=f>0?f:v*custoPct(n);
   });
@@ -1581,11 +1591,11 @@ function agruparSkusMV(rows){
     var k=r.sku_pai;var canal=getNome(r.canal_nome_raw,r.origem_conta);
     if(STATE.focusCanal&&canal!==STATE.focusCanal)return;
     if(!map[k])map[k]={sku_pai:k,nome:r.nome||k,cat:r.cat||'OUTROS',custoUn:0,
-      receita:0,qtd:0,custoTotal:0,fee:0,devolucao:0,freteSeller:0,
+      receita:0,qtd:0,custoTotal:0,fee:0,afiliado:0,devolucao:0,freteSeller:0,
       porCanal:{},pedidoIds:{},datas:{}};
     var g=map[k];var rec=parseFloat(r.receita||0),q=parseFloat(r.qtd||0),cm=parseFloat(r.cmv||0);
     g.receita+=rec;g.qtd+=q;g.custoTotal+=cm;
-    if(!g.porCanal[canal])g.porCanal[canal]={qtd:0,receita:0,fee:0,devolucao:0,freteSeller:0,custoTotal:0};
+    if(!g.porCanal[canal])g.porCanal[canal]={qtd:0,receita:0,fee:0,afiliado:0,devolucao:0,freteSeller:0,custoTotal:0};
     var pc=g.porCanal[canal];pc.receita+=rec;pc.qtd+=q;pc.custoTotal+=cm;
   });
   STATE.skuGroups=Object.values(map).sort(function(a,b){return b.receita-a.receita;});
@@ -1601,17 +1611,17 @@ function agruparSkus(itens){
   (itens||STATE.itens).forEach(function(it){
     var k=it._sku_pai;var c=it._canal||'—';
     if(!map[k])map[k]={sku_pai:k,nome:it._nome,cat:it._cat,custoUn:it._custoUn||0,
-      receita:0,qtd:0,custoTotal:0,fee:0,devolucao:0,freteSeller:0,
+      receita:0,qtd:0,custoTotal:0,fee:0,afiliado:0,devolucao:0,freteSeller:0,
       porCanal:{},pedidoIds:{},datas:{}};
     var g=map[k];
     g.receita+=it._receita; g.qtd+=it._qtd;
     g.custoTotal+=(it._custoUn||0)*it._qtd;
-    g.fee+=it._fee||0; g.devolucao+=it._devolucao||0;
+    g.fee+=it._fee||0; g.afiliado+=it._afiliado||0; g.devolucao+=it._devolucao||0;
     g.freteSeller+=it._freteSeller||0;
-    if(!g.porCanal[c])g.porCanal[c]={qtd:0,receita:0,fee:0,devolucao:0,freteSeller:0,custoTotal:0};
+    if(!g.porCanal[c])g.porCanal[c]={qtd:0,receita:0,fee:0,afiliado:0,devolucao:0,freteSeller:0,custoTotal:0};
     var pc=g.porCanal[c];
     pc.qtd+=it._qtd; pc.receita+=it._receita;
-    pc.fee+=it._fee||0; pc.devolucao+=it._devolucao||0;
+    pc.fee+=it._fee||0; pc.afiliado+=it._afiliado||0; pc.devolucao+=it._devolucao||0;
     pc.freteSeller+=it._freteSeller||0;
     pc.custoTotal+=(it._custoUn||0)*it._qtd;
     if(it.pedido_id)g.pedidoIds[it.pedido_id]=true;
@@ -2190,15 +2200,15 @@ function aggMensal(rows){
     var ym=(r.mes||'').slice(0,7);if(!ym)return;
     var canal=getNome(r.canal_nome_raw,r.origem_conta);
     if(STATE.mensalCanalSel&&STATE.mensalCanalSel[canal]===false)return;   // chip de marketplace desmarcado
-    if(!bm[ym])bm[ym]={ym:ym,receita:0,comissao:0,dev:0,frete:0,cmv:0,pedidos:0,porCanal:{}};
+    if(!bm[ym])bm[ym]={ym:ym,receita:0,comissao:0,afiliado:0,dev:0,frete:0,cmv:0,pedidos:0,porCanal:{}};
     var m=bm[ym],rb=parseFloat(r.receita_bruta||0);
-    m.receita+=rb;m.comissao+=parseFloat(r.comissao||0);m.dev+=parseFloat(r.devolucoes||0);
+    m.receita+=rb;m.comissao+=parseFloat(r.comissao||0);m.afiliado+=parseFloat(r.afiliado||0);m.dev+=parseFloat(r.devolucoes||0);
     m.frete+=parseFloat(r.frete_seller||0);m.cmv+=rb*cmvPct(canal);
     m.pedidos+=parseInt(r.pedidos||0)-parseInt(r.cancelados||0);
     m.porCanal[canal]=(m.porCanal[canal]||0)+rb;
   });
   return Object.keys(bm).sort().map(function(k){var m=bm[k];
-    m.liquida=m.receita-m.comissao-m.dev-m.frete;m.impostos=TAX_RATE*(m.receita-m.dev);m.resultado=m.liquida-m.cmv-m.impostos;
+    m.liquida=m.receita-m.comissao-m.afiliado-m.dev-m.frete;m.impostos=TAX_RATE*(m.receita-m.dev);m.resultado=m.liquida-m.cmv-m.impostos;
     m.margem=m.receita>0?m.resultado/m.receita*100:0;m.ticket=m.pedidos>0?m.receita/m.pedidos:0;return m;});
 }
 // Mensal para 1 produto focado: receita/unidades/CMV REAIS da MV de sku; comissão estimada por
@@ -2211,13 +2221,13 @@ function aggMensalProduto(){
     var canal=getNome(r.canal_nome_raw,r.origem_conta);
     if(STATE.mensalCanalSel&&STATE.mensalCanalSel[canal]===false)return;
     var ym=(r.data_pedido||'').slice(0,7);if(!ym)return;
-    if(!bm[ym])bm[ym]={ym:ym,receita:0,comissao:0,dev:0,frete:0,cmv:0,pedidos:0,porCanal:{}};
+    if(!bm[ym])bm[ym]={ym:ym,receita:0,comissao:0,afiliado:0,dev:0,frete:0,cmv:0,pedidos:0,porCanal:{}};
     var m=bm[ym],rb=parseFloat(r.receita||0);
     m.receita+=rb;m.cmv+=parseFloat(r.cmv||0);m.comissao+=rb*custoPct(canal);m.pedidos+=parseFloat(r.qtd||0);
     m.porCanal[canal]=(m.porCanal[canal]||0)+rb;
   });
   return Object.keys(bm).sort().map(function(k){var m=bm[k];
-    m.liquida=m.receita-m.comissao-m.dev-m.frete;m.impostos=TAX_RATE*(m.receita-m.dev);m.resultado=m.liquida-m.cmv-m.impostos;
+    m.liquida=m.receita-m.comissao-m.afiliado-m.dev-m.frete;m.impostos=TAX_RATE*(m.receita-m.dev);m.resultado=m.liquida-m.cmv-m.impostos;
     m.margem=m.receita>0?m.resultado/m.receita*100:0;m.ticket=m.pedidos>0?m.receita/m.pedidos:0;return m;});
 }
 function subMeses(ymd,n){var y=+ymd.slice(0,4),m=+ymd.slice(5,7);m-=n;while(m<1){m+=12;y--;}return y+'-'+('0'+m).slice(-2)+'-01';}
@@ -2348,12 +2358,12 @@ function renderMensalProdEvol(){
 }
 function renderMensalPnL(M){
   var tbl=document.getElementById('mensal-pnl');if(!tbl)return;
-  var cols=['Mês','Bruta','Comissão','Devol.','Frete','Líquida','CMV (est)','Impostos','Resultado','Margem %'];
+  var cols=['Mês','Bruta','Comissão','Afiliados','Devol.','Frete','Líquida','CMV (est)','Impostos','Resultado','Margem %'];
   tbl.querySelector('thead').innerHTML='<tr>'+cols.map(function(c,i){return '<th'+(i?' class="r"':'')+'>'+c+'</th>';}).join('')+'</tr>';
   tbl.querySelector('tbody').innerHTML=M.slice(-12).reverse().map(function(m){
     var mc=m.margem>=20?'#22c55e':(m.margem>=10?'#eab308':'#f43f5e');
     return '<tr><td style="font-weight:600">'+ymLabel(m.ym)+'</td><td class="r">'+fmt(m.receita)+'</td>'
-      +'<td class="r" style="color:var(--txt2)">'+fmtK(m.comissao)+'</td><td class="r" style="color:var(--txt2)">'+fmtK(m.dev)+'</td>'
+      +'<td class="r" style="color:var(--txt2)">'+fmtK(m.comissao)+'</td><td class="r" style="color:var(--txt2)">'+fmtK(m.afiliado||0)+'</td><td class="r" style="color:var(--txt2)">'+fmtK(m.dev)+'</td>'
       +'<td class="r" style="color:var(--txt2)">'+fmtK(m.frete)+'</td><td class="r">'+fmt(m.liquida)+'</td>'
       +'<td class="r" style="color:var(--txt2)">'+fmtK(m.cmv)+'</td><td class="r" style="color:var(--txt2)">'+fmtK(m.impostos)+'</td><td class="r" style="font-weight:700">'+fmt(m.resultado)+'</td>'
       +'<td class="r" style="font-weight:700;color:'+mc+'">'+fmtD(m.margem)+'%</td></tr>';
@@ -2381,12 +2391,17 @@ function renderMensalPnL(M){
       +'<div class="tip-row">• <b>TikTok:</b> statement</div>'
       +'<div class="tip-row">• <b>Site:</b> Shopify refunds + chargeback (Pagar.me)</div>'
       +'<div class="tip-row" style="margin-top:5px">Troca / vale-crédito do site <b>não</b> entra (não é perda de caixa).</div>'},
+    afiliados:{h:'Afiliados',b:'Comissão paga a afiliados/influencers pelo <b>programa da plataforma</b>, via API:'
+      +'<div class="tip-row">• <b>TikTok:</b> affiliate commission do statement (antes vinha embutido na Comissão)</div>'
+      +'<div class="tip-row">• <b>Shopee:</b> AMS (order_ams_commission_fee) do escrow</div>'
+      +'<div class="tip-row">• <b>ML:</b> "Tarifa de programa de afiliados" do faturamento</div>'
+      +'<div class="tip-row" style="margin-top:5px;opacity:.85">Só programa da plataforma (não inclui cachê/permuta fora dela). Linha separada da Comissão pra dar visibilidade do gasto.</div>'},
     frete:{h:'Frete',b:'Custo de frete do <b>seller</b> (o que pagamos pra enviar), via API:'
       +'<div class="tip-row">• <b>ML:</b> R$0 = acordo comercial (ML banca o envio)</div>'
       +'<div class="tip-row">• <b>Shopee:</b> embutido na comissão (~R$0)</div>'
       +'<div class="tip-row">• <b>TikTok:</b> custo do seller no statement</div>'
       +'<div class="tip-row">• <b>Site:</b> proxy do frete do cliente (Shopify não expõe o custo do transportador)</div>'},
-    receita_liquida:{h:'Receita Líquida',b:'<b>Receita Bruta − Comissão − Devoluções − Frete.</b> É o que sobra antes de Ads e CMV.'},
+    receita_liquida:{h:'Receita Líquida',b:'<b>Receita Bruta − Comissão − Afiliados − Devoluções − Frete.</b> É o que sobra antes de Ads e CMV.'},
     ads:{h:'Ads',b:'Mídia paga real, via API:'
       +'<div class="tip-row">• <b>Mercado Ads</b> (ML)</div>'
       +'<div class="tip-row">• <b>Shopee Ads</b></div>'
