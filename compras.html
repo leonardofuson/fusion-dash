@@ -484,6 +484,8 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
       <input type="text" id="flt-insumo-busca" class="dinput" placeholder="Buscar tecido, cor, NF, fornecedor..." oninput="renderInsumos()">
       <button class="btnf ghost" style="font-size:11px;padding:6px 10px" onclick="expandirTodosInsumos()">Expandir tudo</button>
       <button class="btnf ghost" style="font-size:11px;padding:6px 10px" onclick="colapsarTodosInsumos()">Colapsar tudo</button>
+      <button class="btnf" onclick="iniciarImportNFe()" title="Ler o XML da NFe do fornecedor e pré-preencher a entrada de tecido">📄 Importar NFe (XML)</button>
+      <input type="file" id="nfe-file-input" accept=".xml,text/xml,application/xml" style="display:none" onchange="onArquivoNFe(this)">
       <button class="btnf" onclick="openDrawer('novo-insumo')">+ Cadastrar Insumo</button>
       <div id="chips-localizacao" style="display:flex;gap:6px;flex-wrap:wrap;width:100%;margin-top:6px;align-items:center"></div>
     </div>
@@ -741,7 +743,7 @@ async function buscarTudo(tab, filtro) {
 
 async function carregar() {
   try {
-    var [ops, compras, costureiros, precos, insumos, consumo, planejamento, fornecedores, produtos, coresValidas, custosSku, saldoLocal, eficiencia, entregas] = await Promise.all([
+    var [ops, compras, costureiros, precos, insumos, consumo, planejamento, fornecedores, produtos, coresValidas, custosSku, saldoLocal, eficiencia, entregas, deparaNF] = await Promise.all([
       buscarTudo('ordens_producao', 'select=*&order=criado_em.desc'),
       buscarTudo('ordens_compra', 'select=*&order=data_faturamento.desc'),
       buscarTudo('costureiros', 'select=*&order=nome'),
@@ -756,6 +758,7 @@ async function carregar() {
       buscarTudo('vw_insumo_saldo_local', 'select=*'),
       buscarTudo('vw_eficiencia_costureiro_global', 'select=*&order=eficiencia.asc'),
       buscarTudo('producao_entregas', 'select=*&order=data_entrega.desc'),
+      buscarTudo('insumo_nf_depara', 'select=*&ativo=eq.true'),
     ]);
     STATE.ops = ops;
     STATE.compras = compras;
@@ -771,6 +774,10 @@ async function carregar() {
     STATE.saldoLocal = saldoLocal || [];
     STATE.eficienciaCostureiros = eficiencia || [];
     STATE.entregas = entregas || [];
+    // De-para NFe (item do fornecedor → nosso tecido) — índice por "cnpj|cProd"
+    STATE.deparaNF = deparaNF || [];
+    STATE.deparaNFIdx = {};
+    STATE.deparaNF.forEach(function(m){ STATE.deparaNFIdx[(m.fornecedor_cnpj||'')+'|'+(m.cod_produto_fornecedor||'')] = m; });
     // Index saldo por (insumo_id, localizacao) — modelo event-sourced (Sprint 2)
     STATE.saldoLocalIdx = {};
     STATE.saldoLocal.forEach(function(r) {
@@ -5277,6 +5284,11 @@ function openDrawer(type) {
   } else if (type === 'novo-insumo') {
     title.textContent = 'Cadastrar Insumo';
     body.innerHTML = buildInsumoForm();
+  } else if (type === 'importar-nfe') {
+    var pNFe = STATE.nfeParsed || { header: {}, items: [] };
+    title.textContent = 'Importar NFe ' + (pNFe.header.nNF || '');
+    body.innerHTML = buildImportNFeForm(pNFe);
+    setTimeout(function(){ preencherRowsNFe(pNFe); }, 0);
   } else if (type === 'transferir-tecido') {
     title.textContent = 'Transferir Tecido';
     body.innerHTML = buildTransferirTecidoForm(STATE.transferindoInsumoId);
@@ -6271,6 +6283,170 @@ function buildInsumoRow(idx, firstRow) {
       '<div style="display:flex;flex-wrap:wrap;gap:4px;padding:8px;background:var(--bg3);border:1px solid var(--bdr);border-radius:6px;max-height:160px;overflow-y:auto;" data-field="skus">' + paisHtml + '</div>' +
     '</div>' +
   '</div>';
+}
+
+// ═══════════════ IMPORTAÇÃO DE NFe (XML) ═══════════════
+// Lê o XML oficial da NFe (100% no browser), pré-preenche o form de entrada de
+// tecido (1 linha por item) e memoriza o de-para item-fornecedor→nosso-tecido.
+function iniciarImportNFe() {
+  var inp = document.getElementById('nfe-file-input');
+  if (inp) { inp.value = ''; inp.click(); }
+}
+
+// Texto do 1º elemento com a tag (namespace-agnóstico via localName fallback)
+function _nfeText(parent, tag) {
+  if (!parent) return '';
+  var els = parent.getElementsByTagName(tag);
+  if (els.length) return (els[0].textContent || '').trim();
+  var all = parent.getElementsByTagName('*');
+  for (var i = 0; i < all.length; i++) { if (all[i].localName === tag) return (all[i].textContent || '').trim(); }
+  return '';
+}
+
+function parseNFeXML(text) {
+  var doc = new DOMParser().parseFromString(text, 'application/xml');
+  if (doc.getElementsByTagName('parsererror').length) throw new Error('XML inválido / ilegível.');
+  var infNFe = doc.getElementsByTagName('infNFe')[0] || doc;
+  var ide = infNFe.getElementsByTagName('ide')[0];
+  var emit = infNFe.getElementsByTagName('emit')[0];
+  var nNF = _nfeText(ide, 'nNF');
+  if (!nNF) throw new Error('Não parece uma NFe (sem número nNF).');
+  var dh = _nfeText(ide, 'dhEmi') || _nfeText(ide, 'dEmi');
+  var header = {
+    nNF: nNF,
+    data: dh ? dh.slice(0, 10) : '',
+    fornecedorNome: _nfeText(emit, 'xNome'),
+    fornecedorCnpj: _nfeText(emit, 'CNPJ') || _nfeText(emit, 'CPF'),
+    vNF: parseFloat(_nfeText(infNFe.getElementsByTagName('ICMSTot')[0], 'vNF')) || 0,
+  };
+  var dets = infNFe.getElementsByTagName('det');
+  var items = [];
+  for (var i = 0; i < dets.length; i++) {
+    var prod = dets[i].getElementsByTagName('prod')[0];
+    if (!prod) continue;
+    items.push({
+      cProd: _nfeText(prod, 'cProd'),
+      xProd: _nfeText(prod, 'xProd'),
+      ncm: _nfeText(prod, 'NCM'),
+      uCom: _nfeText(prod, 'uCom'),
+      qCom: parseFloat(_nfeText(prod, 'qCom')) || 0,
+      vUnCom: parseFloat(_nfeText(prod, 'vUnCom')) || 0,
+      vProd: parseFloat(_nfeText(prod, 'vProd')) || 0,
+    });
+  }
+  if (!items.length) throw new Error('NFe sem itens (<det>).');
+  return { header: header, items: items };
+}
+
+function mapUnidadeNFe(u) {
+  var s = (u || '').trim().toUpperCase();
+  if (s.indexOf('KG') >= 0 || s.indexOf('KILO') >= 0) return 'KG';
+  if (s.indexOf('ROL') >= 0) return 'ROL';
+  if (s.indexOf('MT') >= 0 || s === 'M' || s.indexOf('METR') >= 0) return 'M';
+  if (s.indexOf('UN') >= 0 || s.indexOf('PC') >= 0 || s.indexOf('PÇ') >= 0) return 'UN';
+  return 'M';
+}
+
+function onArquivoNFe(input) {
+  var file = input.files && input.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var parsed;
+    try { parsed = parseNFeXML(e.target.result); }
+    catch (err) { alert('Erro ao ler a NFe: ' + err.message); return; }
+    var nf = String(parsed.header.nNF).trim();
+    var jaExiste = (STATE.insumos || []).some(function(i){ return String(i.numero_nf || '').trim() === nf; });
+    if (jaExiste && !confirm('A NF ' + nf + ' já existe no estoque. Importar mesmo assim (pode duplicar)?')) return;
+    STATE.nfeImport = { fornecedorCnpj: parsed.header.fornecedorCnpj, fornecedorNome: parsed.header.fornecedorNome };
+    STATE.nfeParsed = parsed;
+    openDrawer('importar-nfe');
+  };
+  reader.readAsText(file);  // UTF-8 (padrão da NFe)
+}
+
+function buildImportNFeForm(p) {
+  STATE.insumoRowCount = p.items.length;
+  var rows = p.items.map(function(_, i){ return buildInsumoRow(i, false); }).join('');
+  var h = p.header;
+  var banner = '<div style="padding:12px;border:1px solid var(--indigo);border-radius:10px;background:rgba(99,102,241,0.08);margin-bottom:14px">' +
+    '<div style="font-weight:700;color:var(--indigo);margin-bottom:4px">NFe ' + (h.nNF || '—') + ' · ' + (h.data ? formatDate(h.data) : '—') + '</div>' +
+    '<div style="color:var(--txt2);font-size:13px">' + (h.fornecedorNome || 'Fornecedor —') + (h.fornecedorCnpj ? (' · CNPJ ' + h.fornecedorCnpj) : '') + '</div>' +
+    '<div style="color:var(--txt3);font-size:12px;margin-top:2px">' + p.items.length + ' item(s) · Total NF ' + fmtR(h.vNF || 0) + '</div>' +
+    '<div style="color:var(--txt3);font-size:11px;margin-top:6px">Revise cada linha (tecido, cor, produtos). Verde = vínculo já memorizado; amarelo = novo, vincule. Ao salvar, o vínculo fica salvo pra próxima nota deste fornecedor.</div>' +
+  '</div>';
+  return banner + '<div id="insumos-rows">' + rows + '</div>';
+}
+
+function marcarRowReconhecida(row, ok) {
+  row.style.borderLeft = '4px solid ' + (ok ? 'var(--green)' : 'var(--amber)');
+  var hdr = row.querySelector('span');
+  if (hdr) {
+    var base = hdr.innerHTML.split(' <span')[0];
+    hdr.innerHTML = base + (ok ? ' <span style="color:var(--green)">✔ reconhecido</span>' : ' <span style="color:var(--amber)">novo — vincule</span>');
+  }
+}
+
+function preencherRowsNFe(p) {
+  var rows = document.querySelectorAll('#insumos-rows .insumo-row');
+  p.items.forEach(function(it, i) {
+    var row = rows[i];
+    if (!row) return;
+    row.dataset.nfeCprod = it.cProd || '';
+    row.dataset.nfeXprod = it.xProd || '';
+    var set = function(field, val){ var el = row.querySelector('[data-field="' + field + '"]'); if (el != null && val != null && val !== '') el.value = val; };
+    set('qtd', it.qCom || '');
+    set('valor_dentro', it.vUnCom ? it.vUnCom.toFixed(2) : '');
+    set('nf', p.header.nNF || '');
+    set('data_fat', p.header.data || '');
+    var uEl = row.querySelector('[data-field="unidade"]'); if (uEl) uEl.value = mapUnidadeNFe(it.uCom);
+    var m = (STATE.deparaNFIdx || {})[(p.header.fornecedorCnpj || '') + '|' + (it.cProd || '')];
+    if (m) {
+      set('nome', m.insumo_nome || it.xProd || '');
+      if (m.insumo_cor) set('cor', m.insumo_cor);
+      if (m.unidade && uEl) uEl.value = m.unidade;
+      Array.from(row.querySelectorAll('.f-insumo-sku-' + i)).forEach(function(cb){ if ((m.skus_pai || []).indexOf(cb.value) >= 0) cb.checked = true; });
+      marcarRowReconhecida(row, true);
+    } else {
+      set('nome', it.xProd || '');  // fallback: descrição crua do fornecedor (editável)
+      marcarRowReconhecida(row, false);
+    }
+    updateValorTotalInsumoRow(i);
+    atualizarCoresInsumoRow(i);
+  });
+}
+
+// Memoriza o vínculo item-do-fornecedor → nosso tecido (upsert por cnpj+cProd)
+async function upsertDeParaNFe() {
+  var imp = STATE.nfeImport; if (!imp) return;
+  var rows = document.querySelectorAll('#insumos-rows .insumo-row');
+  var payload = [];
+  rows.forEach(function(row) {
+    var cprod = row.dataset.nfeCprod || '';
+    if (!cprod) return;
+    var nomeEl = row.querySelector('[data-field="nome"]');
+    var nome = nomeEl ? (nomeEl.value || '').trim() : '';
+    if (!nome) return;
+    var skus = Array.from(row.querySelectorAll('[data-field="skus"] input:checked')).map(function(el){ return el.value; });
+    payload.push({
+      fornecedor_cnpj: imp.fornecedorCnpj || '',
+      fornecedor_nome: imp.fornecedorNome || null,
+      cod_produto_fornecedor: cprod,
+      desc_fornecedor: row.dataset.nfeXprod || null,
+      insumo_nome: nome,
+      insumo_cor: (row.querySelector('[data-field="cor"]').value || '').trim() || null,
+      unidade: row.querySelector('[data-field="unidade"]').value || null,
+      skus_pai: skus.length ? skus : null,
+      atualizado_em: new Date().toISOString(),
+    });
+  });
+  if (!payload.length) return;
+  var r = await fetch(SB_URL + '/rest/v1/insumo_nf_depara?on_conflict=fornecedor_cnpj,cod_produto_fornecedor', {
+    method: 'POST',
+    headers: Object.assign({}, await getAuthHeaders(), { 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
+    body: JSON.stringify(payload),
+  });
+  if (!r.ok) throw new Error('de-para HTTP ' + r.status + ': ' + await r.text());
 }
 
 function buildInsumoForm() {
@@ -7496,7 +7672,7 @@ async function submitDrawer() {
         bodyCostu.ativo = true;
         await postSupabase('costureiros', bodyCostu);
       }
-    } else if (type === 'novo-insumo') {
+    } else if (type === 'novo-insumo' || type === 'importar-nfe') {
       var insumos = coletarInsumosRows();
       if (!insumos.length) { alert('Preencha ao menos um tecido/insumo'); btn.textContent='Salvar'; btn.disabled=false; return; }
       // Preserva qty original e zera quantidade_atual no insert (trigger soma via mov compra)
@@ -7518,6 +7694,11 @@ async function submitDrawer() {
         });
       });
       if (movsCompra.length) await postSupabase('movimentacao_insumos', movsCompra);
+      // Se veio de importação de NFe, memoriza o de-para pra próxima nota
+      if (STATE.nfeImport) {
+        try { await upsertDeParaNFe(); } catch (e) { console.warn('Falha ao salvar de-para NFe:', e); }
+        STATE.nfeImport = null; STATE.nfeParsed = null;
+      }
     } else if (type === 'transferir-tecido') {
       var insumoId = STATE.transferindoInsumoId;
       var insumo = STATE.insumos.find(function(i){return i.id === insumoId;});
