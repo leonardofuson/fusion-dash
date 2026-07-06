@@ -193,6 +193,9 @@ table.mtz tr:hover td{background:rgba(255,255,255,0.03);}
 table.mtz tr:hover td.tdc{background:#1f1f23;}
 table.mtz tfoot td{background:rgba(255,255,255,0.04)!important;font-weight:800;font-size:11px;color:#fff;border-top:1px solid #3f3f46;}
 table.mtz tfoot td.tdc{background:rgba(255,255,255,0.04)!important;}
+/* "a caminho" (transfer pro ML Full) — 2ª linha na célula, cyan */
+table.mtz td .transito{display:block;font-size:9px;font-weight:700;color:#38bdf8;line-height:1.25;margin-top:1px;font-variant-numeric:tabular-nums;}
+.ch-item-transito{font-size:10px;font-weight:700;color:#38bdf8;margin-left:8px;letter-spacing:0.02em;}
 .cor-dot{width:10px;height:10px;border-radius:50%;border:1px solid rgba(255,255,255,0.1);flex-shrink:0;display:inline-block;vertical-align:middle;margin-right:6px;}
 
 /* ── HEATMAP CELLS ── */
@@ -462,6 +465,13 @@ const LOCS = [
   // Shopee = só Full/FBS (não crossdock) desde 06/07/2026. shopify + olist_fio removidos 06/07 (→ upseller)
 ];
 
+// "A caminho" (em trânsito pro ML Full) — localização espelho por conta. NÃO é coluna do
+// LOCS: aparece como 2ª linha na célula do ML Full e é SUBTRAÍDA do KWID CD (origem, sem
+// dupla contagem). Ver ESTOQUE.md. Populado pelo sync a partir do not_available_detail.transfer.
+const TRANSITO = { mlfull_fio:'mlfull_fio_transito', mlfull_confec:'mlfull_confec_transito' };
+const TRANSITO_KEYS = Object.values(TRANSITO);
+const ORIGEM_CD = 'olist_kwid';  // origem dos produtos que vão pro Full — recebe a subtração
+
 // Whitelist de fabricação própria — fonte da verdade: produtos.fabricacao_propria.
 // Computado a partir do STATE.produtos depois do fetch.
 let SKU_FINALIZADOS = new Set();
@@ -677,6 +687,7 @@ async function carregar(_fromBgRefresh) {
       if (tem) {
         pai.cores[COR_GC] = { 'Único': {} };
         LOCS.forEach(l => { pai.cores[COR_GC]['Único'][l.key] = e[l.key] || 0; });
+        TRANSITO_KEYS.forEach(tk => { pai.cores[COR_GC]['Único'][tk] = e[tk] || 0; });
       }
     });
 
@@ -701,6 +712,20 @@ async function carregar(_fromBgRefresh) {
       LOCS.forEach(l => {
         pai.cores[cor][tam][l.key] = (pai.cores[cor][tam][l.key] || 0) + (e[l.key] || 0);
       });
+      TRANSITO_KEYS.forEach(tk => {
+        pai.cores[cor][tam][tk] = (pai.cores[cor][tam][tk] || 0) + (e[tk] || 0);
+      });
+    });
+
+    // "A caminho" pro Full sai do KWID CD (origem) — subtrai por célula pra não contar 2×.
+    // Dinâmico (recalculado a cada carga): quando o ML confirma, transfer→0 e a subtração some.
+    Object.values(pBySku).forEach(pai => {
+      Object.values(pai.cores).forEach(tams => Object.values(tams).forEach(cell => {
+        const emTransito = TRANSITO_KEYS.reduce((s, tk) => s + (cell[tk] || 0), 0);
+        if (emTransito > 0 && (cell[ORIGEM_CD] || 0) > 0) {
+          cell[ORIGEM_CD] = Math.max(0, (cell[ORIGEM_CD] || 0) - emTransito);
+        }
+      }));
     });
 
     Object.values(pBySku).forEach(pai => {
@@ -1491,29 +1516,36 @@ function renderProd(pai, locF, modoQuebrada, nivel) {
     const v = bl[l.key];
     const pct = tot > 0 ? (v / tot * 100) : 0;
     const isItemOpen = !!CH_ITEM_EXP[lid] || (locF === l.key);
+    // ML Full → 2ª linha "a caminho" (transfer). tKey undefined nas outras localizações.
+    const tKey = TRANSITO[l.key];
+    const cellTr = (c, t) => tKey ? ((pai.cores[c][t] || {})[tKey] || 0) : 0;
+    const trLine = n => n > 0 ? `<span class="transito" title="a caminho pro Full">+${fmt(n)}</span>` : '';
+    const vT = tKey ? cors.reduce((s, c) => s + tams.reduce((s2, t) => s2 + cellTr(c, t), 0), 0) : 0;
     const lins = cors.map(c => {
       const cells = tams.map(t => {
         const q = (pai.cores[c][t] || {})[l.key] || 0;
-        return `<td class="${hcls(q)}">${q === 0 ? '—' : fmt(q)}</td>`;
+        return `<td class="${hcls(q)}">${q === 0 ? '—' : fmt(q)}${trLine(cellTr(c, t))}</td>`;
       }).join('');
       const rt = tams.reduce((s, t) => s + ((pai.cores[c][t] || {})[l.key] || 0), 0);
-      return `<tr><td class="tdc"><span class="cor-dot" style="background:${corV(c)}"></span>${c}</td>${cells}<td class="tot">${rt > 0 ? fmt(rt) : '—'}</td></tr>`;
+      const rtT = tams.reduce((s, t) => s + cellTr(c, t), 0);
+      return `<tr><td class="tdc"><span class="cor-dot" style="background:${corV(c)}"></span>${c}</td>${cells}<td class="tot">${rt > 0 ? fmt(rt) : '—'}${trLine(rtT)}</td></tr>`;
     }).join('');
     // Totalizador por tamanho: soma cada coluna de tamanho entre as cores (só faz sentido com >1 cor)
     let tfoot = '';
     if (cors.length > 1) {
       const tfCells = tams.map(t => {
         const q = cors.reduce((s, c) => s + ((pai.cores[c][t] || {})[l.key] || 0), 0);
-        return `<td>${q === 0 ? '—' : fmt(q)}</td>`;
+        const qT = cors.reduce((s, c) => s + cellTr(c, t), 0);
+        return `<td>${q === 0 ? '—' : fmt(q)}${trLine(qT)}</td>`;
       }).join('');
-      tfoot = `<tfoot><tr><td class="tdc">TOTAL</td>${tfCells}<td class="tot">${v > 0 ? fmt(v) : '—'}</td></tr></tfoot>`;
+      tfoot = `<tfoot><tr><td class="tdc">TOTAL</td>${tfCells}<td class="tot">${v > 0 ? fmt(v) : '—'}${trLine(vT)}</td></tr></tfoot>`;
     }
     return `<div class="ch-item" style="--ch-cor:${l.cor}">
       <div class="ch-item-head" onclick="toggleCanalItem('${lid}')">
         <span class="ch-item-arrow${isItemOpen ? ' open' : ''}" id="carrow-${lid}">▶</span>
         <span class="ch-item-dot"></span>
         <span class="ch-item-name">${l.label}</span>
-        <span class="ch-item-val">${fmt(v)} un</span>
+        <span class="ch-item-val">${fmt(v)} un${vT > 0 ? ` <span class="ch-item-transito">+${fmt(vT)} a caminho</span>` : ''}</span>
         <span class="ch-item-pct">${fmtP(pct)}</span>
       </div>
       <div class="ch-item-body${isItemOpen ? ' open' : ''}" id="cibody-${lid}">
