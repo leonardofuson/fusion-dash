@@ -422,7 +422,9 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
           <th class="r">Ads<span class="hdr-i" data-col="ads">i</span></th>
           <th class="r">CMV<span class="hdr-i" data-col="cmv">i</span></th>
           <th class="r">Impostos<span class="hdr-i" data-col="impostos">i</span></th>
-          <th class="r">Resultado<span class="hdr-i" data-col="resultado">i</span></th>
+          <th class="r">Contribuição<span class="hdr-i" data-col="resultado">i</span></th>
+          <th class="r" title="Custo fixo (opex ECOM) rateado por marketplace = % da receita (absorção). Alocação, não custo marginal.">Custo Fixo</th>
+          <th class="r" title="Resultado Operacional = Contribuição − Custo Fixo rateado.">Result. Oper.</th>
         </tr></thead>
         <tbody id="canal-tbody"></tbody>
       </table>
@@ -734,6 +736,15 @@ async function fetchMLTaxas(de,ate){
   try{var sw=await buscarTudo('shopee_wallet_taxas_mes','select=mes,canal_nome_raw,fulfillment&mes=gte.'+deYM+'&mes=lte.'+ateYM+'&order=mes.asc');
     (sw||[]).forEach(function(r){add(r.canal_nome_raw,r.mes,0,parseFloat(r.fulfillment||0));});}catch(e){}
   STATE.mlTaxas=byCanal;STATE.mlTaxasMes=byMes;return rows;
+}
+// Custo fixo (opex ECOM) rateado por marketplace = % da receita (absorção). Taxa real do mês fechado,
+// trailing-3m pro mês corrente (vw_ecom_custo_fixo_canal_dia). Σ por canal reconcilia com opex_ecom.
+// Chaveado por getNome (display) pra casar com o byCanal da tabela. É alocação, não custo marginal.
+async function fetchCustoFixo(de,ate){
+  var rows=await buscarTudo('vw_ecom_custo_fixo_canal_dia','select=data_pedido,canal_nome_raw,origem_conta,custo_fixo_rateado&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc');
+  var byCanal={};
+  (rows||[]).forEach(function(r){var n=getNome(r.canal_nome_raw,r.origem_conta);byCanal[n]=(byCanal[n]||0)+parseFloat(r.custo_fixo_rateado||0);});
+  STATE.custoFixoByCanal=byCanal;return rows;
 }
 // Soma um campo (afiliado|full) das taxas ML dos canais NO ESCOPO atual (focusCanal/chips).
 function mlTaxaNoEscopo(campo){
@@ -1058,6 +1069,7 @@ async function carregar(){
     fetchTroqueSite(DE,ATE).then(function(rows){STATE.troqueSite=rows;try{renderAlerts();}catch(e){}}).catch(function(){STATE.troqueSite=null;});
     fetchFreteReversoSite(DE,ATE).then(function(){_pnlMemo=null;try{renderWaterfall();renderKPIs();renderCanalTable();}catch(e){}}).catch(function(){STATE.freteReversoSite=0;});
     fetchMLTaxas(DE,ATE).then(function(){_pnlMemo=null;try{renderWaterfall();renderKPIs();renderCanalTable();}catch(e){}}).catch(function(){STATE.mlTaxas=null;});
+    fetchCustoFixo(DE,ATE).then(function(){try{renderCanalTable();}catch(e){}}).catch(function(){STATE.custoFixoByCanal=null;});
     if(STATE.canais.length===0){var seen={};STATE.pedidosRaw.forEach(function(p){if(shouldDedup(p))return;var n=getNome(p.canal_nome_raw,p.origem_conta);if(!seen[n]){seen[n]=true;STATE.canaisSel[n]=true;}});STATE.canais=Object.keys(seen).sort();renderCanalChips();}
 
     // RENDER IMEDIATO — sem itens (waterfall, canais, geo, pagamentos, alertas)
@@ -1378,8 +1390,9 @@ function _canalRowsArr(byCanal,cmvByCanal){
     var full=(mt.full||0);                                            // Full ML (armazenagem + retirada)
     var frete=c.frete+(n==='Site Próprio'?(STATE.freteReversoSite||0):0);  // Site: + reversa Troque
     var liquida=c.r-c.fee-afiliado-c.dev-frete-full;var resultado=liquida-ads-cmv-impostos;
+    var custoFixo=(STATE.custoFixoByCanal&&STATE.custoFixoByCanal[n])||0;var resultadoOper=resultado-custoFixo;
     return{nome:n,cor:c.cor||getCor(n),r:c.r,ped:c.ped,fee:c.fee,afiliado:afiliado,full:full,dev:c.dev,frete:frete,
-      liquida:liquida,ads:ads,cmv:cmv,impostos:impostos,resultado:resultado,share:totalR>0?c.r/totalR*100:0};
+      liquida:liquida,ads:ads,cmv:cmv,impostos:impostos,resultado:resultado,custoFixo:custoFixo,resultadoOper:resultadoOper,share:totalR>0?c.r/totalR*100:0};
   }).sort(function(a,b){return b.r-a.r;});
 }
 function _canalTbodyHTML(rows){
@@ -1402,7 +1415,9 @@ function _canalTbodyHTML(rows){
       '<td class="r">'+vp(r.ads,r.r)+'</td>'+
       '<td class="r">'+vp(r.cmv,r.r)+'</td>'+
       '<td class="r">'+vp(r.impostos,r.r)+'</td>'+
-      '<td class="r" style="color:'+(r.resultado>=0?'#22c55e':'#f43f5e')+';font-weight:600">'+vp(r.resultado,r.r)+'</td>'+
+      '<td class="r" style="color:'+(r.resultado>=0?'#22c55e':'#f43f5e')+'">'+vp(r.resultado,r.r)+'</td>'+
+      '<td class="r"><span style="color:#c084fc">'+vp(r.custoFixo||0,r.r)+'</span></td>'+
+      '<td class="r" style="color:'+((r.resultadoOper||0)>=0?'#22c55e':'#f43f5e')+';font-weight:700">'+vp(r.resultadoOper||0,r.r)+'</td>'+
     '</tr>';
   }).join('');
 }
@@ -1436,7 +1451,7 @@ function _canalRowsProduto(g){
   return canais.map(function(n){var pc=g.porCanal[n];var ads=abp[n]||0;var cmv=pc.custoTotal;var afil=pc.afiliado||0;
     var imp=TAX_RATE*(pc.receita-pc.devolucao);var liquida=pc.receita-pc.fee-afil-pc.devolucao-pc.freteSeller;
     return{nome:n,cor:getCor(n),r:pc.receita,ped:pc.qtd,fee:pc.fee,afiliado:afil,dev:pc.devolucao,frete:pc.freteSeller,
-      liquida:liquida,ads:ads,cmv:cmv,impostos:imp,resultado:liquida-ads-cmv-imp,share:totalR>0?pc.receita/totalR*100:0};
+      liquida:liquida,ads:ads,cmv:cmv,impostos:imp,resultado:liquida-ads-cmv-imp,custoFixo:0,resultadoOper:liquida-ads-cmv-imp,share:totalR>0?pc.receita/totalR*100:0};
   }).sort(function(a,b){return b.r-a.r;});
 }
 function renderCanalTable(){
