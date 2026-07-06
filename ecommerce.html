@@ -414,6 +414,7 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
           <th class="r">Afiliados<span class="hdr-i" data-col="afiliados">i</span></th>
           <th class="r">Devoluções<span class="hdr-i" data-col="devolucoes">i</span></th>
           <th class="r">Frete<span class="hdr-i" data-col="frete">i</span></th>
+          <th class="r">Full<span class="hdr-i" data-col="full">i</span></th>
           <th class="r">Receita Líquida<span class="hdr-i" data-col="receita_liquida">i</span></th>
           <th class="r">Ads<span class="hdr-i" data-col="ads">i</span></th>
           <th class="r">CMV<span class="hdr-i" data-col="cmv">i</span></th>
@@ -730,6 +731,32 @@ function freteReversoNoEscopo(){
   if(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel['Site Próprio'])return 0;
   return v;
 }
+// Taxas de CONTA do ML (nível período, não por pedido): afiliado (CVAF ~R$16k/mês) + Full (armazenagem
+// CFWA + retirada CFRS). Fonte ml_billing_taxas_mes (fusion_sync_ml_taxas). Agregado por canal ML no
+// período selecionado. Entra no P&L como agregado (igual reversa Troque) — não existe por pedido.
+async function fetchMLTaxas(de,ate){
+  var deM=(de||'').slice(0,7)+'-01';
+  var rows=await buscarTudo('ml_billing_taxas_mes','select=periodo_key,canal_nome_raw,afiliado,full_storage,full_retirada&periodo_key=gte.'+deM+'&periodo_key=lte.'+ate+'&order=periodo_key.asc');
+  var byCanal={},byMes={};
+  (rows||[]).forEach(function(r){
+    var cn=r.canal_nome_raw,ym=(r.periodo_key||'').slice(0,7);
+    var af=parseFloat(r.afiliado||0),fu=parseFloat(r.full_storage||0)+parseFloat(r.full_retirada||0);
+    if(!byCanal[cn])byCanal[cn]={afiliado:0,full:0};byCanal[cn].afiliado+=af;byCanal[cn].full+=fu;
+    if(!byMes[ym])byMes[ym]={};if(!byMes[ym][cn])byMes[ym][cn]={afiliado:0,full:0};
+    byMes[ym][cn].afiliado+=af;byMes[ym][cn].full+=fu;
+  });
+  STATE.mlTaxas=byCanal;STATE.mlTaxasMes=byMes;return rows;
+}
+// Soma um campo (afiliado|full) das taxas ML dos canais NO ESCOPO atual (focusCanal/chips).
+function mlTaxaNoEscopo(campo){
+  var bc=STATE.mlTaxas;if(!bc)return 0;var t=0;
+  Object.keys(bc).forEach(function(cn){
+    if(STATE.focusCanal){if(cn!==STATE.focusCanal)return;}
+    else if(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[cn])return;
+    t+=bc[cn][campo]||0;
+  });
+  return round2(t);
+}
 // Ads (custo de mídia). HOJE só Mercado Ads (ML) — Meta/Google/TikTok/Shopee pendentes de
 // credenciais. Soma só level=campaign (item duplica exatamente o mesmo gasto). Coorte por data.
 async function fetchAds(de,ate){
@@ -848,9 +875,11 @@ function calcPnLFromMV(rows,adsVal){
     ped+=parseInt(r.pedidos||0)-parseInt(r.cancelados||0);
   });
   frete+=freteReversoNoEscopo();  // reversa/troca do Site (Troque), agregado do período
-  liquida=receita-com-afiliados-dev-frete;
+  afiliados+=mlTaxaNoEscopo('afiliado');  // afiliado ML (nível conta/período)
+  var full=mlTaxaNoEscopo('full');        // Full ML (armazenagem + retirada)
+  liquida=receita-com-afiliados-dev-frete-full;
   var impostos=TAX_RATE*(receita-dev);   // imposto sobre venda líquida (Bruta − Devoluções)
-  return{receita:receita,devolucoes:dev,frete:frete,comissao:com,afiliados:afiliados,cmv:cmv,ads:adsVal,impostos:impostos,liquida:liquida,lucro:liquida-adsVal-cmv-impostos,pedidos:ped};
+  return{receita:receita,devolucoes:dev,frete:frete,comissao:com,afiliados:afiliados,full:full,cmv:cmv,ads:adsVal,impostos:impostos,liquida:liquida,lucro:liquida-adsVal-cmv-impostos,pedidos:ped};
 }
 async function fetchItensForIds(ids,tabela){
   if(!ids.length)return[];
@@ -1028,6 +1057,7 @@ async function carregar(){
     STATE.pedidosRaw=res[0];
     fetchTroqueSite(DE,ATE).then(function(rows){STATE.troqueSite=rows;try{renderAlerts();}catch(e){}}).catch(function(){STATE.troqueSite=null;});
     fetchFreteReversoSite(DE,ATE).then(function(){_pnlMemo=null;try{renderWaterfall();renderKPIs();renderCanalTable();}catch(e){}}).catch(function(){STATE.freteReversoSite=0;});
+    fetchMLTaxas(DE,ATE).then(function(){_pnlMemo=null;try{renderWaterfall();renderKPIs();renderCanalTable();}catch(e){}}).catch(function(){STATE.mlTaxas=null;});
     if(STATE.canais.length===0){var seen={};STATE.pedidosRaw.forEach(function(p){if(shouldDedup(p))return;var n=getNome(p.canal_nome_raw,p.origem_conta);if(!seen[n]){seen[n]=true;STATE.canaisSel[n]=true;}});STATE.canais=Object.keys(seen).sort();renderCanalChips();}
 
     // RENDER IMEDIATO — sem itens (waterfall, canais, geo, pagamentos, alertas)
@@ -1146,6 +1176,7 @@ function renderWaterfallImediato(cur,prev){
     {lbl:'− Afiliados',val:-(cur.afiliados||0),color:'#fb923c',prev:-(prev.afiliados||0)},
     {lbl:'− Devoluções',val:-cur.devolucoes,color:'#f43f5e',prev:-prev.devolucoes},
     {lbl:'− Frete',val:-cur.frete,color:'#8b5cf6',prev:-prev.frete},
+    {lbl:'− Full',val:-(cur.full||0),color:'#0ea5e9',prev:-(prev.full||0)},
     {lbl:'= Receita Líquida',val:cur.liquida,color:cur.liquida>=0?'#06b6d4':'#f43f5e',prev:prev.liquida},
     {lbl:'− Ads',val:-cur.ads,color:'#eab308',prev:-prev.ads},
     {lbl:'− CMV (estim)',val:-cur.cmv,color:'#ec4899',prev:-prev.cmv},
@@ -1173,6 +1204,7 @@ function renderWaterfall(){
     {lbl:'− Afiliados',val:-(cur.afiliados||0),color:'#fb923c',prev:-(prev.afiliados||0)},
     {lbl:'− Devoluções',val:-cur.devolucoes,color:'#f43f5e',prev:-prev.devolucoes},
     {lbl:'− Frete',val:-cur.frete,color:'#8b5cf6',prev:-prev.frete},
+    {lbl:'− Full',val:-(cur.full||0),color:'#0ea5e9',prev:-(prev.full||0)},
     {lbl:'= Receita Líquida',val:cur.liquida,color:cur.liquida>=0?'#06b6d4':'#f43f5e',prev:prev.liquida},
     {lbl:'− Ads',val:-cur.ads,color:'#eab308',prev:-prev.ads},
     {lbl:'− CMV',val:-cur.cmv,color:'#ec4899',prev:-prev.cmv},
@@ -1225,11 +1257,13 @@ function calcPnL(pedidos,itens,adsVal){
   if(itens&&itens.length>0){itens.forEach(function(it){cmv+=(it._custoUn||0)*it._qtd;});}
   pedidos.forEach(function(p){if(p._cancelado)return;if((p.data_pedido||'')>=iniItens)return;cmv+=valorReceita(p)*cmvPct(p._nome);});
   frete+=freteReversoNoEscopo();  // reversa/troca do Site (Troque tracking.price), agregado do período
-  // P&L: Bruta − Comissão − Afiliados − Devoluções − Frete = Líquida; − CMV = Resultado
-  var liquida=receita-comissao-afiliados-devolucoes-frete;
+  afiliados+=mlTaxaNoEscopo('afiliado');  // afiliado ML (CVAF, nível conta/período — não vem por pedido)
+  var full=mlTaxaNoEscopo('full');        // Full ML (armazenagem CFWA + retirada CFRS), agregado do período
+  // P&L: Bruta − Comissão − Afiliados − Devoluções − Frete − Full = Líquida; − CMV = Resultado
+  var liquida=receita-comissao-afiliados-devolucoes-frete-full;
   var impostos=TAX_RATE*(receita-devolucoes);   // imposto sobre venda líquida (Bruta − Devoluções)
   var lucro=liquida-adsVal-cmv-impostos;
-  var _r={receita:receita,devolucoes:devolucoes,comissao:comissao,afiliados:afiliados,cmv:cmv,frete:frete,ads:adsVal,impostos:impostos,liquida:liquida,lucro:lucro};
+  var _r={receita:receita,devolucoes:devolucoes,comissao:comissao,afiliados:afiliados,full:full,cmv:cmv,frete:frete,ads:adsVal,impostos:impostos,liquida:liquida,lucro:lucro};
   _pnlMemo={p:pedidos,i:itens,a:adsVal,r:_r};
   return _r;
 }
@@ -1339,10 +1373,12 @@ function _canalRowsArr(byCanal,cmvByCanal){
     var c=byCanal[n];var cmv=(cmvByCanal&&cmvByCanal[n])||c.r*cmvPct(n);
     var ads=(STATE.adsByCanal&&STATE.adsByCanal[n])||0;
     var impostos=TAX_RATE*(c.r-c.dev);   // imposto sobre venda líquida (Bruta − Devoluções)
-    var afiliado=c.afiliado||0;
+    var mt=(STATE.mlTaxas&&STATE.mlTaxas[n])||{afiliado:0,full:0};   // taxas de conta ML por canal
+    var afiliado=(c.afiliado||0)+(mt.afiliado||0);                   // + afiliado ML (nível conta)
+    var full=(mt.full||0);                                            // Full ML (armazenagem + retirada)
     var frete=c.frete+(n==='Site Próprio'?(STATE.freteReversoSite||0):0);  // Site: + reversa Troque
-    var liquida=c.r-c.fee-afiliado-c.dev-frete;var resultado=liquida-ads-cmv-impostos;
-    return{nome:n,cor:c.cor||getCor(n),r:c.r,ped:c.ped,fee:c.fee,afiliado:afiliado,dev:c.dev,frete:frete,
+    var liquida=c.r-c.fee-afiliado-c.dev-frete-full;var resultado=liquida-ads-cmv-impostos;
+    return{nome:n,cor:c.cor||getCor(n),r:c.r,ped:c.ped,fee:c.fee,afiliado:afiliado,full:full,dev:c.dev,frete:frete,
       liquida:liquida,ads:ads,cmv:cmv,impostos:impostos,resultado:resultado,share:totalR>0?c.r/totalR*100:0};
   }).sort(function(a,b){return b.r-a.r;});
 }
@@ -1360,6 +1396,7 @@ function _canalTbodyHTML(rows){
       '<td class="r">'+vp(r.afiliado||0,r.r)+'</td>'+
       '<td class="r">'+vp(r.dev,r.r)+'</td>'+
       '<td class="r">'+vp(r.frete,r.r)+'</td>'+
+      '<td class="r">'+vp(r.full||0,r.r)+'</td>'+
       '<td class="r">'+vp(r.liquida,r.r)+'</td>'+
       '<td class="r">'+vp(r.ads,r.r)+'</td>'+
       '<td class="r">'+vp(r.cmv,r.r)+'</td>'+
@@ -2451,10 +2488,14 @@ function renderMensalPnL(M){
       +'<div class="tip-row">• <b>Site:</b> Shopify refunds + chargeback (Pagar.me)</div>'
       +'<div class="tip-row" style="margin-top:5px">Troca / vale-crédito do site <b>não</b> entra (não é perda de caixa).</div>'},
     afiliados:{h:'Afiliados',b:'Comissão paga a afiliados/influencers pelo <b>programa da plataforma</b>, via API:'
-      +'<div class="tip-row">• <b>TikTok:</b> affiliate commission do statement (antes vinha embutido na Comissão)</div>'
-      +'<div class="tip-row">• <b>Shopee:</b> AMS (order_ams_commission_fee) do escrow</div>'
-      +'<div class="tip-row">• <b>ML:</b> "Tarifa de programa de afiliados" do faturamento</div>'
+      +'<div class="tip-row">• <b>TikTok:</b> affiliate commission do statement, por pedido (antes vinha embutido na Comissão)</div>'
+      +'<div class="tip-row">• <b>Shopee:</b> AMS (order_ams_commission_fee) do escrow, por pedido</div>'
+      +'<div class="tip-row">• <b>ML:</b> CVAF ("Cargo por venta con afiliados") do faturamento — total do período (não por pedido)</div>'
       +'<div class="tip-row" style="margin-top:5px;opacity:.85">Só programa da plataforma (não inclui cachê/permuta fora dela). Linha separada da Comissão pra dar visibilidade do gasto.</div>'},
+    full:{h:'Full (armazenagem ML)',b:'Custo do <b>Fulfillment do Mercado Livre (ML Full)</b> — a Fusion estoca produto no depósito do ML. Do faturamento ML, por período:'
+      +'<div class="tip-row">• <b>Armazenagem</b> (CFWA)</div>'
+      +'<div class="tip-row">• <b>Retirada/descarte de estoque</b> (CFRS)</div>'
+      +'<div class="tip-row" style="margin-top:5px;opacity:.85">Só ML tem Full — Shopee não usa depósito (envio do estoque próprio). Total do período, não por pedido.</div>'},
     frete:{h:'Frete',b:'Custo de frete do <b>seller</b> (o que pagamos pra enviar), via API:'
       +'<div class="tip-row">• <b>ML:</b> R$0 = acordo comercial (ML banca o envio)</div>'
       +'<div class="tip-row">• <b>Shopee:</b> embutido na comissão (~R$0)</div>'
