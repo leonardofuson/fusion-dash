@@ -735,16 +735,19 @@ function freteReversoNoEscopo(){
 // CFWA + retirada CFRS). Fonte ml_billing_taxas_mes (fusion_sync_ml_taxas). Agregado por canal ML no
 // período selecionado. Entra no P&L como agregado (igual reversa Troque) — não existe por pedido.
 async function fetchMLTaxas(de,ate){
-  var deM=(de||'').slice(0,7)+'-01';
-  var rows=await buscarTudo('ml_billing_taxas_mes','select=periodo_key,canal_nome_raw,afiliado,full_storage,full_retirada&periodo_key=gte.'+deM+'&periodo_key=lte.'+ate+'&order=periodo_key.asc');
+  var deM=(de||'').slice(0,7)+'-01', deYM=(de||'').slice(0,7), ateYM=(ate||'').slice(0,7);
   var byCanal={},byMes={};
-  (rows||[]).forEach(function(r){
-    var cn=r.canal_nome_raw,ym=(r.periodo_key||'').slice(0,7);
-    var af=parseFloat(r.afiliado||0),fu=parseFloat(r.full_storage||0)+parseFloat(r.full_retirada||0);
+  function add(cn,ym,af,fu){
     if(!byCanal[cn])byCanal[cn]={afiliado:0,full:0};byCanal[cn].afiliado+=af;byCanal[cn].full+=fu;
     if(!byMes[ym])byMes[ym]={};if(!byMes[ym][cn])byMes[ym][cn]={afiliado:0,full:0};
     byMes[ym][cn].afiliado+=af;byMes[ym][cn].full+=fu;
-  });
+  }
+  // ML: afiliado (CVAF) + Full (armazenagem CFWA + retirada CFRS)
+  var rows=await buscarTudo('ml_billing_taxas_mes','select=periodo_key,canal_nome_raw,afiliado,full_storage,full_retirada&periodo_key=gte.'+deM+'&periodo_key=lte.'+ate+'&order=periodo_key.asc');
+  (rows||[]).forEach(function(r){add(r.canal_nome_raw,(r.periodo_key||'').slice(0,7),parseFloat(r.afiliado||0),parseFloat(r.full_storage||0)+parseFloat(r.full_retirada||0));});
+  // Shopee: fulfillment (FBS+RTS) → coluna Full. (adj_rr/adj_center ficam FORA do P&L: double-count devolução/imposto)
+  try{var sw=await buscarTudo('shopee_wallet_taxas_mes','select=mes,canal_nome_raw,fulfillment&mes=gte.'+deYM+'&mes=lte.'+ateYM+'&order=mes.asc');
+    (sw||[]).forEach(function(r){add(r.canal_nome_raw,r.mes,0,parseFloat(r.fulfillment||0));});}catch(e){}
   STATE.mlTaxas=byCanal;STATE.mlTaxasMes=byMes;return rows;
 }
 // Soma um campo (afiliado|full) das taxas ML dos canais NO ESCOPO atual (focusCanal/chips).
@@ -2313,10 +2316,14 @@ async function carregarMensal(){
     var pm={};(rr||[]).forEach(function(r){var ym=(r.dia||'').slice(0,7);pm[ym]=(pm[ym]||0)+parseFloat(r.frete_reverso||0);});
     STATE.freteReversoMesAll=pm;try{renderMensal();}catch(e){}
   }).catch(function(){});
-  // Taxas de conta do ML por mês (afiliado CVAF + Full) — somadas no aggMensal (não vêm na MV mensal).
-  buscarTudo('ml_billing_taxas_mes','select=periodo_key,canal_nome_raw,afiliado,full_storage,full_retirada&order=periodo_key.asc').then(function(rr){
-    var pm={};(rr||[]).forEach(function(r){var ym=(r.periodo_key||'').slice(0,7),cn=r.canal_nome_raw;
-      if(!pm[ym])pm[ym]={};pm[ym][cn]={afiliado:parseFloat(r.afiliado||0),full:parseFloat(r.full_storage||0)+parseFloat(r.full_retirada||0)};});
+  // Taxas de conta por mês: ML (afiliado CVAF + Full) + Shopee fulfillment (FBS) — somadas no aggMensal.
+  Promise.all([
+    buscarTudo('ml_billing_taxas_mes','select=periodo_key,canal_nome_raw,afiliado,full_storage,full_retirada&order=periodo_key.asc').catch(function(){return[];}),
+    buscarTudo('shopee_wallet_taxas_mes','select=mes,canal_nome_raw,fulfillment&order=mes.asc').catch(function(){return[];})
+  ]).then(function(res){
+    var pm={};function put(ym,cn,af,fu){if(!pm[ym])pm[ym]={};if(!pm[ym][cn])pm[ym][cn]={afiliado:0,full:0};pm[ym][cn].afiliado+=af;pm[ym][cn].full+=fu;}
+    (res[0]||[]).forEach(function(r){put((r.periodo_key||'').slice(0,7),r.canal_nome_raw,parseFloat(r.afiliado||0),parseFloat(r.full_storage||0)+parseFloat(r.full_retirada||0));});
+    (res[1]||[]).forEach(function(r){put(r.mes,r.canal_nome_raw,0,parseFloat(r.fulfillment||0));});
     STATE.mlTaxasMesAll=pm;try{renderMensal();}catch(e){}
   }).catch(function(){});
   try{renderMensal();}catch(e){console.error('renderMensal',e);}
@@ -2538,10 +2545,10 @@ function renderMensalPnL(M){
       +'<div class="tip-row">• <b>Shopee:</b> AMS (order_ams_commission_fee) do escrow, por pedido</div>'
       +'<div class="tip-row">• <b>ML:</b> CVAF ("Cargo por venta con afiliados") do faturamento — total do período (não por pedido)</div>'
       +'<div class="tip-row" style="margin-top:5px;opacity:.85">Só programa da plataforma (não inclui cachê/permuta fora dela). Linha separada da Comissão pra dar visibilidade do gasto.</div>'},
-    full:{h:'Full (armazenagem ML)',b:'Custo do <b>Fulfillment do Mercado Livre (ML Full)</b> — a Fusion estoca produto no depósito do ML. Do faturamento ML, por período:'
-      +'<div class="tip-row">• <b>Armazenagem</b> (CFWA)</div>'
-      +'<div class="tip-row">• <b>Retirada/descarte de estoque</b> (CFRS)</div>'
-      +'<div class="tip-row" style="margin-top:5px;opacity:.85">Só ML tem Full — Shopee não usa depósito (envio do estoque próprio). Total do período, não por pedido.</div>'},
+    full:{h:'Full / Fulfillment',b:'Custo de <b>fulfillment</b> (produto no depósito do marketplace), do faturamento de conta, por período:'
+      +'<div class="tip-row">• <b>ML Full:</b> armazenagem (CFWA) + retirada/descarte (CFRS)</div>'
+      +'<div class="tip-row">• <b>Shopee FBS:</b> taxa de fulfillment + retorno RTS</div>'
+      +'<div class="tip-row" style="margin-top:5px;opacity:.85">Total do período, não por pedido. Não inclui ajustes de devolução (adj_rr) nem DIFAL da carteira Shopee — já contam em Devoluções/Impostos.</div>'},
     frete:{h:'Frete',b:'Custo de frete do <b>seller</b> (o que pagamos pra enviar), via API:'
       +'<div class="tip-row">• <b>ML:</b> R$0 = acordo comercial (ML banca o envio)</div>'
       +'<div class="tip-row">• <b>Shopee:</b> embutido na comissão (~R$0)</div>'
