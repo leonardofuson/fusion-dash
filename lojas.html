@@ -579,6 +579,10 @@ var IGNORAR_LOJA=['Atacado WhatsApp'];
 // pra não "sumir" em dia parado / início de mês. Outras lojas que aparecerem nos dados
 // (ex: Atacado Lojas) entram por cima.
 var LOJAS_CANONICAS=['Marcolina','Oriente','Polo Plaza','Vautier','São Bernardo'];
+// Contas que NÃO são vendedor de verdade (não recebem comissão/meta; nunca semeadas no drawer).
+// Global — usado no quadro de vendedores E no guard do drawer de metas.
+var NAO_VENDEDORES=new Set(['Online SBC','Suporte Marcolina','Suporte Oriente','Suporte SBC',
+  'Suporte Valtier','Compra Funcionário','Compra Funcionario','Vendedor Não Identificado']);
 
 function getLoja(loja_nome,origem){
   if(origem==='flecha') return 'Atacado WhatsApp';
@@ -2564,8 +2568,7 @@ function renderVendedores(){
   }
 
   // --- Meta / atingimento / previsão (period-aware: segue o mês do período) ---
-  // Contas que NÃO são vendedor (não recebem comissão — mostram —).
-  var NAO_VENDEDORES=new Set(['Online SBC','Suporte Marcolina','Suporte Oriente','Compra Funcionário','Vendedor Não Identificado']);
+  // NAO_VENDEDORES é global (definido no topo do script).
   var vm=calcVendMes();                 // fatMes (MTD do mês corrente) — base da projeção do resto do mês
   var mesesRange=mesesNoRange(DE,ATE);  // meses cobertos pelo período selecionado
   var fatPerVend={};                    // realizado do período por vendedor (sem filtro de produto)
@@ -2695,8 +2698,49 @@ async function abrirMetas(){
     METAS_STATE.vendedores=vRows.map(function(r){return r.vendedor;}).filter(Boolean);
     vRows.forEach(function(r){METAS_STATE.vendData[r.id]={id:r.id,vendedor:r.vendedor,loja_primaria:r.loja_primaria,ativo:r.ativo};});
   }catch(e){console.warn('vendedores:',e); METAS_STATE.vendedores=[];}
+  // Guard durável (Opção 1): garante que o drawer ofereça os NOMES DE VENDA. Quem está
+  // vendendo no período mas não está no kwid_vendedores é semeado como "novo" pré-preenchido
+  // (nome de venda + loja dominante) → 1 clique salva e completa o cadastro sem drift.
+  seedVendedoresSemCadastro();
   document.getElementById('metas-overlay').classList.add('on');
   await popularGridMetas();
+}
+// Semeia vendNovos com vendedores que estão vendendo (STATE.pedidos, período atual) mas
+// não têm cadastro ativo. Usa o nome EXATO da venda → a meta digitada casa com o dash.
+function seedVendedoresSemCadastro(){
+  try{
+    var cadastrados=new Set(Object.values(METAS_STATE.vendData).map(function(v){return v.vendedor;}));
+    var agg={};  // vend -> {n, lojas:{loja:count}}
+    (STATE.pedidos||[]).forEach(function(p){
+      if(p.origem_conta!=='kwid' || p._canc) return;
+      var v=p._vend; if(!v || NAO_VENDEDORES.has(v)) return;
+      var lj=getLoja(p.loja_nome,p.origem_conta);
+      if(LOJAS_CANONICAS.indexOf(lj)<0) return;  // só lojas reais (ignora Atacado etc.)
+      if(!agg[v]) agg[v]={n:0,lojas:{}};
+      agg[v].n++; agg[v].lojas[lj]=(agg[v].lojas[lj]||0)+1;
+    });
+    var semCad=[];
+    Object.keys(agg).forEach(function(v){
+      if(cadastrados.has(v) || agg[v].n<3) return;  // já cadastrado ou ruído
+      var lojas=agg[v].lojas;
+      var lojaTop=Object.keys(lojas).sort(function(a,b){return lojas[b]-lojas[a];})[0]||'';
+      METAS_STATE.vendNovos.push({tempId:(window.__seedId=(window.__seedId||0)+1),
+        vendedor:v, loja_primaria:lojaTop, _semCadastro:true});
+      semCad.push(v);
+    });
+    METAS_STATE._semCadastro=semCad;  // renderizado pelo note em popularGridMetas (tab-aware)
+  }catch(e){console.warn('seedVendedoresSemCadastro:',e);}
+}
+// Aviso dos vendedores semeados — só na aba "Por Vendedor".
+function renderSeedNote(ehVendedor){
+  var note=document.getElementById('metas-seed-note'); if(!note) return;
+  var semCad=METAS_STATE._semCadastro||[];
+  if(ehVendedor && semCad.length){
+    note.style.display='block';
+    note.innerHTML='⚠️ <b>'+semCad.length+' vendedor(es) vendendo sem cadastro</b> — pré-preenchidos abaixo com o nome de venda + loja provável. '+
+      'Revise a loja e <b>Salvar</b> pra completar o cadastro (a meta digitada já casa com o dashboard): '+
+      semCad.map(function(n){return esc(n);}).join(', ')+'.';
+  } else { note.style.display='none'; }
 }
 function fecharMetas(){
   if(Object.keys(METAS_STATE.dirty).length>0 && !confirm('Há alterações não salvas. Descartar?')) return;
@@ -2752,6 +2796,7 @@ async function popularGridMetas(){
   // Botão "+ Adicionar vendedor" — visível só na aba vendedores
   var btnAdd=document.getElementById('btn-add-vend');
   if(btnAdd) btnAdd.style.display=ehVendedor?'inline-block':'none';
+  renderSeedNote(ehVendedor);
   atualizarStatusMetas();
 }
 
@@ -3035,6 +3080,7 @@ async function salvarMetas(){
     METAS_STATE.vendedores=vRows.map(function(r){return r.vendedor;}).filter(Boolean);
     METAS_STATE.vendData={};
     vRows.forEach(function(r){METAS_STATE.vendData[r.id]={id:r.id,vendedor:r.vendedor,loja_primaria:r.loja_primaria,ativo:r.ativo};});
+    seedVendedoresSemCadastro();  // re-semeia quem ainda ficou sem cadastro
     await popularGridMetas();
     STATE.metasLoaded=false;
   }catch(err){
@@ -3100,6 +3146,7 @@ async function salvarMetas(){
         <button id="btn-add-vend" class="btn-add-vend" onclick="adicionarVendedor()" style="display:none;">+ Adicionar vendedor</button>
         <span style="font-size:11px;color:var(--txt2);margin-left:auto;">Valores em R$ · laranja = editado · só salva o que mudou</span>
       </div>
+      <div id="metas-seed-note" style="display:none;margin:0 0 10px;padding:8px 12px;border-radius:8px;background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.4);color:#22c55e;font-size:12px;line-height:1.4;"></div>
       <div style="overflow-x:auto;max-height:65vh;">
         <table class="metas-grid" id="metas-grid"></table>
       </div>
