@@ -1978,6 +1978,25 @@ async function fetchDowProfile(){
     });
     W._g=gSum.map(function(s,i){var n=Object.keys(gDays[i]).length; return n>0?s/n:0;});
     STATE.dowW=W;
+    // Realizado do mês corrente ATÉ ONTEM — por loja e por vendedor — a partir das MVs
+    // (INVARIANTE ao período/chip selecionado). Base do "Meta hoje" (catch-up): sem isso,
+    // o realizado saía de pedidosRaw (escopado ao período) e a Meta hoje mudava entre
+    // "Hoje" (realizado=0 → meta inflada) e "Este Mês" (realizado real → meta correta).
+    var im=inicioMesSP();
+    var mLoja={};
+    rows.forEach(function(r){
+      var d=(r.data_pedido||'').slice(0,10);
+      if(d<im || d>=h) return;  // [início do mês, ontem]
+      var loja=(r.loja_nome||'').trim(); if(IGNORAR_LOJA.indexOf(loja)>=0) return;
+      mLoja[loja]=(mLoja[loja]||0)+parseFloat(r.receita_bruta||0);
+    });
+    STATE.mtdLojaOntem=mLoja;
+    var mVend={};
+    try{
+      var vr=await buscarTudo('mvw_lojas_vend_dia','select=vendedor,data_pedido,receita&data_pedido=gte.'+im+'&data_pedido=lt.'+h+'&order=data_pedido.asc');
+      vr.forEach(function(r){var v=(r.vendedor||'').trim(); if(!v) return; mVend[v]=(mVend[v]||0)+parseFloat(r.receita||0);});
+    }catch(e){console.warn('mtdVend:',e);}
+    STATE.mtdVendOntem=mVend;
   }catch(e){console.warn('dowW:',e); STATE.dowW={_g:[1,1,1,1,1,1.6,0]};}
 }
 // Meta do dia (catch-up): quanto o alvo precisa vender HOJE pra bater a meta do mês,
@@ -2077,7 +2096,10 @@ function renderLojaCards(){
     var projPctMeta=meta>0?proj/meta*100:0;
     var projCor=meta>0?(projPctMeta>=100?'var(--green)':(projPctMeta>=70?'var(--amber)':'var(--red)')):'var(--amber)';
     // Meta do dia (catch-up ponderado por dia-da-semana) — só no mês corrente aberto (não no mensal).
-    var metaDiaLoja=(!mensal && _periodoAbertoL && meta>0)?metaDoDia(meta,(fatMesLojaOntem[n]||0),n):null;
+    // realAteOntem vem de STATE.mtdLojaOntem (MV, INVARIANTE ao período) — não de pedidosRaw
+    // (escopado ao chip), senão a Meta hoje mudava entre "Hoje" e "Este Mês".
+    var _realOntemLoja=(STATE.mtdLojaOntem&&STATE.mtdLojaOntem[n])||0;
+    var metaDiaLoja=(!mensal && _periodoAbertoL && meta>0)?metaDoDia(meta,_realOntemLoja,n):null;
     var metaDiaHtml=(metaDiaLoja!=null)?'<div class="cc-meta" style="display:flex;justify-content:space-between;align-items:center;"><span class="cc-meta-lbl" style="margin:0;">🎯 Meta hoje</span><span style="font-weight:800;font-size:1.1rem;color:'+(metaDiaLoja<=0?'var(--green)':projCor)+';">'+(metaDiaLoja<=0?'✓ batida':fmt(metaDiaLoja))+'</span></div>':'';
     // % atingimento atual da meta (pra mostrar ao lado da receita)
     var pctMetaAtual=meta>0?(fatMesLoja!==undefined?fatMesLoja:0)/meta*100:0;
@@ -2598,8 +2620,11 @@ function renderVendedores(){
     v.comissaoPct=NAO_VENDEDORES.has(v.nome)?0:((v.meta>0 && realizado>=v.meta)?0.02:0.0075);
     v.comissao=realizado*v.comissaoPct;
     // Meta do dia (catch-up ponderado pelo dia-da-semana) — só no mês corrente aberto.
+    // realAteOntem vem de STATE.mtdVendOntem (MV, INVARIANTE ao período), não de vm.fatOntem
+    // (pedidosRaw escopado ao chip) — senão a Meta hoje mudava entre "Hoje" e "Este Mês".
     var metaMesAtual=(mvend[_im.slice(0,7)]||0);
-    v.metaDia=(periodoAberto && !NAO_VENDEDORES.has(v.nome))?metaDoDia(metaMesAtual,(vm.fatOntem[v.nome]||0),v.lojaTop):null;
+    var _realOntemVend=(STATE.mtdVendOntem&&STATE.mtdVendOntem[v.nome])||0;
+    v.metaDia=(periodoAberto && !NAO_VENDEDORES.has(v.nome))?metaDoDia(metaMesAtual,_realOntemVend,v.lojaTop):null;
   });
   var sk=STATE.vendSort.key, sd=STATE.vendSort.dir==='asc'?1:-1;
   var arr=Object.values(agg).sort(function(a,b){
