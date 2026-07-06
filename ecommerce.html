@@ -424,24 +424,6 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
         <tbody id="canal-tbody"></tbody>
       </table>
     </div>
-    <div style="margin-top:10px;font-size:11.5px;line-height:1.65;color:var(--muted,#94a3b8);border-top:1px solid rgba(148,163,184,.15);padding-top:9px">
-      <div style="margin-bottom:7px;">
-        <strong>De onde vêm os dados</strong> — cada canal é puxado <b>direto da API da própria plataforma, por pedido</b> (não é estimativa nem rateio):
-        ML <i>(sale_fee · shipments · claims)</i> · Shopee <i>(escrow · returns)</i> · TikTok <i>(statement)</i> ·
-        Shein <i>(commission — via API desde 11/06/2026, comissão real ~22%)</i> · Site Próprio <i>(Pagar.me · Shopify refunds)</i>.
-        Pedidos antigos (pré-API) e taxas ainda não liquidadas usam <b>estimativa por canal</b> como fallback.
-      </div>
-      <div style="margin-bottom:7px;background:rgba(234,179,8,.06);border-left:2px solid rgba(234,179,8,.5);padding:6px 9px;border-radius:4px;">
-        <strong>Por que os números podem parecer diferentes</strong> de outras telas (painel do marketplace, Power BI, ERP):
-        <b>1)</b> aqui mostramos o <b>Resultado LÍQUIDO real</b> (Bruta − Comissão − Devolução − Frete − Ads − CMV), não só o faturamento bruto — por isso o resultado é bem menor que a "receita" que o marketplace exibe. ·
-        <b>2)</b> cada plataforma <b>liquida em tempos diferentes</b> (escrow D+X, statement após entrega + hold ~15d): os <b>últimos dias ainda estão maturando</b> e sobem conforme os valores chegam. ·
-        <b>3)</b> <b>devolução é medida pela data do pedido</b> (coorte) — meses recentes subestimam, pois ainda vão voltar devoluções. ·
-        <b>4)</b> a <b>Receita Bruta é só o produto</b> — o frete pago pelo cliente <b>não</b> conta como receita em nenhum canal (no ML a API já manda só o item; nos demais o frete vem embutido e é descontado), então todos os canais ficam comparáveis entre si.
-      </div>
-      <div style="opacity:.85">
-        Passe o mouse ou toque no <span class="hdr-i" style="cursor:default;opacity:1">i</span> ao lado de cada coluna pra ver o que ela mede e a <b>regra de cada marketplace</b>.
-      </div>
-    </div>
   </div>
 
   <!-- 4. ANÁLISE POR PRODUTO — lista pesquisável + detalhe inline cross-canal -->
@@ -1395,7 +1377,8 @@ function _canalRowsArr(byCanal,cmvByCanal){
   }).sort(function(a,b){return b.r-a.r;});
 }
 function _canalTbodyHTML(rows){
-  function vp(v,base){var p=base>0?v/base*100:0;return fmtK(v)+' <span style="opacity:.55;font-size:.82em">('+fmtD(p)+'%)</span>';}
+  // 2 linhas por célula: valor em cima, % embaixo (facilita a leitura). (06/07)
+  function vp(v,base){var p=base>0?v/base*100:0;return fmtK(v)+'<div style="opacity:.5;font-size:.8em;font-weight:400;line-height:1.15;margin-top:1px">'+fmtD(p)+'%</div>';}
   return rows.map(function(r){
     var cls='canal-row';
     if(STATE.focusCanal===r.nome)cls+=' focused';
@@ -1403,7 +1386,7 @@ function _canalTbodyHTML(rows){
     return'<tr class="'+cls+'" onclick="focusCanal(\''+r.nome.replace(/'/g,"\\'")+'\')">' +
       '<td><span class="canal-dot" style="color:'+r.cor+';background:'+r.cor+'"></span>'+r.nome+'</td>'+
       '<td class="r">'+fmtN(r.ped)+'</td>'+
-      '<td class="r">'+fmtK(r.r)+' <span style="opacity:.55;font-size:.82em">('+fmtD(r.share)+'% do total)</span></td>'+
+      '<td class="r">'+fmtK(r.r)+'<div style="opacity:.5;font-size:.8em;font-weight:400;line-height:1.15;margin-top:1px">'+fmtD(r.share)+'% do total</div></td>'+
       '<td class="r">'+vp(r.fee,r.r)+'</td>'+
       '<td class="r">'+vp(r.afiliado||0,r.r)+'</td>'+
       '<td class="r">'+vp(r.dev,r.r)+'</td>'+
