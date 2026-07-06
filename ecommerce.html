@@ -946,7 +946,16 @@ function setTab(t){
 var CHARTS={hero:null,pareto:null};
 var GEO_UF_SEL=null;
 
-function periodoAnterior(de,ate){var d=daysBetween(de,ate);var novoAte=somaDias(de,-1);var novoDe=somaDias(novoAte,-(d-1));return{de:novoDe,ate:novoAte};}
+// Mesmo dia, 1 mês pra trás (clampa o dia no último dia do mês anterior). Ex: 2026-07-06→2026-06-06.
+function mesAnterior(s){var y=+s.slice(0,4),m=+s.slice(5,7),d=+s.slice(8,10);m-=1;if(m<1){m=12;y-=1;}var ld=new Date(y,m,0).getDate();if(d>ld)d=ld;return y+'-'+('0'+m).slice(-2)+'-'+('0'+d).slice(-2);}
+// Período anterior p/ os Δ%. Régua = MESMOS DIAS DO MÊS ANTERIOR (jul 1-6 → jun 1-6) pra períodos de
+// ~1 mês ou menos (MTD/Último Mês/custom curto). Períodos LONGOS (QTD/YTD/12m) mantêm a janela
+// imediatamente anterior de mesma duração — "1 mês pra trás" num range de 6 meses se sobreporia. (06/07)
+function periodoAnterior(de,ate){
+  var d=daysBetween(de,ate);
+  if(d<=31){return{de:mesAnterior(de),ate:mesAnterior(ate)};}
+  var novoAte=somaDias(de,-1);var novoDe=somaDias(novoAte,-(d-1));return{de:novoDe,ate:novoAte};
+}
 
 function setPeriodo(preset,el){
   var h=hojeSP(),de,ate=h;
@@ -1482,6 +1491,34 @@ function renderHero(){
   var fAxis=function(v){return STATE.stackMode==='pct'?v+'%':(isUn?fmtN(v):fmtK(v));};
   var fTipV=function(v){return STATE.stackMode==='pct'?fmtD(v)+'%':(isUn?fmtN(v)+' un':fmt(v));};
   var fTot=function(v){return isUn?fmtN(v)+' un':fmt(v);};
+  // ── MODO MoM: canal focado + período de ~1 mês → 2 linhas (este mês vs mês anterior) por DIA DO MÊS.
+  // Compara receita dia-a-dia (jul dia 1,2,3.. vs jun dia 1,2,3..). Atual dos pedidos; anterior da MV
+  // do mês anterior (mvRowsPrev = mesmos dias do mês anterior, ver periodoAnterior). Só receita. (06/07)
+  if(STATE.focusCanal && !STATE.focusProduto && daysBetween(DE,ATE)<=31){
+    var fc=STATE.focusCanal, curD={}, priD={};
+    (STATE.pedidos||[]).forEach(function(p){if(p._canc)return;if(p._nome!==fc)return;var dd=parseInt((p.data_pedido||'').slice(8,10),10);if(dd)curD[dd]=(curD[dd]||0)+valorReceita(p);});
+    (STATE.mvRowsPrev||[]).forEach(function(r){if(getNome(r.canal_nome_raw,r.origem_conta)!==fc)return;var dd=parseInt((r.data_pedido||'').slice(8,10),10);if(dd)priD[dd]=(priD[dd]||0)+parseFloat(r.receita_bruta||0);});
+    var maxDom=Math.max(31, ...Object.keys(curD).concat(Object.keys(priD)).map(Number).concat([0]));
+    var domLabels=[],curVals=[],priVals=[];
+    for(var dd=1; dd<=maxDom; dd++){domLabels.push('Dia '+dd);curVals.push(curD[dd]||0);priVals.push(priD[dd]||0);}
+    var mesCur=(DE||'').slice(0,7), mesPri=mesAnterior(DE).slice(0,7);
+    var mlabel=function(ym){try{return new Date(ym+'-15T12:00:00').toLocaleDateString('pt-BR',{month:'long'});}catch(e){return ym;}};
+    if(CHARTS.hero)CHARTS.hero.destroy();
+    CHARTS.hero=new Chart(document.getElementById('chart-hero'),{type:'line',
+      data:{labels:domLabels,datasets:[
+        {label:mlabel(mesCur)+' (atual)',data:curVals,borderColor:getCor(fc),backgroundColor:getCor(fc)+'22',fill:false,tension:0.35,pointRadius:2,borderWidth:2.5},
+        {label:mlabel(mesPri)+' (mês ant.)',data:priVals,borderColor:'#71717a',backgroundColor:'transparent',fill:false,tension:0.35,pointRadius:0,borderWidth:2,borderDash:[5,4]}
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,interaction:{intersect:false,mode:'index'},
+        plugins:{legend:{position:'bottom',labels:{color:'#a1a1aa',font:{size:11},boxWidth:12,padding:12,usePointStyle:true,pointStyle:'circle'}},
+          title:{display:true,text:fc+' — dia a dia vs mês anterior',color:'#a1a1aa',font:{size:11}},
+          tooltip:{backgroundColor:'rgba(24,24,27,0.96)',titleColor:'#fafafa',bodyColor:'#fafafa',padding:12,cornerRadius:10,usePointStyle:true,
+            callbacks:{label:function(ctx){return' '+ctx.dataset.label+': '+fmt(ctx.parsed.y);}}}},
+        scales:{x:{ticks:{color:'#71717a',maxTicksLimit:15,font:{size:10}},grid:{color:'rgba(255,255,255,0.03)'}},
+          y:{ticks:{color:'#71717a',font:{size:10},callback:fmtK},grid:{color:'rgba(255,255,255,0.03)'}}}}
+    });
+    return;
+  }
   var diario={};var canais={};
   var selOk=function(n){return !(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[n]);};
   if(STATE.focusProduto){
