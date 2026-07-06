@@ -2313,6 +2313,12 @@ async function carregarMensal(){
     var pm={};(rr||[]).forEach(function(r){var ym=(r.dia||'').slice(0,7);pm[ym]=(pm[ym]||0)+parseFloat(r.frete_reverso||0);});
     STATE.freteReversoMesAll=pm;try{renderMensal();}catch(e){}
   }).catch(function(){});
+  // Taxas de conta do ML por mês (afiliado CVAF + Full) — somadas no aggMensal (não vêm na MV mensal).
+  buscarTudo('ml_billing_taxas_mes','select=periodo_key,canal_nome_raw,afiliado,full_storage,full_retirada&order=periodo_key.asc').then(function(rr){
+    var pm={};(rr||[]).forEach(function(r){var ym=(r.periodo_key||'').slice(0,7),cn=r.canal_nome_raw;
+      if(!pm[ym])pm[ym]={};pm[ym][cn]={afiliado:parseFloat(r.afiliado||0),full:parseFloat(r.full_storage||0)+parseFloat(r.full_retirada||0)};});
+    STATE.mlTaxasMesAll=pm;try{renderMensal();}catch(e){}
+  }).catch(function(){});
   try{renderMensal();}catch(e){console.error('renderMensal',e);}
   if(u)u.textContent='Atualizado '+new Date().toLocaleTimeString('pt-BR');
 }
@@ -2331,7 +2337,7 @@ function aggMensal(rows){
     var ym=(r.mes||'').slice(0,7);if(!ym)return;
     var canal=getNome(r.canal_nome_raw,r.origem_conta);
     if(STATE.mensalCanalSel&&STATE.mensalCanalSel[canal]===false)return;   // chip de marketplace desmarcado
-    if(!bm[ym])bm[ym]={ym:ym,receita:0,comissao:0,afiliado:0,dev:0,frete:0,cmv:0,pedidos:0,porCanal:{}};
+    if(!bm[ym])bm[ym]={ym:ym,receita:0,comissao:0,afiliado:0,full:0,dev:0,frete:0,cmv:0,pedidos:0,porCanal:{}};
     var m=bm[ym],rb=parseFloat(r.receita_bruta||0);
     m.receita+=rb;m.comissao+=parseFloat(r.comissao||0);m.afiliado+=parseFloat(r.afiliado||0);m.dev+=parseFloat(r.devolucoes||0);
     m.frete+=parseFloat(r.frete_seller||0);m.cmv+=rb*cmvPct(canal);
@@ -2339,9 +2345,12 @@ function aggMensal(rows){
     m.porCanal[canal]=(m.porCanal[canal]||0)+rb;
   });
   var siteOn=!(STATE.mensalCanalSel&&STATE.mensalCanalSel['Site Próprio']===false);
+  var canalOn=function(cn){return !(STATE.mensalCanalSel&&STATE.mensalCanalSel[cn]===false);};
   return Object.keys(bm).sort().map(function(k){var m=bm[k];
     if(siteOn)m.frete+=((STATE.freteReversoMesAll||{})[m.ym]||0);  // + reversa Troque do Site no mês
-    m.liquida=m.receita-m.comissao-m.afiliado-m.dev-m.frete;m.impostos=TAX_RATE*(m.receita-m.dev);m.resultado=m.liquida-m.cmv-m.impostos;
+    var mlt=(STATE.mlTaxasMesAll||{})[m.ym]||{};  // taxas de conta ML (afiliado + Full) do mês, por canal
+    Object.keys(mlt).forEach(function(cn){if(!canalOn(cn))return;m.afiliado+=(mlt[cn].afiliado||0);m.full+=(mlt[cn].full||0);});
+    m.liquida=m.receita-m.comissao-m.afiliado-m.dev-m.frete-m.full;m.impostos=TAX_RATE*(m.receita-m.dev);m.resultado=m.liquida-m.cmv-m.impostos;
     m.margem=m.receita>0?m.resultado/m.receita*100:0;m.ticket=m.pedidos>0?m.receita/m.pedidos:0;return m;});
 }
 // Mensal para 1 produto focado: receita/unidades/CMV REAIS da MV de sku; comissão estimada por
@@ -2491,13 +2500,13 @@ function renderMensalProdEvol(){
 }
 function renderMensalPnL(M){
   var tbl=document.getElementById('mensal-pnl');if(!tbl)return;
-  var cols=['Mês','Bruta','Comissão','Afiliados','Devol.','Frete','Líquida','CMV (est)','Impostos','Resultado','Margem %'];
+  var cols=['Mês','Bruta','Comissão','Afiliados','Devol.','Frete','Full','Líquida','CMV (est)','Impostos','Resultado','Margem %'];
   tbl.querySelector('thead').innerHTML='<tr>'+cols.map(function(c,i){return '<th'+(i?' class="r"':'')+'>'+c+'</th>';}).join('')+'</tr>';
   tbl.querySelector('tbody').innerHTML=M.slice(-12).reverse().map(function(m){
     var mc=m.margem>=20?'#22c55e':(m.margem>=10?'#eab308':'#f43f5e');
     return '<tr><td style="font-weight:600">'+ymLabel(m.ym)+'</td><td class="r">'+fmt(m.receita)+'</td>'
       +'<td class="r" style="color:var(--txt2)">'+fmtK(m.comissao)+'</td><td class="r" style="color:var(--txt2)">'+fmtK(m.afiliado||0)+'</td><td class="r" style="color:var(--txt2)">'+fmtK(m.dev)+'</td>'
-      +'<td class="r" style="color:var(--txt2)">'+fmtK(m.frete)+'</td><td class="r">'+fmt(m.liquida)+'</td>'
+      +'<td class="r" style="color:var(--txt2)">'+fmtK(m.frete)+'</td><td class="r" style="color:var(--txt2)">'+fmtK(m.full||0)+'</td><td class="r">'+fmt(m.liquida)+'</td>'
       +'<td class="r" style="color:var(--txt2)">'+fmtK(m.cmv)+'</td><td class="r" style="color:var(--txt2)">'+fmtK(m.impostos)+'</td><td class="r" style="font-weight:700">'+fmt(m.resultado)+'</td>'
       +'<td class="r" style="font-weight:700;color:'+mc+'">'+fmtD(m.margem)+'%</td></tr>';
   }).join('');
