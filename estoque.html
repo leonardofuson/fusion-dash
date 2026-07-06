@@ -573,7 +573,7 @@ async function apiAll(base) {
 }
 
 // localStorage cache TTL 5min (estoque muda pouco entre páginas)
-const EST_CACHE_KEY = 'estoque_data_v1';
+const EST_CACHE_KEY = 'estoque_data_v2';  // v2: vendaItens agora vem da MV (shape {sku_pai,qtd})
 const EST_CACHE_TTL = 5 * 60 * 1000;
 function estCacheGet(){
   try{
@@ -594,11 +594,14 @@ const idle = window.requestIdleCallback || function(fn){return setTimeout(fn,0);
 // ═══════════════════════════════════════════
 async function carregar(_fromBgRefresh) {
   try {
-    // Janela de 30d pra velocidade de venda Shopify (dias de cobertura)
+    // Janela de 30d pra velocidade de venda Shopify (dias de cobertura).
+    // Fonte: MV agregada por sku_pai/dia/canal (mvw_ecommerce_sku_dia) — ~0,5s vs ~15s do join
+    // direto em itens_pedido, que travava o load inteiro (todos os fetches em Promise.all).
+    // A MV já exclui cancelado/devolvido e agrega ao SKU pai; cobertura idêntica onde importa.
+    // order= explícito é obrigatório em MV (sem coluna id, apiAll cairia em order=id.asc → 400).
     const d30 = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
-    const vendaQ = 'itens_pedido?select=sku_raw,quantidade,pedidos!inner(origem_conta,data_pedido,status)'
-      + '&pedidos.origem_conta=eq.shopify&pedidos.data_pedido=gte.' + d30
-      + '&pedidos.status=not.in.(cancelado,devolvido)';
+    const vendaQ = 'mvw_ecommerce_sku_dia?select=sku_pai,qtd&origem_conta=eq.shopify'
+      + '&data_pedido=gte.' + d30 + '&order=sku_pai.asc';
 
     // Cache local: hit válido (<5min) pinta tudo IMEDIATO e dispara fetch fresh em bg
     let prods, est, vendaItens;
@@ -620,15 +623,6 @@ async function carregar(_fromBgRefresh) {
     prods.forEach(p => { if (p.fabricacao_propria === true && p.sku_pai) SKU_FINALIZADOS.add(p.sku_pai); });
     const fabCountEl = document.getElementById('fab-count');
     if (fabCountEl) fabCountEl.textContent = SKU_FINALIZADOS.size + ' produtos';
-
-    // Mapa SKU (variante ou pai) → SKU pai upper — usado pra atribuir vendas ao pai
-    const skuToParent = {};
-    prods.forEach(p => {
-      const k = (p.sku || '').trim().toUpperCase();
-      if (!k) return;
-      if (p.tipo === 'pai') skuToParent[k] = k;
-      else if (p.sku_pai) skuToParent[k] = p.sku_pai.trim().toUpperCase();
-    });
 
     const eBySku = {}, eById = {};
     est.forEach(e => {
@@ -719,21 +713,12 @@ async function carregar(_fromBgRefresh) {
     const pais     = Object.values(pBySku).filter(p => Object.keys(p.cores).length > 0 && !isTecido(p));
     const tecidos  = Object.values(pBySku).filter(p => Object.keys(p.cores).length > 0 &&  isTecido(p));
 
-    // Velocidade de venda Shopify 30d agregada por SKU pai
+    // Velocidade de venda Shopify 30d — a MV já vem agregada por SKU pai
     const vendaShopify30d = {};
     vendaItens.forEach(it => {
-      const raw = (it.sku_raw || '').trim().toUpperCase();
-      if (!raw) return;
-      let parent = skuToParent[raw];
-      if (!parent) {
-        const parts = raw.split('-');
-        if (parts.length > 1) {
-          const base = parts.slice(0, -1).join('-');
-          parent = skuToParent[base] || (pBySku[base] ? base : null);
-        }
-      }
-      if (!parent) parent = raw;
-      vendaShopify30d[parent] = (vendaShopify30d[parent] || 0) + (it.quantidade || 0);
+      const parent = (it.sku_pai || '').trim().toUpperCase();
+      if (!parent) return;
+      vendaShopify30d[parent] = (vendaShopify30d[parent] || 0) + (it.qtd || 0);
     });
 
     const cats = [...new Set(pais.map(p => p.categoria).filter(Boolean))].sort();
