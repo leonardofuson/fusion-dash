@@ -908,7 +908,7 @@ async function fetchProdutos(){
 
 // ── State ──
 var DE=null,ATE=null;
-var STATE={pedidos:[],pedidosFull:[],itens:[],itensFocus:[],canais:[],canaisSel:{},stackMode:'abs',focusCanal:null,skuGroups:[],skuSel:null,skuSort:{key:'receita',dir:'desc'},adsByCanal:{},adsByCanalPrev:{},adsBySkuPai:{},adsBySkuPaiCanal:{},devBySkuPai:{},skuMVRows:[],geoMVRows:[],pgtoMVRows:[],dailyMetric:'rev',mensalMeses:12,mensalRows:null,mensalDe:null,mensalAte:null,mensalYTD:false,mensalSkuRows:[],mensalProdSel:{},mensalProdMetric:'rev',mensalYms:[],mensalCanalSel:{},focusProduto:null,heroMoM:false};
+var STATE={pedidos:[],pedidosFull:[],itens:[],itensFocus:[],canais:[],canaisSel:{},stackMode:'abs',focusCanal:null,skuGroups:[],skuSel:null,skuSort:{key:'receita',dir:'desc'},adsByCanal:{},adsByCanalPrev:{},adsBySkuPai:{},adsBySkuPaiCanal:{},devBySkuPai:{},skuMVRows:[],geoMVRows:[],pgtoMVRows:[],dailyMetric:'rev',mensalMeses:12,mensalRows:null,mensalDe:null,mensalAte:null,mensalYTD:false,mensalSkuRows:[],mensalProdSel:{},mensalProdMetric:'rev',mensalYms:[],mensalCanalSel:{},focusProduto:null,heroMoM:false,velocData:{}};
 
 // ── TABS (Diário · Mensal) ──
 function setTab(t){
@@ -1899,6 +1899,36 @@ function renderEcommSkuList(){
     }).join('')+'</tbody></table>';
 }
 
+// Velocidade "mesmos dias, dias completos": busca dedicada do produto focado (poucas dezenas de
+// linhas da MV) que traz o POR-DIA dos dois períodos — o skuMVRowsPrev só tem totais, e sem o
+// por-dia não dá pra (a) excluir o dia parcial de hoje nem (b) casar exatamente os mesmos dias do
+// mês anterior (um pico num dia-espelho, ex. Dia dos Namorados, distorceria a base). Respeita
+// focusCanal/canaisSel. Alimenta STATE.velocData[key]; re-renderiza o drawer ao terminar. (06/07)
+async function carregarVelocidade(sku,key){
+  var hoje=hojeSP();
+  var curAte=(ATE>=hoje)?somaDias(hoje,-1):ATE;   // exclui hoje (dia em curso, parcial → puxaria a taxa pra baixo)
+  if(curAte<DE) curAte=ATE;                        // período é só hoje → sem dia completo, usa como está
+  var priDe=mesAnterior(DE), priAte=mesAnterior(curAte);
+  var f='sku_pai=eq.'+encodeURIComponent(sku)+'&data_pedido=gte.'+priDe+'&data_pedido=lte.'+curAte
+       +'&select=qtd,canal_nome_raw,origem_conta,data_pedido&order=data_pedido.asc';
+  try{
+    var rows=await buscarTudo('mvw_ecommerce_sku_dia',f);
+    var curUn=0,priUn=0;
+    (rows||[]).forEach(function(r){
+      var canal=getNome(r.canal_nome_raw,r.origem_conta);
+      if(STATE.focusCanal&&canal!==STATE.focusCanal)return;
+      if(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[canal])return;
+      var d=(r.data_pedido||'').slice(0,10),q=parseFloat(r.qtd||0);
+      if(d>=DE&&d<=curAte)curUn+=q;
+      else if(d>=priDe&&d<=priAte)priUn+=q;
+    });
+    var diasCur=Math.max(1,daysBetween(DE,curAte)), diasPri=Math.max(1,daysBetween(priDe,priAte));
+    var curVel=curUn/diasCur, priVel=priUn>0?priUn/diasPri:0;
+    STATE.velocData[key]={pronto:true,curVel:curVel,priVel:priVel,diasCur:diasCur,
+      parcial:(ATE>=hoje&&curAte!==ATE),tendPct:priVel>0?((curVel-priVel)/priVel*100):null};
+  }catch(e){STATE.velocData[key]={pronto:true,erro:true};}
+  if(STATE.skuSel===sku) renderEcommSkuDetail();
+}
 function renderEcommSkuDetail(){
   var wrap=document.getElementById('ecomm-sku-detail');
   if(!wrap)return;
@@ -1948,26 +1978,17 @@ function renderEcommSkuDetail(){
   var impostosSku=TAX_RATE*(receita-s.devolucao);
   var margemLiq=receita-s.custoTotal-s.fee-afiliadoSku-s.devolucao-freteSeller-adsSku-impostosSku;
   var margemPct=receita>0?(margemLiq/receita*100):0;
-  // Velocidade
-  var datas=Object.keys(s.datas||{}).sort();
-  var diasComVenda=datas.length;
-  // Velocidade = unidades/dia no período selecionado, comparada ao MESMO período do mês anterior
-  // (skuMVRowsPrev = período equivalente, ver periodoAnterior). Antes era 7d vs 30d, que dava
-  // ~0% de variação quando o período carregado era curto (ex: MTD): as janelas de 7 e 30 dias
-  // caíam sobre os mesmos dias de s.datas, então v7d≈v30d. (fix 06/07/2026)
-  var diasPer=Math.max(1,daysBetween(DE,ATE));
-  var curVel=s.qtd>0?s.qtd/diasPer:0;
-  var priUn=0;  // unidades do MESMO produto no período anterior equivalente, respeitando focusCanal/chips
-  (STATE.skuMVRowsPrev||[]).forEach(function(r){
-    if(r.sku_pai!==s.sku_pai)return;
-    var canal=getNome(r.canal_nome_raw,r.origem_conta);
-    if(STATE.focusCanal&&canal!==STATE.focusCanal)return;
-    if(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[canal])return;
-    priUn+=parseFloat(r.qtd||0);
-  });
-  var temPrev=(STATE.skuMVRowsPrev||[]).length>0&&priUn>0;
-  var priVel=priUn/diasPer;                       // período anterior tem a MESMA duração (periodoAnterior)
-  var tendPct=temPrev?((curVel-priVel)/priVel*100):0;
+  // Velocidade — un/dia sobre DIAS COMPLETOS (exclui hoje, parcial) vs os MESMOS DIAS do mês anterior.
+  // O cálculo vem de carregarVelocidade() (busca dedicada com por-dia dos 2 períodos). A chave inclui
+  // período+escopo → refetch automático ao trocar filtro; cache caso contrário. Enquanto carrega, vd=null.
+  var velKey=s.sku_pai+'|'+DE+'|'+ATE+'|'+(STATE.focusCanal||'')+'|'+Object.keys(STATE.canaisSel||{}).sort().join(',');
+  var vd=STATE.velocData[velKey];
+  if(vd===undefined){STATE.velocData[velKey]=null;carregarVelocidade(s.sku_pai,velKey);}
+  var velPronto=!!(vd&&vd.pronto&&!vd.erro);
+  var curVel=velPronto?vd.curVel:0;
+  var temPrev=velPronto&&vd.tendPct!==null&&vd.tendPct!==undefined;
+  var tendPct=temPrev?vd.tendPct:0;
+  var velParcial=!!(vd&&vd.parcial);
 
   var ticketMed=nPedidos>0?(receita/nPedidos):0;
   var ticketUn=qtd>0?(receita/qtd):0;
@@ -2019,7 +2040,11 @@ function renderEcommSkuDetail(){
   html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Devolução real</div><div class="dr-kpi-val">'+fmtD(devPct)+'%</div><div class="dr-kpi-sub"><span class="margem-pill '+devCls+'">'+fmtK(s.devolucao)+'</span>'+(dvSku.cnt>0?' · <b>'+fmtN(dvSku.cnt)+'</b> devoluções':'')+'</div></div>';
   html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Frete (custo seller)</div><div class="dr-kpi-val">'+fmtK(freteSeller)+'</div><div class="dr-kpi-sub"><span class="margem-pill '+fretCls+'">'+fmtD(fretePct)+'%</span> da receita</div></div>';
   html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Ads (ML)</div><div class="dr-kpi-val">'+fmtK(adsSku)+'</div><div class="dr-kpi-sub"><span class="margem-pill '+adsCls+'">'+fmtD(adsPct)+'%</span> da receita</div></div>';
-  html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Velocidade</div><div class="dr-kpi-val">'+fmtD(curVel)+' un/d</div><div class="dr-kpi-sub" style="color:'+(temPrev?tendCor:'#71717a')+';">'+(temPrev?(tendSym+' '+(tendPct>=0?'+':'')+Math.round(tendPct)+'% vs mês ant.'):'ative "vs anterior"')+'</div></div>';
+  var velSub=!velPronto?'<span style="color:#71717a">calculando…</span>'
+    :(temPrev?(tendSym+' '+(tendPct>=0?'+':'')+Math.round(tendPct)+'% vs mês ant.')
+             :'<span style="color:#71717a">sem base mês ant.</span>');
+  var velTit=(velParcial?'Dias COMPLETOS (exclui hoje, parcial)':'un/dia')+' vs os MESMOS DIAS do mês anterior';
+  html+=  '<div class="dr-kpi" title="'+velTit+'"><div class="dr-kpi-lbl">Velocidade'+(velParcial?' *':'')+'</div><div class="dr-kpi-val">'+(velPronto?fmtD(curVel):'—')+' un/d</div><div class="dr-kpi-sub" style="color:'+(temPrev?tendCor:'#71717a')+';">'+velSub+'</div></div>';
   html+='</div>';
 
   // Comparativo cross-canal — tabela
