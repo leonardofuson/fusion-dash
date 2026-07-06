@@ -818,14 +818,19 @@ function setParetoMode(m){
   renderPareto();
 }
 
+// Mesmo dia, 1 mês pra trás (clampa o dia no último dia do mês anterior). Ex: 2026-07-06→2026-06-06.
+function mesAnterior(s){var y=+s.slice(0,4),m=+s.slice(5,7),d=+s.slice(8,10);m-=1;if(m<1){m=12;y-=1;}var ld=new Date(y,m,0).getDate();if(d>ld)d=ld;return y+'-'+('0'+m).slice(-2)+'-'+('0'+d).slice(-2);}
 function periodoAnterior(de,ate){
   // Mensal: compara com o MESMO período do ano passado (YoY).
   // ate via fimDoMes do mês-alvo (evita 29/02 inválido em ano não-bissexto).
   if(STATE.viewMode==='mensal'){
     return {de:somaAno(de,-1), ate:fimDoMes(somaAno(ate,-1).slice(0,7))};
   }
-  // Diário: período imediatamente anterior de igual duração.
+  // Diário: MESMOS DIAS DO MÊS ANTERIOR pra ranges ≤31d (jul 1-6 → jun 1-6), alinhado ao ecommerce.
+  // Antes era sempre janela trailing de igual duração, o que em MTD (default do dash Lojas) comparava
+  // jul 1-6 vs jun 25-30 — cruzava fronteira de mês/ciclo de pagamento e distorcia o crescimento. (06/07)
   var dias=daysBetween(de,ate);
+  if(dias<=31){return {de:mesAnterior(de), ate:mesAnterior(ate)};}
   var novoAte=somaDias(de,-1);
   var novoDe=somaDias(novoAte,-(dias-1));
   return {de:novoDe, ate:novoAte};
