@@ -514,6 +514,7 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
       <th class="r sortable" data-sort="meta" onclick="setVendSort('meta')" title="Meta do vendedor no(s) mês(es) do período">Meta</th>
       <th class="r sortable" data-sort="metaPct" onclick="setVendSort('metaPct')" title="% atingido da meta (realizado do período ÷ meta)">Atg.%</th>
       <th class="r sortable" data-sort="proj" onclick="setVendSort('proj')" title="Previsão fim do mês: realizado + projeção do resto do mês corrente (ritmo atual)">Prev. mês</th>
+      <th class="r sortable" data-sort="metaDia" onclick="setVendSort('metaDia')" title="Meta do dia: quanto precisa vender HOJE pra bater a meta do mês. Distribui o que falta pelos dias restantes ponderado pelo dia-da-semana (sábado pesa mais que segunda).">Meta hoje</th>
       <th class="r sortable" data-sort="comissao" onclick="setVendSort('comissao')" title="Comissão sobre as vendas do período: 2% se atingiu 100% da meta, senão 0,75%. Cor = trajetória (previsão fim do mês ÷ meta): verde ≥100% · amarelo 95-99% · vermelho <95%">Comissão</th>
     </tr></thead><tbody id="tbody-vendedores"></tbody></table></div>
   </div>
@@ -717,7 +718,7 @@ async function fetchProdutos(){
 
 // ---- State ----
 var DE=null, ATE=null;
-var STATE={pedidos:[],anteriores:[],pedidosEscopo:[],anterioresEscopo:[],itens:[],prods:null,lojas:[],lojasSel:{},stackMode:'abs',skuGroups:[],skuSel:null,vendSel:null,totLoja:{},metas:{},metasVend:{},metasLoaded:false,freshness:null,lojaHighlight:null,catSel:null,vendSort:{key:'fat',dir:'desc'},skuSort:{key:'receita',dir:'desc'},viewMode:'diario',paretoMode:'receita'};
+var STATE={pedidos:[],anteriores:[],pedidosEscopo:[],anterioresEscopo:[],itens:[],prods:null,lojas:[],lojasSel:{},stackMode:'abs',skuGroups:[],skuSel:null,vendSel:null,totLoja:{},metas:{},metasVend:{},metasLoaded:false,freshness:null,lojaHighlight:null,catSel:null,vendSort:{key:'fat',dir:'desc'},skuSort:{key:'receita',dir:'desc'},viewMode:'diario',paretoMode:'receita',dowW:null};
 var CHARTS={hero:null,pareto:null,sparkPed:null,sparkTM:null,sparkPA:null,lojaSparklines:[]};
 
 function setPeriodo(preset,el){
@@ -1054,6 +1055,9 @@ async function carregar(){
       if(d&&(!maxData||d>maxData)) maxData=d;
     });
     STATE.freshness=maxData;
+
+    // perfil dia-da-semana p/ "Meta do dia" (1x, não bloqueia; re-renderiza quando chega)
+    fetchDowProfile().then(function(){try{renderVendedores();renderLojaCards();}catch(e){}});
 
     // Forecast sazonal (visão mensal): receita dos meses FUTUROS no ano passado,
     // pra projetar o resto do ano = sazonalidade(ano-1) × crescimento(YTD).
@@ -1931,7 +1935,7 @@ function calcProjMesLoja(){
 function calcVendMes(){
   var inicioMes=inicioMesSP(), hoje=hojeSP(), fimMes=fimMesSP();
   var diasDecorridos=daysBetween(inicioMes,hoje), diasTotalMes=daysBetween(inicioMes,fimMes);
-  var fatMes={};
+  var fatMes={}, fatOntem={};   // fatOntem = realizado do mês ATÉ ONTEM (base do catch-up)
   (STATE.pedidosRaw||[]).forEach(function(p){
     var d=(p.data_pedido||'').slice(0,10);
     if(d<inicioMes||d>hoje) return;
@@ -1940,11 +1944,48 @@ function calcVendMes(){
     var nome=getLoja(p.loja_nome,p.origem_conta);
     if(IGNORAR_LOJA.indexOf(nome)>=0) return;
     var v=(p.vendedor||'').trim()||'Vendedor Não Identificado';
-    fatMes[v]=(fatMes[v]||0)+parseFloat(p.valor_bruto||0);
+    var val=parseFloat(p.valor_bruto||0);
+    fatMes[v]=(fatMes[v]||0)+val;
+    if(d<hoje) fatOntem[v]=(fatOntem[v]||0)+val;
   });
   var proj={};
   if(diasDecorridos>0) Object.keys(fatMes).forEach(function(v){proj[v]=fatMes[v]/diasDecorridos*diasTotalMes;});
-  return {fatMes:fatMes, proj:proj};
+  return {fatMes:fatMes, proj:proj, fatOntem:fatOntem};
+}
+
+// Perfil de venda por dia-da-semana (sazonalidade) por loja — média de receita por
+// dia-da-semana nos últimos 90d. Base do "Meta do dia" (catch-up ponderado).
+async function fetchDowProfile(){
+  if(STATE.dowW) return;
+  try{
+    var h=hojeSP(), de=somaDias(h,-90);
+    var rows=await buscarTudo('mvw_lojas_dia','select=loja_nome,data_pedido,receita_bruta&data_pedido=gte.'+de+'&data_pedido=lte.'+h+'&order=data_pedido.asc');
+    var sum={}, days={}, gSum=[0,0,0,0,0,0,0], gDays=[{},{},{},{},{},{},{}];
+    rows.forEach(function(r){
+      var loja=(r.loja_nome||'').trim(); if(IGNORAR_LOJA.indexOf(loja)>=0) return;
+      var d=(r.data_pedido||'').slice(0,10); var dw=dowIdx(d); var rec=parseFloat(r.receita_bruta||0);
+      if(!sum[loja]){sum[loja]=[0,0,0,0,0,0,0]; days[loja]=[{},{},{},{},{},{},{}];}
+      sum[loja][dw]+=rec; days[loja][dw][d]=true;
+      gSum[dw]+=rec; gDays[dw][d]=true;
+    });
+    var W={};
+    Object.keys(sum).forEach(function(loja){
+      W[loja]=sum[loja].map(function(s,i){var n=Object.keys(days[loja][i]).length; return n>0?s/n:0;});
+    });
+    W._g=gSum.map(function(s,i){var n=Object.keys(gDays[i]).length; return n>0?s/n:0;});
+    STATE.dowW=W;
+  }catch(e){console.warn('dowW:',e); STATE.dowW={_g:[1,1,1,1,1,1.6,0]};}
+}
+// Meta do dia (catch-up): quanto o alvo precisa vender HOJE pra bater a meta do mês,
+// distribuindo o que falta pelos dias restantes ponderado pelo dia-da-semana.
+function metaDoDia(metaMes, realAteOntem, loja){
+  if(!(metaMes>0) || !STATE.dowW) return null;
+  var h=hojeSP(), fim=fimMesSP();
+  var w=STATE.dowW[loja]||STATE.dowW._g; if(!w) return null;
+  var restante=Math.max(0, metaMes-(realAteOntem||0));
+  var soma=0, cur=h;
+  while(cur<=fim){ soma+=(w[dowIdx(cur)]||0); cur=somaDias(cur,1); }
+  return soma>0 ? restante*(w[dowIdx(h)]||0)/soma : 0;
 }
 
 // Lista de meses 'YYYY-MM' cobertos por [de,ate] (inclusive).
@@ -1969,7 +2010,7 @@ function renderLojaCards(){
   var projMes=calcProjMesLoja();
 
   // Pre-compute: sparkline data + fat mês por loja (uma passada só)
-  var sparkData={}, fatMesPorLoja={};
+  var sparkData={}, fatMesPorLoja={}, fatMesLojaOntem={};
   var _inicioM=inicioMesSP(), _hojeC=hojeSP();
   pedidosUse.forEach(function(p){
     if(p._canc) return;
@@ -1985,8 +2026,11 @@ function renderLojaCards(){
     var nm=getLoja(p2.loja_nome,p2.origem_conta);
     if(IGNORAR_LOJA.indexOf(nm)>=0) return;
     if(STATE.vendSel && ((p2.vendedor||'').trim()||'Vendedor Não Identificado')!==STATE.vendSel) return;
-    fatMesPorLoja[nm]=(fatMesPorLoja[nm]||0)+parseFloat(p2.valor_bruto||0);
+    var v2=parseFloat(p2.valor_bruto||0);
+    fatMesPorLoja[nm]=(fatMesPorLoja[nm]||0)+v2;
+    if(d2<_hojeC) fatMesLojaOntem[nm]=(fatMesLojaOntem[nm]||0)+v2;
   });
+  var _periodoAbertoL=ATE>=_hojeC;
 
   // Clientes cadastrados (vendas com cliente identificado no Linx — crm_cliente_id,
   // exclui consumidor padrão). Por loja: nº de clientes distintos + % das vendas.
@@ -2028,6 +2072,9 @@ function renderLojaCards(){
     // Cor da previsão baseada em atingimento projetado da meta
     var projPctMeta=meta>0?proj/meta*100:0;
     var projCor=meta>0?(projPctMeta>=100?'var(--green)':(projPctMeta>=70?'var(--amber)':'var(--red)')):'var(--amber)';
+    // Meta do dia (catch-up ponderado por dia-da-semana) — só no mês corrente aberto (não no mensal).
+    var metaDiaLoja=(!mensal && _periodoAbertoL && meta>0)?metaDoDia(meta,(fatMesLojaOntem[n]||0),n):null;
+    var metaDiaHtml=(metaDiaLoja!=null)?'<div class="cc-meta" style="display:flex;justify-content:space-between;align-items:center;"><span class="cc-meta-lbl" style="margin:0;">🎯 Meta hoje</span><span style="font-weight:800;font-size:1.1rem;color:'+(metaDiaLoja<=0?'var(--green)':projCor)+';">'+(metaDiaLoja<=0?'✓ batida':fmt(metaDiaLoja))+'</span></div>':'';
     // % atingimento atual da meta (pra mostrar ao lado da receita)
     var pctMetaAtual=meta>0?(fatMesLoja!==undefined?fatMesLoja:0)/meta*100:0;
     var pctMetaCor=meta>0?(pctMetaAtual>=100?'var(--green)':(pctMetaAtual>=70?'var(--amber)':'var(--red)')):'';
@@ -2065,6 +2112,7 @@ function renderLojaCards(){
         '<div class="cc-stat"><div class="cc-stat-lbl">'+(pa!==undefined?'PA':'—')+'</div><div class="cc-stat-val">'+(pa!==undefined?fmtD(pa):'—')+'</div></div>'+
       '</div>'+
       metaHtml+
+      metaDiaHtml+
       '<div class="cc-spark-wrap"><canvas id="'+cid+'"></canvas></div>'+
     '</div>';
   }).join('');
@@ -2546,6 +2594,9 @@ function renderVendedores(){
     v.realizado=realizado;
     v.comissaoPct=NAO_VENDEDORES.has(v.nome)?0:((v.meta>0 && realizado>=v.meta)?0.02:0.0075);
     v.comissao=realizado*v.comissaoPct;
+    // Meta do dia (catch-up ponderado pelo dia-da-semana) — só no mês corrente aberto.
+    var metaMesAtual=(mvend[_im.slice(0,7)]||0);
+    v.metaDia=(periodoAberto && !NAO_VENDEDORES.has(v.nome))?metaDoDia(metaMesAtual,(vm.fatOntem[v.nome]||0),v.lojaTop):null;
   });
   var sk=STATE.vendSort.key, sd=STATE.vendSort.dir==='asc'?1:-1;
   var arr=Object.values(agg).sort(function(a,b){
@@ -2586,17 +2637,20 @@ function renderVendedores(){
     // Cor da comissão = trajetória rumo à meta (via projeção fim do mês):
     // verde ≥100% · amarelo 95-99% (até 5% abaixo) · vermelho <95% · cinza sem meta.
     var comCor=v.meta>0?(v.projPct>=100?'var(--green)':(v.projPct>=95?'var(--amber)':'var(--red)')):'#a1a1aa';
+    var metaDiaTxt=v.metaDia==null?'—':(v.metaDia<=0?'✓':fmt(v.metaDia));
+    var metaDiaCor=v.metaDia===0?'var(--green)':comCor;
     var metaTd=
       '<td class="val">'+(v.meta>0?fmt(v.meta):'—')+'</td>'+
       '<td class="val" style="text-align:center;">'+atgBar+'</td>'+
       '<td class="val" style="color:'+prevCor+';font-weight:'+(v.meta>0?'800':'600')+';">'+(v.proj>0?fmt(v.proj):'—')+'</td>'+
+      '<td class="val" style="color:'+metaDiaCor+';font-weight:800;" title="Quanto precisa vender HOJE pra bater a meta do mês (ponderado pelo dia-da-semana)">'+metaDiaTxt+'</td>'+
       '<td class="val" style="color:'+comCor+';font-weight:700;" title="'+(v.comissaoPct*100).toFixed(2).replace('.',',')+'% sobre '+fmt(v.realizado)+'">'+(v.comissao>0?fmt(v.comissao):'—')+'</td>';
     return '<tr style="cursor:pointer;'+activeStyle+'" onclick="selectVend(\''+v.nome.replace(/'/g,"\\'")+'\')"><td class="r">'+(i+1)+'</td><td style="font-weight:600">'+v.nome+'</td><td style="color:'+getCor(v.lojaTop)+'">'+lojaDisplay(v.lojaTop)+'</td><td class="val">'+fmt(v.fat)+'</td><td class="val">'+fmtN(v.ped)+'</td><td class="val">'+fmtN(v.qtd)+'</td><td class="val">'+fmt(tm)+'</td><td class="val">'+(pa!=null?fmtD(pa):'—')+'</td>'+metaTd+'</tr>';
   }).join('');
   var wrap=document.getElementById('tbody-vendedores').parentElement.parentElement.parentElement; // .tb-wrap-scroll
   // inject breadcrumb above the table
   document.getElementById('vend-breadcrumb-slot').innerHTML=breadcrumb;
-  document.getElementById('tbody-vendedores').innerHTML=html||'<tr><td colspan="12" style="text-align:center;color:#d4d4d8;padding:20px;">Sem vendedores no escopo.</td></tr>';
+  document.getElementById('tbody-vendedores').innerHTML=html||'<tr><td colspan="13" style="text-align:center;color:#d4d4d8;padding:20px;">Sem vendedores no escopo.</td></tr>';
 }
 
 // ============================================================
