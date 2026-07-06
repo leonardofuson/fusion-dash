@@ -1176,9 +1176,9 @@ const barLabelsPlugin = {
           const x = bar.x + 6;
           const y = bar.y;
           const maxX = chart.chartArea.right - 8;
-          // Se a barra é muito larga, coloca dentro
+          // Se a barra é muito larga, coloca dentro (label branca p/ contraste na barra colorida)
           if (x > maxX - 40) {
-            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.fillStyle = '#fafafa';
             ctx.textAlign = 'right';
             ctx.fillText(fmt(val), bar.x - 6, y);
           } else {
