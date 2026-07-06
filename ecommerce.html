@@ -1805,7 +1805,8 @@ function renderEcommSkuList(){
   // Ads do produto somando só os canais visíveis (respeita focusCanal, igual ao drawer).
   function adsOf(s){return Object.keys(s.porCanal||{}).reduce(function(a,c){return a+(((STATE.adsBySkuPaiCanal||{})[s.sku_pai]||{})[c]||0);},0);}
   function tacosOf(s){return s.receita>0?adsOf(s)/s.receita*100:0;}                       // TACoS = ads ÷ receita
-  function margemLiqOf(s){return s.receita-(s.custoTotal||0)-(s.fee||0)-(s.devolucao||0)-(s.freteSeller||0)-adsOf(s);}
+  // Margem líq. alinhada à régua do P&L (06/07): − CMV − comissão − AFILIADOS − devolução − frete − ads − IMPOSTOS.
+  function margemLiqOf(s){return s.receita-(s.custoTotal||0)-(s.fee||0)-(s.afiliado||0)-(s.devolucao||0)-(s.freteSeller||0)-adsOf(s)-TAX_RATE*(s.receita-(s.devolucao||0));}
   function margemLiqPctOf(s){return s.receita>0?margemLiqOf(s)/s.receita*100:0;}
   function devUnPctOf(s){var dv=devDoProduto(s.sku_pai);return s.qtd>0?dv.cnt/s.qtd*100:0;}  // devolução em UNIDADES (canal no escopo)
   // Sort
@@ -1853,7 +1854,7 @@ function renderEcommSkuList(){
     +'<th class="r sortable'+arrow('qtd')+'" onclick="setEcommSkuSort(\'qtd\')">Qtd</th>'
     +'<th class="r sortable'+arrow('devun')+'" onclick="setEcommSkuSort(\'devun\')" title="taxa de devolução em unidades (un devolvidas ÷ un vendidas); qtd em letra menor">Devol. %</th>'
     +'<th class="r sortable'+arrow('tacos')+'" onclick="setEcommSkuSort(\'tacos\')" title="TACoS: gasto em Ads (ML) ÷ receita do produto">TACoS</th>'
-    +'<th class="r sortable'+arrow('margemliq')+'" onclick="setEcommSkuSort(\'margemliq\')" title="margem líquida %: receita − CMV − comissão − devolução − frete − ads">Margem líq.</th>'
+    +'<th class="r sortable'+arrow('margemliq')+'" onclick="setEcommSkuSort(\'margemliq\')" title="margem líquida %: receita − CMV − comissão − afiliados − devolução − frete − ads − impostos (Full de conta não entra por produto)">Margem líq.</th>'
     +'<th style="min-width:200px;">Distribuição por canal</th>'
     +'</tr>';
   listEl.innerHTML='<table class="tb"><thead>'+th+'</thead><tbody>'
@@ -1941,7 +1942,11 @@ function renderEcommSkuDetail(){
   var adsSku=Object.keys(s.porCanal||{}).reduce(function(a,c){return a+(((STATE.adsBySkuPaiCanal||{})[s.sku_pai]||{})[c]||0);},0);
   var adsPct=receita>0?(adsSku/receita*100):0;
   var dvSku=devDoProduto(s.sku_pai);  // devolução real por produto, FILTRADA pelo canal no escopo (fix 02/07)
-  var margemLiq=receita-s.custoTotal-s.fee-s.devolucao-freteSeller-adsSku;
+  // Alinhado à régua da tabela Performance por canal (06/07): margem = receita − CMV − comissão
+  // − AFILIADOS − devolução − frete − ads − IMPOSTOS. (Full é custo de nível-conta, não por produto → fora.)
+  var afiliadoSku=s.afiliado||0;
+  var impostosSku=TAX_RATE*(receita-s.devolucao);
+  var margemLiq=receita-s.custoTotal-s.fee-afiliadoSku-s.devolucao-freteSeller-adsSku-impostosSku;
   var margemPct=receita>0?(margemLiq/receita*100):0;
   // Velocidade
   var datas=Object.keys(s.datas||{}).sort();
@@ -1994,7 +1999,7 @@ function renderEcommSkuDetail(){
   html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Receita</div><div class="dr-kpi-val">'+fmtK(receita)+'</div><div class="dr-kpi-sub">'+fmt(receita)+'</div></div>';
   html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Pedidos</div><div class="dr-kpi-val">'+fmtN(nPedidos)+'</div><div class="dr-kpi-sub">Ticket: '+fmt(ticketMed)+'</div></div>';
   html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Unidades</div><div class="dr-kpi-val">'+fmtN(qtd)+'</div><div class="dr-kpi-sub">Preço/un: '+fmt(ticketUn)+'</div></div>';
-  html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Margem líquida</div><div class="dr-kpi-val">'+fmtK(margemLiq)+'</div><div class="dr-kpi-sub"><span class="margem-pill '+mcls+'">'+Math.round(margemPct)+'%</span></div></div>';
+  html+=  '<div class="dr-kpi" title="Receita − CMV − Comissão − Afiliados ('+fmtK(afiliadoSku)+') − Devolução − Frete − Ads − Impostos 6,5% ('+fmtK(impostosSku)+'). Mesma régua da tabela Performance por canal. Full (armazenagem, nível conta) não entra por produto."><div class="dr-kpi-lbl">Margem líquida</div><div class="dr-kpi-val">'+fmtK(margemLiq)+'</div><div class="dr-kpi-sub"><span class="margem-pill '+mcls+'">'+Math.round(margemPct)+'%</span></div></div>';
   html+='</div>';
 
   // KPIs row 2 — comissão real / devolução / frete líquido / velocidade
@@ -2021,7 +2026,8 @@ function renderEcommSkuDetail(){
     var custo=p.custoTotal;
     var cmvPct=p.receita>0?(custo/p.receita*100):0;
     var adsC=((STATE.adsBySkuPaiCanal[s.sku_pai]||{})[c])||0;  // ads ML real do SKU nesse canal
-    var marg=p.receita-custo-p.fee-p.devolucao-fr-adsC;
+    var afilC=p.afiliado||0;var impC=TAX_RATE*(p.receita-p.devolucao);  // afiliado + imposto (alinha à régua do P&L)
+    var marg=p.receita-custo-p.fee-afilC-p.devolucao-fr-adsC-impC;
     var mp=p.receita>0?(marg/p.receita*100):0;
     return {nome:c,cor:getCor(c),qtd:p.qtd,receita:p.receita,fee:p.fee,feePct:fc,devolucao:p.devolucao,devPct:dc,frete:fr,ads:adsC,cmv:custo,cmvPct:cmvPct,margem:marg,margemPct:mp};
   }).sort(function(a,b){return b.receita-a.receita;});
