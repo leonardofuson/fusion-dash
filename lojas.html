@@ -1125,7 +1125,7 @@ function selAllLojas(){STATE.lojas.forEach(function(n){STATE.lojasSel[n]=true;})
 function clearLojas(){STATE.lojas.forEach(function(n){STATE.lojasSel[n]=false;});renderLojaChips();renderAll();}
 
 // ════════ Premiação por loja (semana seg–dom dinâmica + mês corrente) ════════
-var PREMIO={loaded:false,loading:false,week:null,month:null,ternos:null,semana:null};
+var PREMIO={loaded:false,loading:false,weekFechada:null,weekAtual:null,month:null,ternos:null,semFechada:null,semAtual:null};
 var MES_ABREV=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 function inicioSemana(){var h=hojeSP();var dt=new Date(h+'T12:00:00Z');var dow=(dt.getUTCDay()+6)%7;return somaDias(h,-dow);} // 0=seg
 function diaMes(ds){return ds.slice(8,10)+' '+MES_ABREV[parseInt(ds.slice(5,7))-1];}
@@ -1185,14 +1185,17 @@ async function loadPremio(){
   if(PREMIO.loading||PREMIO.loaded) return; PREMIO.loading=true;
   try{
     var seg=inicioSemana(), dom=somaDias(seg,6), mIni=inicioMesSP(), hoje=hojeSP();
+    var segF=somaDias(seg,-7), domF=somaDias(seg,-1);  // semana FECHADA (seg–dom anterior, completa)
     var sel='select=loja_nome,vendedor,pedidos,cancelados,receita,data_pedido&order=data_pedido.asc';
     var res=await Promise.all([
+      buscarTudo('mvw_lojas_vend_dia',sel+'&data_pedido=gte.'+segF+'&data_pedido=lte.'+domF),
       buscarTudo('mvw_lojas_vend_dia',sel+'&data_pedido=gte.'+seg+'&data_pedido=lte.'+dom),
       buscarTudo('mvw_lojas_vend_dia',sel+'&data_pedido=gte.'+mIni+'&data_pedido=lte.'+hoje),
       ternosMesPorVend(mIni,hoje)
     ]);
-    PREMIO.week=aggVendPremio(res[0]); PREMIO.month=aggVendPremio(res[1]); PREMIO.ternos=res[2];
-    PREMIO.semana={de:seg,ate:dom}; PREMIO.loaded=true;
+    PREMIO.weekFechada=aggVendPremio(res[0]); PREMIO.weekAtual=aggVendPremio(res[1]);
+    PREMIO.month=aggVendPremio(res[2]); PREMIO.ternos=res[3];
+    PREMIO.semFechada={de:segF,ate:domF}; PREMIO.semAtual={de:seg,ate:dom}; PREMIO.loaded=true;
   }catch(e){console.warn('premio load',e);} finally{PREMIO.loading=false;}
 }
 function premioAward(icon,label,best,fmtFn){
@@ -1206,17 +1209,22 @@ async function renderPremiacao(){
   var ternos=PREMIO.ternos||{};
   var lojas=(STATE.lojas||[]).filter(function(n){return IGNORAR_LOJA.indexOf(n)<0 && (!STATE.lojasSel||STATE.lojasSel[n]);});
   if(!lojas.length){ box.innerHTML='<div class="premio-empty">Selecione ao menos uma loja.</div>'; return; }
-  var sem=PREMIO.semana, mesLbl=MES_ABREV[parseInt(hojeSP().slice(5,7))-1];
+  var sF=PREMIO.semFechada, sA=PREMIO.semAtual, mesLbl=MES_ABREV[parseInt(hojeSP().slice(5,7))-1];
   box.innerHTML=lojas.map(function(loja){
-    var wFat=premioSelVend(PREMIO.week,loja,'fat');
-    var wTM=premioSelVend(PREMIO.week,loja,'tm',3)||premioSelVend(PREMIO.week,loja,'tm',1);
+    var fFat=premioSelVend(PREMIO.weekFechada,loja,'fat');
+    var fTM=premioSelVend(PREMIO.weekFechada,loja,'tm',3)||premioSelVend(PREMIO.weekFechada,loja,'tm',1);
+    var aFat=premioSelVend(PREMIO.weekAtual,loja,'fat');
+    var aTM=premioSelVend(PREMIO.weekAtual,loja,'tm',3)||premioSelVend(PREMIO.weekAtual,loja,'tm',1);
     var mFat=premioSelVend(PREMIO.month,loja,'fat');
     var mTer=premioSelTernos(ternos,loja);
     return '<div class="premio-card" style="--lc:'+getCor(loja)+'">'+
       '<div class="premio-head"><span>'+loja+'</span><span>&#x1F3C6;</span></div>'+
-      '<div class="premio-sec">Semana · '+diaMes(sem.de)+'–'+diaMes(sem.ate)+'</div>'+
-      premioAward('&#x1F947;','Faturamento',wFat,fmt)+
-      premioAward('&#x1F3AF;','Ticket médio',wTM,fmt)+
+      '<div class="premio-sec">&#x1F3C1; Semana fechada · '+diaMes(sF.de)+'–'+diaMes(sF.ate)+'</div>'+
+      premioAward('&#x1F947;','Faturamento',fFat,fmt)+
+      premioAward('&#x1F3AF;','Ticket médio',fTM,fmt)+
+      '<div class="premio-sec">&#x23F1;&#xFE0F; Semana atual · '+diaMes(sA.de)+'–'+diaMes(sA.ate)+'</div>'+
+      premioAward('&#x1F947;','Faturamento',aFat,fmt)+
+      premioAward('&#x1F3AF;','Ticket médio',aTM,fmt)+
       '<div class="premio-sec">Mês · '+mesLbl+'</div>'+
       premioAward('&#x1F947;','Faturamento',mFat,fmt)+
       premioAward('&#x1F454;','Ternos',mTer,fmtN)+
@@ -1450,8 +1458,10 @@ function exportImage(tipo){
 
   var periodo=document.createElement('div');
   periodo.style.cssText='font-size:11px;color:#d4d4d8;margin-bottom:14px;';
-  if(tipo==='premiacao' && PREMIO.semana){
-    periodo.textContent='Semana '+diaMes(PREMIO.semana.de)+' – '+diaMes(PREMIO.semana.ate)+'  ·  Mês de '+MES_ABREV[parseInt(hojeSP().slice(5,7))-1];
+  if(tipo==='premiacao' && PREMIO.semFechada){
+    periodo.textContent='Semana fechada '+diaMes(PREMIO.semFechada.de)+'–'+diaMes(PREMIO.semFechada.ate)+
+      '  ·  Semana atual '+diaMes(PREMIO.semAtual.de)+'–'+diaMes(PREMIO.semAtual.ate)+
+      '  ·  Mês de '+MES_ABREV[parseInt(hojeSP().slice(5,7))-1];
   } else {
     periodo.textContent='Período: '+new Date(DE+'T12:00:00').toLocaleDateString('pt-BR')+' a '+new Date(ATE+'T12:00:00').toLocaleDateString('pt-BR');
   }
