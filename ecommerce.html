@@ -1222,6 +1222,8 @@ function renderWaterfall(){
   var fp=STATE.focusProduto, gp=fp?pnlProduto():null;
   var cur=gp||calcPnL(STATE.pedidos,STATE.itensFocus,adsFiltrado(STATE.adsByCanal));
   var prev=fp?{receita:0,liquida:0,lucro:0,comissao:0,afiliados:0,devolucoes:0,frete:0,cmv:0,ads:0,impostos:0,pedidos:0}:calcPnLFromMV(STATE.mvRowsPrev||[],adsFiltrado(STATE.adsByCanalPrev));
+  // prev vem da MV (sem custo fixo por canal do mês anterior) → estima pela taxa atual, p/ delta honesto
+  if((prev.custoFixo||0)===0&&cur.receita>0){var _rtF=(cur.custoFixo||0)/cur.receita;prev.custoFixo=_rtF*(prev.receita||0);prev.resultadoOper=(prev.lucro||0)-prev.custoFixo;}
   var items=[
     {lbl:'Receita Bruta',val:cur.receita,color:'#22c55e',prev:prev.receita},
     {lbl:'− Comissão',val:-cur.comissao,color:'#f97316',prev:-prev.comissao},
@@ -1366,6 +1368,7 @@ function renderKPIs(){
   var fp=STATE.focusProduto, gp=fp?pnlProduto():null;
   var cur=gp||calcPnL(STATE.pedidos,STATE.itensFocus,adsFiltrado(STATE.adsByCanal));
   var prev=fp?{receita:0,liquida:0,lucro:0,comissao:0,devolucoes:0,frete:0,cmv:0,ads:0,impostos:0,pedidos:0}:calcPnLFromMV(STATE.mvRowsPrev||[],adsFiltrado(STATE.adsByCanalPrev));
+  if((prev.custoFixo||0)===0&&cur.receita>0){var _rtF=(cur.custoFixo||0)/cur.receita;prev.custoFixo=_rtF*(prev.receita||0);prev.resultadoOper=(prev.lucro||0)-prev.custoFixo;}  // estima custo fixo do mês anterior pela taxa atual (delta honesto)
   var nPed=fp?(gp?gp.pedidos:0):STATE.pedidos.filter(function(p){return!p._canc;}).length;
   var pedAntN=prev.pedidos||0;   // prev vem da MV (sem fetch detalhado anterior)
   var tm=nPed>0?cur.receita/nPed:0;
