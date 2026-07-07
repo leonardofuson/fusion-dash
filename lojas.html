@@ -141,9 +141,10 @@ table.tb tr:last-child td{border-bottom:none;}
 .premio-head{display:flex;align-items:center;gap:9px;margin-bottom:4px;}
 .premio-head .bar{width:3px;height:15px;border-radius:2px;background:var(--lc,#64748b);flex-shrink:0;}
 .premio-head .nm{font-size:12.5px;font-weight:700;color:var(--txt1);letter-spacing:.02em;}
-.premio-sec{display:flex;align-items:center;gap:7px;margin:13px 0 6px;}
-.premio-sec .t{font-size:9px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--txt2);}
-.premio-sec .d{font-size:9px;color:var(--txt3);margin-left:auto;font-variant-numeric:tabular-nums;}
+.premio-group{border-left:2px solid var(--sc,#64748b);padding-left:11px;margin-top:11px;}
+.premio-sec{display:flex;align-items:center;gap:7px;margin:0 0 2px;}
+.premio-sec .t{font-size:9px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--txt2);white-space:nowrap;}
+.premio-date{font-size:9px;color:var(--txt3);font-variant-numeric:tabular-nums;margin:0 0 6px;}
 .premio-sec .tag{font-size:7.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:2px 5px;border-radius:4px;}
 .premio-sec .tag.final{background:rgba(34,197,94,.13);color:var(--green);}
 .premio-sec .tag.live{background:rgba(234,179,8,.14);color:var(--amber);}
@@ -1211,10 +1212,13 @@ function premioAward(label,best,fmtFn){
     : '<div class="row"><span class="nm none">sem dados</span></div>';
   return '<div class="premio-aw"><div class="lb">'+label+'</div>'+row+'</div>';
 }
-function premioSec(titulo,dateRange,tagClass,tagText){
-  return '<div class="premio-sec"><span class="t">'+titulo+'</span>'+
-    (tagText?'<span class="tag '+tagClass+'">'+tagText+'</span>':'')+
-    (dateRange?'<span class="d">'+dateRange+'</span>':'')+'</div>';
+// Grupo de seção: rail colorido de status à esquerda (verde=fechada, âmbar=atual, azul=mês)
+// + cabeçalho da seção + os prêmios. Separa as categorias sem caixa/agressividade.
+function premioGrupo(titulo,dateRange,tagClass,tagText,railVar,awardsHtml){
+  var sec='<div class="premio-sec"><span class="t">'+titulo+'</span>'+
+    (tagText?'<span class="tag '+tagClass+'">'+tagText+'</span>':'')+'</div>'+
+    (dateRange?'<div class="premio-date">'+dateRange+'</div>':'');
+  return '<div class="premio-group" style="--sc:'+railVar+'">'+sec+awardsHtml+'</div>';
 }
 async function renderPremiacao(){
   var box=document.getElementById('premiacao-grid'); if(!box) return;
@@ -1232,15 +1236,12 @@ async function renderPremiacao(){
     var mTer=premioSelTernos(ternos,loja);
     return '<div class="premio-card" style="--lc:'+getCor(loja)+'">'+
       '<div class="premio-head"><span class="bar"></span><span class="nm">'+loja+'</span></div>'+
-      premioSec('Semana fechada',diaMes(sF.de)+'–'+diaMes(sF.ate),'final','Final')+
-      premioAward('Faturamento',fFat,fmt)+
-      premioAward('Ticket médio',fTM,fmt)+
-      premioSec('Semana atual',diaMes(sA.de)+'–'+diaMes(sA.ate),'live','Ao vivo')+
-      premioAward('Faturamento',aFat,fmt)+
-      premioAward('Ticket médio',aTM,fmt)+
-      premioSec('Mês',mesLbl,'mes','')+
-      premioAward('Faturamento',mFat,fmt)+
-      premioAward('Ternos',mTer,fmtN)+
+      premioGrupo('Semana fechada',diaMes(sF.de)+'–'+diaMes(sF.ate),'final','Final','var(--green)',
+        premioAward('Faturamento',fFat,fmt)+premioAward('Ticket médio',fTM,fmt))+
+      premioGrupo('Semana atual',diaMes(sA.de)+'–'+diaMes(sA.ate),'live','Ao vivo','var(--amber)',
+        premioAward('Faturamento',aFat,fmt)+premioAward('Ticket médio',aTM,fmt))+
+      premioGrupo('Mês',mesLbl,'mes','','var(--blue)',
+        premioAward('Faturamento',mFat,fmt)+premioAward('Ternos',mTer,fmtN))+
     '</div>';
   }).join('');
 }
