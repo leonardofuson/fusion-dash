@@ -756,6 +756,17 @@ function mlTaxaNoEscopo(campo){
   });
   return round2(t);
 }
+// Custo fixo (opex ECOM) rateado por marketplace, somado só nos canais em escopo (chips/focusCanal).
+// Absorção (% da receita) — vw_ecom_custo_fixo_canal_dia. Entra no P&L abaixo da Contribuição.
+function custoFixoNoEscopo(){
+  var bc=STATE.custoFixoByCanal;if(!bc)return 0;var t=0;
+  Object.keys(bc).forEach(function(cn){
+    if(STATE.focusCanal){if(cn!==STATE.focusCanal)return;}
+    else if(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[cn])return;
+    t+=bc[cn]||0;
+  });
+  return round2(t);
+}
 // Ads (custo de mídia). HOJE só Mercado Ads (ML) — Meta/Google/TikTok/Shopee pendentes de
 // credenciais. Soma só level=campaign (item duplica exatamente o mesmo gasto). Coorte por data.
 async function fetchAds(de,ate){
@@ -859,7 +870,7 @@ function cacheSet(de,ate,data){
 var idle = window.requestIdleCallback || function(fn){return setTimeout(fn,0);};
 function calcPnLFromMV(rows,adsVal){
   adsVal=adsVal||0;
-  if(!rows||!rows.length)return{receita:0,devolucoes:0,frete:0,comissao:0,afiliados:0,cmv:0,ads:0,liquida:0,lucro:0,pedidos:0};
+  if(!rows||!rows.length)return{receita:0,devolucoes:0,frete:0,comissao:0,afiliados:0,cmv:0,ads:0,liquida:0,lucro:0,custoFixo:0,resultadoOper:0,pedidos:0};
   var receita=0,dev=0,frete=0,com=0,afiliados=0,liquida=0,ped=0,cmv=0;
   rows.forEach(function(r){
     var n=r.canal_nome_raw, _nome=getNome(n,r.origem_conta);
@@ -878,7 +889,8 @@ function calcPnLFromMV(rows,adsVal){
   var full=mlTaxaNoEscopo('full');        // Full ML (armazenagem + retirada)
   liquida=receita-com-afiliados-dev-frete-full;
   var impostos=TAX_RATE*(receita-dev);   // imposto sobre venda líquida (Bruta − Devoluções)
-  return{receita:receita,devolucoes:dev,frete:frete,comissao:com,afiliados:afiliados,full:full,cmv:cmv,ads:adsVal,impostos:impostos,liquida:liquida,lucro:liquida-adsVal-cmv-impostos,pedidos:ped};
+  var _lucro=liquida-adsVal-cmv-impostos;
+  return{receita:receita,devolucoes:dev,frete:frete,comissao:com,afiliados:afiliados,full:full,cmv:cmv,ads:adsVal,impostos:impostos,liquida:liquida,lucro:_lucro,custoFixo:0,resultadoOper:_lucro,pedidos:ped};
 }
 async function fetchItensForIds(ids,tabela){
   if(!ids.length)return[];
@@ -1221,7 +1233,9 @@ function renderWaterfall(){
     {lbl:'− Ads',val:-cur.ads,color:'#eab308',prev:-prev.ads},
     {lbl:'− CMV',val:-cur.cmv,color:'#ec4899',prev:-prev.cmv},
     {lbl:'− Impostos',val:-(cur.impostos||0),color:'#64748b',prev:-(prev.impostos||0)},
-    {lbl:'= Resultado',val:cur.lucro,color:cur.lucro>=0?'#22c55e':'#f43f5e',prev:prev.lucro}
+    {lbl:'= Contribuição',val:cur.lucro,color:cur.lucro>=0?'#06b6d4':'#f43f5e',prev:prev.lucro},
+    {lbl:'− Custo Fixo',val:-(cur.custoFixo||0),color:'#c084fc',prev:-(prev.custoFixo||0)},
+    {lbl:'= Result. Oper.',val:(cur.resultadoOper||0),color:(cur.resultadoOper||0)>=0?'#22c55e':'#f43f5e',prev:(prev.resultadoOper||0)}
   ];
   var maxVal=Math.max.apply(null,items.map(function(i){return Math.abs(i.val);}));
   if(maxVal===0) maxVal=1;
@@ -1240,7 +1254,8 @@ function renderWaterfall(){
 var _pnlMemo=null;  // PERF: evita recomputar calcPnL 2x no mesmo tick (renderWaterfall + renderKPIs)
 function calcPnL(pedidos,itens,adsVal){
   adsVal=adsVal||0;
-  if(_pnlMemo&&_pnlMemo.p===pedidos&&_pnlMemo.i===itens&&_pnlMemo.a===adsVal)return _pnlMemo.r;
+  var custoFixo=custoFixoNoEscopo();  // fixo rateado no escopo — entra no memo key (muda com chips/fetch async)
+  if(_pnlMemo&&_pnlMemo.p===pedidos&&_pnlMemo.i===itens&&_pnlMemo.a===adsVal&&_pnlMemo.f===custoFixo)return _pnlMemo.r;
   // Fase 7 P&L (31/05): usa valor_devolucao REAL de API (Fase 5) em vez de
   // "valor de cancelados". Cancelados ficam fora da receita (filtro _canc).
   // fee_canal real de API (Fase 1-4); fallback custoPct só pra pedidos onde a
@@ -1274,9 +1289,10 @@ function calcPnL(pedidos,itens,adsVal){
   // P&L: Bruta − Comissão − Afiliados − Devoluções − Frete − Full = Líquida; − CMV = Resultado
   var liquida=receita-comissao-afiliados-devolucoes-frete-full;
   var impostos=TAX_RATE*(receita-devolucoes);   // imposto sobre venda líquida (Bruta − Devoluções)
-  var lucro=liquida-adsVal-cmv-impostos;
-  var _r={receita:receita,devolucoes:devolucoes,comissao:comissao,afiliados:afiliados,full:full,cmv:cmv,frete:frete,ads:adsVal,impostos:impostos,liquida:liquida,lucro:lucro};
-  _pnlMemo={p:pedidos,i:itens,a:adsVal,r:_r};
+  var lucro=liquida-adsVal-cmv-impostos;   // = Contribuição (antes do custo fixo)
+  var resultadoOper=lucro-custoFixo;        // = Resultado Operacional (após custo fixo rateado)
+  var _r={receita:receita,devolucoes:devolucoes,comissao:comissao,afiliados:afiliados,full:full,cmv:cmv,frete:frete,ads:adsVal,impostos:impostos,liquida:liquida,lucro:lucro,custoFixo:custoFixo,resultadoOper:resultadoOper};
+  _pnlMemo={p:pedidos,i:itens,a:adsVal,f:custoFixo,r:_r};
   return _r;
 }
 
@@ -1365,7 +1381,8 @@ function renderKPIs(){
   // LINHA 1 — Receita Bruta · Receita Líquida · Resultado · Margem % · Ticket Médio
   html+='<div class="kpi" style="--kpi-accent:#6366f1"><div class="kpi-lbl">Receita Bruta</div><div class="kpi-val">'+fmt(cur.receita)+'</div>'+(proj?'<div class="kpi-sub">proj. mês: '+fmt(proj)+'</div>':'')+'<div class="kpi-delta">'+deltaBadge(delta(cur.receita,prev.receita))+'</div></div>';
   html+='<div class="kpi" style="--kpi-accent:#06b6d4"><div class="kpi-lbl">Receita Líquida</div><div class="kpi-val">'+fmt(cur.liquida)+'</div><div class="kpi-sub">após comissão/dev/frete</div><div class="kpi-delta">'+deltaBadge(delta(cur.liquida,prev.liquida))+'</div></div>';
-  html+='<div class="kpi" style="--kpi-accent:'+(cur.lucro>=0?'#22c55e':'#f43f5e')+'"><div class="kpi-lbl">Resultado</div><div class="kpi-val" style="color:'+(cur.lucro>=0?'#22c55e':'#f43f5e')+'">'+fmt(cur.lucro)+'</div><div class="kpi-sub">margem '+fmtD(mp)+'%</div><div class="kpi-delta">'+deltaBadge(delta(cur.lucro,prev.lucro))+'</div></div>';
+  var _ro=(cur.resultadoOper!=null?cur.resultadoOper:cur.lucro),_mpO=cur.receita>0?_ro/cur.receita*100:0,_roPrev=(prev.resultadoOper!=null?prev.resultadoOper:prev.lucro),_cf=cur.custoFixo||0;
+  html+='<div class="kpi" style="--kpi-accent:'+(_ro>=0?'#22c55e':'#f43f5e')+'"><div class="kpi-lbl">Result. Operacional</div><div class="kpi-val" style="color:'+(_ro>=0?'#22c55e':'#f43f5e')+'">'+fmt(_ro)+'</div><div class="kpi-sub">margem '+fmtD(_mpO)+'% · após custo fixo '+fmtK(_cf)+' (contrib. '+fmtK(cur.lucro)+')</div><div class="kpi-delta">'+deltaBadge(delta(_ro,_roPrev))+'</div></div>';
   html+='<div class="kpi" style="--kpi-accent:'+mc+'"><div class="kpi-lbl">Margem líquida %</div><div class="kpi-val" style="color:'+mc+'">'+fmtD(mp)+'%</div><div class="kpi-delta">'+deltaBadge(delta(mp,prevMp))+'</div></div>';
   html+='<div class="kpi" style="--kpi-accent:#06b6d4"><div class="kpi-lbl">Ticket Médio</div><div class="kpi-val">'+fmt(tm)+'</div><div class="kpi-delta">'+deltaBadge(delta(tm,tmAnt))+'</div></div>';
   // LINHA 2 — Pedidos · Unidades · PA · Devolução % · Ads %
