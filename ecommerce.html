@@ -612,7 +612,23 @@ function cmvPct(nome){var n=(nome||'').toLowerCase();
   if(n.indexOf('site')>=0)return CMV_PCT_CANAL.site;
   if(n.indexOf('shein')>=0)return CMV_PCT_CANAL.shein;
   return CMV_PCT_GERAL;}
-function custoPct(n){return CANAL_CUSTO[n]!==undefined?CANAL_CUSTO[n]:0.0;}
+// Comissão fallback: preferir a taxa REAL derivada de fee_canal (vw_sim_canal_taxas,
+// 3 meses fechados) sobre o hardcode CANAL_CUSTO. Só entra quando o fee_canal do pedido
+// ainda não maturou (ex: TikTok, statement lag ~15d). Mesma fonte do dash (fee_canal real).
+var CANAL_COMISSAO_REAL={};
+async function fetchComissaoReal(){
+  if(Object.keys(CANAL_COMISSAO_REAL).length) return CANAL_COMISSAO_REAL;  // 1x por sessão
+  try{
+    var rows=await buscarTudo('vw_sim_canal_taxas','select=canal_nome_raw,comissao_pct&order=canal_nome_raw.asc');
+    var m={};(rows||[]).forEach(function(r){var d=getNome(r.canal_nome_raw,'');var p=parseFloat(r.comissao_pct||0)/100;if(p>0)m[d]=p;});
+    if(Object.keys(m).length)CANAL_COMISSAO_REAL=m;
+  }catch(e){/* falha → mantém hardcode CANAL_CUSTO */}
+  return CANAL_COMISSAO_REAL;
+}
+function custoPct(n){
+  if(CANAL_COMISSAO_REAL[n]!==undefined) return CANAL_COMISSAO_REAL[n];  // real (fee_canal) primeiro
+  return CANAL_CUSTO[n]!==undefined?CANAL_CUSTO[n]:0.0;                   // hardcode = último recurso
+}
 
 // ── Helpers ──
 function fmt(n){return 'R$ '+Math.round(n||0).toLocaleString('pt-BR');}
@@ -1028,6 +1044,7 @@ async function carregar(){
     var pAds=fetchAds(DE,ATE).then(adsRowsToByCanal).catch(function(){return{};});
     var pAdsPrev=usarComp?fetchAds(ant.de,ant.ate).then(adsRowsToByCanal).catch(function(){return{};}):Promise.resolve({});
     var pDev=fetchDevItem(DE,ATE).then(devRowsToBySkuPai).catch(function(){return{};});
+    var pCom=fetchComissaoReal();  // taxa de comissão REAL por canal (fee_canal) p/ o fallback do custoPct
     var pSkuMV=fetchSkuMV(DE,ATE,bigPeriod).catch(function(){return[];});      // PERF: lista de produtos no paint imediato
     var pAdsItem=fetchAdsItem(DE,ATE).catch(function(){return[];});  // PERF: em paralelo (era serial após itens)
     // PERF (09/06): geo + pagamentos no paint imediato via MV — pinta assim que a MV
@@ -1053,7 +1070,7 @@ async function carregar(){
     var pSkuMVprev=usarComp?fetchSkuMV(ant.de,ant.ate).catch(function(){return[];}):Promise.resolve([]);  // prior p/ "o que mudou"
     // ── PERÍODO LONGO: render 100% pela MV, sem fetch detalhado (que truncaria em 50k) ──
     if(bigPeriod){
-      STATE.adsByCanal=await pAds;STATE.adsByCanalPrev=await pAdsPrev;STATE.mvRowsPrev=await pMVprev;STATE.devBySkuPai=await pDev;
+      STATE.adsByCanal=await pAds;STATE.adsByCanalPrev=await pAdsPrev;STATE.mvRowsPrev=await pMVprev;STATE.devBySkuPai=await pDev;await pCom;
       var mvBig=await pMV;STATE.skuMVRows=await pSkuMV;
       if(seq!==LOAD_SEQ)return;
       STATE.pedidosRaw=[];STATE.pedidos=[];STATE.itens=[];STATE.itensFocus=[];STATE.adsBySkuPai={};STATE.adsBySkuPaiCanal={};
@@ -1086,7 +1103,7 @@ async function carregar(){
 
     // RENDER IMEDIATO — sem itens (waterfall, canais, geo, pagamentos, alertas)
     STATE.itens=[];STATE.itensFocus=[];STATE.adsBySkuPai={};STATE.adsBySkuPaiCanal={};
-    STATE.adsByCanal=await pAds;STATE.adsByCanalPrev=await pAdsPrev;STATE.devBySkuPai=await pDev;STATE.mvRowsPrev=await pMVprev;STATE.skuMVRows=await pSkuMV;STATE.skuMVRowsPrev=await pSkuMVprev;
+    STATE.adsByCanal=await pAds;STATE.adsByCanalPrev=await pAdsPrev;STATE.devBySkuPai=await pDev;STATE.mvRowsPrev=await pMVprev;STATE.skuMVRows=await pSkuMV;STATE.skuMVRowsPrev=await pSkuMVprev;await pCom;
     renderAll();
     document.getElementById('upd').textContent='Atualizado '+new Date().toLocaleTimeString('pt-BR')+' · detalhe…';
 
