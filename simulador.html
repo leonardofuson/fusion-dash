@@ -174,82 +174,68 @@ details.card > summary:hover{background:rgba(255,255,255,.02);}
 
   <!-- ───────────── Aba 1: Calculadora ───────────── -->
   <section id="tab-calc" class="tab-panel active">
-    <div class="grid3">
-      <!-- Inputs -->
-      <div class="card">
-        <div class="card-header"><div class="card-title">Inputs</div></div>
+    <div>
+      <!-- Inputs (linha full-width) -->
+      <div class="card" style="margin-bottom:16px;">
         <div class="card-body">
-          <div class="form-row">
-            <div class="form-group">
+          <div class="form-row" style="align-items:flex-end;gap:14px;flex-wrap:wrap;">
+            <div class="form-group" style="min-width:140px;">
               <label class="form-label">Categoria</label>
               <select id="in-categoria" class="form-select"><option value="">Todas</option></select>
-              <div class="form-help">Filtra os SKUs disponíveis abaixo</div>
             </div>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Produto / SKU pai</label>
-            <input id="in-sku" class="form-input" list="dl-skus" placeholder="Digite SKU pai (ex: CLMALHA)" autocomplete="off">
-            <datalist id="dl-skus"></datalist>
-            <div id="sku-info" class="form-help">Apenas SKUs pai de revenda (insumos TECIDO e TROCA excluídos).</div>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Canal</label>
-            <select id="in-canal" class="form-select"></select>
-          </div>
-          <div class="form-row">
+            <div class="form-group" style="min-width:220px;flex:1;">
+              <label class="form-label">Produto / SKU pai</label>
+              <input id="in-sku" class="form-input" list="dl-skus" placeholder="Digite SKU pai (ex: CLMALHA)" autocomplete="off">
+              <datalist id="dl-skus"></datalist>
+            </div>
             <div class="form-group">
-              <label class="form-label">Preço de venda (R$)</label>
+              <label class="form-label">Modo</label>
+              <div class="seg" id="seg-modo">
+                <button type="button" class="seg-btn active" data-modo="preco">Mesmo preço → margem</button>
+                <button type="button" class="seg-btn" data-modo="margem">Margem-alvo → preço</button>
+              </div>
+            </div>
+            <div class="form-group" id="grp-preco" style="width:130px;">
+              <label class="form-label">Preço (R$)</label>
               <input id="in-preco" class="form-input" type="number" min="0" step="0.01" value="0">
             </div>
-            <div class="form-group">
-              <label class="form-label">Investimento ads (R$)</label>
-              <input id="in-ads" class="form-input" type="number" min="0" step="0.01" value="0">
-              <div class="form-help">Por unidade vendida</div>
+            <div class="form-group" id="grp-margem" style="width:120px;display:none;">
+              <label class="form-label">Margem-alvo (%)</label>
+              <input id="in-margem" class="form-input" type="number" min="0" max="99" step="0.5" value="20">
             </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group" id="grp-cupom" style="display:none;">
-              <label class="form-label">Cupom (% — só Site)</label>
-              <input id="in-cupom" class="form-input" type="number" min="0" max="100" step="0.1" value="0">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Custos fixos (% receita)</label>
-              <input id="in-fixo" class="form-input" type="number" min="0" max="100" step="0.5" value="8">
-              <div class="form-help">Aluguel, salários, log interna</div>
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">Rebate da plataforma (R$)</label>
-              <input id="in-rebate" class="form-input" type="number" min="0" step="0.01" value="0">
-              <div class="form-help">Bônus que a plataforma repassa</div>
-            </div>
-            <div class="form-group" id="grp-afiliado" style="display:none;">
-              <label class="form-label">Comissão afiliado TikTok</label>
-              <select id="in-afiliado" class="form-select">
-                <option value="0">Sem afiliado (6%)</option>
-                <option value="1">Com afiliado (+12%)</option>
+            <div class="form-group" id="grp-margem-base" style="width:160px;display:none;">
+              <label class="form-label">Sobre</label>
+              <select id="in-margem-base" class="form-select">
+                <option value="operacional">Result. operacional</option>
+                <option value="contribuicao">Contribuição</option>
               </select>
             </div>
+            <div class="form-group" style="width:105px;">
+              <label class="form-label">Ads (% preço)</label>
+              <input id="in-ads-pct" class="form-input" type="number" min="0" max="99" step="0.5" value="0">
+            </div>
+            <div class="form-group" style="width:150px;">
+              <label class="form-label">Custo fixo (~6,1%)</label>
+              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;height:38px;"><input type="checkbox" id="in-fixo-on" checked> incluir no result.</label>
+            </div>
           </div>
-          <hr style="border:none;border-top:1px solid var(--bdr);margin:16px 0;">
-          <div class="form-row">
+          <div id="sku-info" class="form-help" style="margin-top:8px;">Apenas SKUs pai de revenda (TECIDO/TROCA fora). Comissão/frete/devolução = taxas REAIS dos últimos 3 meses fechados; CMV do cadastro (Compras).</div>
+        </div>
+      </div>
+
+      <!-- Outputs: matriz multicanal -->
+      <div id="calc-alerts"></div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Margem por canal <small id="matriz-meta"></small></div>
+          <div class="form-row" style="gap:8px;">
             <button class="btn" onclick="resetForm()">Limpar</button>
             <button class="btn btn-primary" onclick="abrirSalvar()">💾 Salvar cenário</button>
           </div>
         </div>
-      </div>
-
-      <!-- Outputs -->
-      <div>
-        <div id="kpis-calc" class="kpi-grid"></div>
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title">Breakdown <small id="brk-meta"></small></div>
-          </div>
-          <div id="brk-body" class="card-body breakdown"></div>
+        <div class="card-body" style="overflow-x:auto;padding:0;">
+          <div id="matriz-body"></div>
         </div>
-        <div id="calc-alerts"></div>
       </div>
     </div>
   </section>
@@ -451,6 +437,8 @@ const STATE = {
   faixas: [],            // canal_custos_faixa
   taxaDevSku: {},        // (sku||canal) → taxa
   taxaDevCanal: {},      // canal → taxa
+  taxaSkuCanal: {},      // v2: (sku_pai|canal_nome_raw) → {comissao_pct,afiliado_pct,frete_pct,devolucao_pct,...} REAL
+  taxaCanalFb: {},       // v2: canal_nome_raw → {...} fallback média real do canal
   freteSku: {},          // (sku||canal) → frete medio
   freteCanal: {},        // canal → frete medio
   curvas: [],            // ads_curva_otima
@@ -515,7 +503,7 @@ async function carregarReferencias(){
     + '&tipo=eq.pai'
     + `&and=(${insumoFilter})`
     + '&limit=10000';
-  const [produtos, faixas, devSku, devCanal, freteSku, freteCanal, curvas, cenarios] = await Promise.all([
+  const [produtos, faixas, devSku, devCanal, freteSku, freteCanal, curvas, cenarios, txSku, txCanal] = await Promise.all([
     sbGet('produtos', produtosQs),
     sbGet('canal_custos_faixa', 'select=*&ativo=eq.true&order=canal_pattern,faixa_min'),
     sbGet('vw_taxa_devolucao_sku_canal', 'select=*&limit=5000'),
@@ -524,9 +512,15 @@ async function carregarReferencias(){
     sbGet('vw_frete_medio_canal', 'select=*'),
     sbGet('ads_curva_otima', 'select=*'),
     sbGet('simulacao_cenarios', 'select=*&order=criado_em.desc&limit=200'),
+    // v2: taxas REAIS (fee_canal/frete/devolução reais, 3 meses fechados) — fonte única
+    sbGet('mvw_sim_sku_canal_taxa', 'select=canal_nome_raw,sku_pai,comissao_pct,afiliado_pct,frete_pct,devolucao_pct,receita_3m,ticket_medio,n_devolucoes&order=sku_pai.asc&limit=10000'),
+    sbGet('vw_sim_canal_taxas', 'select=canal_nome_raw,comissao_pct,afiliado_pct,frete_pct,devolucao_pct&order=canal_nome_raw.asc'),
   ]);
   STATE.produtos = produtos;
   STATE.faixas = faixas;
+  // v2: índices reais por SKU×canal e fallback por canal
+  txSku.forEach(r => { STATE.taxaSkuCanal[(r.sku_pai||'')+'|'+(r.canal_nome_raw||'')] = r; });
+  txCanal.forEach(r => { STATE.taxaCanalFb[r.canal_nome_raw] = r; });
   // Indexa só pelo SKU pai (sku_ml/shopify/shopee de pais raramente preenchidos e geralmente
   // apontam pro item_id ML, não SKU vendedor — não confundir o lookup).
   produtos.forEach(p => { if (p.sku) STATE.produtosBySku[p.sku] = p; });
@@ -542,7 +536,7 @@ function popularCanaisDropdown(){
   // Distinct canal_label da tabela faixas
   const labels = Array.from(new Set(STATE.faixas.map(f => f.canal_label)));
   const opts = labels.map(l => `<option value="${l}">${l}</option>`).join('');
-  $('#in-canal').innerHTML = opts;
+  const ic = $('#in-canal'); if (ic) ic.innerHTML = opts;   // v2: calculadora não usa mais dropdown de canal
   $('#curva-canal').innerHTML = opts;
 }
 
@@ -622,73 +616,118 @@ function lookupFrete(sku, canal_label){
   return 0;
 }
 
-function calcular(inputs){
-  // inputs: {sku, canal_label, preco, ads, cupom_pct, fixo_pct, rebate, afiliado_tiktok}
-  const p = STATE.produtosBySku[inputs.sku];
-  const cmv = p ? parseFloat(p.custo_total||0) : 0;
-  const faixa = lookupFaixa(inputs.canal_label, inputs.preco);
-  const com_pct = faixa ? parseFloat(faixa.comissao_pct||0) : 0;
-  const taxa_fixa = faixa ? parseFloat(faixa.taxa_fixa||0) : 0;
-  const taxa_extra = (inputs.afiliado_tiktok && faixa) ? parseFloat(faixa.taxa_extra_pct||0) : 0;
-  const com_pct_total = com_pct + taxa_extra;
-  const desconto_cupom = (inputs.canal_label === 'Site Próprio') ? (inputs.preco * inputs.cupom_pct/100) : 0;
-  const receita_liq = inputs.preco - desconto_cupom + (inputs.rebate || 0);
-  const comissao = (inputs.preco * com_pct_total) + taxa_fixa;
-  const taxa_dev = lookupTaxaDev(inputs.sku, inputs.canal_label);
-  const frete = lookupFrete(inputs.sku, inputs.canal_label);
-  const devolucao_estim = inputs.preco * taxa_dev;
-  const fixos = receita_liq * (inputs.fixo_pct||0) / 100;
-  const margem_rs = receita_liq - comissao - cmv - frete - devolucao_estim - inputs.ads - fixos;
-  const margem_pct = receita_liq > 0 ? (margem_rs / receita_liq * 100) : 0;
-  return {
-    receita_liq, desconto_cupom, comissao, com_pct_total, taxa_fixa, cmv,
-    frete, taxa_dev, devolucao_estim, ads: inputs.ads, fixos, rebate: inputs.rebate||0,
-    margem_rs, margem_pct, produto: p,
-  };
+// ═════════════════════════════════════════════════════════════
+// v2 — Motor multicanal sobre custo REAL (inverso do P&L do ecommerce)
+// ═════════════════════════════════════════════════════════════
+const CHANNELS = [
+  {k:'Mercado Livre FIO', l:'ML Fio'},
+  {k:'Mercado Livre Confecções', l:'ML Confec'},
+  {k:'TikTok Shop', l:'TikTok'},
+  {k:'Shopee FIO', l:'Shopee Fio'},
+  {k:'Shopee Confecções', l:'Shopee Confec'},
+  {k:'Site Próprio', l:'Site'},
+  {k:'Shein Confecções', l:'Shein'},
+];
+const IMPOSTO_PCT = 0.065;      // Simples/DAS sobre receita líquida (mesma constante do ecommerce)
+const CUSTO_FIXO_PCT = 0.061;   // absorção real de overhead ECOM (~6,1% da receita, vw_ecom_custo_fixo_canal_dia)
+
+// taxa real por SKU×canal; fallback = média real do canal
+function taxaDe(sku, canalKey){
+  const s = STATE.taxaSkuCanal[sku+'|'+canalKey];
+  if (s && parseFloat(s.receita_3m||0) > 0)
+    return {comissao:+s.comissao_pct||0, afiliado:+s.afiliado_pct||0, frete:+s.frete_pct||0, devol:+s.devolucao_pct||0, fonte:'sku', receita:+s.receita_3m||0, nDev:+s.n_devolucoes||0};
+  const c = STATE.taxaCanalFb[canalKey];
+  if (c) return {comissao:+c.comissao_pct||0, afiliado:+c.afiliado_pct||0, frete:+c.frete_pct||0, devol:+c.devolucao_pct||0, fonte:'canal', receita:0, nDev:0};
+  return null;
+}
+
+// cascata forward = inverso do calcPnL do ecommerce (taxas em %; cmv em R$/un)
+function calcCanal(cmv, tx, cfg){
+  const com=tx.comissao/100, afi=tx.afiliado/100, fre=tx.frete/100, dev=tx.devol/100, ads=(cfg.adsPct||0)/100;
+  const impPct = IMPOSTO_PCT*(1-dev);           // imposto sobre receita líquida (preço − devolução)
+  const cf = cfg.incluirFixo ? CUSTO_FIXO_PCT : 0;
+  const V = com+afi+fre+dev+impPct+ads;         // taxas proporcionais (antes do custo fixo)
+  let P;
+  if (cfg.modo === 'margem') {
+    const m = (cfg.margem||0)/100;
+    const denom = 1 - V - (cfg.margemBase==='operacional' ? cf : 0) - m;
+    P = denom > 0 ? cmv/denom : NaN;            // NaN = margem-alvo inalcançável
+  } else { P = cfg.preco||0; }
+  const comissao_rs=P*com, afiliado_rs=P*afi, frete_rs=P*fre, devol_rs=P*dev, imposto_rs=P*impPct, ads_rs=P*ads, fixo_rs=P*cf;
+  const contrib = P - comissao_rs - afiliado_rs - frete_rs - devol_rs - cmv - imposto_rs - ads_rs;
+  const resultOp = contrib - fixo_rs;
+  const beDenom = 1 - V - cf;
+  const breakeven = beDenom > 0 ? cmv/beDenom : NaN;
+  return {P, comissao_rs, afiliado_rs, frete_rs, devol_rs, cmv, imposto_rs, ads_rs, fixo_rs,
+          contrib, contribPct:P>0?contrib/P*100:0, resultOp, resultOpPct:P>0?resultOp/P*100:0,
+          breakeven, viavel: !isNaN(P) && P>0};
 }
 
 // ═════════════════════════════════════════════════════════════
 // Aba 1: Calculadora
 // ═════════════════════════════════════════════════════════════
-function lerInputs(){
+function lerCfg(){
+  const modoBtn = document.querySelector('#seg-modo .seg-btn.active');
   return {
     sku: $('#in-sku').value.trim(),
-    canal_label: $('#in-canal').value,
+    modo: modoBtn ? modoBtn.dataset.modo : 'preco',
     preco: parseFloat($('#in-preco').value)||0,
-    ads: parseFloat($('#in-ads').value)||0,
-    cupom_pct: parseFloat($('#in-cupom').value)||0,
-    fixo_pct: parseFloat($('#in-fixo').value)||0,
-    rebate: parseFloat($('#in-rebate').value)||0,
-    afiliado_tiktok: $('#in-afiliado').value === '1',
+    margem: parseFloat($('#in-margem').value)||0,
+    margemBase: $('#in-margem-base').value,
+    adsPct: parseFloat($('#in-ads-pct').value)||0,
+    incluirFixo: $('#in-fixo-on').checked,
   };
 }
 
-function recalcular(){
-  const inputs = lerInputs();
-  // toggle Site/TikTok-only fields
-  $('#grp-cupom').style.display = (inputs.canal_label === 'Site Próprio') ? '' : 'none';
-  $('#grp-afiliado').style.display = (inputs.canal_label === 'TikTok Shop') ? '' : 'none';
-
-  // SKU info
-  const p = STATE.produtosBySku[inputs.sku];
-  if (p) {
-    $('#sku-info').innerHTML = `<strong>${p.nome||''}</strong> · CMV: ${fmt(p.custo_total||0)}`;
-  } else {
-    $('#sku-info').innerHTML = inputs.sku ? `<span style="color:var(--amber)">⚠️ SKU não encontrado em produtos</span>` : '';
-  }
-
-  if (!inputs.sku || !inputs.canal_label || !inputs.preco) { renderKPIsVazio(); return; }
-
-  const o = calcular(inputs);
-  renderKPIs(o);
-  renderBreakdown(inputs, o);
-  renderAlerts(inputs, o);
+function setModo(modo){
+  $$('#seg-modo .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.modo===modo));
+  renderMatriz();
 }
 
-function renderKPIsVazio(){
-  $('#kpis-calc').innerHTML = '<div class="empty">Preencha SKU, canal e preço pra ver a margem.</div>';
-  $('#brk-body').innerHTML = '';
-  $('#calc-alerts').innerHTML = '';
+function renderMatriz(){
+  const cfg = lerCfg();
+  const mp = cfg.modo === 'margem';
+  $('#grp-preco').style.display = mp ? 'none' : '';
+  $('#grp-margem').style.display = mp ? '' : 'none';
+  $('#grp-margem-base').style.display = mp ? '' : 'none';
+  const p = STATE.produtosBySku[cfg.sku];
+  const cmv = p ? parseFloat(p.custo_total||0) : 0;
+  const al = [];
+  if (cfg.sku && !p) al.push(['warn','SKU não encontrado em produtos.']);
+  if (p && cmv === 0) al.push(['warn','Produto sem custo_total cadastrado (Compras) — margem superestimada.']);
+  $('#sku-info').innerHTML = p ? `<strong>${p.nome||''}</strong> · ${p.categoria||''} · CMV ${fmt(cmv)}` : 'Escolha um SKU pai. Taxas reais dos últimos 3 meses fechados; CMV do cadastro (Compras).';
+  $('#calc-alerts').innerHTML = al.map(a => `<div class="alert alert-${a[0]}">${a[1]}</div>`).join('');
+  if (!cfg.sku || !p) { $('#matriz-body').innerHTML = '<div class="empty" style="padding:24px;">Escolha um produto pra ver a margem por canal.</div>'; $('#matriz-meta').textContent = ''; return; }
+  $('#matriz-meta').textContent = mp ? `· preço p/ ${fmtN(cfg.margem,1)}% de ${cfg.margemBase==='operacional'?'result. op.':'contribuição'}` : `· preço R$ ${fmtN(cfg.preco,2)}${cfg.incluirFixo?'':' · sem custo fixo'}`;
+  const rows = CHANNELS.map(ch => { const tx = taxaDe(cfg.sku, ch.k); return tx ? {ch, tx, o: calcCanal(cmv, tx, cfg)} : null; }).filter(Boolean);
+  const fx = cfg.incluirFixo;
+  const th = `<style>
+.matriz{width:100%;border-collapse:collapse;font-size:12px}
+.matriz th,.matriz td{padding:7px 10px;border-bottom:1px solid var(--bdr);white-space:nowrap}
+.matriz th{text-align:left;color:var(--txt3);font-weight:600}
+.matriz td.r,.matriz th.r{text-align:right}
+.matriz tbody tr:hover{background:rgba(127,127,127,0.08)}
+</style><table class="matriz"><thead><tr><th>Canal</th><th class="r">Preço</th><th class="r">Comissão</th><th class="r">Afiliado</th><th class="r">Frete</th><th class="r">Devol.</th><th class="r">CMV</th><th class="r">Imposto</th><th class="r">Ads</th>${fx?'<th class="r">Custo Fixo</th>':''}<th class="r">Contribuição</th><th class="r">Result. Op.</th><th class="r">Break-even</th></tr></thead><tbody>`;
+  const body = rows.map(r => {
+    const o = r.o;
+    const fonte = r.tx.fonte==='sku' ? '<span title="Taxa real deste SKU" style="color:var(--green)">●</span>' : '<span title="SKU sem histórico neste canal — média real do canal" style="color:var(--amber)">○</span>';
+    if (!o.viavel) return `<tr><td>${fonte} ${r.ch.l}</td><td class="r" colspan="${fx?12:11}" style="color:var(--red)">margem-alvo inalcançável (as taxas já consomem a margem)</td></tr>`;
+    const mColor = o.resultOpPct>=15 ? 'var(--green)' : (o.resultOpPct>=5 ? 'var(--amber)' : 'var(--red)');
+    return `<tr><td>${fonte} ${r.ch.l}</td>`
+      + `<td class="r"><strong>${fmt(o.P)}</strong></td>`
+      + `<td class="r">${fmt(o.comissao_rs)}</td>`
+      + `<td class="r">${o.afiliado_rs>0?fmt(o.afiliado_rs):'—'}</td>`
+      + `<td class="r">${fmt(o.frete_rs)}</td>`
+      + `<td class="r">${fmt(o.devol_rs)}</td>`
+      + `<td class="r">${fmt(o.cmv)}</td>`
+      + `<td class="r">${fmt(o.imposto_rs)}</td>`
+      + `<td class="r">${o.ads_rs>0?fmt(o.ads_rs):'—'}</td>`
+      + (fx?`<td class="r">${fmt(o.fixo_rs)}</td>`:'')
+      + `<td class="r">${fmt(o.contrib)}<br><small style="color:var(--txt3)">${fmtN(o.contribPct,1)}%</small></td>`
+      + `<td class="r" style="color:${mColor};font-weight:600">${fmt(o.resultOp)}<br><small>${fmtN(o.resultOpPct,1)}%</small></td>`
+      + `<td class="r"><small>${isNaN(o.breakeven)?'—':fmt(o.breakeven)}</small></td></tr>`;
+  }).join('');
+  $('#matriz-body').innerHTML = th + body + '</tbody></table>';
 }
 
 function renderKPIs(o){
@@ -732,61 +771,55 @@ function renderAlerts(inputs, o){
 }
 
 function resetForm(){
-  ['in-sku','in-preco','in-ads','in-cupom','in-rebate'].forEach(id => $('#'+id).value = id==='in-sku'?'':'0');
-  $('#in-fixo').value = '8';
-  $('#in-afiliado').value = '0';
-  recalcular();
+  $('#in-sku').value = '';
+  $('#in-preco').value = '0';
+  $('#in-margem').value = '20';
+  $('#in-ads-pct').value = '0';
+  $('#in-fixo-on').checked = true;
+  renderMatriz();
 }
 
 // ═════════════════════════════════════════════════════════════
 // Aba 1: Salvar cenário (drawer)
 // ═════════════════════════════════════════════════════════════
 function abrirSalvar(){
-  const inputs = lerInputs();
-  if (!inputs.sku || !inputs.canal_label || !inputs.preco) { alert('Preencha SKU, canal e preço primeiro.'); return; }
+  const cfg = lerCfg();
+  if (!cfg.sku || !STATE.produtosBySku[cfg.sku]) { alert('Escolha um produto primeiro.'); return; }
   STATE.modoDrawer = 'cenario';
   $('#drawer-title').textContent = 'Salvar cenário';
   $('#drawer-body').innerHTML = `
     <div class="form-group">
       <label class="form-label">Nome do cenário</label>
-      <input id="scn-nome" class="form-input" placeholder="Ex: CMPL01 ML preço novo maio" autofocus>
+      <input id="scn-nome" class="form-input" placeholder="Ex: CLMALHA margem 20% multicanal" autofocus>
     </div>
     <div class="form-group">
       <label class="form-label">Notas (opcional)</label>
       <textarea id="scn-notas" class="form-textarea" placeholder="Contexto, premissas, etc"></textarea>
     </div>
-    <div class="alert alert-info">Cenário será salvo só pra você (RLS).</div>
+    <div class="alert alert-info">Salva a matriz multicanal atual (RLS: só pra você).</div>
   `;
   $('#drawer-submit').textContent = 'Salvar cenário';
   $('#drawer-overlay').classList.add('open');
 }
 
 async function salvarCenarioConfirma(){
-  const inputs = lerInputs();
-  const o = calcular(inputs);
+  const cfg = lerCfg();
+  const p = STATE.produtosBySku[cfg.sku];
+  const cmv = p ? parseFloat(p.custo_total||0) : 0;
   const nome = $('#scn-nome').value.trim();
   if (!nome) { alert('Dê um nome ao cenário'); return; }
+  const matriz = CHANNELS.map(ch => {
+    const tx = taxaDe(cfg.sku, ch.k); if (!tx) return null;
+    const o = calcCanal(cmv, tx, cfg);
+    return {canal: ch.l, fonte: tx.fonte, preco: o.P, contribPct: o.contribPct, resultOp: o.resultOp, resultOpPct: o.resultOpPct, breakeven: o.breakeven};
+  }).filter(Boolean);
   const session = await fusionAuth.getSession();
   const payload = {
-    user_id: session.user.id,
-    nome,
-    sku: inputs.sku,
-    produto_id: o.produto?.id || null,
-    canal_label: inputs.canal_label,
-    inputs,
-    outputs: {
-      receita_liq: o.receita_liq, comissao: o.comissao, cmv: o.cmv, frete: o.frete,
-      devolucao_estim: o.devolucao_estim, ads: o.ads, fixos: o.fixos,
-      margem_rs: o.margem_rs, margem_pct: o.margem_pct,
-    },
-    notas: $('#scn-notas').value.trim() || null,
+    user_id: session.user.id, nome, sku: cfg.sku, produto_id: p?.id || null,
+    canal_label: 'multicanal', inputs: cfg, outputs: {cmv, matriz}, notas: $('#scn-notas').value.trim() || null,
   };
   const res = await sbPost('simulacao_cenarios', payload, 'return=representation');
-  if (res) {
-    fecharDrawer();
-    await recarregarCenarios();
-    alert('Cenário salvo.');
-  }
+  if (res) { fecharDrawer(); await recarregarCenarios(); alert('Cenário salvo.'); }
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -1660,10 +1693,12 @@ async function resolverDrift(id, resolucao){
 // ═════════════════════════════════════════════════════════════
 // Listeners
 // ═════════════════════════════════════════════════════════════
-['in-sku','in-canal','in-preco','in-ads','in-cupom','in-fixo','in-rebate','in-afiliado'].forEach(id => {
-  document.getElementById(id).addEventListener('input', recalcular);
-  document.getElementById(id).addEventListener('change', recalcular);
+['in-sku','in-preco','in-margem','in-margem-base','in-ads-pct','in-fixo-on'].forEach(id => {
+  const el = document.getElementById(id); if (!el) return;
+  el.addEventListener('input', renderMatriz);
+  el.addEventListener('change', renderMatriz);
 });
+$$('#seg-modo .seg-btn').forEach(b => b.addEventListener('click', () => setModo(b.dataset.modo)));
 // Filtro de categoria na Aba Calculadora — re-popula datalist e limpa SKU se fora da categoria
 $('#in-categoria').addEventListener('change', () => {
   const cat = $('#in-categoria').value;
@@ -1674,7 +1709,7 @@ $('#in-categoria').addEventListener('change', () => {
     const p = STATE.produtosBySku[skuAtual];
     if (!p || p.categoria !== cat) $('#in-sku').value = '';
   }
-  recalcular();
+  renderMatriz();
 });
 $('#curva-canal').addEventListener('change', renderCurva);
 $('#curva-plat').addEventListener('change', renderCurva);
@@ -1708,7 +1743,7 @@ $('#ad-categoria').addEventListener('change', () => {
   popularCategoriaDropdowns();
   popularDataListSkus();
   popularCurvaSkus();
-  recalcular();
+  renderMatriz();
   // Carrega drifts em background pra atualizar badge no header
   recarregarDrifts();
 })();
