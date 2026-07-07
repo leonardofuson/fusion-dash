@@ -2,6 +2,8 @@
 
 > Dash em [`simulador.html`](simulador.html). Pipeline em [`../fusion-sync/CLAUDE.md`](../fusion-sync/CLAUDE.md) (`snapshot_produtos.py` + `fit_curva_ads.py` + scripts de mapping ML). Schema em [`../SCHEMA.md`](../SCHEMA.md).
 
+> ⚠️ **A Aba 1 (Calculadora) foi RECONSTRUÍDA para v2 em 07/07/2026** — a seção "Aba 1 — Calculadora" abaixo descreve a versão ANTIGA (single-channel, `canal_custos_faixa`, custo estimado). A v2 é uma **matriz multicanal** (todos os canais lado a lado, 2 modos preço↔margem, forma fechada `P*=CMV/(1−V−cf−m)`) sobre **taxas REAIS por SKU×canal** (`mvw_sim_sku_canal_taxa` → fallback `vw_sim_canal_taxas`, comissão/frete/devolução da API dos 3 meses fechados) + CMV do `produtos.custo_total` (Compras). Espelha o P&L do ecommerce (paridade A/B 0,00pp). O `ecommerce.html` também passou a ler `vw_sim_canal_taxas` no fallback de comissão (fix TikTok). Design/decisões em [`../TODO_SIMULADOR_V2.md`](../TODO_SIMULADOR_V2.md). As Abas 2-5 (Curva/Antes-Depois/Cenários/Drifts) seguem como descrito aqui.
+
 ## Objetivo
 
 Ferramenta operacional pros gestores de canal (ML, TikTok, Shopee, Site Próprio) decidirem:
