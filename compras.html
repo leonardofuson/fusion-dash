@@ -1906,6 +1906,8 @@ async function abrirRegistrarEntrega(opId) {
     '</div>' +
     '<div class="form-group"><label class="form-label">Peças com defeito <small style="color:var(--txt3);font-weight:400">(opcional — devolvidas pra remanufatura)</small></label>' +
       '<input type="number" min="0" class="form-input" id="f-ent-defeito" value="0" placeholder="0"></div>' +
+    '<div class="form-group"><label class="form-label">Valor real desta entrega (R$) <small style="color:var(--txt3);font-weight:400">(opcional — o que você vai pagar ao costureiro; bate com a NF. Vazio = calcula por qtd × taxa)</small></label>' +
+      '<input type="text" inputmode="decimal" class="form-input" id="f-ent-valor-real" placeholder="Ex: 2000.00"></div>' +
     '<div class="form-group" style="background:rgba(99,102,241,0.06);padding:14px;border-radius:8px;border:1px solid rgba(99,102,241,0.25)">' +
       '<label class="form-label" style="color:var(--indigo);font-weight:700">Esta entrega é:</label>' +
       '<div style="display:flex;gap:14px;margin-top:6px">' +
@@ -7133,13 +7135,16 @@ async function submitDrawer() {
         }
       }
 
-      // 1) Insere registro da entrega (trigger DB atualiza qtde_pecas_entregues)
+      // Valor real desta entrega (bate com a NF do costureiro) — sobrescreve o boleto AP (trigger fn_pp_resync_op)
+      var valorRealEnt = parseFloat(((document.getElementById('f-ent-valor-real') || {}).value || '').replace(',', '.'));
+      // 1) Insere registro da entrega (trigger DB atualiza qtde_pecas_entregues + gera boleto AP)
       await postSupabase('producao_entregas', {
         ordem_producao_id: op.id,
         data_entrega: data,
         quantidade: totalEntrega,
         qtde_defeito: qtdDefeito,
         nf_remessa: nfRemessaEnt,
+        valor_real: (valorRealEnt && valorRealEnt > 0) ? valorRealEnt : null,
         grade_entregue: Object.keys(grade).length ? grade : null,
         observacao: (document.getElementById('f-ent-obs').value || '').trim() || null,
       });
