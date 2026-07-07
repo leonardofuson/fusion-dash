@@ -133,20 +133,27 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
 .atg-txt{position:relative;z-index:1;display:block;text-align:center;line-height:18px;font-size:10px;font-weight:800;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.7);font-variant-numeric:tabular-nums;}
 table.tb tr:last-child td{border-bottom:none;}
 
-/* Premiação por loja (compacto, sem fotos — 1 linha de cards) */
-.premiacao-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;}
+/* Premiação por loja — leaderboard compacto, sem emojis, alinhado ao dash */
+.premiacao-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;}
 @media(max-width:1100px){.premiacao-grid{grid-template-columns:repeat(2,1fr);}}
 @media(max-width:560px){.premiacao-grid{grid-template-columns:1fr;}}
-.premio-card{background:var(--bg3);border:1px solid var(--bdr);border-top:3px solid var(--lc,#64748b);border-radius:12px;padding:11px 12px 12px;}
-.premio-head{font-size:13px;font-weight:800;color:var(--lc,#fff);margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;}
-.premio-sec{font-size:8px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:var(--txt3);margin:8px 0 4px;}
-.premio-aw{padding:4px 0 5px;}
-.premio-aw-top{display:flex;align-items:center;gap:5px;}
-.premio-aw-top .ic{font-size:12px;flex-shrink:0;}
-.premio-aw-top .lb{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.04em;color:var(--txt2);}
-.premio-aw-top .vl{margin-left:auto;font-size:13px;font-weight:800;color:var(--txt1);font-variant-numeric:tabular-nums;white-space:nowrap;}
-.premio-aw .nm{font-size:11px;font-weight:600;color:var(--txt1);padding-left:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.premio-aw .nm.none{color:var(--txt3);font-weight:400;}
+.premio-card{background:var(--bg3);border:1px solid var(--bdr);border-radius:12px;padding:13px 14px 14px;}
+.premio-head{display:flex;align-items:center;gap:9px;margin-bottom:4px;}
+.premio-head .bar{width:3px;height:15px;border-radius:2px;background:var(--lc,#64748b);flex-shrink:0;}
+.premio-head .nm{font-size:12.5px;font-weight:700;color:var(--txt1);letter-spacing:.02em;}
+.premio-sec{display:flex;align-items:center;gap:7px;margin:13px 0 6px;}
+.premio-sec .t{font-size:9px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--txt2);}
+.premio-sec .d{font-size:9px;color:var(--txt3);margin-left:auto;font-variant-numeric:tabular-nums;}
+.premio-sec .tag{font-size:7.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:2px 5px;border-radius:4px;}
+.premio-sec .tag.final{background:rgba(34,197,94,.13);color:var(--green);}
+.premio-sec .tag.live{background:rgba(234,179,8,.14);color:var(--amber);}
+.premio-sec .tag.mes{background:rgba(99,102,241,.14);color:var(--blue);}
+.premio-aw{padding:3px 0;}
+.premio-aw .lb{font-size:8.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--txt3);margin-bottom:1px;}
+.premio-aw .row{display:flex;align-items:baseline;gap:8px;}
+.premio-aw .row .nm{font-size:12px;font-weight:600;color:var(--txt1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.premio-aw .row .nm.none{color:var(--txt3);font-weight:400;font-size:11px;}
+.premio-aw .row .vl{font-size:12px;font-weight:700;color:var(--txt1);font-variant-numeric:tabular-nums;white-space:nowrap;margin-left:auto;}
 .premio-empty{grid-column:1/-1;color:var(--txt3);font-size:11px;padding:14px 0;}
 table.tb tr:hover td{background:rgba(255,255,255,0.06);}
 
@@ -463,7 +470,7 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
   <div class="highlights" id="highlights"></div>
 
   <div class="card c-prizes">
-    <div class="card-title">&#x1F3C6; Premiação por loja <button class="btn-export" onclick="exportImage('premiacao')">Compartilhar</button></div>
+    <div class="card-title">Premiação por loja <button class="btn-export" onclick="exportImage('premiacao')">Compartilhar</button></div>
     <div id="premiacao-grid" class="premiacao-grid"><div class="premio-empty">Carregando premiação…</div></div>
   </div>
 
@@ -1198,10 +1205,16 @@ async function loadPremio(){
     PREMIO.semFechada={de:segF,ate:domF}; PREMIO.semAtual={de:seg,ate:dom}; PREMIO.loaded=true;
   }catch(e){console.warn('premio load',e);} finally{PREMIO.loading=false;}
 }
-function premioAward(icon,label,best,fmtFn){
-  var top='<div class="premio-aw-top"><span class="ic">'+icon+'</span><span class="lb">'+label+'</span>'+(best?'<span class="vl">'+fmtFn(best.val)+'</span>':'')+'</div>';
-  var nm=best?'<div class="nm">'+best.vend+'</div>':'<div class="nm none">sem dados</div>';
-  return '<div class="premio-aw">'+top+nm+'</div>';
+function premioAward(label,best,fmtFn){
+  var row=best
+    ? '<div class="row"><span class="nm">'+best.vend+'</span><span class="vl">'+fmtFn(best.val)+'</span></div>'
+    : '<div class="row"><span class="nm none">sem dados</span></div>';
+  return '<div class="premio-aw"><div class="lb">'+label+'</div>'+row+'</div>';
+}
+function premioSec(titulo,dateRange,tagClass,tagText){
+  return '<div class="premio-sec"><span class="t">'+titulo+'</span>'+
+    (tagText?'<span class="tag '+tagClass+'">'+tagText+'</span>':'')+
+    (dateRange?'<span class="d">'+dateRange+'</span>':'')+'</div>';
 }
 async function renderPremiacao(){
   var box=document.getElementById('premiacao-grid'); if(!box) return;
@@ -1218,16 +1231,16 @@ async function renderPremiacao(){
     var mFat=premioSelVend(PREMIO.month,loja,'fat');
     var mTer=premioSelTernos(ternos,loja);
     return '<div class="premio-card" style="--lc:'+getCor(loja)+'">'+
-      '<div class="premio-head"><span>'+loja+'</span><span>&#x1F3C6;</span></div>'+
-      '<div class="premio-sec">&#x1F3C1; Semana fechada · '+diaMes(sF.de)+'–'+diaMes(sF.ate)+'</div>'+
-      premioAward('&#x1F947;','Faturamento',fFat,fmt)+
-      premioAward('&#x1F3AF;','Ticket médio',fTM,fmt)+
-      '<div class="premio-sec">&#x23F1;&#xFE0F; Semana atual · '+diaMes(sA.de)+'–'+diaMes(sA.ate)+'</div>'+
-      premioAward('&#x1F947;','Faturamento',aFat,fmt)+
-      premioAward('&#x1F3AF;','Ticket médio',aTM,fmt)+
-      '<div class="premio-sec">Mês · '+mesLbl+'</div>'+
-      premioAward('&#x1F947;','Faturamento',mFat,fmt)+
-      premioAward('&#x1F454;','Ternos',mTer,fmtN)+
+      '<div class="premio-head"><span class="bar"></span><span class="nm">'+loja+'</span></div>'+
+      premioSec('Semana fechada',diaMes(sF.de)+'–'+diaMes(sF.ate),'final','Final')+
+      premioAward('Faturamento',fFat,fmt)+
+      premioAward('Ticket médio',fTM,fmt)+
+      premioSec('Semana atual',diaMes(sA.de)+'–'+diaMes(sA.ate),'live','Ao vivo')+
+      premioAward('Faturamento',aFat,fmt)+
+      premioAward('Ticket médio',aTM,fmt)+
+      premioSec('Mês',mesLbl,'mes','')+
+      premioAward('Faturamento',mFat,fmt)+
+      premioAward('Ternos',mTer,fmtN)+
     '</div>';
   }).join('');
 }
@@ -1452,7 +1465,7 @@ function exportImage(tipo){
   // Header
   var header=document.createElement('div');
   header.style.cssText='font-size:14px;font-weight:700;margin-bottom:12px;color:#fafafa;';
-  var titles={'vendedores':'Top Vendedores','lojas':'Desempenho por Loja','produtos':'Venda de Produtos por Loja','top5vend':'Top 5 Vendedores','premiacao':'🏆 Premiação por loja'};
+  var titles={'vendedores':'Top Vendedores','lojas':'Desempenho por Loja','produtos':'Venda de Produtos por Loja','top5vend':'Top 5 Vendedores','premiacao':'Premiação por loja'};
   header.textContent=titles[tipo]||tipo;
   wrapper.appendChild(header);
 
