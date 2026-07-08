@@ -186,6 +186,17 @@
   .fn-val{color:#0f1115;font-weight:800;font-size:13px;padding:0 11px;white-space:nowrap}
   .fn-rate{font-size:12px;text-align:left;color:var(--mut)}.fn-rate b{color:var(--txt);font-size:15px}
   @media(max-width:640px){.fn-row{grid-template-columns:88px 1fr 76px;gap:7px}.fn-label{font-size:11px}.fn-val{font-size:12px;padding:0 7px}}
+  #pane-organico .org-tb{width:100%;border-collapse:collapse;font-size:13px}
+  #pane-organico .org-tb th{color:var(--mut);font-weight:600;text-align:right;padding:7px 9px;border-bottom:1px solid var(--line);white-space:nowrap}
+  #pane-organico .org-tb th.l,#pane-organico .org-tb td:first-child{text-align:left}
+  #pane-organico .org-tb td{padding:7px 9px;border-bottom:1px solid var(--line);text-align:right}
+  #pane-organico .org-tb td a{color:var(--accent2);text-decoration:none}
+  .org-heat{display:grid;grid-template-columns:auto repeat(7,1fr);gap:3px;font-size:11px}
+  .org-heat .hc{height:24px;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#0b0d12;font-weight:700}
+  .org-heat .hl{color:var(--mut);display:flex;align-items:center;padding:0 4px}
+  .b-reel,.b-feed{padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700}
+  .b-reel{background:rgba(124,92,255,.16);color:var(--accent)}
+  .b-feed{background:rgba(34,211,238,.16);color:var(--accent2)}
   #pane-shopify td.l,#pane-shopify th.l{text-align:left}
   #pane-shopify .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:middle}
   #pane-shopify .kpi.paid{border-color:rgba(245,166,35,.35)}
@@ -220,6 +231,7 @@
     <div class="tab on" data-t="geral">Visão Geral</div>
     <div class="tab" data-t="shopify">🛍️ Loja (Shopify)</div>
     <div class="tab" data-t="funil">🌐 Funil</div>
+    <div class="tab" data-t="organico">📲 Orgânico</div>
     <div class="tab" data-t="sku">Lucro por SKU</div>
     <div class="tab" data-t="criativo">Saúde de Criativo</div>
     <div class="tab" data-t="incr">Incrementalidade</div>
@@ -316,6 +328,23 @@
     </div>
     <div class="card"><h3>Origens do tráfego <span class="hint">source / medium — de onde vem a sessão · inclui link-in-bio</span></h3>
       <div style="overflow-x:auto"><table><thead><tr><th class="l">Origem</th><th>Sessões</th><th>Receita</th><th>% rec.</th><th>Pedidos</th><th>R$/sessão</th></tr></thead><tbody id="fn-origens"></tbody></table></div>
+    </div>
+  </section>
+
+  <!-- ORGÂNICO -->
+  <section class="pane" id="pane-organico">
+    <div class="note">
+      <div class="note-lead">Performance <b>orgânica</b> do Instagram (não-paga) — @usefusion_.</div>
+      <div class="note-sub">O que cresce a conta e o que engaja, pra decidir <b>o que postar, em que formato e quando</b>. É o outro lado do Funil: aqui é o alcance que <b>não</b> custou mídia. <span class="muted">Métricas pós-depreciação 2025 (alcance, salvamentos, compartilhamentos, interações). Crescimento acumula com o cron. TikTok entra quando a API liberar.</span></div>
+    </div>
+    <div class="kpis" id="org-kpis"></div>
+    <div class="grid2b">
+      <div class="card"><h3>Crescimento <span class="hint">seguidores + alcance/dia</span></h3><canvas id="org-ch-growth"></canvas></div>
+      <div class="card"><h3>Engajamento por formato <span class="hint">taxa média (interações ÷ alcance)</span></h3><canvas id="org-ch-fmt"></canvas></div>
+    </div>
+    <div class="card"><h3>Melhor horário pra postar <span class="hint">engajamento médio por dia da semana × faixa de horário</span></h3><div id="org-heat"></div></div>
+    <div class="card"><h3>Top conteúdos <span class="hint">por taxa de engajamento</span></h3>
+      <div style="overflow-x:auto"><table class="org-tb"><thead><tr><th class="l">Post</th><th>Formato</th><th>Alcance</th><th>Interações</th><th>Salvos</th><th>Engaj.</th><th></th></tr></thead><tbody id="org-tb-posts"></tbody></table></div>
     </div>
   </section>
 
@@ -775,11 +804,79 @@ async function carregarAlertas(){
 async function carregarCross(){
   try{
     const [conta,posts]=await Promise.all([
-      buscarTudo('social_conta_dia','select=data,seguidores,reach,novos_seguidores&plataforma=eq.instagram&order=data.desc&limit=30'),
-      buscarTudo('social_posts','select=formato,reach,interactions,engagement_rate,caption&plataforma=eq.instagram&order=publicado_em.desc&limit=60'),
+      buscarTudo('social_conta_dia','select=data,seguidores,reach,novos_seguidores&plataforma=eq.instagram&order=data.desc&limit=90'),
+      // campos extras (saved/publicado_em/permalink) alimentam a aba Orgânico: heatmap de horário + tabela de posts
+      buscarTudo('social_posts','select=formato,reach,interactions,engagement_rate,caption,saved,publicado_em,permalink&plataforma=eq.instagram&order=publicado_em.desc&limit=200'),
     ]);
     STATE.organico={conta,posts};  // STATE.trafego vem do fetch principal (período)
+    if(STATE.tab==='organico')renderOrganico();  // dados chegaram com a aba aberta → pinta
   }catch(e){}
+}
+
+// ---------- ORGÂNICO (Instagram não-pago) ----------
+// Lê STATE.organico (social_conta_dia + social_posts), já carregado por carregarCross().
+// Portado de social.html em 08/07/2026 — 5 telas: KPIs, crescimento, engajamento por
+// formato, heatmap de melhor horário, top posts.
+function renderOrganico(){
+  const org=STATE.organico;
+  const kEl=document.getElementById('org-kpis');
+  if(!kEl)return;
+  if(!org||!org.conta){ kEl.innerHTML='<div class="muted" style="padding:8px">Carregando orgânico…</div>'; return; }
+  const ri=v=>(Math.round(v||0)).toLocaleString('pt-BR');
+  const pctv=v=>v==null?'—':(v*100).toFixed(1)+'%';
+  const conta=[...org.conta].sort((a,b)=>(a.data||'').localeCompare(b.data||''));  // vem desc → asc p/ o gráfico
+  const posts=org.posts||[];
+  const cur=conta[conta.length-1]||{};
+  const withER=posts.filter(p=>p.engagement_rate!=null);
+  const erF=a=>a.length?a.reduce((s,p)=>s+ +p.engagement_rate,0)/a.length:0;
+  const erAvg=withER.length?withER.reduce((s,p)=>s+ +p.engagement_rate,0)/withER.length:null;
+  const reels=withER.filter(p=>p.formato==='REELS'), feed=withER.filter(p=>p.formato!=='REELS');
+  const melhorFmt=erF(reels)>=erF(feed)?'Reels':'Feed';
+  const novos=conta.reduce((s,r)=>s+(+r.novos_seguidores||0),0);
+  kEl.innerHTML=[
+    {l:'Seguidores',v:ri(cur.seguidores),s:(novos>=0?'+':'')+ri(novos)+' no período'},
+    {l:'Alcance/dia',v:ri(cur.reach),s:'contas únicas (último dia)'},
+    {l:'Engajamento médio',v:pctv(erAvg),s:withER.length+' posts',accent:1},
+    {l:'Melhor formato',v:melhorFmt,s:'Reels '+pctv(erF(reels))+' · Feed '+pctv(erF(feed))},
+    {l:'Posts analisados',v:withER.length,s:'com insights'},
+  ].map(kpiHTML).join('');
+  // crescimento (seguidores + alcance, 2 eixos)
+  if(CHARTS['org-growth'])CHARTS['org-growth'].destroy();
+  CHARTS['org-growth']=new Chart(document.getElementById('org-ch-growth'),{type:'line',
+    data:{labels:conta.map(r=>(r.data||'').slice(5)),datasets:[
+      {label:'Seguidores',data:conta.map(r=>r.seguidores),borderColor:'#7c5cff',yAxisID:'y',tension:.3,pointRadius:0},
+      {label:'Alcance/dia',data:conta.map(r=>r.reach),borderColor:'#22d3ee',yAxisID:'y1',tension:.3,pointRadius:0}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#9aa3b2',boxWidth:12}}},scales:{
+      y:{position:'left',ticks:{color:'#9aa3b2'},grid:{color:'#2a2f3a'}},
+      y1:{position:'right',ticks:{color:'#9aa3b2'},grid:{display:false}},x:{ticks:{color:'#9aa3b2',maxTicksLimit:12},grid:{display:false}}}}});
+  // engajamento por formato
+  if(CHARTS['org-fmt'])CHARTS['org-fmt'].destroy();
+  CHARTS['org-fmt']=new Chart(document.getElementById('org-ch-fmt'),{type:'bar',
+    data:{labels:['Reels','Feed'],datasets:[{label:'Engaj. médio',data:[erF(reels)*100,erF(feed)*100],backgroundColor:['#7c5cff','#22d3ee']}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{color:'#9aa3b2',callback:v=>v+'%'},grid:{color:'#2a2f3a'}},x:{ticks:{color:'#9aa3b2'},grid:{display:false}}}}});
+  // heatmap melhor horário (DOW × faixa 6h)
+  const DOW=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  const spDate=ts=>new Date(new Date(ts).toLocaleString('en-US',{timeZone:'America/Sao_Paulo'}));
+  const buckets={},faixas=['0-6','6-12','12-18','18-24'];
+  withER.forEach(p=>{ if(!p.publicado_em)return; const d=spDate(p.publicado_em);const dw=d.getDay(),fx=Math.floor(d.getHours()/6);
+    const k=dw+'_'+fx;(buckets[k]||(buckets[k]={s:0,n:0}));buckets[k].s+= +p.engagement_rate;buckets[k].n++;});
+  let mx=0;Object.values(buckets).forEach(b=>mx=Math.max(mx,b.s/b.n));
+  let hh='<div class="org-heat"><div></div>'+DOW.map(d=>`<div class="hl" style="justify-content:center">${d}</div>`).join('');
+  faixas.forEach((fx,fi)=>{hh+=`<div class="hl">${fx}h</div>`;
+    for(let dw=0;dw<7;dw++){const b=buckets[dw+'_'+fi];const er=b?b.s/b.n:null;
+      const a=er==null?0:Math.max(.12,er/(mx||1));const c=er==null?'#1e222b':`rgba(124,92,255,${a})`;
+      hh+=`<div class="hc" style="background:${c}" title="${er==null?'sem post':pctv(er)+' ('+b.n+' posts)'}">${er==null?'':Math.round(er*100*10)/10}</div>`;}});
+  hh+='</div><div class="muted" style="font-size:11px;margin-top:8px">Número = engajamento médio (%). Mais roxo = melhor. Horário de Brasília.</div>';
+  document.getElementById('org-heat').innerHTML=hh;
+  // top conteúdos
+  const top=[...withER].sort((a,b)=>+b.engagement_rate-+a.engagement_rate).slice(0,12);
+  document.getElementById('org-tb-posts').innerHTML=top.map(p=>{
+    const isR=p.formato==='REELS';
+    return `<tr><td>${(p.caption||'').replace(/\n/g,' ').slice(0,46)}…</td>`+
+      `<td><span class="${isR?'b-reel':'b-feed'}">${isR?'Reels':'Feed'}</span></td>`+
+      `<td>${ri(p.reach)}</td><td>${ri(p.interactions)}</td><td>${ri(p.saved)}</td>`+
+      `<td><b>${pctv(p.engagement_rate)}</b></td><td><a href="${p.permalink}" target="_blank" rel="noopener">ver</a></td></tr>`;
+  }).join('')||'<tr><td colspan="7" class="muted" style="padding:12px">Sem posts no período.</td></tr>';
 }
 
 // ---------- saúde de criativo (Meta, nível anúncio) ----------
@@ -1684,6 +1781,7 @@ async function carregarTitulos(){
     if(t.dataset.t==='incr'){initIncrDefaults();carregarExperimentos();}
     if(t.dataset.t==='shopify')carregarShopify();
     if(t.dataset.t==='funil')carregarFunil();
+    if(t.dataset.t==='organico')renderOrganico();
   });
   document.getElementById('btn-analista').onclick=rodarAnalista;
   document.getElementById('btn-medir').onclick=medirIncr;
