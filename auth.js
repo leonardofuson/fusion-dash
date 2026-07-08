@@ -28,7 +28,10 @@
     diretoria:  { titulo: 'Diretoria',   descricao: 'Visão consolidada',         url: '/diretoria.html',  icone: '📊' },
     'cockpit-fusion': { titulo: 'Cockpit Fusion', descricao: 'DRE consolidado + projeção × realizado + drawer Max', url: '/cockpit.html', icone: '🎯' },
     projetos:   { titulo: 'Projetos',    descricao: 'Gestão de projetos estratégicos (Facção PR + Fábrica PY)', url: '/projetos.html', icone: '🏗️' },
-    'cockpit-conciliacao': { titulo: 'Conciliação', descricao: 'Extratos × contas_pagar × planilha entradas — revisão de dúvidas', url: '/cockpit-conciliacao.html', icone: '🔍' },
+    // Dash "Conciliação" (cockpit-conciliacao.html) removido em 08/07/2026. A metade útil — a fila
+    // de classificação de dúvidas do fluxo_caixa — virou a página "Revisão de Caixa" no fusion-financeiro
+    // (/revisao). As tabelas de drift DRE-planilha×contas_pagar×extratos foram descartadas (dre_mensal
+    // parou em março/2026; DRE nativo é construído no fusion-financeiro).
     estoque:    { titulo: 'Estoque',     descricao: 'Posição multi-canal',       url: '/estoque.html',    icone: '📦' },
     compras:    { titulo: 'Compras',     descricao: 'Ordens e fornecedores',     url: '/compras.html',    icone: '🧾' },
     financeiro: { titulo: 'Financeiro',  descricao: 'Contas a pagar, fluxo de caixa e DRE de resultado (multi-CNPJ)', url: '/financeiro.html', icone: '💰' },
