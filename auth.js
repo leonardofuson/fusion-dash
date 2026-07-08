@@ -36,8 +36,8 @@
     simulador:  { titulo: 'Simulador',   descricao: 'Margem por produto + curva ótima de ads', url: '/simulador.html', icone: '🎯' },
     marketing:  { titulo: 'Marketing',   descricao: 'Mídia paga Meta + Google: lucro por SKU, MER, auditoria da agência', url: '/marketing.html', icone: '📣', restritoPara: ['leonardo@usefusion.com.br', 'allanjonnesj@gmail.com', 'tiago@usefusion.com.br', 'thiago.caleb@usefusion.com.br'] },
     social:     { titulo: 'Orgânico',    descricao: 'Instagram orgânico: crescimento, engajamento por formato, melhor horário', url: '/social.html', icone: '📲', restritoPara: ['leonardo@usefusion.com.br'] },
-    trafego:    { titulo: 'Tráfego & Atribuição', descricao: 'GA4: tráfego e receita por canal (pago × orgânico), origens, link-in-bio', url: '/trafego.html', icone: '🌐', restritoPara: ['leonardo@usefusion.com.br'] },
   };
+  // O dash "Tráfego & Atribuição" (trafego.html) foi removido em 08/07/2026 — virou a aba "🌐 Funil" DENTRO do marketing (marketing.html), que consolida Impressão→Clique→Sessão→Pedido e migrou a tabela de origens source/medium (link-in-bio).
   // Nota: a performance do Site Próprio (Shopify) virou a aba "🛍️ Loja" DENTRO do dash marketing (marketing.html) — não é mais dash standalone.
 
   async function getSession() {

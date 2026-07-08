@@ -176,9 +176,16 @@
   @media(max-width:760px){.grid2{grid-template-columns:1fr}th,td{padding:6px}}
   #loader{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:var(--bg);z-index:100;color:var(--mut)}
   /* Loja (Shopify) pane */
-  #pane-shopify .secTitle{font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--mut);margin:20px 2px 8px;display:flex;align-items:center;gap:8px}
-  #pane-shopify .secTitle::before{content:'';width:8px;height:8px;border-radius:2px;background:var(--accent)}
-  #pane-shopify .secTitle.paid::before{background:#f5a623}
+  #pane-shopify .secTitle,#pane-funil .secTitle{font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--mut);margin:20px 2px 8px;display:flex;align-items:center;gap:8px}
+  #pane-shopify .secTitle::before,#pane-funil .secTitle::before{content:'';width:8px;height:8px;border-radius:2px;background:var(--accent)}
+  #pane-shopify .secTitle.paid::before,#pane-funil .secTitle.paid::before{background:#f5a623}
+  .fn-row{display:grid;grid-template-columns:160px 1fr 124px;align-items:center;gap:12px;margin:9px 0}
+  .fn-label{font-size:12px;color:var(--mut);font-weight:600;text-align:right}
+  .fn-bar-wrap{background:var(--panel2);border-radius:8px;overflow:hidden}
+  .fn-bar{height:36px;border-radius:8px;display:flex;align-items:center;min-width:64px;transition:width .5s ease}
+  .fn-val{color:#0f1115;font-weight:800;font-size:13px;padding:0 11px;white-space:nowrap}
+  .fn-rate{font-size:12px;text-align:left;color:var(--mut)}.fn-rate b{color:var(--txt);font-size:15px}
+  @media(max-width:640px){.fn-row{grid-template-columns:88px 1fr 76px;gap:7px}.fn-label{font-size:11px}.fn-val{font-size:12px;padding:0 7px}}
   #pane-shopify td.l,#pane-shopify th.l{text-align:left}
   #pane-shopify .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:middle}
   #pane-shopify .kpi.paid{border-color:rgba(245,166,35,.35)}
@@ -212,6 +219,7 @@
   <div class="tabs">
     <div class="tab on" data-t="geral">Visão Geral</div>
     <div class="tab" data-t="shopify">🛍️ Loja (Shopify)</div>
+    <div class="tab" data-t="funil">🌐 Funil</div>
     <div class="tab" data-t="sku">Lucro por SKU</div>
     <div class="tab" data-t="criativo">Saúde de Criativo</div>
     <div class="tab" data-t="incr">Incrementalidade</div>
@@ -284,6 +292,30 @@
     </div>
     <div class="card"><h3>Top produtos do site <span class="hint">por receita · bestsellers · aquisição de novos clientes · CPA</span></h3>
       <div style="overflow-x:auto"><table><thead><tr><th class="l">Produto</th><th class="l">Categoria</th><th>Receita</th><th>Unidades</th><th title="Conversão da página do produto (GA4): compras ÷ views. Só produtos mapeados ao GA4 (~86% das views).">Conversão</th><th>Margem bruta</th><th title="Clientes cuja 1ª compra no site (por CPF) incluiu este produto — o que traz gente nova">Novos</th><th title="CAC: gasto real de ads do produto (Meta+Google, por SKU) ÷ novos clientes que ele trouxe. Custo pra adquirir 1 cliente novo via este produto. (Blended/real — a aba Saúde de Criativo mostra o CPA por conversão atribuída pela Meta, que é maior.)">CPA (CAC)</th></tr></thead><tbody id="sh-tb-prod"></tbody></table></div>
+    </div>
+  </section>
+
+  <!-- FUNIL -->
+  <section class="pane" id="pane-funil">
+    <div class="note">
+      <div class="note-lead">O caminho completo da <b>mídia paga até a venda no site</b>: Impressão → Clique → Sessão → Pedido.</div>
+      <div class="note-sub">Junta o que a <b>Meta</b> entrega (impressões, cliques, gasto — de <code>ads_metrics</code>) com o que o <b>GA4</b> registra no site (sessões e pedidos pagos). Cada etapa mostra a taxa de conversão pra próxima, então dá pra ver <b>onde o funil vaza</b>. <span class="muted">⚠️ Recorte = <b>Meta → Site Próprio</b> (Paid Social + Cross-network no GA4). Google Ads leva pras <b>lojas físicas</b>, não pro site (só ~0,1% das sessões pagas do site) → fica fora. GA4 é <b>último clique</b> com atraso de ~1-2 dias; use como distribuição relativa, não como caixa (a receita de R$ real é a do dash de ecommerce).</span></div>
+    </div>
+    <div class="secTitle paid">🌐 Funil de mídia paga (Meta → Site)</div>
+    <div class="kpis" id="fn-kpis"></div>
+    <div class="card"><h3>Funil <span class="hint">volume por etapa · escala log (as etapas têm ordens de grandeza diferentes)</span></h3>
+      <div id="fn-funil"></div>
+    </div>
+    <div class="grid2">
+      <div class="card"><h3>Contexto do site <span class="hint">todo o tráfego GA4, não só pago</span></h3>
+        <div class="kpis" id="fn-ctx" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr))"></div>
+      </div>
+      <div class="card"><h3>Eficiência de mídia <span class="hint">custo por etapa</span></h3>
+        <table><thead><tr><th class="l">Métrica</th><th>Valor</th></tr></thead><tbody id="fn-efic"></tbody></table>
+      </div>
+    </div>
+    <div class="card"><h3>Origens do tráfego <span class="hint">source / medium — de onde vem a sessão · inclui link-in-bio</span></h3>
+      <div style="overflow-x:auto"><table><thead><tr><th class="l">Origem</th><th>Sessões</th><th>Receita</th><th>% rec.</th><th>Pedidos</th><th>R$/sessão</th></tr></thead><tbody id="fn-origens"></tbody></table></div>
     </div>
   </section>
 
@@ -514,6 +546,7 @@ async function carregar(force){
   STATE.trafego=(data.trafego||[]).filter(r=>inCur(r.data)); STATE.trafegoPrev=(data.trafego||[]).filter(r=>inPrev(r.data));
   renderAll();
   if(STATE.tab==='shopify')carregarShopify();  // período mudou com a aba Loja aberta → recarrega (key novo)
+  if(STATE.tab==='funil')carregarFunil();      // idem para a aba Funil (usa STATE.trafego já refrescado + ads Meta do período)
   document.getElementById('loader').style.display='none';
   carregarCurva();    // curva 90d (independe do período) — fire-and-forget
   carregarCriativo(); // saúde de criativo (snapshot mais recente) — fire-and-forget
@@ -1533,6 +1566,73 @@ function renderShopifyProdutos(){
 }
 function setSGran(g){STATE.sgran=g;document.getElementById('sgran-d').classList.toggle('on',g==='diario');document.getElementById('sgran-m').classList.toggle('on',g==='mensal');renderShopifyTrend();}
 
+// ---------- FUNIL (mídia paga → site) ----------
+// Impressões/cliques/gasto vêm do Meta (ads_metrics); sessões/pedidos pagos vêm do
+// GA4 (STATE.trafego, canais Paid Social + Cross-network = tráfego Meta no site).
+async function carregarFunil(){
+  STATE.funilAds=await buscarTudo('ads_metrics',
+    'select=data,impressoes,cliques,gasto,receita_total&plataforma=eq.meta_ads&level=eq.campaign&data=gte.'+STATE.de+'&data=lte.'+STATE.ate+'&order=data.asc');
+  renderFunil();
+}
+function renderFunil(){
+  const META=c=>/Paid Social|Cross-network/.test(c||'');
+  const tr=STATE.trafego||[];
+  let sessPaid=0,ordPaid=0,recPaid=0,sessTot=0,ordTot=0,recTot=0;
+  tr.forEach(r=>{const s=+r.sessions||0,t=+r.transacoes||0,rc=+r.receita||0;
+    sessTot+=s;ordTot+=t;recTot+=rc; if(META(r.canal)){sessPaid+=s;ordPaid+=t;recPaid+=rc;}});
+  let imp=0,cli=0,gasto=0;
+  (STATE.funilAds||[]).forEach(r=>{imp+=+r.impressoes||0;cli+=+r.cliques||0;gasto+=+r.gasto||0;});
+  const ri=v=>(Math.round(v||0)).toLocaleString('pt-BR');
+  const p1=(a,b)=>b>0?(a/b*100):0;
+  const pctS=(a,b)=>b>0?(a/b*100).toFixed(a/b<0.1?2:1)+'%':'—';
+  const ctr=p1(cli,imp), chegada=p1(sessPaid,cli), cvr=p1(ordPaid,sessPaid);
+  document.getElementById('fn-kpis').innerHTML=[
+    {l:'CTR',v:ctr.toFixed(2)+'%',s:'cliques ÷ impressões',t:'Quantas impressões viram clique no anúncio da Meta.'},
+    {l:'Chegada',v:chegada>0?Math.round(chegada)+'%':'—',s:'sessões ÷ cliques',t:'Quantos cliques no anúncio viram sessão no site (GA4). Perto de 100% valida o casamento clique↔sessão paga.'},
+    {l:'Conversão',v:cvr.toFixed(2)+'%',s:'pedidos ÷ sessões pagas',accent:1,t:'Quantas sessões pagas do site viram pedido (GA4 último clique).'},
+    {l:'1 pedido a cada',v:ordPaid>0?ri(imp/ordPaid):'—',s:'impressões',t:'Impressões necessárias, em média, pra gerar 1 pedido pago no site.'},
+    {l:'CPA (GA4)',v:ordPaid>0?rs(gasto/ordPaid):'—',s:'gasto ÷ pedidos pagos',t:'Custo por pedido pago atribuído pelo GA4 (blended do canal pago). A aba Saúde de Criativo traz o CPA por conversão que a própria Meta atribui, que é maior.'},
+    {l:'MER pago',v:gasto>0?(recPaid/gasto).toFixed(2):'—',s:'receita GA4 ÷ gasto',t:'Retorno sobre o gasto no recorte pago (GA4 último clique — subestima social/topo de funil).'},
+  ].map(kpiHTML).join('');
+  // funil visual — escala log (etapas com ordens de grandeza muito diferentes)
+  const stages=[
+    {n:'Impressões',v:imp,c:'#7c5cff',rate:null},
+    {n:'Cliques',v:cli,c:'#22d3ee',rate:pctS(cli,imp),rl:'CTR'},
+    {n:'Sessões pagas (site)',v:sessPaid,c:'#f5a623',rate:pctS(sessPaid,cli),rl:'chegada'},
+    {n:'Pedidos pagos',v:ordPaid,c:'#2fbf71',rate:pctS(ordPaid,sessPaid),rl:'conversão'},
+  ];
+  const vals=stages.map(s=>s.v).filter(v=>v>0);
+  const lg=v=>v>0?Math.log10(v):0;
+  const mx=lg(Math.max(...vals,1)), mn=lg(Math.min(...vals,1));
+  const wpct=v=>{if(v<=0)return 6;const t=(mx===mn)?1:(lg(v)-mn)/(mx-mn);return Math.round(8+t*92);};
+  document.getElementById('fn-funil').innerHTML=stages.map(s=>
+    `<div class="fn-row"><div class="fn-label">${s.n}</div>`+
+    `<div class="fn-bar-wrap"><div class="fn-bar" style="width:${wpct(s.v)}%;background:${s.c}"><span class="fn-val">${ri(s.v)}</span></div></div>`+
+    `<div class="fn-rate">${s.rate?`<b>${s.rate}</b> ${s.rl}`:''}</div></div>`).join('');
+  // contexto site total
+  const shareRec=p1(recPaid,recTot), shareSess=p1(sessPaid,sessTot);
+  document.getElementById('fn-ctx').innerHTML=[
+    {l:'Sessões (total)',v:ri(sessTot),s:Math.round(shareSess)+'% pagas'},
+    {l:'Pedidos (total)',v:ri(ordTot),s:'ticket '+rs(ordTot?recTot/ordTot:0)},
+    {l:'Receita GA4',v:rs(recTot),s:'último clique'},
+    {l:'Share pago',v:Math.round(shareRec)+'%',s:'da receita GA4'},
+  ].map(kpiHTML).join('');
+  // eficiência de mídia
+  document.getElementById('fn-efic').innerHTML=[
+    ['Gasto Meta',rs(gasto)],
+    ['CPM (custo/mil impr.)',imp>0?rs(gasto/imp*1000):'—'],
+    ['CPC (custo/clique)',cli>0?'R$'+(gasto/cli).toFixed(2):'—'],
+    ['Custo/sessão paga',sessPaid>0?'R$'+(gasto/sessPaid).toFixed(2):'—'],
+    ['Receita atribuída (GA4)',rs(recPaid)],
+  ].map(r=>`<tr><td class="l">${r[0]}</td><td>${r[1]}</td></tr>`).join('');
+  // origens source/medium (migrado do trafego.html — inclui link-in-bio)
+  const byS={}; tr.forEach(r=>{const k=r.source_medium||'(não informado)';(byS[k]||(byS[k]={sm:k,sess:0,rec:0,txn:0}));byS[k].sess+=+r.sessions||0;byS[k].rec+=+r.receita||0;byS[k].txn+=+r.transacoes||0;});
+  const arr=Object.values(byS).sort((a,b)=>b.rec-a.rec), tot=arr.reduce((s,x)=>s+x.rec,0);
+  document.getElementById('fn-origens').innerHTML=arr.slice(0,15).map(s=>
+    `<tr><td class="l">${s.sm}</td><td>${ri(s.sess)}</td><td>${rs(s.rec)}</td><td>${Math.round(tot?s.rec/tot*100:0)}%</td><td>${s.txn}</td><td>${rs(s.sess?s.rec/s.sess:0)}</td></tr>`).join('')
+    ||'<tr><td colspan="6" class="l muted" style="padding:12px">Sem dado GA4 no período (atraso de ~1-2 dias).</td></tr>';
+}
+
 // ---------- período / tabs / eventos ----------
 function setPeriodo(p){
   const h=hojeSP();
@@ -1583,6 +1683,7 @@ async function carregarTitulos(){
     if(t.dataset.t==='analista')mostrarAnalistaCache();
     if(t.dataset.t==='incr'){initIncrDefaults();carregarExperimentos();}
     if(t.dataset.t==='shopify')carregarShopify();
+    if(t.dataset.t==='funil')carregarFunil();
   });
   document.getElementById('btn-analista').onclick=rodarAnalista;
   document.getElementById('btn-medir').onclick=medirIncr;
