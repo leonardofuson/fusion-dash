@@ -320,9 +320,7 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
       <button class="chip" data-preset="30d" onclick="setPeriodo('30d',this)">30d</button>
       <button class="chip on" data-preset="mtd" onclick="setPeriodo('mtd',this)">MTD</button>
       <button class="chip" data-preset="m-1" onclick="setPeriodo('m-1',this)">Último Mês</button>
-      <button class="chip" data-preset="qtd" onclick="setPeriodo('qtd',this)">QTD</button>
-      <button class="chip" data-preset="ytd" onclick="setPeriodo('ytd',this)">YTD</button>
-      <button class="chip" data-preset="12m" onclick="setPeriodo('12m',this)">12m</button>
+      <span style="font-size:10px;color:var(--txt3);align-self:center;margin-left:4px">· histórico &gt;60d na <b>Diretoria</b></span>
     </div>
     <div class="drange">
       <input type="date" id="dt-de" class="dinput">
@@ -990,7 +988,11 @@ function setPeriodo(preset,el){
   DE=de;ATE=ate;document.getElementById('dt-de').value=DE;document.getElementById('dt-ate').value=ATE;
   document.querySelectorAll('.chip[data-preset]').forEach(function(c){c.classList.remove('on');});if(el)el.classList.add('on');carregar();
 }
-function aplicarFiltro(){DE=document.getElementById('dt-de').value;ATE=document.getElementById('dt-ate').value;document.querySelectorAll('.chip[data-preset]').forEach(function(c){c.classList.remove('on');});carregar();}
+function aplicarFiltro(){DE=document.getElementById('dt-de').value;ATE=document.getElementById('dt-ate').value;
+  // Diário limitado a 60 dias (mês corrente + anterior). Histórico longo vive na Diretoria.
+  if(DE&&ATE&&daysBetween(DE,ATE)>62){DE=somaDias(ATE,-61);document.getElementById('dt-de').value=DE;
+    alert('O diário mostra no máximo 60 dias (mês corrente + anterior). Ajustei o início para '+DE+'.\nPara histórico mais longo, use o dash Diretoria.');}
+  document.querySelectorAll('.chip[data-preset]').forEach(function(c){c.classList.remove('on');});carregar();}
 function setStack(m){STATE.stackMode=m;document.getElementById('stk-abs').classList.toggle('on',m==='abs');document.getElementById('stk-pct').classList.toggle('on',m==='pct');renderHero();}
 // Toggle "Destaque" — alterna o gráfico entre "por canal" (empilhado) e MoM (este mês vs mês anterior,
 // dia a dia, agregado dos canais no escopo). Mesma visão que aparece ao focar um marketplace. (06/07)
@@ -1153,7 +1155,7 @@ async function carregar(){
     // CMV/frete ficavam no valor do render-sem-itens (ou no da MV, o que vencesse a corrida)
     // → coluna vinha vazia/0 de forma intermitente ao trocar período. (fix 02/06)
     STATE.itensFocus=STATE.itens.filter(function(it){return canalItemOk(it._canal);});
-    agruparSkus(STATE.itensFocus);
+    montarSkuGroups();   // lista sempre da MV enriquecida (rápida); itens só p/ drawer/variante/unidades
     [renderWaterfall,renderKPIs,renderCanalTable,renderTopProdutos,renderPareto].forEach(function(fn){
       try{fn();}catch(e){console.error(fn.name+':',e);}});
     document.getElementById('upd').textContent='Atualizado '+new Date().toLocaleTimeString('pt-BR');
@@ -1330,6 +1332,9 @@ function projecaoMes(receita){
   }catch(e){return null;}
 }
 // ── FILTRO GLOBAL DE PRODUTO ────────────────────────────────────────────────
+// Contagem de pedidos distintos de um produto — dos itens (skuGroups da MV não tem pedido_id).
+// Vazio até os itens carregarem em bg (o ticket médio do produto aparece progressivo).
+function nPedProduto(sku){var s={};(STATE.itensFocus||[]).forEach(function(it){if(it._sku_pai===sku&&it.pedido_id)s[it.pedido_id]=1;});return Object.keys(s).length;}
 // P&L do produto focado, do skuGroups (rateio de fee/dev/frete já pronto). Respeita focusCanal.
 function pnlProduto(){
   var g=(STATE.skuGroups||[]).find(function(s){return s.sku_pai===STATE.focusProduto;});
@@ -1342,7 +1347,7 @@ function pnlProduto(){
   var ads=0,abp=(STATE.adsBySkuPaiCanal||{})[STATE.focusProduto]||{};
   Object.keys(abp).forEach(function(c){if(!canalItemOk(c))return;ads+=abp[c]||0;});  // respeita focusCanal + chips
   var imp=TAX_RATE*(receita-dev),liquida=receita-fee-afiliados-dev-frete;
-  return {receita:receita,comissao:fee,afiliados:afiliados,devolucoes:dev,frete:frete,cmv:cmv,ads:ads,impostos:imp,liquida:liquida,lucro:liquida-ads-cmv-imp,pedidos:Object.keys(g.pedidoIds||{}).length,unidades:qtd};
+  return {receita:receita,comissao:fee,afiliados:afiliados,devolucoes:dev,frete:frete,cmv:cmv,ads:ads,impostos:imp,liquida:liquida,lucro:liquida-ads-cmv-imp,pedidos:nPedProduto(STATE.focusProduto),unidades:qtd};
 }
 function popularProdDatalist(){
   var dl=document.getElementById('prod-datalist');if(!dl)return;
@@ -1743,7 +1748,7 @@ function pintarDowHeat(matrix){
 // continuam carregando em background pra enriquecer o drawer (variantes/fee/dev/frete) e o CMV real.
 async function fetchSkuMV(de,ate,big){
   // big period (YTD/12m): sku_dia pode passar de 50k linhas → teto maior (250k) pra não truncar.
-  return buscarTudo('mvw_ecommerce_sku_dia','select=sku_pai,nome,cat,canal_nome_raw,origem_conta,receita,qtd,cmv&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc', big?250:undefined);
+  return buscarTudo('mvw_ecommerce_sku_dia','select=sku_pai,nome,cat,canal_nome_raw,origem_conta,receita,qtd,cmv,fee,afiliado,devolucao,frete_seller&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc', big?250:undefined);
 }
 // PERF (09/06): geo (UF/cidade) e pagamentos (método/parcelas) vêm de MV no paint imediato —
 // antes ficavam vazios até o fetch de 10-115k pedidos chegar. Validado A/B (0 divergências).
@@ -1757,27 +1762,33 @@ async function fetchPgtoMV(de,ate){
 // (via agruparSkusMV) E o heatmap dia-da-semana (renderDowHeatMV) com uma só leitura.
 async function fetchSkuMVData(de,ate){
   // aba Mensal = janela longa (6-24m); sku_dia ~110k linhas/ano → teto 250k pra não truncar.
-  return buscarTudo('mvw_ecommerce_sku_dia','select=sku_pai,nome,cat,canal_nome_raw,origem_conta,receita,qtd,cmv,data_pedido&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc', 250);
+  return buscarTudo('mvw_ecommerce_sku_dia','select=sku_pai,nome,cat,canal_nome_raw,origem_conta,receita,qtd,cmv,fee,afiliado,devolucao,frete_seller,data_pedido&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc', 250);
 }
 function agruparSkusMV(rows){
   var map={};
   (rows||[]).forEach(function(r){
     var k=r.sku_pai;var canal=getNome(r.canal_nome_raw,r.origem_conta);
     if(STATE.focusCanal&&canal!==STATE.focusCanal)return;
+    // respeita os chips de canal (canaisSel) — igual ao caminho de itens (itensFocus), pra a lista
+    // e a margem por produto responderem ao chip mesmo saindo da MV. (08/07)
+    if(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[canal])return;
     if(!map[k])map[k]={sku_pai:k,nome:r.nome||k,cat:r.cat||'OUTROS',custoUn:0,
       receita:0,qtd:0,custoTotal:0,fee:0,afiliado:0,devolucao:0,freteSeller:0,
       porCanal:{},pedidoIds:{},datas:{}};
     var g=map[k];var rec=parseFloat(r.receita||0),q=parseFloat(r.qtd||0),cm=parseFloat(r.cmv||0);
-    g.receita+=rec;g.qtd+=q;g.custoTotal+=cm;
+    var fe=parseFloat(r.fee||0),af=parseFloat(r.afiliado||0),dv=parseFloat(r.devolucao||0),fr=parseFloat(r.frete_seller||0);
+    g.receita+=rec;g.qtd+=q;g.custoTotal+=cm;g.fee+=fe;g.afiliado+=af;g.devolucao+=dv;g.freteSeller+=fr;
     if(!g.porCanal[canal])g.porCanal[canal]={qtd:0,receita:0,fee:0,afiliado:0,devolucao:0,freteSeller:0,custoTotal:0};
-    var pc=g.porCanal[canal];pc.receita+=rec;pc.qtd+=q;pc.custoTotal+=cm;
+    var pc=g.porCanal[canal];pc.receita+=rec;pc.qtd+=q;pc.custoTotal+=cm;pc.fee+=fe;pc.afiliado+=af;pc.devolucao+=dv;pc.freteSeller+=fr;
   });
   STATE.skuGroups=Object.values(map).sort(function(a,b){return b.receita-a.receita;});
 }
-// Itens carregados → fonte completa (variantes + fee/dev/frete rateado); senão → MV (lista rápida).
+// MV enriquecida (08/07) já traz fee/afiliado/devolução/frete_seller rateados por produto → a lista
+// e a margem saem 100% da MV (rápido, e o toggle de chip re-agrega centenas de linhas em vez de dezenas
+// de milhares de itens). Itens seguem carregando em bg só p/ o drawer (variante cor/tam), modo unidades
+// e produto focado. Fallback p/ itens só se a MV falhar/estiver vazia.
 function montarSkuGroups(){
-  if((STATE.itens||[]).length>0) agruparSkus(STATE.itensFocus);
-  else if((STATE.skuMVRows||[]).length>0) agruparSkusMV(STATE.skuMVRows);
+  if((STATE.skuMVRows||[]).length>0) agruparSkusMV(STATE.skuMVRows);
   else agruparSkus(STATE.itensFocus);
 }
 function agruparSkus(itens){
@@ -2006,7 +2017,7 @@ function renderEcommSkuDetail(){
   wrap.style.cssText='margin-top:22px;padding:18px;background:var(--bg3);border:1px solid var(--bdr);border-top:3px solid '+corDom+';border-radius:12px;';
   // Itens deste SKU (no escopo)
   var itens=(STATE.itensFocus||[]).filter(function(it){return it._sku_pai===STATE.skuSel;});
-  var nPedidos=Object.keys(s.pedidoIds||{}).length;
+  var nPedidos=Object.keys(s.pedidoIds||{}).length||nPedProduto(STATE.skuSel);
 
   // KPIs ecommerce
   var receita=s.receita;var qtd=s.qtd;
