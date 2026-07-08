@@ -5093,7 +5093,7 @@ function gerarPagamentosFromOps() {
   // Retorna array de pagamentos {data (null = sem data), costureiro_id, costureiro_nome, op_id, produto, cor, qtd, tipo, valor_unit, valor_total, sem_data}
   var pagamentos = [];
   (STATE.ops || []).forEach(function(o) {
-    if (o.status === 'Cancelado' || o.status === 'Devolvido Fornecedor') return;
+    if (o.status === 'Entregue' || o.status === 'Cancelado' || o.status === 'Devolvido Fornecedor') return; // Entregue = NF real no financeiro, não previsão
     var qtd = parseFloat(o.qtde_pecas) || 0;
     if (qtd <= 0) return;
     var vd = o.valor_costura_dentro != null ? parseFloat(o.valor_costura_dentro) : null;
@@ -5152,7 +5152,7 @@ function populateReguaPagFilters() {
   if (!sel) return;
   var nomes = {};
   (STATE.ops || []).forEach(function(o) {
-    if (o.status === 'Cancelado' || o.status === 'Devolvido Fornecedor') return;
+    if (o.status === 'Entregue' || o.status === 'Cancelado' || o.status === 'Devolvido Fornecedor') return; // Entregue = NF real no financeiro, não previsão
     var n = costuName(o.costureiro_id);
     if (n && n !== '—') nomes[n] = 1;
   });
