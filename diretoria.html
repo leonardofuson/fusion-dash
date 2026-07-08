@@ -125,6 +125,25 @@ table.tb tr:hover td{background:rgba(255,255,255,0.02);}
     <div class="card"><div class="card-title">Mix de receita líquida por canal <span style="color:var(--txt3);font-weight:400">· período selecionado</span></div><div class="chart-wrap"><canvas id="chart-mix"></canvas></div></div>
   </div>
 
+  <div class="section-title" style="margin-bottom:14px;">Histórico por Produto <span style="color:var(--txt3);font-weight:400;font-size:11px;">· consolidado Ecommerce + Lojas · mês a mês (independe do filtro)</span></div>
+  <div class="card" style="margin-bottom:16px;">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+      <span style="font-size:13px;font-weight:600;color:var(--txt1);">Top produtos ao longo dos meses</span>
+      <span style="display:inline-flex;gap:6px;margin-left:auto;">
+        <button class="chip ativo" data-hg="todos" onclick="setHistGrupo('todos',this)">Todos</button>
+        <button class="chip" data-hg="ecom" onclick="setHistGrupo('ecom',this)">Ecommerce</button>
+        <button class="chip" data-hg="lojas" onclick="setHistGrupo('lojas',this)">Lojas</button>
+      </span>
+      <span style="display:inline-flex;gap:6px;">
+        <button class="chip ativo" data-hm="rev" onclick="setHistMetric('rev',this)">Receita</button>
+        <button class="chip" data-hm="un" onclick="setHistMetric('un',this)">Unidades</button>
+      </span>
+    </div>
+    <div class="chart-wrap" style="height:300px;"><canvas id="chart-hist-prod"></canvas></div>
+    <div style="overflow-x:auto;margin-top:16px;"><table class="tb" id="hist-prod-tbl"><thead></thead><tbody></tbody></table></div>
+    <div style="font-size:11px;color:var(--txt3);margin-top:10px;">Top 12 produtos (gráfico) / top 20 (tabela) por receita na janela · consolida SKU pai de Ecommerce + Lojas Físicas.</div>
+  </div>
+
   <div class="section-title" style="margin-bottom:14px;">Projeção de Receita 2026 <span style="color:var(--txt3);font-weight:400;font-size:11px;">· realizado + forecast sazonal vs meta · valores brutos · ano calendário (independe do filtro)</span></div>
   <div class="grid4" id="proj-kpis"></div>
   <div class="card" style="margin-bottom:16px;">
@@ -330,6 +349,48 @@ function aplicarFiltro(){
 }
 function destroyChart(id){ if(charts[id]){ charts[id].destroy(); delete charts[id]; } }
 
+// ── HISTÓRICO POR PRODUTO (consolidado ecom+lojas, mensal — mvw_vendas_sku_mes) ──
+let SKU_HIST_ROWS=null, HIST_GRUPO='todos', HIST_METRIC='rev';
+const HIST_CORES=['#3B82F6','#F59E0B','#10B981','#EF4444','#8B5CF6','#06B6D4','#EC4899','#84CC16','#F97316','#14B8A6','#A855F7','#EAB308'];
+function histMesLbl(ym){ try{ return new Date(ym+'-15T12:00:00').toLocaleDateString('pt-BR',{month:'short',year:'2-digit'}); }catch(e){ return ym; } }
+function setHistGrupo(g,el){ HIST_GRUPO=g; document.querySelectorAll('[data-hg]').forEach(b=>b.classList.remove('ativo')); if(el)el.classList.add('ativo'); renderHistProduto(); }
+function setHistMetric(m,el){ HIST_METRIC=m; document.querySelectorAll('[data-hm]').forEach(b=>b.classList.remove('ativo')); if(el)el.classList.add('ativo'); renderHistProduto(); }
+function renderHistProduto(){
+  const rows=SKU_HIST_ROWS||[]; if(!rows.length) return;
+  const val=r=> HIST_METRIC==='un'?parseFloat(r.qtd||0):parseFloat(r.receita||0);
+  const inGrupo=r=> HIST_GRUPO==='todos'||r.grupo===HIST_GRUPO;
+  const meses=[...new Set(rows.map(r=>r.mes))].sort();
+  const porProd={}, totProd={};
+  rows.forEach(r=>{ if(!inGrupo(r))return; const k=r.sku_pai;
+    if(!porProd[k]) porProd[k]={nome:r.nome||k, byMes:{}};
+    if(r.nome && (!porProd[k].nome || porProd[k].nome===k)) porProd[k].nome=r.nome;
+    porProd[k].byMes[r.mes]=(porProd[k].byMes[r.mes]||0)+val(r);
+    totProd[k]=(totProd[k]||0)+val(r); });
+  const ordenados=Object.keys(totProd).sort((a,b)=>totProd[b]-totProd[a]);
+  const fVal=v=> HIST_METRIC==='un'?fmtN(v)+' un':fmt(v);
+  // ── Gráfico: top 12 produtos ao longo dos meses ──
+  const top=ordenados.slice(0,12);
+  const ds=top.map((k,i)=>({label:(porProd[k].nome||k).slice(0,24),data:meses.map(m=>porProd[k].byMes[m]||0),
+    borderColor:HIST_CORES[i%HIST_CORES.length],backgroundColor:'transparent',tension:0.3,pointRadius:2,borderWidth:2}));
+  destroyChart('histProd');
+  charts['histProd']=new Chart(document.getElementById('chart-hist-prod'),{type:'line',
+    data:{labels:meses.map(histMesLbl),datasets:ds},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{intersect:false,mode:'index'},
+      plugins:{legend:{position:'bottom',labels:{color:'#a1a1aa',font:{size:10},boxWidth:10,padding:8,usePointStyle:true,pointStyle:'circle'}},
+        tooltip:{callbacks:{label:c=>' '+c.dataset.label+': '+fVal(c.parsed.y)}}},
+      scales:{x:{ticks:{color:'#71717a',font:{size:10}},grid:{display:false}},
+        y:{ticks:{color:'#71717a',font:{size:10},callback:v=> HIST_METRIC==='un'?fmtN(v):('R$ '+(Math.abs(v)>=1000?(v/1000).toFixed(0)+'k':Math.round(v)))},grid:{color:'rgba(255,255,255,0.04)'}}}}
+  });
+  // ── Tabela: top 20 × últimos 12 meses + total ──
+  const mesesTab=meses.slice(-12), topT=ordenados.slice(0,20);
+  const th='<tr><th>Produto</th>'+mesesTab.map(m=>'<th class="r">'+histMesLbl(m)+'</th>').join('')+'<th class="r">Total</th></tr>';
+  const tb=topT.map(k=>{ const p=porProd[k];
+    return '<tr><td>'+(p.nome||k)+'</td>'+mesesTab.map(m=>'<td class="r">'+fVal(p.byMes[m]||0)+'</td>').join('')+'<td class="val">'+fVal(totProd[k])+'</td></tr>';
+  }).join('');
+  const tbl=document.getElementById('hist-prod-tbl');
+  if(tbl){ tbl.querySelector('thead').innerHTML=th; tbl.querySelector('tbody').innerHTML=tb; }
+}
+
 // Período anterior equivalente: mesma duração imediatamente antes de DE.
 function periodoAnterior(de,ate){
   const d1=new Date(de+'T12:00:00'), d2=new Date(ate+'T12:00:00');
@@ -372,6 +433,9 @@ async function carregar(){
   }
   renderTudo(allRows,pDE,pATE,wDe);
   cacheSet(DE,ATE,{rows:allRows});
+  // Histórico por produto (consolidado ecom+lojas, mensal) — fetch leve (~2k rows), independe do filtro.
+  if(SKU_HIST_ROWS===null){ try{ SKU_HIST_ROWS=await apiAll('mvw_vendas_sku_mes?select=*&order=mes.asc'); }catch(e){ SKU_HIST_ROWS=[]; } }
+  try{ renderHistProduto(); }catch(e){ console.warn('hist prod:',e); }
 }
 
 // Régua Net Sales (Gross − Returns), alinhada ao ecommerce.html (02/06):

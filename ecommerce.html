@@ -341,14 +341,8 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
     <button class="btn-ghost" onclick="clearCanais()">Limpar</button>
   </div>
 
-  <!-- TAB SWITCHER (Diário · Mensal) — segmented control igual ao dash Lojas -->
-  <div class="tabbar">
-    <div class="viewseg">
-      <button id="tb-diario" class="tabbtn active" onclick="setTab('diario')"><span class="vs-dot"></span>Diário</button>
-      <button id="tb-mensal" class="tabbtn" onclick="setTab('mensal')"><span class="vs-dot"></span>Mensal</button>
-    </div>
-    <span class="tabbar-hint">Diário = pulso operacional · Mensal = análise (geo, pagamentos, pareto, tendências)</span>
-  </div>
+  <!-- Aba Mensal removida em 08/07/2026 — histórico consolidado (canal + produto) vive na Diretoria.
+       Este dash é o pulso operacional dos últimos 60 dias (mês corrente + anterior). -->
 
   <!-- FILTRO GLOBAL DE PRODUTO (cruza todos os containers) -->
   <div class="filtros" id="filtro-produto" style="margin-bottom:14px;align-items:center;gap:8px;">
