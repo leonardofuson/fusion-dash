@@ -26,7 +26,9 @@
     lojas:      { titulo: 'Lojas Físicas', descricao: 'Vendas das lojas físicas (Linx Microvix desde 01/06/2026)', url: '/lojas.html', icone: '🏬' },
     ecommerce:  { titulo: 'E-commerce',  descricao: 'Canais digitais',           url: '/ecommerce.html',  icone: '🛒' },
     diretoria:  { titulo: 'Diretoria',   descricao: 'Visão consolidada',         url: '/diretoria.html',  icone: '📊' },
-    'cockpit-fusion': { titulo: 'Cockpit Fusion', descricao: 'DRE consolidado + projeção × realizado + drawer Max', url: '/cockpit.html', icone: '🎯' },
+    // Dash "Cockpit Fusion" (cockpit.html) removido em 08/07/2026 — era port 1:1 da página "Cockpit"
+    // do fusion-financeiro (Cockpit.tsx: mesmas fontes dre_mensal/projecao_faturamento/entradas_caixa/
+    // extratos + mesmas seções + drawer Max). Acesso ao cockpit agora é via aba Cockpit do Financeiro.
     projetos:   { titulo: 'Projetos',    descricao: 'Gestão de projetos estratégicos (Facção PR + Fábrica PY)', url: '/projetos.html', icone: '🏗️' },
     // Dash "Conciliação" (cockpit-conciliacao.html) removido em 08/07/2026. A metade útil — a fila
     // de classificação de dúvidas do fluxo_caixa — virou a página "Revisão de Caixa" no fusion-financeiro
