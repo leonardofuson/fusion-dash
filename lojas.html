@@ -102,9 +102,8 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
 #dash-cards.mensal .c-produtos{order:5;}
 #dash-cards.mensal .c-vend{order:6;}
 #dash-cards.mensal .c-pareto{order:7;}
-#dash-cards.mensal .c-heatmap{display:none;}
-/* Ordem da visão DIÁRIA (mobile-friendly): premiação por último, produtos + heatmap
-   logo após a tabela de vendedores. Explícito p/ não depender só do DOM. */
+/* Ordem da visão DIÁRIA (mobile-friendly): premiação por último, produtos logo
+   após a tabela de vendedores. Explícito p/ não depender só do DOM. */
 #dash-cards:not(.mensal) .c-forecast{order:0;}
 #dash-cards:not(.mensal) #kpis{order:1;}
 #dash-cards:not(.mensal) #highlights{order:2;}
@@ -112,9 +111,8 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
 #dash-cards:not(.mensal) .c-lojas{order:4;}
 #dash-cards:not(.mensal) .c-vend{order:5;}
 #dash-cards:not(.mensal) .c-produtos{order:6;}
-#dash-cards:not(.mensal) .c-heatmap{order:7;}
-#dash-cards:not(.mensal) .c-pareto{order:8;}
-#dash-cards:not(.mensal) .c-prizes{order:9;}
+#dash-cards:not(.mensal) .c-pareto{order:7;}
+#dash-cards:not(.mensal) .c-prizes{order:8;}
 /* Mensal: tabela de vendedores sem Meta/Atg%/Prev/Comissão (col 9-12) */
 #dash-cards.mensal #thead-vendedores th:nth-child(n+9),
 #dash-cards.mensal #tbody-vendedores tr td:nth-child(n+9){display:none;}
@@ -169,26 +167,11 @@ table.tb tr:last-child td{border-bottom:none;}
 .premio-aw .row .nm.none{color:var(--txt3);font-weight:400;font-size:11px;}
 .premio-aw .row .vl{font-size:12px;font-weight:700;color:var(--txt1);font-variant-numeric:tabular-nums;white-space:nowrap;margin-left:auto;}
 .premio-empty{grid-column:1/-1;color:var(--txt3);font-size:11px;padding:14px 0;}
-/* Heatmap — desempenho diário do time (matriz vendedores × dias) */
+/* Navegação de mês (‹ ›) — usada no modal do calendário do vendedor */
 .hm-nav{display:flex;align-items:center;gap:8px;}
 .hm-nav button{background:var(--bg3);border:1px solid var(--bdr);color:var(--txt1);width:26px;height:26px;border-radius:7px;cursor:pointer;font-size:15px;line-height:1;padding:0;}
 .hm-nav button:hover{border-color:var(--green);color:var(--green);}
 .hm-nav .lbl{font-size:12px;color:var(--txt2);min-width:104px;text-align:center;font-weight:700;}
-.hm-wrap{overflow-x:auto;padding-bottom:4px;}
-.hm-matrix{display:grid;gap:3px;align-items:center;}
-.hm-mh{text-align:center;font-size:8px;color:var(--txt3);font-weight:700;line-height:1.15;}
-.hm-mh b{font-size:9px;color:var(--txt2);display:block;}
-.hm-mh.we b,.hm-mh.we{color:var(--amber);}
-.hm-corner,.hm-mh.tot{font-size:9px;color:var(--txt3);font-weight:700;text-align:center;}
-.hm-name{font-size:11px;font-weight:600;color:var(--txt1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:8px;cursor:pointer;}
-.hm-name:hover{color:var(--green);text-decoration:underline;}
-.hm-c{aspect-ratio:1;border-radius:4px;background:#212124;display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:700;font-variant-numeric:tabular-nums;color:#e9e9ec;cursor:pointer;min-width:22px;}
-.hm-c.z{color:#3f3f46;background:#1c1c1f;cursor:default;}
-.hm-c.off{background:transparent;cursor:default;}
-.hm-c.tot{background:var(--bg3);color:var(--txt1);font-weight:800;border-radius:5px;cursor:default;}
-.hm-hint{font-size:10px;color:var(--txt3);margin-top:11px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
-.hm-hint .sw{width:15px;height:10px;border-radius:3px;display:inline-block;}
-.hm-loading{color:var(--txt3);font-size:11px;padding:16px 2px;}
 /* Modal calendário (drill-down de 1 vendedor) — filho do <body> */
 .hmcal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.62);display:none;align-items:center;justify-content:center;z-index:200;padding:20px;}
 .hmcal-overlay.on{display:flex;}
@@ -206,6 +189,28 @@ table.tb tr:last-child td{border-bottom:none;}
 .hmcal-cell .vv.zero{color:#52525b;font-weight:400;}
 .hmcal-legend{display:flex;align-items:center;gap:6px;margin-top:12px;font-size:10px;color:var(--txt3);}
 .hmcal-legend .sw{width:16px;height:10px;border-radius:3px;}
+.hmcal-toggles{display:flex;align-items:center;gap:10px;margin:2px 0 12px;}
+.hm-seg{display:inline-flex;background:var(--bg3);border:1px solid var(--bdr);border-radius:8px;padding:3px;gap:3px;}
+.hm-seg button{background:transparent;border:0;color:var(--txt2);font-size:11px;font-weight:700;padding:5px 12px;border-radius:6px;cursor:pointer;font-family:inherit;}
+.hm-seg button.on{background:var(--green);color:#06140b;}
+.hm-cmp-btn{background:var(--bg3);border:1px solid var(--bdr);color:var(--txt2);font-size:11px;font-weight:700;padding:6px 12px;border-radius:8px;cursor:pointer;font-family:inherit;}
+.hm-cmp-btn.on{background:rgba(99,102,241,.18);border-color:var(--blue);color:#c7c9ff;}
+.hmcal-compare{margin-top:14px;padding-top:13px;border-top:1px solid var(--bdr);}
+.hmc-title{font-size:11px;font-weight:700;color:var(--txt2);margin-bottom:9px;display:flex;align-items:center;gap:6px;}
+.hmc-title span{color:var(--txt3);font-weight:600;}
+.hmc-title b{margin-left:auto;color:var(--blue);font-size:11px;}
+.hmc-row{display:flex;align-items:center;gap:8px;padding:3px 0;}
+.hmc-rk{font-size:9px;color:var(--txt3);font-weight:700;width:16px;text-align:right;flex-shrink:0;}
+.hmc-nm{font-size:11px;color:var(--txt1);width:118px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.hmc-bar{flex:1;height:9px;background:var(--bg);border-radius:5px;overflow:hidden;}
+.hmc-fill{display:block;height:100%;background:#3f8f5a;border-radius:5px;}
+.hmc-vl{font-size:11px;font-weight:700;color:var(--txt1);font-variant-numeric:tabular-nums;white-space:nowrap;width:66px;text-align:right;flex-shrink:0;}
+.hmc-row.sel .hmc-nm,.hmc-row.sel .hmc-vl{color:var(--green);font-weight:800;}
+.hmc-row.sel .hmc-fill{background:var(--green);}
+.hmc-row.sel .hmc-rk{color:var(--green);}
+.hmc-empty{font-size:11px;color:var(--txt3);}
+.vend-hm{cursor:pointer;border-bottom:1px dotted var(--txt3);}
+.vend-hm:hover{color:var(--green);border-bottom-color:var(--green);}
 table.tb tr:hover td{background:rgba(255,255,255,0.06);}
 
 .delta-badge{display:inline-block;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:700;}
@@ -575,25 +580,6 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
       <th class="r sortable" data-sort="metaDia" onclick="setVendSort('metaDia')" title="Meta do dia: quanto precisa vender HOJE pra bater a meta do mês. Distribui o que falta pelos dias restantes ponderado pelo dia-da-semana (sábado pesa mais que segunda).">Meta hoje</th>
       <th class="r sortable" data-sort="comissao" onclick="setVendSort('comissao')" title="Comissão sobre as vendas do período: 2% se atingiu 100% da meta, senão 0,75%. Cor = trajetória (previsão fim do mês ÷ meta): verde ≥100% · amarelo 95-99% · vermelho <95%">Comissão</th>
     </tr></thead><tbody id="tbody-vendedores"></tbody></table></div>
-  </div>
-
-  <div class="card c-heatmap">
-    <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-      <span>Desempenho diário do time</span>
-      <div class="hm-nav">
-        <button onclick="hmMonth(-1)" title="Mês anterior">‹</button>
-        <span class="lbl" id="hm-month-lbl">—</span>
-        <button onclick="hmMonth(1)" title="Próximo mês">›</button>
-      </div>
-    </div>
-    <div class="hm-wrap"><div id="hm-matrix" class="hm-matrix"><div class="hm-loading">Carregando…</div></div></div>
-    <div class="hm-hint">
-      <span>Receita por vendedor/dia · escala de cor global</span>
-      <span class="sw" style="background:rgba(34,197,94,.14)"></span>
-      <span class="sw" style="background:rgba(34,197,94,.45)"></span>
-      <span class="sw" style="background:rgba(34,197,94,.82)"></span>
-      <span style="margin-left:auto">Clique no nome para o calendário do vendedor · domingo fechado</span>
-    </div>
   </div>
 
   <div class="card c-pareto">
@@ -1315,22 +1301,34 @@ async function renderPremiacao(){
   }).join('');
 }
 
-// ════════ Heatmap — desempenho diário do time (matriz vendedores × dias) ════════
-// Fonte: mvw_lojas_vend_dia (invariante ao período do dash — tem navegação de mês própria).
-var HM={month:null, cache:{}, inflight:{}, vendSel:null};
+// ════════ Heatmap diário de 1 vendedor (drill-down da tabela Top vendedores) ════════
+// Fonte: mvw_lojas_vend_dia (invariante ao período do dash — mês próprio c/ navegação).
+// Toggles: métrica (receita R$ ↔ vendas qtd) e comparação (só ele ↔ vs loja).
+var HM={cache:{}, inflight:{}, vendSel:null, vendLoja:null, metric:'rec', compare:false};
 var HMCAL={month:null};
-var HM_DOW=['S','T','Q','Q','S','S','D'];  // Seg..Dom (dowIdx: 0=Seg..6=Dom)
 function hmK(v){ return v>=1000 ? (v/1000).toFixed(1).replace('.',',')+'k' : String(Math.round(v)); }
 function hmUltimoDia(m){ var y=+m.slice(0,4),mo=+m.slice(5,7); return new Date(Date.UTC(y,mo,0)).getUTCDate(); }
 function hmNomeMes(m){ return MES_NOMES[+m.slice(5,7)-1]+' '+m.slice(0,4); }
 function hmDias(m){ var out=[],last=hmUltimoDia(m); for(var d=1;d<=last;d++) out.push(m+'-'+String(d).padStart(2,'0')); return out; }
+function hmMetricLbl(){ return HM.metric==='qtd'?'vendas':'R$'; }
+function hmCellVal(cell){ if(!cell) return 0; return HM.metric==='qtd'?(cell.qtd||0):(cell.rec||0); }
+function hmTotVal(vd){ if(!vd) return 0; return HM.metric==='qtd'?(vd._qtd||0):(vd._rec||0); }
+function hmFmtVal(v){ return HM.metric==='qtd'?fmtN(Math.round(v)):('R$ '+fmtN(Math.round(v))); }
 function hmAgg(rows){
   var vend={};
   (rows||[]).forEach(function(r){
     var v=(r.vendedor||'').trim(); if(!v) return;
-    var d=(r.data_pedido||'').slice(0,10), val=parseFloat(r.receita||0);
-    if(!vend[v]) vend[v]={_tot:0};
-    vend[v][d]=(vend[v][d]||0)+val; vend[v]._tot+=val;
+    var d=(r.data_pedido||'').slice(0,10);
+    var rec=parseFloat(r.receita||0), q=(parseInt(r.pedidos||0,10)-parseInt(r.cancelados||0,10));
+    var loja=(r.loja_nome||'').trim();
+    if(!vend[v]) vend[v]={days:{}, _rec:0,_qtd:0, lojas:{}};
+    var cell=vend[v].days[d]||(vend[v].days[d]={rec:0,qtd:0});
+    cell.rec+=rec; cell.qtd+=q; vend[v]._rec+=rec; vend[v]._qtd+=q;
+    if(loja) vend[v].lojas[loja]=(vend[v].lojas[loja]||0)+rec;
+  });
+  Object.keys(vend).forEach(function(v){  // loja dominante do vendedor no mês
+    var mx=-1,top=''; Object.keys(vend[v].lojas).forEach(function(l){if(vend[v].lojas[l]>mx){mx=vend[v].lojas[l];top=l;}});
+    vend[v].loja=top;
   });
   return {vend:vend};
 }
@@ -1338,56 +1336,28 @@ function hmFetchMonth(m){
   if(HM.cache[m]) return Promise.resolve(HM.cache[m]);
   if(HM.inflight[m]) return HM.inflight[m];
   var de=m+'-01', ate=m+'-'+String(hmUltimoDia(m)).padStart(2,'0');
-  var p=buscarTudo('mvw_lojas_vend_dia','select=vendedor,data_pedido,receita&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc')
+  var p=buscarTudo('mvw_lojas_vend_dia','select=vendedor,loja_nome,data_pedido,receita,pedidos,cancelados&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc')
     .then(function(rows){ HM.cache[m]=hmAgg(rows); delete HM.inflight[m]; return HM.cache[m]; })
     .catch(function(e){ console.warn('HM fetch',e); HM.cache[m]={vend:{}}; delete HM.inflight[m]; return HM.cache[m]; });
   HM.inflight[m]=p; return p;
 }
-function hmInit(){ if(!HM.month) HM.month=hojeSP().slice(0,7); hmRenderMatrix(); hmFetchMonth(HM.month).then(hmRenderMatrix); }
-function hmMonth(delta){
-  var y=+HM.month.slice(0,4), mo=+HM.month.slice(5,7)+delta;
-  while(mo<1){mo+=12;y--;} while(mo>12){mo-=12;y++;}
-  HM.month=y+'-'+String(mo).padStart(2,'0');
-  hmRenderMatrix(); hmFetchMonth(HM.month).then(hmRenderMatrix);
-}
-function hmRenderMatrix(){
-  var box=document.getElementById('hm-matrix'); if(!box) return;
-  var lbl=document.getElementById('hm-month-lbl'); if(lbl) lbl.textContent=hmNomeMes(HM.month);
-  var data=HM.cache[HM.month];
-  if(!data){ box.innerHTML='<div class="hm-loading">Carregando…</div>'; box.style.gridTemplateColumns=''; return; }
-  var dias=hmDias(HM.month);
-  var vends=Object.keys(data.vend).filter(function(v){return v && v!=='Vendedor Não Identificado' && !NAO_VENDEDORES.has(v) && data.vend[v]._tot>0;})
-    .sort(function(a,b){return data.vend[b]._tot-data.vend[a]._tot;}).slice(0,25);
-  if(!vends.length){ box.innerHTML='<div class="hm-loading">Sem vendas neste mês.</div>'; box.style.gridTemplateColumns=''; return; }
-  var mx=0;
-  vends.forEach(function(v){ dias.forEach(function(ds){ var x=data.vend[v][ds]||0; if(x>mx)mx=x; }); });
-  if(mx<=0) mx=1;
-  box.style.gridTemplateColumns='120px repeat('+dias.length+',minmax(22px,1fr)) 44px';
-  var html='<div class="hm-corner"></div>';
-  dias.forEach(function(ds){ var wk=dowIdx(ds); var we=(wk>=5); html+='<div class="hm-mh'+(we?' we':'')+'"><b>'+ds.slice(8,10)+'</b>'+HM_DOW[wk]+'</div>'; });
-  html+='<div class="hm-mh tot">Σ</div>';
-  vends.forEach(function(v){
-    var vd=data.vend[v];
-    html+='<div class="hm-name" onclick="hmOpenVend(\''+v.replace(/'/g,"\\'")+'\')" title="Ver calendário de '+esc(v)+'">'+v+'</div>';
-    dias.forEach(function(ds){
-      var wk=dowIdx(ds), val=vd[ds]||0;
-      if(wk===6 && val<=0){ html+='<div class="hm-c off"></div>'; return; }
-      if(val<=0){ html+='<div class="hm-c z">·</div>'; return; }
-      var a=(0.12+0.72*(val/mx)).toFixed(2);
-      html+='<div class="hm-c" onclick="hmOpenVend(\''+v.replace(/'/g,"\\'")+'\')" style="background:rgba(34,197,94,'+a+')" title="'+esc(v)+' · '+ds.slice(8,10)+'/'+ds.slice(5,7)+': '+fmt(val)+'">'+hmK(val)+'</div>';
-    });
-    html+='<div class="hm-c tot" title="Total do mês">'+hmK(vd._tot)+'</div>';
-  });
-  box.innerHTML=html;
-}
-// ---- Drill-down: calendário mensal de 1 vendedor ----
-function hmOpenVend(nome){
-  HM.vendSel=nome; HMCAL.month=HM.month;
+// Abre o calendário de 1 vendedor. loja = loja de referência (pra comparação vs loja).
+function hmOpenVend(nome, loja){
+  HM.vendSel=nome; HM.vendLoja=loja||null;
+  HMCAL.month=(typeof ATE!=='undefined'&&ATE?ATE:hojeSP()).slice(0,7);
   document.getElementById('hmcal-overlay').classList.add('on');
-  document.getElementById('hmcal-nome').textContent=nome;
-  hmRenderCal();
+  document.getElementById('hmcal-nome').textContent=nome+(loja?' · '+lojaDisplay(loja):'');
+  hmSyncToggles(); hmRenderCal();
 }
 function hmCalClose(){ document.getElementById('hmcal-overlay').classList.remove('on'); }
+function hmSetMetric(m){ HM.metric=m; hmSyncToggles(); hmRenderCal(); }
+function hmToggleCompare(){ HM.compare=!HM.compare; hmSyncToggles(); hmRenderCal(); }
+function hmSyncToggles(){
+  var r=document.getElementById('hm-mt-rec'), q=document.getElementById('hm-mt-qtd'), c=document.getElementById('hm-cmp');
+  if(r) r.classList.toggle('on', HM.metric==='rec');
+  if(q) q.classList.toggle('on', HM.metric==='qtd');
+  if(c) c.classList.toggle('on', HM.compare);
+}
 function hmCalMonth(delta){
   var y=+HMCAL.month.slice(0,4), mo=+HMCAL.month.slice(5,7)+delta;
   while(mo<1){mo+=12;y--;} while(mo>12){mo-=12;y++;}
@@ -1397,26 +1367,51 @@ function hmCalMonth(delta){
 function hmRenderCal(){
   var nome=HM.vendSel, m=HMCAL.month;
   var lbl=document.getElementById('hmcal-month-lbl'); if(lbl) lbl.textContent=hmNomeMes(m);
-  var grid=document.getElementById('hmcal-grid'), meta=document.getElementById('hmcal-meta');
+  var grid=document.getElementById('hmcal-grid'), meta=document.getElementById('hmcal-meta'), cmp=document.getElementById('hmcal-compare');
   var data=HM.cache[m];
-  if(!data){ grid.innerHTML=''; meta.textContent='Carregando…'; hmFetchMonth(m).then(function(){ if(HMCAL.month===m) hmRenderCal(); }); return; }
-  var vd=data.vend[nome]||{_tot:0};
-  var dias=hmDias(m), mx=0, tot=vd._tot||0, best=0, bestD=null;
-  dias.forEach(function(ds){ var x=vd[ds]||0; if(x>mx)mx=x; if(x>best){best=x;bestD=ds;} });
+  if(!data){ grid.innerHTML=''; if(cmp) cmp.innerHTML=''; meta.textContent='Carregando…'; hmFetchMonth(m).then(function(){ if(HMCAL.month===m) hmRenderCal(); }); return; }
+  var vd=data.vend[nome]||{days:{},_rec:0,_qtd:0};
+  var dias=hmDias(m), mx=0, tot=hmTotVal(vd), best=0, bestD=null;
+  dias.forEach(function(ds){ var x=hmCellVal(vd.days[ds]); if(x>mx)mx=x; if(x>best){best=x;bestD=ds;} });
   if(mx<=0) mx=1;
-  meta.textContent='Total R$ '+fmtN(Math.round(tot))+(bestD?' · melhor dia R$ '+fmtN(Math.round(best))+' ('+bestD.slice(8,10)+'/'+bestD.slice(5,7)+')':' · sem vendas no mês');
-  // header dias-da-semana
+  var un=(HM.metric==='qtd'?' vendas':'');
+  meta.textContent='Total '+hmFmtVal(tot)+un+(bestD?' · melhor dia '+hmFmtVal(best)+un+' ('+bestD.slice(8,10)+'/'+bestD.slice(5,7)+')':' · sem vendas no mês');
+  // calendário
   var html=['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'].map(function(d){return '<div class="hmcal-dow">'+d+'</div>';}).join('');
-  // alinhar 1º dia na coluna certa (dowIdx do dia 1)
   var off=dowIdx(m+'-01');
   for(var i=0;i<off;i++) html+='<div class="hmcal-cell out"></div>';
   dias.forEach(function(ds){
-    var val=vd[ds]||0;
+    var val=hmCellVal(vd.days[ds]);
     if(val<=0){ html+='<div class="hmcal-cell"><span class="dn">'+ds.slice(8,10)+'</span><span class="vv zero">—</span></div>'; return; }
     var a=(0.14+0.66*(val/mx)).toFixed(2);
-    html+='<div class="hmcal-cell" style="background:rgba(34,197,94,'+a+')" title="'+ds+': '+fmt(val)+'"><span class="dn">'+ds.slice(8,10)+'</span><span class="vv">'+hmK(val)+'</span></div>';
+    html+='<div class="hmcal-cell" style="background:rgba(34,197,94,'+a+')" title="'+ds+': '+hmFmtVal(val)+un+'"><span class="dn">'+ds.slice(8,10)+'</span><span class="vv">'+hmK(val)+'</span></div>';
   });
   grid.innerHTML=html;
+  hmRenderCompare(data, nome);
+}
+// Comparação vs loja: ranking dos vendedores da MESMA loja no mês, na métrica atual.
+function hmRenderCompare(data, nome){
+  var box=document.getElementById('hmcal-compare'); if(!box) return;
+  if(!HM.compare){ box.innerHTML=''; box.style.display='none'; return; }
+  box.style.display='block';
+  var loja=(data.vend[nome]&&data.vend[nome].loja)||HM.vendLoja;
+  if(!loja){ box.innerHTML='<div class="hmc-empty">Sem loja de referência para comparar.</div>'; return; }
+  var peers=Object.keys(data.vend).filter(function(v){
+    return v && v!=='Vendedor Não Identificado' && !NAO_VENDEDORES.has(v) && data.vend[v].loja===loja && hmTotVal(data.vend[v])>0;
+  }).map(function(v){ return {nome:v, val:hmTotVal(data.vend[v])}; }).sort(function(a,b){return b.val-a.val;});
+  if(!peers.length){ box.innerHTML='<div class="hmc-empty">Sem vendas na loja neste mês.</div>'; return; }
+  var mx=peers[0].val||1, rank=peers.map(function(p){return p.nome;}).indexOf(nome)+1;
+  var html='<div class="hmc-title">Ranking em '+esc(lojaDisplay(loja))+' · '+hmNomeMes(HMCAL.month)+' <span>('+hmMetricLbl()+')</span>'+
+    (rank>0?'<b>'+rank+'º de '+peers.length+'</b>':'')+'</div>';
+  peers.forEach(function(p,i){
+    var sel=(p.nome===nome);
+    var w=Math.max(2,(p.val/mx*100));
+    html+='<div class="hmc-row'+(sel?' sel':'')+'"><span class="hmc-rk">'+(i+1)+'</span>'+
+      '<span class="hmc-nm">'+esc(p.nome)+'</span>'+
+      '<span class="hmc-bar"><span class="hmc-fill" style="width:'+w.toFixed(1)+'%"></span></span>'+
+      '<span class="hmc-vl">'+hmFmtVal(p.val)+'</span></div>';
+  });
+  box.innerHTML=html;
 }
 
 // Escopo por produto: quando há SKU ou categoria selecionada, cada pedido passa a
@@ -2875,7 +2870,8 @@ function renderVendedores(){
       '<td class="val" style="color:'+prevCor+';font-weight:'+(v.meta>0?'800':'600')+';">'+(v.proj>0?fmt(v.proj):'—')+'</td>'+
       '<td class="val" style="color:'+metaDiaCor+';font-weight:800;" title="Quanto precisa vender HOJE pra bater a meta do mês (ponderado pelo dia-da-semana)">'+metaDiaTxt+'</td>'+
       '<td class="val" style="color:'+comCor+';font-weight:700;" title="'+(v.comissaoPct*100).toFixed(2).replace('.',',')+'% sobre '+fmt(v.realizado)+'">'+(v.comissao>0?fmt(v.comissao):'—')+'</td>';
-    return '<tr style="cursor:pointer;'+activeStyle+'" onclick="selectVend(\''+v.nome.replace(/'/g,"\\'")+'\')"><td class="r">'+(i+1)+'</td><td style="font-weight:600">'+v.nome+'</td><td style="color:'+getCor(v.lojaTop)+'">'+lojaDisplay(v.lojaTop)+'</td><td class="val">'+fmt(v.fat)+'</td><td class="val">'+fmtN(v.ped)+'</td><td class="val">'+fmtN(v.qtd)+'</td><td class="val">'+fmt(tm)+'</td><td class="val">'+(pa!=null?fmtD(pa):'—')+'</td>'+metaTd+'</tr>';
+    var vEsc=v.nome.replace(/'/g,"\\'"), lEsc=(v.lojaTop||'').replace(/'/g,"\\'");
+    return '<tr style="cursor:pointer;'+activeStyle+'" onclick="selectVend(\''+vEsc+'\')"><td class="r">'+(i+1)+'</td><td style="font-weight:600"><span class="vend-hm" onclick="event.stopPropagation();hmOpenVend(\''+vEsc+'\',\''+lEsc+'\')" title="Ver heatmap diário deste vendedor">'+v.nome+'</span></td><td style="color:'+getCor(v.lojaTop)+'">'+lojaDisplay(v.lojaTop)+'</td><td class="val">'+fmt(v.fat)+'</td><td class="val">'+fmtN(v.ped)+'</td><td class="val">'+fmtN(v.qtd)+'</td><td class="val">'+fmt(tm)+'</td><td class="val">'+(pa!=null?fmtD(pa):'—')+'</td>'+metaTd+'</tr>';
   }).join('');
   var wrap=document.getElementById('tbody-vendedores').parentElement.parentElement.parentElement; // .tb-wrap-scroll
   // inject breadcrumb above the table
@@ -3352,7 +3348,6 @@ async function salvarMetas(){
       carregar();
     }
   }
-  hmInit();  // heatmap do time — independente do período (mês próprio c/ navegação)
 })();
 </script>
 
@@ -3368,6 +3363,13 @@ async function salvarMetas(){
       </div>
       <button class="x" onclick="hmCalClose()" title="Fechar">✕</button>
     </div>
+    <div class="hmcal-toggles">
+      <div class="hm-seg">
+        <button id="hm-mt-rec" class="on" onclick="hmSetMetric('rec')">Receita</button>
+        <button id="hm-mt-qtd" onclick="hmSetMetric('qtd')">Vendas</button>
+      </div>
+      <button id="hm-cmp" class="hm-cmp-btn" onclick="hmToggleCompare()">vs Loja</button>
+    </div>
     <div class="hmcal-meta" id="hmcal-meta">—</div>
     <div class="hmcal-grid" id="hmcal-grid"></div>
     <div class="hmcal-legend"><span>menos</span>
@@ -3375,6 +3377,7 @@ async function salvarMetas(){
       <span class="sw" style="background:rgba(34,197,94,.45)"></span>
       <span class="sw" style="background:rgba(34,197,94,.8)"></span><span>mais</span>
       <span style="margin-left:auto">— = sem venda (fechado/folga)</span></div>
+    <div class="hmcal-compare" id="hmcal-compare" style="display:none;"></div>
   </div>
 </div>
 

@@ -160,6 +160,7 @@ Fonte: `vw_pedidos_full` (origem_conta=kwid). Histórico completo (out/24 → ho
 - Projeção do mês: média por DOW dos dias observados, fallback pra média diária. Ativa quando range inclui hoje.
 - Charts: registro em `CHARTS`. Sparklines em `CHARTS.lojaSparklines[]`.
 - Cross-filtering bidirecional: click vendedor ↔ click SKU.
+- **Heatmap diário do vendedor (modal)**: clicar no NOME na tabela "Top vendedores" (`.vend-hm`, stopPropagation p/ não disparar o cross-filter da linha) abre `#hmcal-overlay` — calendário mensal (‹ › navega mês, default = mês do `ATE`) do vendedor. Fonte `mvw_lojas_vend_dia` (invariante ao período). 2 toggles: **métrica** receita↔vendas (qtd = `pedidos−cancelados`) e **vs Loja** (ranking dos vendedores da mesma loja no mês, na métrica atual, destacando o selecionado). Estado em `HM`/`HMCAL`; funções `hm*`. Modal é filho do `<body>` (backdrop-filter do header aprisiona `position:fixed`).
 - Categorias excluídas: TECIDO, TROCA.
 
 ## ~~Dash Lojas Lynx~~ — REMOVIDO em 01/06/2026
