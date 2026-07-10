@@ -21,14 +21,15 @@
 </head>
 <body>
   <div id="bar">
-    <a href="/index.html">← Voltar ao Fusion BI</a>
+    <img src="/logo-urso.png" alt="Fusion" style="height:22px;">
+    <span class="tit">Fusion <span style="color:#059669;font-weight:800;">Financeiro</span></span>
     <span class="sep">·</span>
-    <span class="tit">💰 Financeiro</span>
+    <a href="/index.html">← Menu</a>
   </div>
   <div id="load">Abrindo Financeiro…</div>
   <iframe id="frame" title="Financeiro" allow="clipboard-read; clipboard-write"></iframe>
   <script>
-    // Renderiza o app Financeiro (fusion-financeiro) DENTRO do Fusion BI, passando a sessão
+    // Renderiza o app Financeiro (fusion-financeiro) DENTRO do Fusion OS, passando a sessão
     // já ativa do BI via hash (#sso=) → sem segundo login. O hash não vai pro servidor e é
     // limpo pelo app assim que lido. Re-injetado a cada visita → robusto a partição de storage.
     (async function () {

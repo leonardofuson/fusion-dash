@@ -15,7 +15,7 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
 .topbar{background:rgba(9,9,11,0.92);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--bdr);height:64px;display:flex;align-items:center;padding:0 1.5rem;gap:16px;position:sticky;top:0;z-index:1000;isolation:isolate;}
 .topbar img{height:32px;object-fit:contain;}
 .topbar-div{width:1px;height:18px;background:var(--bdr);}
-.topbar-label{font-size:15px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--txt1);}
+.topbar-label{font-size:15px;font-weight:700;letter-spacing:-.005em;color:var(--txt1);}.topbar-label .tb-name{color:#2563eb;font-weight:800;}
 .main{max-width:1440px;margin:0 auto;padding:1.5rem;}
 .filtros{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:1rem;align-items:center;}
 .chips{display:flex;gap:6px;flex-wrap:wrap;}
@@ -455,8 +455,8 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
 
 <header class="topbar">
   <img src="/logo-urso.png" alt="Fusion">
-  <div class="topbar-div"></div>
-  <span class="topbar-label">Lojas Físicas</span>
+  
+  <span class="topbar-label">Fusion <span class="tb-name">Lojas Físicas</span></span>
   <div class="topbar-actions"><span id="user-info-tb"></span><button id="btn-metas" class="btn-metas-toggle" onclick="abrirMetas()" style="display:none;" title="Cadastrar metas mensais por loja/vendedor (acesso restrito)">✏️ <span class="metas-lbl-long">Cadastro Metas/Vendedores</span><span class="metas-lbl-short">Metas</span></button><a href="/index.html" class="btn-back">Menu</a><button class="btn-logout-tb" onclick="fusionAuth.signOut()">Sair</button></div>
 </header>
 

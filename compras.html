@@ -18,7 +18,7 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
 .topbar{background:rgba(9,9,11,0.85);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--bdr);height:64px;display:flex;align-items:center;padding:0 1.5rem;gap:16px;position:sticky;top:0;z-index:100;}
 .topbar img{height:32px;object-fit:contain;}
 .topbar-div{width:1px;height:18px;background:var(--bdr);}
-.topbar-label{font-size:15px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--txt1);}
+.topbar-label{font-size:15px;font-weight:700;letter-spacing:-.005em;color:var(--txt1);}.topbar-label .tb-name{color:#059669;font-weight:800;}
 .topbar-actions{display:flex;align-items:center;gap:14px;margin-left:auto;}
 #user-info-tb{font-size:13px;color:var(--txt2);}
 .btn-back,.btn-logout-tb{background:transparent;border:1px solid var(--bdr);color:var(--txt2);padding:7px 14px;border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit;text-decoration:none;display:inline-block;transition:all 0.15s;}
@@ -310,8 +310,8 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
 
 <header class="topbar">
   <img src="/logo-urso.png" alt="Fusion">
-  <div class="topbar-div"></div>
-  <span class="topbar-label">Compras & Produção</span>
+  
+  <span class="topbar-label">Fusion <span class="tb-name">Compras & Produção</span></span>
   <div class="topbar-actions">
     <span id="user-info-tb"></span>
     <a href="/index.html" class="btn-back">Menu</a>
@@ -6895,7 +6895,7 @@ async function imprimirOPFechamento(opId) {
 
   // Rodapé
   doc.setFontSize(7).setTextColor(150, 150, 150);
-  doc.text('Documento gerado pelo Fusion BI · OP ' + op.id + ' · ' + hoje, 105, 285, { align: 'center' });
+  doc.text('Documento gerado pelo Fusion OS · OP ' + op.id + ' · ' + hoje, 105, 285, { align: 'center' });
 
   doc.save('OP-' + op.id + '-' + (op.produto || 'producao').replace(/[^A-Za-z0-9]/g, '') + '.pdf');
 }

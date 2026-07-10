@@ -17,7 +17,7 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
 .topbar{background:rgba(9,9,11,.85);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--bdr);height:64px;display:flex;align-items:center;padding:0 1.5rem;gap:16px;position:sticky;top:0;z-index:100;}
 .topbar img{height:32px;object-fit:contain;}
 .topbar-div{width:1px;height:18px;background:var(--bdr);}
-.topbar-label{font-size:15px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--txt1);}
+.topbar-label{font-size:15px;font-weight:700;letter-spacing:-.005em;color:var(--txt1);}.topbar-label .tb-name{color:#7c3aed;font-weight:800;}
 .topbar-actions{display:flex;align-items:center;gap:14px;margin-left:auto;}
 #user-info-tb{font-size:13px;color:var(--txt2);}
 .btn-back,.btn-logout-tb{background:transparent;border:1px solid var(--bdr);color:var(--txt2);padding:7px 14px;border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit;text-decoration:none;display:inline-block;transition:all .15s;}
@@ -154,8 +154,8 @@ details.card > summary:hover{background:rgba(255,255,255,.02);}
 
 <header class="topbar">
   <img src="/logo-urso.png" alt="Fusion">
-  <div class="topbar-div"></div>
-  <span class="topbar-label">🎯 Simulador de Preço</span>
+  
+  <span class="topbar-label">Fusion <span class="tb-name">Simulador de Preço</span></span>
   <div class="topbar-actions">
     <span id="user-info-tb"></span>
     <a href="/index.html" class="btn-back">Menu</a>
