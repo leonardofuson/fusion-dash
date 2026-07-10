@@ -76,7 +76,7 @@
   <div class="strip" id="strip"></div>
 
   <!-- GRÁFICO DIÁRIO (prominente) -->
-  <div class="sec-h"><h2>Vendas diárias por canal · mês corrente</h2><span class="sp"></span><span class="tgl" id="tgl-mom">vs mês anterior</span></div>
+  <div class="sec-h"><h2>Vendas diárias por canal · mês corrente</h2><span class="sp"></span><span id="foc-lbl" style="font-size:11px"></span><span class="tgl" id="tgl-mom">total vs mês anterior</span></div>
   <div class="chartcard" style="height:400px"><canvas id="chart"></canvas></div>
 
   <!-- PERFORMANCE KPIs -->
@@ -290,6 +290,11 @@ function renderChart(){
   const dias=[];for(let d=1;d<=diaHoje;d++)dias.push(mStart.slice(0,8)+String(d).padStart(2,'0'));
   if(CHARTS.c)CHARTS.c.destroy();
   const ctx=document.getElementById('chart');
+  // cabeçalho: estado do toggle + canal focado
+  const tg=document.getElementById('tgl-mom');if(tg)tg.classList.toggle('on',UI.mom&&!UI.foc);
+  const fl=document.getElementById('foc-lbl');
+  if(fl){fl.innerHTML=UI.foc?`<span style="color:${CCOR[UI.foc]};font-weight:700">${UI.foc}</span> · mês atual vs anterior &nbsp;<span id="clrfoc" style="cursor:pointer;color:var(--mut);border:1px solid var(--line);border-radius:20px;padding:2px 8px">✕ todos</span>`:'';
+    const cf=document.getElementById('clrfoc');if(cf)cf.onclick=()=>{UI.foc=null;renderChart();renderPnL();};}
   if(UI.mom||UI.foc){
     // linha: mês atual vs mês anterior (mesmos dias). Se foco num canal, filtra o canal.
     const focCol=UI.foc;
@@ -302,7 +307,7 @@ function renderChart(){
     CHARTS.c=new Chart(ctx,{type:'line',data:{labels:dias.map(d=>+d.slice(8)),datasets:[
       {label:(focCol||'Fusion')+' — mês atual',data:serCur,borderColor:focCol?CCOR[focCol]:'#7c5cff',backgroundColor:'transparent',tension:.3,pointRadius:0,borderWidth:2},
       {label:'mês anterior',data:serPrev,borderColor:'#71717a',borderDash:[5,4],tension:.3,pointRadius:0,borderWidth:1.5}]},
-      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#8a94a6',boxWidth:12,font:{size:11}}}},scales:{y:{ticks:{color:'#8a94a6',callback:v=>'R$'+Math.round(v/1000)+'k'},grid:{color:'rgba(40,45,56,.6)'}},x:{title:{display:true,text:'dia do mês',color:'#5b6474'},ticks:{color:'#8a94a6',maxTicksLimit:16},grid:{display:false}}}}});
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{onClick:()=>{},labels:{color:'#8a94a6',boxWidth:12,font:{size:11}}}},scales:{y:{ticks:{color:'#8a94a6',callback:v=>'R$'+Math.round(v/1000)+'k'},grid:{color:'rgba(40,45,56,.6)'}},x:{title:{display:true,text:'dia do mês',color:'#5b6474'},ticks:{color:'#8a94a6',maxTicksLimit:16},grid:{display:false}}}}});
   } else {
     // empilhado por canal
     const byColDia={};COLS.forEach(c=>byColDia[c]={});
@@ -310,7 +315,7 @@ function renderChart(){
     S.fresh.filter(p=>p.data_pedido>=mStart).forEach(p=>{const col=colDeFresh(p.origem_conta,p.canal_nome_raw,p.loja_nome);if(byColDia[col])byColDia[col][p.data_pedido]=(byColDia[col][p.data_pedido]||0)+(recBrutaRow(p)-devRow(p));});
     const usar=COLS.filter(c=>Object.values(byColDia[c]).some(v=>v>0));
     CHARTS.c=new Chart(ctx,{type:'line',data:{labels:dias.map(d=>+d.slice(8)),datasets:usar.map(c=>({label:c,data:dias.map(d=>byColDia[c][d]||0),borderColor:CCOR[c],backgroundColor:CCOR[c]+'66',fill:true,stack:'a',tension:.3,pointRadius:0,borderWidth:1}))},
-      options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{labels:{color:'#8a94a6',boxWidth:11,font:{size:11}}},tooltip:{itemSort:(a,b)=>b.parsed.y-a.parsed.y,callbacks:{label:i=>i.dataset.label+': '+rsK(i.parsed.y),footer:items=>'Total: '+rsFull(items.reduce((s,i)=>s+i.parsed.y,0))}}},scales:{y:{stacked:true,ticks:{color:'#8a94a6',callback:v=>'R$'+Math.round(v/1000)+'k'},grid:{color:'rgba(40,45,56,.6)'}},x:{stacked:true,title:{display:true,text:'dia do mês',color:'#5b6474'},ticks:{color:'#8a94a6',maxTicksLimit:16},grid:{display:false}}}}});
+      options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},onClick:(e,els,ch)=>{const pts=ch.getElementsAtEventForMode(e,'index',{intersect:false},false);if(pts.length){const c=ch.data.datasets[pts[0].datasetIndex].label;UI.foc=(UI.foc===c)?null:c;renderChart();renderPnL();}},plugins:{legend:{onClick:(e,it)=>{UI.foc=(UI.foc===it.text)?null:it.text;renderChart();renderPnL();},labels:{color:'#8a94a6',boxWidth:11,font:{size:11}}},tooltip:{itemSort:(a,b)=>b.parsed.y-a.parsed.y,callbacks:{label:i=>i.dataset.label+': '+rsK(i.parsed.y),footer:items=>'Total: '+rsFull(items.reduce((s,i)=>s+i.parsed.y,0))}}},scales:{y:{stacked:true,ticks:{color:'#8a94a6',callback:v=>'R$'+Math.round(v/1000)+'k'},grid:{color:'rgba(40,45,56,.6)'}},x:{stacked:true,title:{display:true,text:'dia do mês',color:'#5b6474'},ticks:{color:'#8a94a6',maxTicksLimit:16},grid:{display:false}}}}});
   }
 }
 
@@ -319,7 +324,7 @@ function renderChart(){
   document.getElementById('who').textContent=(auth.role&&auth.role.nome)||auth.email||'';
   SB=fusionAuth.SUPABASE_URL;ANON=fusionAuth.SUPABASE_ANON_KEY;
   document.getElementById('btnOut').onclick=()=>fusionAuth.signOut();
-  document.getElementById('tgl-mom').onclick=function(){UI.mom=!UI.mom;this.classList.toggle('on',UI.mom);renderChart();};
+  document.getElementById('tgl-mom').onclick=function(){UI.mom=!UI.mom;UI.foc=null;renderChart();};
   try{await carregar();}catch(e){document.getElementById('loader').textContent='Erro: '+e.message;console.error(e);}
 })();
 </script>
