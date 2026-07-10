@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Fusion BI</title>
+<title>Fusion OS</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -31,9 +31,11 @@ body{
   display:flex;align-items:center;justify-content:space-between;
   position:sticky;top:0;z-index:100;
 }
-.topbar .brand{display:flex;align-items:center;gap:14px;font-size:16px;font-weight:600;letter-spacing:.08em;}
+.topbar .brand{display:flex;align-items:center;gap:11px;font-size:17px;}
 .topbar .brand img{height:32px;width:auto;}
-.topbar .brand span{color:var(--text-soft);font-weight:500;border-left:1px solid var(--border);padding-left:14px;}
+.topbar .brand .wm{font-weight:700;letter-spacing:-.01em;color:var(--text);}
+.topbar .brand .os-suf{margin-left:6px;}
+.os-suf{font-weight:800;background:linear-gradient(120deg,#7c9dff,#c4a3ff);-webkit-background-clip:text;background-clip:text;color:transparent;}
 .topbar-right{display:flex;align-items:center;gap:14px;font-size:14px;color:var(--text-soft);}
 .btn-logout{
   background:transparent;border:1px solid var(--border);color:var(--text-soft);
@@ -45,7 +47,6 @@ body{
   .topbar{padding:0 1rem;height:56px;}
   .topbar .brand{font-size:13px;gap:10px;}
   .topbar .brand img{height:26px;}
-  .topbar .brand span{padding-left:10px;}
   .topbar-right{gap:8px;font-size:12px;}
   #user-info{display:none;}
   .btn-logout{padding:5px 10px;font-size:11px;}
@@ -125,7 +126,7 @@ body{
 <body>
 
 <div class="topbar">
-  <div class="brand"><img src="/logo-urso.png" alt="Fusion"><span>BI</span></div>
+  <div class="brand"><img src="/logo-urso.png" alt="Fusion"><span class="wm">Fusion<span class="os-suf">OS</span></span></div>
   <div class="topbar-right">
     <span id="user-info"></span>
     <button id="btn-logout" class="btn-logout hidden" onclick="fusionAuth.signOut()">Sair</button>
@@ -136,7 +137,7 @@ body{
   <!-- TELA DE LOGIN -->
   <div id="login-view" class="login-card hidden">
     <div class="logo-wrap"><img src="/logo-marca.png" alt="Fusion"></div>
-    <h1>Business Intelligence</h1>
+    <h1>Fusion <span class="os-suf">OS</span></h1>
     <p class="subtitle">Entre com seu e-mail corporativo.</p>
     <form id="login-form">
       <div class="field">
