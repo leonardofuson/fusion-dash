@@ -78,6 +78,9 @@
   </span></div>
   <div class="cgrid" id="best-grid"></div>
 
+  <div class="secTitle">📖 Stories <span class="muted" style="text-transform:none;font-weight:400;font-size:11px">— expiram em 24h; arquivamos a cada 12h (histórico começa agora, o passado não volta)</span></div>
+  <div class="card"><div id="stories-body"></div></div>
+
   <div class="grid2">
     <div class="card"><h3>Melhor dia pra postar <span class="hint">engajamento médio por dia da semana</span></h3><div id="dow-bars"></div></div>
     <div class="card"><h3>Melhor horário <span class="hint">engajamento médio por faixa (BRT)</span></h3><div id="hour-bars"></div></div>
@@ -120,11 +123,12 @@ let D={posts:[],conta:[]};
 function inPer(ts){const d=String(ts).slice(0,10);return d>=STATE.de&&d<=STATE.ate;}
 async function carregar(){
   document.getElementById('loader').style.display='flex';
-  const [posts,conta]=await Promise.all([
+  const [posts,conta,stories]=await Promise.all([
     api('social_posts','select=post_id,publicado_em,formato,caption,permalink,reach,likes,comments,saved,shares,interactions,views,engagement_rate,avg_watch_time,total_watch_time,profile_visits,follows,profile_activity,thumbnail_url,media_url&plataforma=eq.instagram&order=publicado_em.desc'),
     api('social_conta_dia','select=data,seguidores,reach,novos_seguidores&plataforma=eq.instagram&order=data.asc'),
+    api('social_stories','select=story_id,publicado_em,permalink,thumbnail_url,media_url,reach,replies,shares,follows,navigation,profile_visits,exits&plataforma=eq.instagram&order=publicado_em.desc'),
   ]);
-  D.posts=posts; D.conta=conta;
+  D.posts=posts; D.conta=conta; D.stories=stories;
   render();
   document.getElementById('loader').style.display='none';
 }
@@ -132,7 +136,24 @@ function curPosts(){return D.posts.filter(p=>inPer(p.publicado_em));}
 
 function render(){
   const ps=curPosts();
-  renderKPIs(ps); renderFormatos(ps); renderBest(); renderTempo(ps); renderTrend(ps); renderTabela(ps);
+  renderKPIs(ps); renderFormatos(ps); renderBest(); renderStories(); renderTempo(ps); renderTrend(ps); renderTabela(ps);
+}
+function renderStories(){
+  const st=(D.stories||[]).filter(s=>inPer(s.publicado_em));
+  const el=document.getElementById('stories-body');
+  if(!st.length){el.innerHTML='<div class="muted" style="padding:6px 2px">Nenhuma story arquivada no período ainda. A coleta roda <b>a cada 12h</b> — o histórico começa agora; stories somem em 24h, então o passado não é recuperável. Assim que postarem, aparecem aqui com alcance, replies e saídas.</div>';return;}
+  const avg=k=>{const v=st.filter(s=>s[k]!=null);return v.length?Math.round(v.reduce((a,s)=>a+(+s[k]||0),0)/v.length):null;};
+  el.innerHTML=`<div style="display:flex;gap:22px;flex-wrap:wrap;margin-bottom:12px;font-size:13px">
+    <div><b style="font-size:19px">${ri(st.length)}</b> <span class="muted">stories</span></div>
+    <div><b style="font-size:19px">${ri(avg('reach'))}</b> <span class="muted">alcance médio</span></div>
+    <div><b style="font-size:19px">${ri(avg('replies'))}</b> <span class="muted">replies médio</span></div>
+    <div><b style="font-size:19px">${ri(avg('exits')||avg('navigation'))}</b> <span class="muted">saídas médio</span></div></div>
+    <div class="cgrid">`+st.slice(0,15).map(s=>{
+      const img=s.thumbnail_url||s.media_url||'';const dt=brt(s.publicado_em).toLocaleDateString('pt-BR',{day:'2-digit',month:'short',hour:'2-digit'});
+      return `<a class="cc" href="${s.permalink||'#'}" target="_blank" rel="noopener"><img class="thumb" loading="lazy" src="${img}" onerror="this.style.display='none'">
+        <div class="cbody"><div class="cbig">${ri(s.reach)}</div><div class="csub">alcance</div>
+        <div class="cdate">${dt} · ${ri(s.replies)} replies · ${ri(s.exits||s.navigation)} saídas</div></div></a>`;
+    }).join('')+`</div>`;
 }
 
 function renderKPIs(ps){
