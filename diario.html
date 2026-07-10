@@ -75,6 +75,10 @@
   <div class="hero" id="hero"></div>
   <div class="strip" id="strip"></div>
 
+  <!-- GRÁFICO DIÁRIO (prominente) -->
+  <div class="sec-h"><h2>Vendas diárias por canal · mês corrente</h2><span class="sp"></span><span class="tgl" id="tgl-mom">vs mês anterior</span></div>
+  <div class="chartcard"><canvas id="chart" height="150"></canvas></div>
+
   <!-- PERFORMANCE KPIs -->
   <div class="sec-h"><h2>Performance · mês corrente <span class="muted" style="text-transform:none;font-weight:400">(Δ vs mesmos dias do mês anterior)</span></h2></div>
   <div class="perf" id="perf"></div>
@@ -83,14 +87,6 @@
   <div class="sec-h"><h2>P&amp;L por canal · MTD</h2><span class="sp"></span><span class="muted" style="font-size:11px">clique num milestone p/ abrir os custos · num canal p/ comparar no gráfico</span></div>
   <div class="pnlwrap"><table class="pnl" id="pnl"><thead id="pnl-h"></thead><tbody id="pnl-b"></tbody></table></div>
   <div class="note" id="pnl-note"></div>
-
-  <!-- GRÁFICO DIÁRIO -->
-  <div class="sec-h"><h2>Vendas diárias · mês corrente</h2><span class="sp"></span><span class="tgl" id="tgl-mom">vs mês anterior</span></div>
-  <div class="chartcard"><canvas id="chart" height="92"></canvas></div>
-
-  <!-- ALERTAS -->
-  <div class="sec-h"><h2>Radar · alertas</h2><span class="sp"></span><a class="drill" href="/marketing.html">Marketing →</a></div>
-  <div class="alerts" id="alerts"></div>
 </main>
 <div id="loader">Carregando…</div>
 <script>
@@ -145,7 +141,7 @@ async function carregar(){
   const freshFrom=somaDias(hoje,-2), mvFrom=somaDias(hoje,-75), mStart=inicioMes(hoje);
   S.freshFrom=freshFrom;S.mStart=mStart;S.pm=mesAnt(hoje);
   const pmIni=S.pm.ini;
-  const [fresh,mv,margem,ecomFixo,lojasCusto,ads,metaRows,alertas]=await Promise.all([
+  const [fresh,mv,margem,ecomFixo,lojasCusto,ads,metaRows]=await Promise.all([
     apiAll('vw_pedidos_full','select=data_pedido,origem_conta,canal_nome_raw,loja_nome,valor_bruto,frete,valor_devolucao,valor_chargeback,status&data_pedido=gte.'+freshFrom+'&status=neq.cancelado','id.asc'),
     apiAll('mvw_diretoria_dia','select=data_pedido,origem_conta,canal_nome_raw,loja_nome,pedidos,receita_bruta,devolucoes&data_pedido=gte.'+mvFrom,'data_pedido.asc,origem_conta.asc,canal_nome_raw.asc,loja_nome.asc'),
     apiAll('mvw_margem_canal_dia','select=data_pedido,grupo,canal,receita_bruta,devolucoes,comissao,afiliado,frete_seller,cmv,unidades&data_pedido=gte.'+pmIni,'data_pedido.asc,grupo.asc,canal.asc,origem_conta.asc'),
@@ -153,9 +149,8 @@ async function carregar(){
     apiAll('vw_lojas_custo_dia','select=data_pedido,comissao_lojas,custo_fixo_lojas&data_pedido=gte.'+mStart,'data_pedido.asc'),
     apiAll('ads_metrics','select=data,plataforma,conta,gasto&level=eq.campaign&data=gte.'+pmIni,'data.asc'),
     apiAll('projecao_faturamento','select=ano_mes,valor&tipo=eq.projetado&versao=eq.1','ano_mes.asc'),
-    apiAll('marketing_alertas','select=data_ref,severidade,categoria,titulo,detalhe','data_ref.desc'),
   ]);
-  S.fresh=fresh;S.mv=mv;S.margem=margem;S.ecomFixo=ecomFixo;S.lojasCusto=lojasCusto;S.ads=ads;S.alertas=alertas;
+  S.fresh=fresh;S.mv=mv;S.margem=margem;S.ecomFixo=ecomFixo;S.lojasCusto=lojasCusto;S.ads=ads;
   const meta={};metaRows.forEach(r=>{meta[r.ano_mes]=(meta[r.ano_mes]||0)+(+r.valor||0);});S.meta=meta;
   render();
   document.getElementById('loader').style.display='none';
@@ -220,12 +215,8 @@ function render(){
     kpi('Devolução %',pct1(mtdRec?mtdDev/mtdRec:0),mtdRec?mtdDev/mtdRec:0,pRec?pDev/pRec:0,true)+
     kpi('Fat/dia',rsK(diaHoje?mtd/diaHoje:0),diaHoje?mtd/diaHoje:0,pm?( (pm.ate.slice(8,10))?pMtd/(+pm.ate.slice(8,10)):0):0);
 
-  renderPnL();
   renderChart();
-  // alertas
-  const ref=S.alertas.length?S.alertas[0].data_ref:null;const av=S.alertas.filter(a=>a.data_ref===ref);
-  const so={alta:0,media:1,baixa:2};av.sort((a,b)=>(so[a.severidade]??3)-(so[b.severidade]??3));
-  document.getElementById('alerts').innerHTML=av.length?av.map(a=>`<div class="alert ${a.severidade}"><span class="sev">${a.severidade}</span><span>${a.titulo}${a.detalhe?' <span class="muted">— '+a.detalhe+'</span>':''}</span><span class="cat">${a.categoria}</span></div>`).join(''):'<div class="muted" style="padding:8px">Sem alertas ativos. 🎉</div>';
+  renderPnL();
 }
 
 // ── P&L por canal (MTD) ──
@@ -318,8 +309,8 @@ function renderChart(){
     S.mv.filter(r=>r.data_pedido>=mStart&&r.data_pedido<S.freshFrom).forEach(r=>{const col=colDe(grupoDe(r.origem_conta,r.canal_nome_raw,r.loja_nome),r.canal_nome_raw);if(byColDia[col])byColDia[col][r.data_pedido]=(byColDia[col][r.data_pedido]||0)+((+r.receita_bruta||0)-(+r.devolucoes||0));});
     S.fresh.filter(p=>p.data_pedido>=mStart).forEach(p=>{const col=colDeFresh(p.origem_conta,p.canal_nome_raw,p.loja_nome);if(byColDia[col])byColDia[col][p.data_pedido]=(byColDia[col][p.data_pedido]||0)+(recBrutaRow(p)-devRow(p));});
     const usar=COLS.filter(c=>Object.values(byColDia[c]).some(v=>v>0));
-    CHARTS.c=new Chart(ctx,{type:'bar',data:{labels:dias.map(d=>+d.slice(8)),datasets:usar.map(c=>({label:c,data:dias.map(d=>byColDia[c][d]||0),backgroundColor:CCOR[c],stack:'a'}))},
-      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#8a94a6',boxWidth:11,font:{size:10}}}},scales:{y:{stacked:true,ticks:{color:'#8a94a6',callback:v=>'R$'+Math.round(v/1000)+'k'},grid:{color:'rgba(40,45,56,.6)'}},x:{stacked:true,title:{display:true,text:'dia do mês',color:'#5b6474'},ticks:{color:'#8a94a6',maxTicksLimit:16},grid:{display:false}}}}});
+    CHARTS.c=new Chart(ctx,{type:'line',data:{labels:dias.map(d=>+d.slice(8)),datasets:usar.map(c=>({label:c,data:dias.map(d=>byColDia[c][d]||0),borderColor:CCOR[c],backgroundColor:CCOR[c]+'66',fill:true,stack:'a',tension:.3,pointRadius:0,borderWidth:1}))},
+      options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{labels:{color:'#8a94a6',boxWidth:11,font:{size:11}}},tooltip:{itemSort:(a,b)=>b.parsed.y-a.parsed.y,callbacks:{label:i=>i.dataset.label+': '+rsK(i.parsed.y),footer:items=>'Total: '+rsFull(items.reduce((s,i)=>s+i.parsed.y,0))}}},scales:{y:{stacked:true,ticks:{color:'#8a94a6',callback:v=>'R$'+Math.round(v/1000)+'k'},grid:{color:'rgba(40,45,56,.6)'}},x:{stacked:true,title:{display:true,text:'dia do mês',color:'#5b6474'},ticks:{color:'#8a94a6',maxTicksLimit:16},grid:{display:false}}}}});
   }
 }
 
