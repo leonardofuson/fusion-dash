@@ -12,63 +12,57 @@
   .topbar .data{color:var(--mut);font-size:12px;text-transform:capitalize}
   .btn{background:var(--panel2);border:1px solid var(--line);color:var(--txt);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:13px;text-decoration:none}
   .btn:hover{border-color:var(--accent)}
-  main{padding:18px 20px 40px;max-width:1240px;margin:0 auto}
+  main{padding:18px 20px 44px;max-width:1280px;margin:0 auto}
   a.drill{font-size:11px;color:var(--cy);text-decoration:none}a.drill:hover{text-decoration:underline}
   .fresh{font-size:11px;color:var(--dim);margin:2px 0 16px;display:flex;align-items:center;gap:6px}
   .fresh .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green)}
   .sec-h{display:flex;align-items:center;gap:10px;margin:24px 2px 11px}
   .sec-h h2{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--mut);margin:0}
-  .sec-h .sp{flex:1}
-  /* HERO */
+  .sec-h .sp{flex:1}.sec-h .tgl{font-size:11px;color:var(--mut);cursor:pointer;border:1px solid var(--line);border-radius:20px;padding:3px 11px}
+  .sec-h .tgl.on{background:var(--accent);border-color:var(--accent);color:#fff}
   .hero{display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:14px}@media(max-width:820px){.hero{grid-template-columns:1fr}}
   .hcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
   .hcard.main{background:linear-gradient(140deg,rgba(124,92,255,.16),rgba(124,92,255,.02));border-color:rgba(124,92,255,.32)}
   .hcard .lbl{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.5px}
-  .hcard .big{font-size:32px;font-weight:800;margin-top:4px;white-space:nowrap;line-height:1.1}
-  .hcard.main .big{font-size:38px}
-  .hcard .meta{color:var(--mut);font-size:12.5px;margin-top:7px;display:flex;gap:14px;flex-wrap:wrap}
-  .hcard .meta b{color:var(--txt)}
-  .bar{height:9px;background:var(--panel2);border-radius:6px;overflow:hidden;margin-top:10px}
-  .bar>i{display:block;height:100%;border-radius:6px}
-  /* strip hoje/ontem */
+  .hcard .big{font-size:31px;font-weight:800;margin-top:4px;white-space:nowrap;line-height:1.1}
+  .hcard.main .big{font-size:37px}
+  .hcard .meta{color:var(--mut);font-size:12.5px;margin-top:7px;display:flex;gap:14px;flex-wrap:wrap}.hcard .meta b{color:var(--txt)}
+  .bar{height:9px;background:var(--panel2);border-radius:6px;overflow:hidden;margin-top:10px}.bar>i{display:block;height:100%;border-radius:6px}
   .strip{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}@media(max-width:560px){.strip{grid-template-columns:1fr}}
   .scard{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px 16px;display:flex;align-items:center;gap:14px}
   .scard .em{font-size:22px}.scard .lbl{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.5px}
   .scard .v{font-size:22px;font-weight:800;white-space:nowrap}.scard .x{color:var(--mut);font-size:12px}
-  .tag{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:2px 7px;border-radius:20px;background:rgba(251,191,36,.16);color:var(--amber)}
-  .tag.ok{background:rgba(52,211,153,.14);color:var(--green)}
-  /* grupos */
-  .grupos{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}@media(max-width:900px){.grupos{grid-template-columns:repeat(2,1fr)}}
-  .gcard{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px 14px;position:relative;overflow:hidden}
-  .gcard .gtop{display:flex;align-items:center;gap:7px}
-  .gcard .gdot{width:9px;height:9px;border-radius:3px}
-  .gcard .gname{font-size:11px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.4px}
-  .gcard .gval{font-size:22px;font-weight:800;margin-top:6px;white-space:nowrap}
-  .gcard .grow{display:flex;justify-content:space-between;font-size:12px;color:var(--mut);margin-top:5px}
-  .gcard .grow b{color:var(--txt)}
-  .gcard .gspark{position:absolute;bottom:0;left:0;right:0;height:30px;opacity:.45;pointer-events:none}
-  .up{color:var(--green)}.down{color:var(--red)}.flat{color:var(--dim)}
-  /* tabela */
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px 4px}
-  table{width:100%;border-collapse:collapse;font-size:13px}
-  th,td{text-align:right;padding:9px 12px;white-space:nowrap}
-  th{color:var(--mut);font-weight:600;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--line)}
-  th.l,td.l{text-align:left}
-  tbody tr{border-bottom:1px solid rgba(40,45,56,.5)}tbody tr:last-child{border-bottom:none}
-  tbody tr:hover{background:rgba(255,255,255,.02)}
-  td .cn{display:inline-flex;align-items:center;gap:8px}td .cn i{width:8px;height:8px;border-radius:2px;display:inline-block}
-  tr.grp td{background:rgba(255,255,255,.025);font-weight:700}
-  .pill{font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px}
-  .pill.g{background:rgba(52,211,153,.14);color:var(--green)}.pill.a{background:rgba(251,191,36,.14);color:var(--amber)}.pill.r{background:rgba(248,113,113,.14);color:var(--red)}
+  .tag{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:2px 7px;border-radius:20px;background:rgba(251,191,36,.16);color:var(--amber)}.tag.ok{background:rgba(52,211,153,.14);color:var(--green)}
+  /* perf KPIs */
+  .perf{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}@media(max-width:820px){.perf{grid-template-columns:repeat(2,1fr)}}
+  .pcard{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px 15px}
+  .pcard .lbl{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.4px}
+  .pcard .v{font-size:22px;font-weight:800;margin-top:5px;white-space:nowrap}
+  .pcard .d{font-size:12px;margin-top:4px}
+  /* P&L */
+  .pnlwrap{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow-x:auto}
+  table.pnl{width:100%;border-collapse:collapse;font-size:12.5px;min-width:760px}
+  table.pnl th,table.pnl td{padding:8px 12px;text-align:right;white-space:nowrap}
+  table.pnl thead th{color:var(--mut);font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel)}
+  table.pnl th.l,table.pnl td.l{text-align:left}
+  table.pnl th.canal{cursor:pointer;user-select:none}table.pnl th.canal:hover{color:var(--txt)}
+  table.pnl th.canal.foc{color:var(--accent)}
+  table.pnl td.tot,table.pnl th.tot{border-left:1px solid var(--line);font-weight:700}
+  tr.mile td{font-weight:800;border-top:1px solid var(--line);background:rgba(255,255,255,.015)}
+  tr.mile td.l{cursor:pointer;user-select:none}
+  tr.mile.op td{border-top:2px solid var(--line)}
+  tr.cost td{color:var(--mut)}tr.cost td.l{padding-left:26px;color:var(--dim)}
+  tr.cost.hide{display:none}
+  .chev{display:inline-block;width:12px;color:var(--dim);transition:transform .15s}.chev.open{transform:rotate(90deg)}
+  .pos{color:var(--green)}.neg{color:var(--red)}.up{color:var(--green)}.down{color:var(--red)}.flat{color:var(--dim)}
   .chartcard{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
-  /* alertas */
   .alerts{display:flex;flex-direction:column;gap:8px}
   .alert{display:flex;align-items:center;gap:11px;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--dim);border-radius:9px;padding:10px 13px;font-size:13px}
   .alert.alta{border-left-color:var(--red)}.alert.media{border-left-color:var(--amber)}.alert.baixa{border-left-color:var(--cy)}
   .alert .sev{font-size:9.5px;text-transform:uppercase;font-weight:800;letter-spacing:.5px;padding:2px 8px;border-radius:20px;background:var(--panel2)}
   .alert.alta .sev{color:var(--red)}.alert.media .sev{color:var(--amber)}.alert.baixa .sev{color:var(--cy)}
   .alert .cat{color:var(--dim);font-size:11px;margin-left:auto;text-transform:uppercase}
-  .muted{color:var(--mut)}
+  .muted{color:var(--mut)}.note{font-size:11px;color:var(--dim);margin-top:8px}
   #loader{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;color:var(--mut);z-index:50}
 </style></head>
 <body>
@@ -78,23 +72,21 @@
 <main>
   <div class="fresh"><span class="dot"></span><span id="freshtxt">Carregando…</span></div>
 
-  <!-- HERO -->
   <div class="hero" id="hero"></div>
   <div class="strip" id="strip"></div>
 
-  <!-- POR GRUPO -->
-  <div class="sec-h"><h2>Por canal · mês corrente</h2><span class="sp"></span><a class="drill" href="/diretoria.html">Diretoria →</a></div>
-  <div class="grupos" id="grupos"></div>
+  <!-- PERFORMANCE KPIs -->
+  <div class="sec-h"><h2>Performance · mês corrente <span class="muted" style="text-transform:none;font-weight:400">(Δ vs mesmos dias do mês anterior)</span></h2></div>
+  <div class="perf" id="perf"></div>
 
-  <!-- TABELA POR CANAL -->
-  <div class="sec-h"><h2>Detalhe por canal · MTD</h2><span class="sp"></span><a class="drill" href="/ecommerce.html">Ecommerce →</a></div>
-  <div class="card" style="overflow-x:auto"><table id="tb"><thead><tr>
-    <th class="l">Canal</th><th>Receita líq</th><th>vs mês ant.</th><th>Pedidos</th><th>Ticket</th><th>Devol.</th><th>Contrib.</th><th>Margem</th>
-  </tr></thead><tbody id="tbb"></tbody></table></div>
+  <!-- P&L POR CANAL -->
+  <div class="sec-h"><h2>P&amp;L por canal · MTD</h2><span class="sp"></span><span class="muted" style="font-size:11px">clique num milestone p/ abrir os custos · num canal p/ comparar no gráfico</span></div>
+  <div class="pnlwrap"><table class="pnl" id="pnl"><thead id="pnl-h"></thead><tbody id="pnl-b"></tbody></table></div>
+  <div class="note" id="pnl-note"></div>
 
-  <!-- RITMO -->
-  <div class="sec-h"><h2>Ritmo diário · 60 dias</h2></div>
-  <div class="chartcard"><canvas id="ritmo" height="88"></canvas></div>
+  <!-- GRÁFICO DIÁRIO -->
+  <div class="sec-h"><h2>Vendas diárias · mês corrente</h2><span class="sp"></span><span class="tgl" id="tgl-mom">vs mês anterior</span></div>
+  <div class="chartcard"><canvas id="chart" height="92"></canvas></div>
 
   <!-- ALERTAS -->
   <div class="sec-h"><h2>Radar · alertas</h2><span class="sp"></span><a class="drill" href="/marketing.html">Marketing →</a></div>
@@ -103,207 +95,232 @@
 <div id="loader">Carregando…</div>
 <script>
 let SB='',ANON='';const CHARTS={};
-const GRUPOS=['Marketplaces','Lojas','Site','Atacado'];
-const GCOR={Marketplaces:'#7c5cff',Lojas:'#22d3ee',Site:'#34d399',Atacado:'#fbbf24'};
-const CANORDER=['ML Fio','ML Confec','Shopee Fio','Shopee Confec','TikTok','Shein','Venda Direta'];
+const TAX=0.065;
+// colunas do P&L (ordem)
+const COLS=['ML Fio','ML Confec','Shopee','TikTok','Shein','Venda Direta','Site','Lojas'];
+const CCOR={'ML Fio':'#7c5cff','ML Confec':'#a78bfa','Shopee':'#f5a623','TikTok':'#ec4899','Shein':'#f472b6','Venda Direta':'#94a3b8','Site':'#34d399','Lojas':'#22d3ee'};
 const rsFull=v=>'R$ '+(Math.round(v||0)).toLocaleString('pt-BR');
-const rsK=v=>{v=v||0;const a=Math.abs(v);if(a>=1e6)return 'R$ '+(v/1e6).toFixed(2).replace('.',',')+'M';if(a>=1e3)return 'R$ '+(v/1e3).toFixed(0)+'k';return 'R$ '+Math.round(v);};
+const rsK=v=>{v=v||0;const a=Math.abs(v);const s=v<0?'-':'';if(a>=1e6)return s+'R$ '+(a/1e6).toFixed(2).replace('.',',')+'M';if(a>=1e3)return s+'R$ '+(a/1e3).toFixed(0)+'k';return s+'R$ '+Math.round(a);};
 const ri=v=>(Math.round(v||0)).toLocaleString('pt-BR');
 const pct0=v=>(v==null||isNaN(v))?'—':Math.round(v*100)+'%';
 const pct1=v=>(v==null||isNaN(v))?'—':(v*100).toFixed(1)+'%';
 
-// datas (fuso SP)
 function hojeSP(){return new Date().toLocaleDateString('en-CA',{timeZone:'America/Sao_Paulo'});}
 function agoraSP(){return new Date().toLocaleTimeString('pt-BR',{timeZone:'America/Sao_Paulo',hour:'2-digit',minute:'2-digit'});}
 function fmtD(dt){return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');}
 function somaDias(d,n){const dt=new Date(d+'T12:00:00');dt.setDate(dt.getDate()+n);return fmtD(dt);}
 function inicioMes(d){return d.slice(0,7)+'-01';}
-function mesAnteriorMesmoDia(d){const dt=new Date(d+'T12:00:00');const day=dt.getDate();const p=new Date(dt.getFullYear(),dt.getMonth()-1,1);const dim=new Date(p.getFullYear(),p.getMonth()+1,0).getDate();return{ini:fmtD(p),ate:fmtD(new Date(p.getFullYear(),p.getMonth(),Math.min(day,dim)))};}
+function mesAnt(d){const dt=new Date(d+'T12:00:00'),day=dt.getDate(),p=new Date(dt.getFullYear(),dt.getMonth()-1,1),dim=new Date(p.getFullYear(),p.getMonth()+1,0).getDate();return{ini:fmtD(p),ate:fmtD(new Date(p.getFullYear(),p.getMonth(),Math.min(day,dim)))};}
 function diasNoMes(d){return new Date(+d.slice(0,4),+d.slice(5,7),0).getDate();}
 
 // régua idêntica ao mvw_diretoria_dia
 function recBrutaRow(p){const ml=(p.origem_conta==='fio_e_trama'||p.origem_conta==='confeccoes')&&/^Mercado Livre/.test(p.canal_nome_raw||'');return (+p.valor_bruto||0)-(ml?0:(+p.frete||0));}
 function devRow(p){return (+p.valor_devolucao||0)+(+p.valor_chargeback||0);}
 function grupoDe(oc,canal,loja){oc=(oc||'').toLowerCase();loja=loja||'';canal=canal||'';
-  if(oc==='flecha')return'Atacado';if(oc==='kwid'&&loja==='Atacado WhatsApp')return'Atacado';
+  if(oc==='flecha'||(oc==='kwid'&&loja==='Atacado WhatsApp'))return'Atacado';
   if(oc==='kwid')return'Lojas';if(oc==='shopify'||/site pr[óo]prio/i.test(canal))return'Site';return'Marketplaces';}
-function canalDe(oc,canal,loja){const g=grupoDe(oc,canal,loja);
-  if(g==='Lojas')return'Lojas Físicas';if(g==='Atacado')return'Atacado';if(g==='Site')return'Site';
+// label de coluna do P&L (canal cru → coluna)
+function colDe(grupo,canal){
+  if(grupo==='Lojas'||grupo==='Atacado')return'Lojas';if(grupo==='Site')return'Site';
   const c=canal||'';
   if(/Mercado Livre FIO/i.test(c))return'ML Fio';if(/Mercado Livre Conf/i.test(c))return'ML Confec';
-  if(/Shopee FIO/i.test(c))return'Shopee Fio';if(/Shopee Conf/i.test(c))return'Shopee Confec';
-  if(/TikTok/i.test(c))return'TikTok';if(/Shein/i.test(c))return'Shein';return c||'Outros';}
+  if(/Shopee/i.test(c))return'Shopee';if(/TikTok/i.test(c))return'TikTok';if(/Shein/i.test(c))return'Shein';
+  if(/Venda Direta/i.test(c))return'Venda Direta';return'Venda Direta';}
+function colDeFresh(oc,canal,loja){return colDe(grupoDe(oc,canal,loja),canal);}
+// ads: plataforma+conta → coluna
+function colAds(plat,conta){plat=(plat||'');conta=(conta||'');
+  if(/mercado/.test(plat))return /confec/i.test(conta)?'ML Confec':'ML Fio';
+  if(/shopee/.test(plat))return'Shopee';if(/meta/.test(plat))return'Site';return null;} // google→lojas fica no opex
 
 async function getHeaders(){const s=await fusionAuth.getSession();return{apikey:ANON,Authorization:'Bearer '+(s?s.access_token:'')};}
 async function apiAll(table,qs,orderKey){let all=[],off=0;const h=await getHeaders();const ord=orderKey?'&order='+orderKey:'';
   while(true){const r=await fetch(SB+'/rest/v1/'+table+'?'+qs+ord+'&limit=1000&offset='+off,{headers:h});if(!r.ok)break;const l=await r.json();all=all.concat(l);if(l.length<1000)break;off+=1000;}return all;}
 
-const S={fresh:[],mv:[],margem:[],meta:{},alertas:[]};
+const S={fresh:[],mv:[],margem:[],ecomFixo:[],lojasCusto:[],ads:[],meta:{},alertas:[],hoje:'',mStart:'',freshFrom:'',pm:null};
+const UI={open:{gross:false,net:true,contrib:false},foc:null,mom:false};
 
 async function carregar(){
-  const hoje=hojeSP();
+  const hoje=hojeSP();S.hoje=hoje;
   document.getElementById('data').textContent='· '+new Date(hoje+'T12:00:00').toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long'});
-  const freshFrom=somaDias(hoje,-2);            // últimos 3 dias frescos (vw_pedidos_full)
-  const mvFrom=somaDias(hoje,-75);              // MV cobre trend 60d + mês anterior
-  const mStart=inicioMes(hoje);
-  const [fresh,mv,margem,metaRows,alertas]=await Promise.all([
+  const freshFrom=somaDias(hoje,-2), mvFrom=somaDias(hoje,-75), mStart=inicioMes(hoje);
+  S.freshFrom=freshFrom;S.mStart=mStart;S.pm=mesAnt(hoje);
+  const pmIni=S.pm.ini;
+  const [fresh,mv,margem,ecomFixo,lojasCusto,ads,metaRows,alertas]=await Promise.all([
     apiAll('vw_pedidos_full','select=data_pedido,origem_conta,canal_nome_raw,loja_nome,valor_bruto,frete,valor_devolucao,valor_chargeback,status&data_pedido=gte.'+freshFrom+'&status=neq.cancelado','id.asc'),
     apiAll('mvw_diretoria_dia','select=data_pedido,origem_conta,canal_nome_raw,loja_nome,pedidos,receita_bruta,devolucoes&data_pedido=gte.'+mvFrom,'data_pedido.asc,origem_conta.asc,canal_nome_raw.asc,loja_nome.asc'),
-    apiAll('mvw_margem_canal_dia','select=data_pedido,grupo,canal,receita_liquida,comissao,afiliado,frete_seller,devolucoes,cmv,contribuicao&data_pedido=gte.'+mStart,'data_pedido.asc,grupo.asc,canal.asc,origem_conta.asc'),
+    apiAll('mvw_margem_canal_dia','select=data_pedido,grupo,canal,receita_bruta,devolucoes,comissao,afiliado,frete_seller,cmv,unidades&data_pedido=gte.'+pmIni,'data_pedido.asc,grupo.asc,canal.asc,origem_conta.asc'),
+    apiAll('vw_ecom_custo_fixo_canal_dia','select=data_pedido,canal_nome_raw,custo_fixo_rateado&data_pedido=gte.'+mStart,'data_pedido.asc'),
+    apiAll('vw_lojas_custo_dia','select=data_pedido,comissao_lojas,custo_fixo_lojas&data_pedido=gte.'+mStart,'data_pedido.asc'),
+    apiAll('ads_metrics','select=data,plataforma,conta,gasto&level=eq.campaign&data=gte.'+pmIni,'data.asc'),
     apiAll('projecao_faturamento','select=ano_mes,valor&tipo=eq.projetado&versao=eq.1','ano_mes.asc'),
     apiAll('marketing_alertas','select=data_ref,severidade,categoria,titulo,detalhe','data_ref.desc'),
   ]);
-  S.fresh=fresh;S.mv=mv;S.margem=margem;S.alertas=alertas;
+  S.fresh=fresh;S.mv=mv;S.margem=margem;S.ecomFixo=ecomFixo;S.lojasCusto=lojasCusto;S.ads=ads;S.alertas=alertas;
   const meta={};metaRows.forEach(r=>{meta[r.ano_mes]=(meta[r.ano_mes]||0)+(+r.valor||0);});S.meta=meta;
-  render(hoje,freshFrom,mStart);
+  render();
   document.getElementById('loader').style.display='none';
-  document.getElementById('freshtxt').innerHTML='Hoje · ontem · mês em <b>tempo real</b> ('+agoraSP()+') · margem e tendência via MV (~2h) · receita líquida (bruto − devoluções)';
+  document.getElementById('freshtxt').innerHTML='Hoje · ontem · performance em <b>tempo real</b> ('+agoraSP()+') · P&amp;L e margem via MV (~2h) · receita líquida = bruto − devoluções';
 }
 
-// ── agregadores ──
-// fresh: por dia + por canal/grupo (net, pedidos). mv: idem pra histórico.
-function aggFresh(rows){ // {porDia:{d:net}, porCanal:{canal:{net,ped,dev,rec,grupo}}, porGrupo:{g:{net,ped}}}
-  const porDia={},porCanal={},porGrupo={};
-  rows.forEach(p=>{const d=p.data_pedido,g=grupoDe(p.origem_conta,p.canal_nome_raw,p.loja_nome),c=canalDe(p.origem_conta,p.canal_nome_raw,p.loja_nome);
-    const rb=recBrutaRow(p),dv=devRow(p),net=rb-dv;
-    porDia[d]=(porDia[d]||0)+net;
-    (porCanal[c]||(porCanal[c]={net:0,ped:0,dev:0,rec:0,grupo:g}));porCanal[c].net+=net;porCanal[c].ped++;porCanal[c].dev+=dv;porCanal[c].rec+=rb;
-    (porGrupo[g]||(porGrupo[g]={net:0,ped:0}));porGrupo[g].net+=net;porGrupo[g].ped++;});
-  return{porDia,porCanal,porGrupo};
-}
-function aggMV(rows){const porDia={},porCanal={},porGrupo={};
-  rows.forEach(r=>{const d=r.data_pedido,g=grupoDe(r.origem_conta,r.canal_nome_raw,r.loja_nome),c=canalDe(r.origem_conta,r.canal_nome_raw,r.loja_nome);
-    const net=(+r.receita_bruta||0)-(+r.devolucoes||0),ped=(+r.pedidos||0),dev=(+r.devolucoes||0);
-    porDia[d]=(porDia[d]||0)+net;
-    (porCanal[c]||(porCanal[c]={net:0,ped:0,dev:0,rec:0,grupo:g}));porCanal[c].net+=net;porCanal[c].ped+=ped;porCanal[c].dev+=dev;porCanal[c].rec+=(+r.receita_bruta||0);
-    (porGrupo[g]||(porGrupo[g]={net:0,ped:0}));porGrupo[g].net+=net;porGrupo[g].ped+=ped;});
-  return{porDia,porCanal,porGrupo};}
-
-function render(hoje,freshFrom,mStart){
-  const F=aggFresh(S.fresh);
-  const ontem=somaDias(hoje,-1);
-  // ── séries diárias combinadas: MV p/ d<freshFrom, fresh p/ d>=freshFrom ──
+// net diário combinado (MV histórico + fresh recente)
+function netDiaFn(){
   const mvDia={};S.mv.forEach(r=>{mvDia[r.data_pedido]=(mvDia[r.data_pedido]||0)+((+r.receita_bruta||0)-(+r.devolucoes||0));});
-  const netDia=d=>(d>=freshFrom)?(F.porDia[d]||0):(mvDia[d]||0);
+  const frDia={};S.fresh.forEach(p=>{frDia[p.data_pedido]=(frDia[p.data_pedido]||0)+(recBrutaRow(p)-devRow(p));});
+  return d=>(d>=S.freshFrom)?(frDia[d]||0):(mvDia[d]||0);
+}
 
-  // ── MTD (MV até freshFrom-1 + fresh do mês) ──
-  const mtdMV=S.mv.filter(r=>r.data_pedido>=mStart&&r.data_pedido<freshFrom);
-  const mtdMVagg=aggMV(mtdMV);
-  const freshMes=S.fresh.filter(p=>p.data_pedido>=mStart);
-  const freshMesAgg=aggFresh(freshMes);
-  // merge por grupo
-  const mtdG={},pedG={};GRUPOS.forEach(g=>{mtdG[g]=((mtdMVagg.porGrupo[g]||{}).net||0)+((freshMesAgg.porGrupo[g]||{}).net||0);pedG[g]=((mtdMVagg.porGrupo[g]||{}).ped||0)+((freshMesAgg.porGrupo[g]||{}).ped||0);});
-  // merge por canal
-  const canaisSet=new Set([...Object.keys(mtdMVagg.porCanal),...Object.keys(freshMesAgg.porCanal)]);
-  const mtdCanal={};canaisSet.forEach(c=>{const a=mtdMVagg.porCanal[c]||{net:0,ped:0,dev:0,rec:0,grupo:''},b=freshMesAgg.porCanal[c]||{net:0,ped:0,dev:0,rec:0,grupo:''};
-    mtdCanal[c]={net:a.net+b.net,ped:a.ped+b.ped,dev:a.dev+b.dev,rec:a.rec+b.rec,grupo:a.grupo||b.grupo};});
-  const mtd=Object.values(mtdG).reduce((s,v)=>s+v,0);
-  const mtdPed=Object.values(pedG).reduce((s,v)=>s+v,0);
-
-  // ── mês anterior, mesmos dias (da MV) ──
-  const pm=mesAnteriorMesmoDia(hoje);
-  const pmRows=S.mv.filter(r=>r.data_pedido>=pm.ini&&r.data_pedido<=pm.ate);
-  const pmAgg=aggMV(pmRows);
-  const mtdPrev=Object.values(pmAgg.porGrupo).reduce((s,v)=>s+v.net,0);
-  const dMtd=mtdPrev?(mtd-mtdPrev)/mtdPrev:null;
-
-  // ── meta + projeção ──
-  const metaMes=S.meta[mStart]||0;
-  const dim=diasNoMes(hoje),diaHoje=+hoje.slice(8,10);
-  // projeção DOW-weighted (usa netDia combinado do mês)
-  const byDow={};let observed=0;for(let dd=1;dd<=diaHoje;dd++){const ds=mStart.slice(0,8)+String(dd).padStart(2,'0');const dw=new Date(ds+'T12:00:00').getDay();const v=netDia(ds);(byDow[dw]||(byDow[dw]={s:0,n:0}));byDow[dw].s+=v;byDow[dw].n++;observed+=v;}
-  let proj=observed;for(let dd=diaHoje+1;dd<=dim;dd++){const dw=new Date(mStart.slice(0,8)+String(dd).padStart(2,'0')+'T12:00:00').getDay();const avg=(byDow[dw]&&byDow[dw].n)?byDow[dw].s/byDow[dw].n:(diaHoje?observed/diaHoje:0);proj+=avg;}
-  const atMTD=metaMes?mtd/metaMes:null, atProj=metaMes?proj/metaMes:null;
-  const dHTML=d=>d==null?'<span class="flat">—</span>':`<span class="${d>=0?'up':'down'}">${d>=0?'▲':'▼'} ${Math.abs(d*100).toFixed(0)}%</span>`;
+function render(){
+  const hoje=S.hoje,mStart=S.mStart,ontem=somaDias(hoje,-1);
+  const netDia=netDiaFn();
+  // fresh agregado
+  let vHoje=0,vOntem=0,pedHoje=0,pedOntem=0;
+  S.fresh.forEach(p=>{const n=recBrutaRow(p)-devRow(p);if(p.data_pedido===hoje){vHoje+=n;pedHoje++;}if(p.data_pedido===ontem){vOntem+=n;pedOntem++;}});
+  // MTD fresh (mês corrente todo, do vw_pedidos_full últimos 3d) + MV pro resto do mês
+  const freshMes=S.fresh.filter(p=>p.data_pedido>=mStart&&p.data_pedido>=S.freshFrom);
+  const mvMes=S.mv.filter(r=>r.data_pedido>=mStart&&r.data_pedido<S.freshFrom);
+  // MTD KPIs de performance
+  let mtd=0,mtdPed=0,mtdUn=0,mtdDev=0,mtdRec=0;
+  mvMes.forEach(r=>{mtd+=(+r.receita_bruta||0)-(+r.devolucoes||0);mtdPed+=(+r.pedidos||0);mtdDev+=(+r.devolucoes||0);mtdRec+=(+r.receita_bruta||0);});
+  freshMes.forEach(p=>{const rb=recBrutaRow(p),dv=devRow(p);mtd+=rb-dv;mtdPed++;mtdDev+=dv;mtdRec+=rb;});
+  // unidades MTD da margem MV (tem unidades)
+  S.margem.filter(r=>r.data_pedido>=mStart).forEach(r=>{mtdUn+=(+r.unidades||0);});
+  // prev month same days (da MV)
+  const pm=S.pm;let pMtd=0,pPed=0,pUn=0,pDev=0,pRec=0;
+  S.mv.filter(r=>r.data_pedido>=pm.ini&&r.data_pedido<=pm.ate).forEach(r=>{pMtd+=(+r.receita_bruta||0)-(+r.devolucoes||0);pPed+=(+r.pedidos||0);pDev+=(+r.devolucoes||0);pRec+=(+r.receita_bruta||0);});
+  S.margem.filter(r=>r.data_pedido>=pm.ini&&r.data_pedido<=pm.ate).forEach(r=>{pUn+=(+r.unidades||0);});
 
   // ── HERO ──
-  const barCol=p=>p>=1?'var(--green)':p>=0.8?'var(--amber)':'var(--red)';
+  const metaMes=S.meta[mStart]||0, dim=diasNoMes(hoje), diaHoje=+hoje.slice(8,10);
+  const byDow={};let obs=0;for(let dd=1;dd<=diaHoje;dd++){const ds=mStart.slice(0,8)+String(dd).padStart(2,'0');const dw=new Date(ds+'T12:00:00').getDay();const v=netDia(ds);(byDow[dw]||(byDow[dw]={s:0,n:0}));byDow[dw].s+=v;byDow[dw].n++;obs+=v;}
+  let proj=obs;for(let dd=diaHoje+1;dd<=dim;dd++){const dw=new Date(mStart.slice(0,8)+String(dd).padStart(2,'0')+'T12:00:00').getDay();proj+=(byDow[dw]&&byDow[dw].n)?byDow[dw].s/byDow[dw].n:(diaHoje?obs/diaHoje:0);}
+  const atMTD=metaMes?mtd/metaMes:null,atProj=metaMes?proj/metaMes:null;
+  const dMtd=pMtd?(mtd-pMtd)/pMtd:null;
+  const dH=d=>d==null?'<span class="flat">—</span>':`<span class="${d>=0?'up':'down'}">${d>=0?'▲':'▼'} ${Math.abs(d*100).toFixed(0)}%</span>`;
+  const barc=p=>p>=1?'var(--green)':p>=.8?'var(--amber)':'var(--red)';
   document.getElementById('hero').innerHTML=`
-    <div class="hcard main"><div class="lbl">Faturamento do mês (MTD)</div>
-      <div class="big">${rsFull(mtd)}</div>
-      <div class="meta"><span>${ri(mtdPed)} pedidos</span><span>ticket <b>${rsFull(mtdPed?mtd/mtdPed:0)}</b></span><span>vs mesmos dias de ${new Date(pm.ini+'T12:00:00').toLocaleDateString('pt-BR',{month:'short'}).replace('.','')} ${dHTML(dMtd)}</span></div></div>
-    <div class="hcard"><div class="lbl">Meta do mês</div>
-      <div class="big">${rsK(metaMes)}</div>
+    <div class="hcard main"><div class="lbl">Faturamento do mês (MTD)</div><div class="big">${rsFull(mtd)}</div>
+      <div class="meta"><span>${ri(mtdPed)} pedidos</span><span>ticket <b>${rsFull(mtdPed?mtd/mtdPed:0)}</b></span><span>vs ${new Date(pm.ini+'T12:00:00').toLocaleDateString('pt-BR',{month:'short'}).replace('.','')} ${dH(dMtd)}</span></div></div>
+    <div class="hcard"><div class="lbl">Meta do mês</div><div class="big">${rsK(metaMes)}</div>
       <div class="meta"><span><b>${pct0(atMTD)}</b> atingido${metaMes>mtd?' · faltam '+rsK(metaMes-mtd):''}</span></div>
-      <div class="bar"><i style="width:${Math.min(100,(atMTD||0)*100)}%;background:${barCol(atMTD||0)}"></i></div></div>
-    <div class="hcard"><div class="lbl">Projeção de fechamento</div>
-      <div class="big" style="color:${atProj>=1?'var(--green)':'var(--amber)'}">${rsK(proj)}</div>
-      <div class="meta"><span>${atProj>=1?'<span class="up">bate a meta</span>':'<span class="down">abaixo da meta</span>'} · <b>${pct0(atProj)}</b> · ritmo atual</span></div></div>`;
-
-  // ── STRIP hoje/ontem ──
-  const vHoje=F.porDia[hoje]||0;
-  const pedHojeN=S.fresh.filter(p=>p.data_pedido===hoje).length, pedOntemN=S.fresh.filter(p=>p.data_pedido===ontem).length;
-  const vOntem=F.porDia[ontem]||0;
+      <div class="bar"><i style="width:${Math.min(100,(atMTD||0)*100)}%;background:${barc(atMTD||0)}"></i></div></div>
+    <div class="hcard"><div class="lbl">Projeção de fechamento</div><div class="big" style="color:${atProj>=1?'var(--green)':'var(--amber)'}">${rsK(proj)}</div>
+      <div class="meta"><span>${atProj>=1?'<span class="up">bate a meta</span>':'<span class="down">abaixo</span>'} · <b>${pct0(atProj)}</b> · ritmo atual</span></div></div>`;
   document.getElementById('strip').innerHTML=`
-    <div class="scard"><span class="em">🟡</span><div><div class="lbl">Hoje até agora <span class="tag">parcial</span></div><div class="v">${rsFull(vHoje)}</div><div class="x">${ri(pedHojeN)} pedidos · atualizando ao vivo</div></div></div>
-    <div class="scard"><span class="em">✅</span><div><div class="lbl">Ontem <span class="tag ok">fechado</span></div><div class="v">${rsFull(vOntem)}</div><div class="x">${ri(pedOntemN)} pedidos · ticket ${rsFull(pedOntemN?vOntem/pedOntemN:0)}</div></div></div>`;
+    <div class="scard"><span class="em">🟡</span><div><div class="lbl">Hoje até agora <span class="tag">parcial</span></div><div class="v">${rsFull(vHoje)}</div><div class="x">${ri(pedHoje)} pedidos · ao vivo</div></div></div>
+    <div class="scard"><span class="em">✅</span><div><div class="lbl">Ontem <span class="tag ok">fechado</span></div><div class="v">${rsFull(vOntem)}</div><div class="x">${ri(pedOntem)} pedidos · ticket ${rsFull(pedOntem?vOntem/pedOntem:0)}</div></div></div>`;
 
-  // ── GRUPOS ──
-  const contribG={};GRUPOS.forEach(g=>contribG[g]={net:0,c:0});
-  S.margem.filter(r=>r.data_pedido>=mStart&&r.data_pedido<=hoje).forEach(r=>{if(contribG[r.grupo]){contribG[r.grupo].net+=(+r.receita_liquida||0);contribG[r.grupo].c+=(+r.contribuicao||0);}});
-  document.getElementById('grupos').innerHTML=GRUPOS.map(g=>{
-    const cur=mtdG[g],prev=(pmAgg.porGrupo[g]||{}).net||0,dl=prev?(cur-prev)/prev:null;
-    const cg=contribG[g],cp=cg&&cg.net?cg.c/cg.net:null;
-    return `<div class="gcard"><div class="gtop"><span class="gdot" style="background:${GCOR[g]}"></span><span class="gname">${g}</span></div>
-      <div class="gval">${rsK(cur)}</div>
-      <div class="grow"><span>${dHTML(dl)} <span class="muted">vs mês ant.</span></span></div>
-      <div class="grow"><span class="muted">${ri(pedG[g])} ped</span><span>contrib <b>${cp==null?'—':pct0(cp)}</b></span></div>
-      <canvas class="gspark" id="sp-${g}"></canvas></div>`;
-  }).join('');
-  GRUPOS.forEach(g=>{const dias=[];for(let i=13;i>=0;i--)dias.push(somaDias(hoje,-i));
-    // net por dia por grupo: usa MV p/ passado + fresh p/ recente
-    const mvGDia={};S.mv.forEach(r=>{if(grupoDe(r.origem_conta,r.canal_nome_raw,r.loja_nome)===g){mvGDia[r.data_pedido]=(mvGDia[r.data_pedido]||0)+((+r.receita_bruta||0)-(+r.devolucoes||0));}});
-    const frGDia={};S.fresh.forEach(p=>{if(grupoDe(p.origem_conta,p.canal_nome_raw,p.loja_nome)===g){frGDia[p.data_pedido]=(frGDia[p.data_pedido]||0)+(recBrutaRow(p)-devRow(p));}});
-    const data=dias.map(d=>d>=freshFrom?(frGDia[d]||0):(mvGDia[d]||0));
-    if(CHARTS['sp-'+g])CHARTS['sp-'+g].destroy();const ctx=document.getElementById('sp-'+g);if(!ctx)return;
-    CHARTS['sp-'+g]=new Chart(ctx,{type:'line',data:{labels:dias,datasets:[{data,borderColor:GCOR[g],backgroundColor:GCOR[g]+'22',fill:true,tension:.35,pointRadius:0,borderWidth:1.5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{enabled:false}},scales:{x:{display:false},y:{display:false,min:0}}}});});
+  // ── PERF KPIs ──
+  const kpi=(lbl,val,cur,prev,inv)=>{const d=prev?(cur-prev)/prev:null;const good=inv?(d!=null&&d<0):(d!=null&&d>=0);
+    return `<div class="pcard"><div class="lbl">${lbl}</div><div class="v">${val}</div><div class="d">${d==null?'<span class="flat">—</span>':`<span class="${good?'up':'down'}">${d>=0?'▲':'▼'} ${Math.abs(d*100).toFixed(0)}%</span>`} <span class="muted">vs mês ant.</span></div></div>`;};
+  const tHoje=mtdPed?mtd/mtdPed:0,tPrev=pPed?pMtd/pPed:0;
+  document.getElementById('perf').innerHTML=
+    kpi('Pedidos',ri(mtdPed),mtdPed,pPed)+
+    kpi('Ticket médio',rsFull(tHoje),tHoje,tPrev)+
+    kpi('Unidades',ri(mtdUn),mtdUn,pUn)+
+    kpi('Devolução %',pct1(mtdRec?mtdDev/mtdRec:0),mtdRec?mtdDev/mtdRec:0,pRec?pDev/pRec:0,true)+
+    kpi('Fat/dia',rsK(diaHoje?mtd/diaHoje:0),diaHoje?mtd/diaHoje:0,pm?( (pm.ate.slice(8,10))?pMtd/(+pm.ate.slice(8,10)):0):0);
 
-  // ── TABELA POR CANAL ──
-  renderTabela(mtdCanal,pmAgg.porCanal);
-
-  // ── RITMO 60d ──
-  const d60=[];for(let i=59;i>=0;i--)d60.push(somaDias(hoje,-i));
-  const serie=d60.map(d=>netDia(d));
-  const mm7=serie.map((_,i)=>{const s=serie.slice(Math.max(0,i-6),i+1);return s.reduce((a,b)=>a+b,0)/s.length;});
-  const metaDia=metaMes?metaMes/dim:null;
-  if(CHARTS.ritmo)CHARTS.ritmo.destroy();
-  CHARTS.ritmo=new Chart(document.getElementById('ritmo'),{data:{labels:d60.map(d=>d.slice(8)+'/'+d.slice(5,7)),datasets:[
-    {type:'bar',label:'Receita líq/dia',data:serie,backgroundColor:'rgba(124,92,255,.5)',borderRadius:3,order:3},
-    {type:'line',label:'Média 7d',data:mm7,borderColor:'#22d3ee',pointRadius:0,borderWidth:2,tension:.35,order:1},
-    ...(metaDia?[{type:'line',label:'Meta/dia',data:d60.map(()=>metaDia),borderColor:'#fbbf24',borderDash:[5,4],pointRadius:0,borderWidth:1.5,order:2}]:[])]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#8a94a6',boxWidth:12,font:{size:11}}}},scales:{y:{ticks:{color:'#8a94a6',callback:v=>'R$'+Math.round(v/1000)+'k'},grid:{color:'rgba(40,45,56,.6)'}},x:{ticks:{color:'#8a94a6',maxTicksLimit:16,font:{size:10}},grid:{display:false}}}}});
-
-  // ── ALERTAS ──
+  renderPnL();
+  renderChart();
+  // alertas
   const ref=S.alertas.length?S.alertas[0].data_ref:null;const av=S.alertas.filter(a=>a.data_ref===ref);
   const so={alta:0,media:1,baixa:2};av.sort((a,b)=>(so[a.severidade]??3)-(so[b.severidade]??3));
   document.getElementById('alerts').innerHTML=av.length?av.map(a=>`<div class="alert ${a.severidade}"><span class="sev">${a.severidade}</span><span>${a.titulo}${a.detalhe?' <span class="muted">— '+a.detalhe+'</span>':''}</span><span class="cat">${a.categoria}</span></div>`).join(''):'<div class="muted" style="padding:8px">Sem alertas ativos. 🎉</div>';
 }
 
-function renderTabela(mtdCanal,prevCanal){
-  const rows=Object.entries(mtdCanal).map(([canal,o])=>({canal,...o}));
-  // contribuição por canal (da margem MV, MTD) — mapeia por label
-  const cbyCanal={};S.margem.forEach(r=>{const c=canalDeMargem(r.grupo,r.canal);(cbyCanal[c]||(cbyCanal[c]={net:0,c:0}));cbyCanal[c].net+=(+r.receita_liquida||0);cbyCanal[c].c+=(+r.contribuicao||0);});
-  // ordena por grupo (ordem fixa) e dentro por net
-  const ordGrupo={Marketplaces:0,Site:1,Lojas:2,Atacado:3};
-  rows.sort((a,b)=>(ordGrupo[a.grupo]-ordGrupo[b.grupo])||(b.net-a.net));
-  let h='';let curG=null;
-  rows.forEach(r=>{
-    if(r.grupo!==curG){curG=r.grupo;}
-    const prev=prevCanal[r.canal]?prevCanal[r.canal].net:0,dl=prev?(r.net-prev)/prev:null;
-    const cb=cbyCanal[r.canal],cp=cb&&cb.net?cb.c/cb.net:null;
-    const devp=r.rec?r.dev/r.rec:0;
-    const mpill=cp==null?'<span class="muted">—</span>':`<span class="pill ${cp>=.30?'g':cp>=.15?'a':'r'}">${pct0(cp)}</span>`;
-    h+=`<tr><td class="l"><span class="cn"><i style="background:${GCOR[r.grupo]}"></i>${r.canal}</span></td>
-      <td>${rsK(r.net)}</td><td>${dl==null?'<span class="flat">—</span>':`<span class="${dl>=0?'up':'down'}">${dl>=0?'▲':'▼'}${Math.abs(dl*100).toFixed(0)}%</span>`}</td>
-      <td>${ri(r.ped)}</td><td>${rsFull(r.ped?r.net/r.ped:0)}</td><td>${devp>0.001?pct1(devp):'—'}</td>
-      <td>${cb?rsK(cb.c):'—'}</td><td>${mpill}</td></tr>`;
-  });
-  document.getElementById('tbb').innerHTML=h||'<tr><td colspan="8" class="l muted" style="padding:14px">Sem dados no mês.</td></tr>';
+// ── P&L por canal (MTD) ──
+function pnlByCanal(){
+  const mStart=S.mStart,hoje=S.hoje;
+  const Z=()=>({gross:0,dev:0,com:0,afi:0,fre:0,ads:0,cmv:0,imp:0,fixo:0});
+  const M={};COLS.forEach(c=>M[c]=Z());
+  // margem MV (MTD): gross/dev/com/afi/fre/cmv
+  S.margem.filter(r=>r.data_pedido>=mStart&&r.data_pedido<=hoje).forEach(r=>{
+    const col=colDe(r.grupo,r.canal);if(!M[col])return;const o=M[col];
+    o.gross+=(+r.receita_bruta||0);o.dev+=(+r.devolucoes||0);o.cmv+=(+r.cmv||0);
+    if(col!=='Lojas'){o.com+=(+r.comissao||0);o.afi+=(+r.afiliado||0);o.fre+=(+r.frete_seller||0);}});
+  // ads (MTD) — ecom
+  S.ads.filter(r=>r.data>=mStart&&r.data<=hoje).forEach(r=>{const col=colAds(r.plataforma,r.conta);if(col&&M[col])M[col].ads+=(+r.gasto||0);});
+  // ecom custo fixo (MTD)
+  S.ecomFixo.filter(r=>r.data_pedido>=mStart&&r.data_pedido<=hoje).forEach(r=>{const col=colDe('Marketplaces',r.canal_nome_raw);const cc=(/site pr/i.test(r.canal_nome_raw||''))?'Site':col;if(M[cc])M[cc].fixo+=(+r.custo_fixo_rateado||0);});
+  // lojas comissão + custo fixo (MTD)
+  S.lojasCusto.filter(r=>r.data_pedido>=mStart&&r.data_pedido<=hoje).forEach(r=>{M['Lojas'].com+=(+r.comissao_lojas||0);M['Lojas'].fixo+=(+r.custo_fixo_lojas||0);});
+  // impostos (ecom): 6,5% do net
+  COLS.forEach(c=>{if(c!=='Lojas'){const o=M[c];o.imp=TAX*(o.gross-o.dev);}});
+  // derivados
+  const fin={};COLS.forEach(c=>{const o=M[c];const net=o.gross-o.dev;const contrib=net-o.com-o.afi-o.fre-o.ads-o.cmv-o.imp;const opp=contrib-o.fixo;fin[c]={...o,net,contrib,opp};});
+  // total
+  const T=Z();T.net=0;T.contrib=0;T.opp=0;
+  COLS.forEach(c=>{const o=fin[c];['gross','dev','com','afi','fre','ads','cmv','imp','fixo','net','contrib','opp'].forEach(k=>T[k]=(T[k]||0)+o[k]);});
+  fin.Total=T;
+  return fin;
 }
-// margem MV usa canal_nome_raw cru → mapeia pro mesmo label da tabela
-function canalDeMargem(grupo,canalRaw){
-  if(grupo==='Lojas')return'Lojas Físicas';if(grupo==='Atacado')return'Atacado';if(grupo==='Site')return'Site';
-  return canalDe('',canalRaw,'');
+
+function renderPnL(){
+  const fin=pnlByCanal();
+  const cols=COLS.filter(c=>Math.abs(fin[c].gross)>0.5);  // só canais com venda
+  // header
+  let h='<tr><th class="l">R$ · MTD</th>'+cols.map(c=>`<th class="canal${UI.foc===c?' foc':''}" data-col="${c}" style="color:${CCOR[c]}">${c}</th>`).join('')+'<th class="tot">Total</th></tr>';
+  document.getElementById('pnl-h').innerHTML=h;
+  const val=(c,k)=>fin[c][k], row=(c,k)=>{const v=val(c,k);return v?rsK(v):'<span class="dim">—</span>';};
+  const cell=(k,neg)=>cols.map(c=>{const v=fin[c][k];const disp=(v===0||v==null)?'—':(neg?'-'+rsK(v):rsK(v));return `<td>${disp}</td>`;}).join('')+`<td class="tot">${fin.Total[k]?(neg?'-':'')+rsK(fin.Total[k]):'—'}</td>`;
+  const mile=(k,lbl,grp,cls)=>{const pct=cols.map(c=>{const g=fin[c].gross;const p=g?fin[c][k]/g:null;return '';});
+    const chev=grp?`<span class="chev${UI.open[grp]?' open':''}">▸</span> `:'';
+    const tds=cols.map(c=>`<td>${fin[c][k]?rsK(fin[c][k]):'—'}</td>`).join('')+`<td class="tot">${rsK(fin.Total[k])}</td>`;
+    return `<tr class="mile ${cls||''}"><td class="l" ${grp?`data-grp="${grp}"`:''}>${chev}${lbl}</td>${tds}</tr>`;};
+  const cost=(k,lbl,grp,neg)=>`<tr class="cost ${UI.open[grp]?'':'hide'}" data-under="${grp}"><td class="l">− ${lbl}</td>${cell(k,true)}</tr>`;
+  let b='';
+  b+=mile('gross','GROSS SALES','gross');
+  b+=cost('dev','Devoluções','gross',true);
+  b+=mile('net','NET SALES','net');
+  b+=cost('com','Comissão','net',true);
+  b+=cost('afi','Afiliado','net',true);
+  b+=cost('fre','Frete (seller)','net',true);
+  b+=cost('ads','Ads','net',true);
+  b+=cost('cmv','CMV','net',true);
+  b+=cost('imp','Impostos (6,5%)','net',true);
+  b+=mile('contrib','CONTRIBUIÇÃO','contrib');
+  b+=cost('fixo','Custo fixo / Opex','contrib',true);
+  // resultado operacional — verde/vermelho
+  const oppTds=cols.map(c=>{const v=fin[c].opp;return `<td class="${v>=0?'pos':'neg'}">${rsK(v)}</td>`;}).join('')+`<td class="tot ${fin.Total.opp>=0?'pos':'neg'}">${rsK(fin.Total.opp)}</td>`;
+  const oppPct=fin.Total.gross?fin.Total.opp/fin.Total.gross:0;
+  b+=`<tr class="mile op"><td class="l">RESULTADO OPERACIONAL</td>${oppTds}</tr>`;
+  b+=`<tr class="cost"><td class="l muted">% da receita</td>${cols.map(c=>{const p=fin[c].gross?fin[c].opp/fin[c].gross:null;return `<td class="${p>=0?'pos':'neg'}">${pct1(p)}</td>`;}).join('')}<td class="tot ${oppPct>=0?'pos':'neg'}">${pct1(oppPct)}</td></tr>`;
+  document.getElementById('pnl-b').innerHTML=b;
+  document.getElementById('pnl-note').innerHTML='Ecom: comissão/afiliado/frete/ads/imposto reais por canal + custo fixo (overhead absorção). Lojas: CMV + comissão vendedor + opex (pessoal/ocupação/impostos) do classificado — reconcilia com opex_lojas; linhas variáveis "—" não existem no físico. "Full" (fulfillment ML/Shopee) não quebrado por canal.';
+  // wire
+  document.querySelectorAll('tr.mile td[data-grp]').forEach(td=>td.onclick=()=>{const g=td.dataset.grp;UI.open[g]=!UI.open[g];renderPnL();});
+  document.querySelectorAll('th.canal').forEach(th=>th.onclick=()=>{UI.foc=(UI.foc===th.dataset.col)?null:th.dataset.col;renderPnL();renderChart();});
+}
+
+// ── gráfico diário ──
+function renderChart(){
+  const hoje=S.hoje,mStart=S.mStart,dim=diasNoMes(hoje),diaHoje=+hoje.slice(8,10);
+  const netDia=netDiaFn();
+  const dias=[];for(let d=1;d<=diaHoje;d++)dias.push(mStart.slice(0,8)+String(d).padStart(2,'0'));
+  if(CHARTS.c)CHARTS.c.destroy();
+  const ctx=document.getElementById('chart');
+  if(UI.mom||UI.foc){
+    // linha: mês atual vs mês anterior (mesmos dias). Se foco num canal, filtra o canal.
+    const focCol=UI.foc;
+    const serCur=dias.map(d=>{ if(!focCol) return netDia(d);
+      // net do canal no dia: usa MV (histórico) + fresh (recente)
+      let v=0; if(d>=S.freshFrom){S.fresh.forEach(p=>{if(p.data_pedido===d&&colDeFresh(p.origem_conta,p.canal_nome_raw,p.loja_nome)===focCol)v+=recBrutaRow(p)-devRow(p);});}
+      else {S.mv.forEach(r=>{if(r.data_pedido===d&&colDe(grupoDe(r.origem_conta,r.canal_nome_raw,r.loja_nome),r.canal_nome_raw)===focCol)v+=(+r.receita_bruta||0)-(+r.devolucoes||0);});} return v;});
+    const pm=S.pm;const pmDays=[];for(let d=1;d<=diaHoje;d++){const dd=new Date(pm.ini+'T12:00:00');dd.setDate(d);pmDays.push(fmtD(dd));}
+    const serPrev=pmDays.map(d=>{let v=0;S.mv.forEach(r=>{if(r.data_pedido===d&&(!focCol||colDe(grupoDe(r.origem_conta,r.canal_nome_raw,r.loja_nome),r.canal_nome_raw)===focCol))v+=(+r.receita_bruta||0)-(+r.devolucoes||0);});return v;});
+    CHARTS.c=new Chart(ctx,{type:'line',data:{labels:dias.map(d=>+d.slice(8)),datasets:[
+      {label:(focCol||'Fusion')+' — mês atual',data:serCur,borderColor:focCol?CCOR[focCol]:'#7c5cff',backgroundColor:'transparent',tension:.3,pointRadius:0,borderWidth:2},
+      {label:'mês anterior',data:serPrev,borderColor:'#71717a',borderDash:[5,4],tension:.3,pointRadius:0,borderWidth:1.5}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#8a94a6',boxWidth:12,font:{size:11}}}},scales:{y:{ticks:{color:'#8a94a6',callback:v=>'R$'+Math.round(v/1000)+'k'},grid:{color:'rgba(40,45,56,.6)'}},x:{title:{display:true,text:'dia do mês',color:'#5b6474'},ticks:{color:'#8a94a6',maxTicksLimit:16},grid:{display:false}}}}});
+  } else {
+    // empilhado por canal
+    const byColDia={};COLS.forEach(c=>byColDia[c]={});
+    S.mv.filter(r=>r.data_pedido>=mStart&&r.data_pedido<S.freshFrom).forEach(r=>{const col=colDe(grupoDe(r.origem_conta,r.canal_nome_raw,r.loja_nome),r.canal_nome_raw);if(byColDia[col])byColDia[col][r.data_pedido]=(byColDia[col][r.data_pedido]||0)+((+r.receita_bruta||0)-(+r.devolucoes||0));});
+    S.fresh.filter(p=>p.data_pedido>=mStart).forEach(p=>{const col=colDeFresh(p.origem_conta,p.canal_nome_raw,p.loja_nome);if(byColDia[col])byColDia[col][p.data_pedido]=(byColDia[col][p.data_pedido]||0)+(recBrutaRow(p)-devRow(p));});
+    const usar=COLS.filter(c=>Object.values(byColDia[c]).some(v=>v>0));
+    CHARTS.c=new Chart(ctx,{type:'bar',data:{labels:dias.map(d=>+d.slice(8)),datasets:usar.map(c=>({label:c,data:dias.map(d=>byColDia[c][d]||0),backgroundColor:CCOR[c],stack:'a'}))},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#8a94a6',boxWidth:11,font:{size:10}}}},scales:{y:{stacked:true,ticks:{color:'#8a94a6',callback:v=>'R$'+Math.round(v/1000)+'k'},grid:{color:'rgba(40,45,56,.6)'}},x:{stacked:true,title:{display:true,text:'dia do mês',color:'#5b6474'},ticks:{color:'#8a94a6',maxTicksLimit:16},grid:{display:false}}}}});
+  }
 }
 
 (async()=>{
@@ -311,6 +328,7 @@ function canalDeMargem(grupo,canalRaw){
   document.getElementById('who').textContent=(auth.role&&auth.role.nome)||auth.email||'';
   SB=fusionAuth.SUPABASE_URL;ANON=fusionAuth.SUPABASE_ANON_KEY;
   document.getElementById('btnOut').onclick=()=>fusionAuth.signOut();
+  document.getElementById('tgl-mom').onclick=function(){UI.mom=!UI.mom;this.classList.toggle('on',UI.mom);renderChart();};
   try{await carregar();}catch(e){document.getElementById('loader').textContent='Erro: '+e.message;console.error(e);}
 })();
 </script>
