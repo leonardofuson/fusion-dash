@@ -21,6 +21,7 @@
 
   // Catálogo de dashes disponíveis (chave → metadados)
   const DASHES = {
+    diario:     { titulo: 'Diário',      descricao: 'Sua foto do dia: vendas por canal, ritmo vs meta, margem e alertas', url: '/diario.html', icone: '☀️', destaque: true },
     'max-chat': { titulo: 'Max Chat',    descricao: 'Pergunte sobre vendas, estoque e mais — IA responde na hora', url: 'https://max-chat-frontend.onrender.com', icone: '🤖', destaque: true },
     'max-chat-admin': { titulo: 'Max Chat — Admin', descricao: 'Qualidade do chat, falhas, sugestões', url: '/max-chat-admin.html', icone: '🛠️', restritoPara: ['leonardo@usefusion.com.br'] },
     lojas:      { titulo: 'Lojas Físicas', descricao: 'Vendas das lojas físicas (Linx Microvix desde 01/06/2026)', url: '/lojas.html', icone: '🏬' },
