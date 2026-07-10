@@ -1,0 +1,272 @@
+<!doctype html><html lang="pt-BR"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Orgânico — Fusion BI</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="auth.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root{--bg:#0f1115;--panel:#171a21;--panel2:#1e222b;--line:#2a2f3a;--txt:#e7ebf2;--mut:#9aa3b2;--accent:#c13584;--accent2:#f77737;--reel:#c13584;--feed:#22d3ee;--green:#2fbf71;--red:#ef5350;--amber:#f5a623}
+  *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:14px}
+  .topbar{display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5;flex-wrap:wrap}
+  .topbar b{font-weight:800}.ig{background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .btn{background:var(--panel2);border:1px solid var(--line);color:var(--txt);padding:7px 12px;border-radius:8px;cursor:pointer;font-size:13px;text-decoration:none}
+  .btn:hover{border-color:var(--accent)}
+  .chip{background:var(--panel2);border:1px solid var(--line);padding:6px 12px;border-radius:20px;cursor:pointer;font-size:12px;color:var(--mut)}
+  .chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .custrange{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--mut)}
+  .custrange input[type=date]{background:var(--panel2);border:1px solid var(--line);color:var(--txt);padding:5px 8px;border-radius:8px;font-size:12px;color-scheme:dark}
+  main{padding:18px;max-width:1280px;margin:0 auto}
+  .secTitle{font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--mut);margin:22px 2px 10px;display:flex;align-items:center;gap:8px}
+  .secTitle::before{content:'';width:8px;height:8px;border-radius:2px;background:var(--accent)}
+  .note{background:linear-gradient(135deg,rgba(193,53,132,.13),rgba(193,53,132,.04));border:1px solid rgba(193,53,132,.3);border-left:3px solid var(--accent);border-radius:12px;padding:13px 16px;margin-bottom:16px;font-size:13px;line-height:1.6}
+  .note b{color:#fff}.muted{color:var(--mut)}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;position:relative;overflow:hidden}
+  .kpi.accent{border-color:rgba(193,53,132,.4)}
+  .kpi .lbl{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.4px}
+  .kpi .val{font-size:23px;font-weight:800;margin-top:6px;white-space:nowrap}
+  .kpi.accent .val{color:#f77737}.kpi .sub{color:var(--mut);font-size:12px;margin-top:2px}
+  .delta-badge{font-size:11px;font-weight:700;padding:1px 6px;border-radius:10px;margin-left:6px;white-space:nowrap}
+  .delta-badge.up{background:rgba(47,191,113,.16);color:var(--green)}.delta-badge.down{background:rgba(239,83,80,.16);color:var(--red)}.delta-badge.flat{background:rgba(154,163,178,.16);color:var(--mut)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
+  .card h3{margin:0 0 10px;font-size:14px}.card h3 .hint{color:var(--mut);font-weight:400;font-size:12px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:860px){.grid2{grid-template-columns:1fr}}
+  table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:right;padding:7px 9px;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{color:var(--mut);font-weight:600;cursor:pointer;user-select:none}th.l,td.l{text-align:left}th.sorted::after{content:' ▾';color:var(--accent)}
+  .fmt{display:inline-block;font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px}
+  .fmt.REELS{background:rgba(193,53,132,.18);color:#e879b9}.fmt.FEED{background:rgba(34,211,238,.16);color:#67e8f9}.fmt.CAROUSEL_ALBUM,.fmt.CAROUSEL{background:rgba(245,166,35,.16);color:#fbbf24}
+  /* content grid */
+  .segbtns{display:inline-flex;flex-wrap:wrap;gap:6px;margin-left:auto}
+  .segbtns button{background:var(--panel2);border:1px solid var(--line);color:var(--mut);padding:5px 11px;font-size:12px;border-radius:8px;cursor:pointer}
+  .segbtns button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .cgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+  .cc{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;text-decoration:none;color:var(--txt);display:flex;flex-direction:column;transition:transform .12s,border-color .12s}
+  .cc:hover{transform:translateY(-2px);border-color:var(--accent)}
+  .cc .thumb{width:100%;aspect-ratio:4/5;object-fit:cover;background:var(--panel2);display:block}
+  .cc .cbody{padding:9px 10px}
+  .cc .cbig{font-size:19px;font-weight:800}.cc .csub{font-size:11px;color:var(--mut);margin-top:1px}
+  .cc .cdate{font-size:10px;color:var(--mut);margin-top:4px}
+  .cc .ccap{font-size:11px;color:var(--mut);margin-top:5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .barrow{display:flex;align-items:center;gap:8px;margin:5px 0;font-size:12px}
+  .barrow .bl{width:78px;color:var(--mut);flex:none}.barrow .bt{width:78px;text-align:right;flex:none;font-weight:600}
+  .barrow .bwrap{flex:1;background:var(--panel2);border-radius:6px;overflow:hidden;height:16px}
+  .barrow .bfill{height:100%;border-radius:6px}
+  #loader{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;color:var(--mut)}
+</style></head>
+<body>
+<div class="topbar"><b>FUSION <span class="ig">Orgânico</span></b><span class="muted" style="font-size:12px">@usefusion_ · Instagram</span>
+  <span class="chip" data-p="30d">30 dias</span><span class="chip on" data-p="90d">90 dias</span><span class="chip" data-p="6m">6 meses</span><span class="chip" data-p="12m">12 meses</span><span class="chip" data-p="all">Tudo</span>
+  <span class="custrange">📅 <input type="date" id="c-de"><span>–</span><input type="date" id="c-ate"><button class="btn" id="c-go" style="padding:5px 11px;font-size:12px">Aplicar</button></span>
+  <span style="flex:1"></span><span class="muted" id="who" style="font-size:12px"></span>
+  <button class="btn" id="btnRefresh">↻ Atualizar</button><a class="btn" href="/index.html">Menu</a><button class="btn" id="btnOut">Sair</button></div>
+<main>
+  <div class="note">Painel pra decidir <b>que conteúdo funciona melhor</b>. <b>Reels</b> medem <b>retenção</b> (segundos assistidos) e engajamento; <b>Feed/Carrossel</b> medem <b>alcance</b> e <b>seguidores ganhos</b> por post. Compare formatos, veja os campeões (com o criativo), o melhor horário e a tendência. <span class="muted">Fonte: Instagram Graph API · janela do filtro aplica à data de publicação.</span></div>
+
+  <div class="secTitle">📊 Conta &amp; período</div>
+  <div class="kpis" id="kpis"></div>
+
+  <div class="secTitle">🎬 O que funciona por formato</div>
+  <div class="grid2">
+    <div class="card"><h3>Reels × Feed <span class="hint">média por post no período</span></h3><div id="fmt-bars"></div></div>
+    <div class="card"><h3>Comparação <span class="hint">n · alcance · engaj. · retenção · seguidores</span></h3>
+      <table><thead><tr><th class="l">Formato</th><th>Posts</th><th>Alcance méd</th><th>Engaj.</th><th>Retenção</th><th>Salvos</th><th>Seguidores</th></tr></thead><tbody id="fmt-tb"></tbody></table>
+    </div>
+  </div>
+
+  <div class="secTitle">🏆 Campeões de conteúdo <span class="segbtns" id="best-seg">
+    <button data-m="retencao" class="on">Retenção (reels)</button><button data-m="engajamento">Engajamento</button><button data-m="follows">Seguidores</button><button data-m="saved">Salvamentos</button><button data-m="reach">Alcance</button><button data-m="views">Views</button>
+  </span></div>
+  <div class="cgrid" id="best-grid"></div>
+
+  <div class="grid2">
+    <div class="card"><h3>Melhor dia pra postar <span class="hint">engajamento médio por dia da semana</span></h3><div id="dow-bars"></div></div>
+    <div class="card"><h3>Melhor horário <span class="hint">engajamento médio por faixa (BRT)</span></h3><div id="hour-bars"></div></div>
+  </div>
+
+  <div class="grid2">
+    <div class="card"><h3>Crescimento de seguidores</h3><canvas id="ch-fol" height="150"></canvas></div>
+    <div class="card"><h3>Engajamento por mês <span class="hint">taxa média dos posts publicados no mês</span></h3><canvas id="ch-eng" height="150"></canvas></div>
+  </div>
+
+  <div class="card"><h3>Todos os posts do período <span class="hint">clique no cabeçalho pra ordenar · clique na linha abre no Instagram</span></h3>
+    <div style="overflow-x:auto"><table id="tbl"><thead><tr>
+      <th class="l" data-k="publicado_em">Data</th><th class="l" data-k="formato">Formato</th><th class="l">Legenda</th>
+      <th data-k="reach">Alcance</th><th data-k="views">Views</th><th data-k="er">Engaj.</th><th data-k="wt">Retenção</th><th data-k="saved">Salvos</th><th data-k="shares">Shares</th><th data-k="follows">Seguidores</th>
+    </tr></thead><tbody id="tbl-b"></tbody></table></div>
+  </div>
+</main>
+<div id="loader">Carregando…</div>
+<script>
+let SB='',ANON='',STATE={de:'',ate:'',bestMetric:'retencao',sort:{k:'publicado_em',dir:-1}};
+const CHARTS={};
+const ri=v=>(Math.round(v||0)).toLocaleString('pt-BR');
+const pct1=v=>v==null||isNaN(v)?'—':(v*100).toFixed(1)+'%';
+const seg=v=>v==null?'—':(v/1000).toFixed(1)+'s';   // ms → s
+function spNow(){return new Date(new Date().toLocaleString('en-US',{timeZone:'America/Sao_Paulo'}))}
+function fmtD(d){return d.toISOString().slice(0,10)}
+function somaDias(s,n){const d=new Date(s+'T12:00:00');d.setDate(d.getDate()+n);return fmtD(d)}
+function hoje(){return fmtD(spNow())}
+function brt(ts){return new Date(new Date(ts).toLocaleString('en-US',{timeZone:'America/Sao_Paulo'}))}
+async function authHeaders(){const s=await fusionAuth.getSession();return{apikey:ANON,Authorization:'Bearer '+(s?s.access_token:'')}}
+async function api(tab,q){const h=await authHeaders();let out=[],pg=0;while(true){const r=await fetch(SB+'/rest/v1/'+tab+'?'+q+'&limit=1000&offset='+(pg*1000),{headers:h});if(!r.ok)break;const j=await r.json();out=out.concat(j);if(j.length<1000)break;pg++;if(pg>10)break}return out}
+
+const pctDelta=(a,b)=>(b&&isFinite(b)&&b!==0)?(a-b)/b*100:null;
+function deltaBadge(d,neutral){if(d==null||isNaN(d))return '';const cls=neutral?'flat':(d>=0.5?'up':(d<=-0.5?'down':'flat'));return `<span class="delta-badge ${cls}">${d>=0?'+':''}${d.toFixed(0)}%</span>`;}
+function kpiHTML(k){return `<div class="kpi ${k.cls||''}"><div class="lbl">${k.l}</div><div class="val">${k.v}</div><div class="sub">${k.s||''}${k.d!=null?' '+deltaBadge(k.d,k.dn):''}</div></div>`;}
+function fmtNorm(f){f=(f||'').toUpperCase();if(f==='CAROUSEL_ALBUM'||f==='CAROUSEL')return 'CARROSSEL';if(f==='IMAGE'||f==='VIDEO')return 'FEED';return f;}
+
+// ------- data -------
+let D={posts:[],conta:[]};
+function inPer(ts){const d=String(ts).slice(0,10);return d>=STATE.de&&d<=STATE.ate;}
+async function carregar(){
+  document.getElementById('loader').style.display='flex';
+  const [posts,conta]=await Promise.all([
+    api('social_posts','select=post_id,publicado_em,formato,caption,permalink,reach,likes,comments,saved,shares,interactions,views,engagement_rate,avg_watch_time,total_watch_time,profile_visits,follows,profile_activity,thumbnail_url,media_url&plataforma=eq.instagram&order=publicado_em.desc'),
+    api('social_conta_dia','select=data,seguidores,reach,novos_seguidores&plataforma=eq.instagram&order=data.asc'),
+  ]);
+  D.posts=posts; D.conta=conta;
+  render();
+  document.getElementById('loader').style.display='none';
+}
+function curPosts(){return D.posts.filter(p=>inPer(p.publicado_em));}
+
+function render(){
+  const ps=curPosts();
+  renderKPIs(ps); renderFormatos(ps); renderBest(); renderTempo(ps); renderTrend(ps); renderTabela(ps);
+}
+
+function renderKPIs(ps){
+  // período anterior de mesma duração p/ Δ
+  const dlen=Math.round((new Date(STATE.ate)-new Date(STATE.de))/864e5)+1;
+  const pDe=somaDias(STATE.de,-dlen), pAte=somaDias(STATE.de,-1);
+  const prev=D.posts.filter(p=>{const d=String(p.publicado_em).slice(0,10);return d>=pDe&&d<=pAte;});
+  const seguidoresAtual=(D.conta.length?+D.conta[D.conta.length-1].seguidores:0);
+  const seguidoresIni=(D.conta.length?+D.conta[0].seguidores:0);
+  const novos=D.conta.reduce((s,r)=>s+(+r.novos_seguidores||0),0);
+  const reachTot=ps.reduce((s,p)=>s+(+p.reach||0),0);
+  const engMed=ps.length?ps.reduce((s,p)=>s+(+p.engagement_rate||0),0)/ps.filter(p=>p.engagement_rate!=null).length:0;
+  const engPrev=prev.length?prev.reduce((s,p)=>s+(+p.engagement_rate||0),0)/Math.max(prev.filter(p=>p.engagement_rate!=null).length,1):0;
+  const followsTot=ps.reduce((s,p)=>s+(+p.follows||0),0);
+  document.getElementById('kpis').innerHTML=[
+    {l:'Seguidores',v:ri(seguidoresAtual),s:'agora',cls:'accent',d:pctDelta(seguidoresAtual,seguidoresIni)},
+    {l:'Novos seguidores',v:'+'+ri(novos),s:'no histórico coletado'},
+    {l:'Posts no período',v:ri(ps.length),s:ps.filter(p=>fmtNorm(p.formato)==='REELS').length+' reels · '+ps.filter(p=>fmtNorm(p.formato)==='FEED').length+' feed',d:pctDelta(ps.length,prev.length),dn:true},
+    {l:'Alcance total',v:ri(reachTot),s:'soma do período'},
+    {l:'Engajamento médio',v:pct1(engMed),s:'interações ÷ alcance',d:pctDelta(engMed,engPrev)},
+    {l:'Seguidores via posts',v:'+'+ri(followsTot),s:'follows atribuídos (feed)'},
+  ].map(kpiHTML).join('');
+}
+
+function aggFmt(ps,f){
+  const g=ps.filter(p=>fmtNorm(p.formato)===f);
+  const avg=(k)=>{const v=g.filter(p=>p[k]!=null);return v.length?v.reduce((s,p)=>s+(+p[k]||0),0)/v.length:null;};
+  return {f,n:g.length,reach:avg('reach'),er:avg('engagement_rate'),wt:avg('avg_watch_time'),saved:avg('saved'),follows:avg('follows'),views:avg('views')};
+}
+function renderFormatos(ps){
+  const rows=['REELS','FEED','CARROSSEL'].map(f=>aggFmt(ps,f)).filter(r=>r.n>0);
+  // barras (alcance + engajamento normalizados)
+  const maxReach=Math.max(...rows.map(r=>r.reach||0),1), maxEr=Math.max(...rows.map(r=>r.er||0),0.001);
+  const cor={REELS:'var(--reel)',FEED:'var(--feed)',CARROSSEL:'var(--amber)'};
+  document.getElementById('fmt-bars').innerHTML=rows.map(r=>`
+    <div style="margin-bottom:12px"><div style="font-size:12px;margin-bottom:3px"><span class="fmt ${r.f==='CARROSSEL'?'CAROUSEL':r.f}">${r.f}</span> <span class="muted">${r.n} posts</span></div>
+    <div class="barrow"><span class="bl">Alcance</span><div class="bwrap"><div class="bfill" style="width:${Math.round(100*(r.reach||0)/maxReach)}%;background:${cor[r.f]}"></div></div><span class="bt">${ri(r.reach)}</span></div>
+    <div class="barrow"><span class="bl">Engaj.</span><div class="bwrap"><div class="bfill" style="width:${Math.round(100*(r.er||0)/maxEr)}%;background:${cor[r.f]};opacity:.7"></div></div><span class="bt">${pct1(r.er)}</span></div>
+    </div>`).join('')||'<div class="muted">Sem posts no período.</div>';
+  document.getElementById('fmt-tb').innerHTML=rows.map(r=>`<tr>
+    <td class="l"><span class="fmt ${r.f==='CARROSSEL'?'CAROUSEL':r.f}">${r.f}</span></td><td>${r.n}</td><td>${ri(r.reach)}</td><td>${pct1(r.er)}</td>
+    <td>${r.f==='REELS'?seg(r.wt):'—'}</td><td>${ri(r.saved)}</td><td>${r.f==='REELS'?'—':(r.follows!=null?ri(r.follows):'—')}</td></tr>`).join('');
+}
+
+const METRICS={
+  retencao:{f:'avg_watch_time',lbl:'retenção',fmt:seg,only:'REELS'},
+  engajamento:{f:'engagement_rate',lbl:'engajamento',fmt:pct1},
+  follows:{f:'follows',lbl:'seguidores',fmt:ri},
+  saved:{f:'saved',lbl:'salvamentos',fmt:ri},
+  reach:{f:'reach',lbl:'alcance',fmt:ri},
+  views:{f:'views',lbl:'views',fmt:ri},
+};
+function renderBest(){
+  const m=METRICS[STATE.bestMetric]; let ps=curPosts().filter(p=>p[m.f]!=null&&+p[m.f]>0);
+  if(m.only)ps=ps.filter(p=>fmtNorm(p.formato)===m.only);
+  ps.sort((a,b)=>(+b[m.f]||0)-(+a[m.f]||0));
+  const top=ps.slice(0,15);
+  document.getElementById('best-grid').innerHTML=top.map(p=>{
+    const img=p.thumbnail_url||p.media_url||'';
+    const dt=brt(p.publicado_em); const ds=dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'short'});
+    return `<a class="cc" href="${p.permalink||'#'}" target="_blank" rel="noopener">
+      <img class="thumb" loading="lazy" src="${img}" onerror="this.style.display='none'">
+      <div class="cbody"><div class="cbig">${m.fmt(+p[m.f])}</div><div class="csub">${m.lbl} · <span class="fmt ${fmtNorm(p.formato)==='CARROSSEL'?'CAROUSEL':fmtNorm(p.formato)}">${fmtNorm(p.formato)}</span></div>
+      <div class="cdate">${ds} · ${ri(p.reach)} alcance · ${pct1(p.engagement_rate)}</div>
+      <div class="ccap">${(p.caption||'').replace(/</g,'&lt;').slice(0,80)}</div></div></a>`;
+  }).join('')||'<div class="muted" style="padding:10px">Sem posts com esse dado no período.</div>';
+}
+
+function barsBy(el,groups,fmt,color){
+  const max=Math.max(...groups.map(g=>g.v||0),0.0001);
+  document.getElementById(el).innerHTML=groups.map(g=>`<div class="barrow"><span class="bl">${g.k}</span>
+    <div class="bwrap"><div class="bfill" style="width:${Math.round(100*(g.v||0)/max)}%;background:${color}"></div></div><span class="bt">${g.n?fmt(g.v):'—'}</span></div>`).join('');
+}
+function renderTempo(ps){
+  const withEr=ps.filter(p=>p.engagement_rate!=null);
+  const DOW=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  const dow=DOW.map((k,i)=>{const g=withEr.filter(p=>brt(p.publicado_em).getDay()===i);return{k,n:g.length,v:g.length?g.reduce((s,p)=>s+(+p.engagement_rate||0),0)/g.length:0};});
+  barsBy('dow-bars',dow,pct1,'var(--accent)');
+  const FX=[['0-6h',0,6],['6-12h',6,12],['12-18h',12,18],['18-24h',18,24]];
+  const hour=FX.map(([k,a,b])=>{const g=withEr.filter(p=>{const h=brt(p.publicado_em).getHours();return h>=a&&h<b;});return{k,n:g.length,v:g.length?g.reduce((s,p)=>s+(+p.engagement_rate||0),0)/g.length:0};});
+  barsBy('hour-bars',hour,pct1,'var(--accent2)');
+}
+
+function renderTrend(ps){
+  // seguidores (conta_dia, todo histórico)
+  const c=D.conta.filter(r=>r.seguidores);
+  if(CHARTS.fol)CHARTS.fol.destroy();
+  CHARTS.fol=new Chart(document.getElementById('ch-fol'),{type:'line',data:{labels:c.map(r=>r.data.slice(5)),datasets:[{label:'Seguidores',data:c.map(r=>+r.seguidores),borderColor:'#c13584',backgroundColor:'#c1358422',fill:true,tension:.3,pointRadius:0,borderWidth:2}]},
+    options:{plugins:{legend:{display:false}},scales:{y:{ticks:{color:'#9aa3b2'},grid:{color:'#23262e'}},x:{ticks:{color:'#9aa3b2',maxTicksLimit:8},grid:{display:false}}}}});
+  // engajamento por mês
+  const bym={}; ps.forEach(p=>{if(p.engagement_rate==null)return;const k=String(p.publicado_em).slice(0,7);(bym[k]||(bym[k]={s:0,n:0}));bym[k].s+=+p.engagement_rate;bym[k].n++;});
+  const ks=Object.keys(bym).sort();
+  if(CHARTS.eng)CHARTS.eng.destroy();
+  CHARTS.eng=new Chart(document.getElementById('ch-eng'),{type:'bar',data:{labels:ks.map(k=>k.slice(5)+'/'+k.slice(2,4)),datasets:[{label:'Engajamento',data:ks.map(k=>+(bym[k].s/bym[k].n*100).toFixed(2)),backgroundColor:'#f7773788',borderColor:'#f77737',borderWidth:1}]},
+    options:{plugins:{legend:{display:false}},scales:{y:{ticks:{color:'#9aa3b2',callback:v=>v+'%'},grid:{color:'#23262e'}},x:{ticks:{color:'#9aa3b2',maxTicksLimit:12},grid:{display:false}}}}});
+}
+
+function renderTabela(ps){
+  const val=(p,k)=>k==='er'?(+p.engagement_rate||0):k==='wt'?(+p.avg_watch_time||0):k==='publicado_em'?p.publicado_em:k==='formato'?fmtNorm(p.formato):(+p[k]||0);
+  const s=STATE.sort; const arr=[...ps].sort((a,b)=>{const x=val(a,s.k),y=val(b,s.k);return (x<y?-1:x>y?1:0)*s.dir;});
+  document.getElementById('tbl-b').innerHTML=arr.slice(0,200).map(p=>{
+    const f=fmtNorm(p.formato); const dt=brt(p.publicado_em).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+    return `<tr style="cursor:pointer" onclick="window.open('${p.permalink||'#'}','_blank')">
+      <td class="l">${dt}</td><td class="l"><span class="fmt ${f==='CARROSSEL'?'CAROUSEL':f}">${f}</span></td>
+      <td class="l muted" style="max-width:230px;overflow:hidden;text-overflow:ellipsis">${(p.caption||'').replace(/</g,'&lt;').slice(0,50)}</td>
+      <td>${ri(p.reach)}</td><td>${ri(p.views)}</td><td>${pct1(p.engagement_rate)}</td><td>${f==='REELS'?seg(p.avg_watch_time):'—'}</td>
+      <td>${ri(p.saved)}</td><td>${ri(p.shares)}</td><td>${f==='REELS'?'—':(p.follows!=null?ri(p.follows):'—')}</td></tr>`;
+  }).join('')||'<tr><td colspan="10" class="l muted" style="padding:12px">Sem posts no período.</td></tr>';
+}
+
+// ------- período / eventos -------
+function setPeriodo(p){const h=hoje();
+  if(p==='30d'){STATE.de=somaDias(h,-29);STATE.ate=h}
+  else if(p==='90d'){STATE.de=somaDias(h,-89);STATE.ate=h}
+  else if(p==='6m'){STATE.de=somaDias(h,-181);STATE.ate=h}
+  else if(p==='12m'){STATE.de=somaDias(h,-364);STATE.ate=h}
+  else if(p==='all'){STATE.de='2024-01-01';STATE.ate=h}
+  document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on',c.dataset.p===p));
+  document.getElementById('c-de').value=STATE.de;document.getElementById('c-ate').value=STATE.ate;
+  render();
+}
+(async()=>{
+  const auth=await fusionAuth.requireAuth('social');
+  document.getElementById('who').textContent=(auth.role&&auth.role.nome)||(auth.role&&auth.role.email)||'';
+  SB=fusionAuth.SUPABASE_URL;ANON=fusionAuth.SUPABASE_ANON_KEY;
+  document.getElementById('btnOut').onclick=()=>fusionAuth.signOut();
+  document.getElementById('btnRefresh').onclick=()=>carregar();
+  document.querySelectorAll('.chip').forEach(c=>c.onclick=()=>setPeriodo(c.dataset.p));
+  document.getElementById('c-go').onclick=()=>{const de=document.getElementById('c-de').value,ate=document.getElementById('c-ate').value;if(!de||!ate||de>ate){alert('Datas inválidas');return}STATE.de=de;STATE.ate=ate;document.querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));render()};
+  document.querySelectorAll('#best-seg button').forEach(b=>b.onclick=()=>{STATE.bestMetric=b.dataset.m;document.querySelectorAll('#best-seg button').forEach(x=>x.classList.toggle('on',x===b));renderBest()});
+  document.querySelectorAll('#tbl th[data-k]').forEach(th=>th.onclick=()=>{const k=th.dataset.k;STATE.sort.dir=(STATE.sort.k===k)?-STATE.sort.dir:-1;STATE.sort.k=k;document.querySelectorAll('#tbl th').forEach(x=>x.classList.toggle('sorted',x===th));renderTabela(curPosts())});
+  STATE.de=somaDias(hoje(),-89);STATE.ate=hoje();
+  document.getElementById('c-de').value=STATE.de;document.getElementById('c-ate').value=STATE.ate;
+  await carregar();
+})();
+</script>
+</body></html>
