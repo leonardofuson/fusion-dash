@@ -63,10 +63,12 @@ Token JWT expira em ~1h. **Não usar `var AUTH_HEADERS = auth.headers` capturado
 
 ## Adicionar novo dashboard (procedimento)
 
+> **Portal redesenhado (10/07/2026)**: `index.html` renderiza os cards **agrupados por categoria** (`cat` no DASHES: `vendas`/`operacoes`/`inteligencia`/`assistente`), cada card com a **inicial cropada** + fundo em **fade na cor da categoria** (Vendas azul, Operações verde, Inteligência roxo, Assistente cinza) + texto em negativo. **Sem emojis** — o campo `icone` continua no DASHES mas o card não usa mais. Cores/labels/ordem das categorias em `CAT_META` no `index.html`. `Projetos` foi removido do catálogo. `restritoPara` + gating por `user_roles.dashes` inalterados. Sandbox de estilos (não versionado, na raiz do workspace): `portal-preview.html`.
+
 Pra criar um novo dash (ex: `marketing`):
-1. Editar `auth.js` — adicionar entry no objeto `DASHES`:
+1. Editar `auth.js` — adicionar entry no objeto `DASHES` **com `cat`** (define a seção/cor no portal):
    ```js
-   marketing: { titulo: 'Marketing', descricao: 'Campanhas e CAC', url: '/marketing.html', icone: '📣' }
+   marketing: { titulo: 'Marketing', descricao: 'Campanhas e CAC', url: '/marketing.html', icone: '📣', cat: 'inteligencia' }
    ```
 2. Criar `marketing.html` — copiar `compras.html` como template, trocar label da topbar e `fusionAuth.requireAuth('marketing')`
 3. Liberar acesso nos usuários que devem ver:
