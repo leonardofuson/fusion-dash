@@ -102,6 +102,19 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
 #dash-cards.mensal .c-produtos{order:5;}
 #dash-cards.mensal .c-vend{order:6;}
 #dash-cards.mensal .c-pareto{order:7;}
+#dash-cards.mensal .c-heatmap{display:none;}
+/* Ordem da visão DIÁRIA (mobile-friendly): premiação por último, produtos + heatmap
+   logo após a tabela de vendedores. Explícito p/ não depender só do DOM. */
+#dash-cards:not(.mensal) .c-forecast{order:0;}
+#dash-cards:not(.mensal) #kpis{order:1;}
+#dash-cards:not(.mensal) #highlights{order:2;}
+#dash-cards:not(.mensal) .c-hero{order:3;}
+#dash-cards:not(.mensal) .c-lojas{order:4;}
+#dash-cards:not(.mensal) .c-vend{order:5;}
+#dash-cards:not(.mensal) .c-produtos{order:6;}
+#dash-cards:not(.mensal) .c-heatmap{order:7;}
+#dash-cards:not(.mensal) .c-pareto{order:8;}
+#dash-cards:not(.mensal) .c-prizes{order:9;}
 /* Mensal: tabela de vendedores sem Meta/Atg%/Prev/Comissão (col 9-12) */
 #dash-cards.mensal #thead-vendedores th:nth-child(n+9),
 #dash-cards.mensal #tbody-vendedores tr td:nth-child(n+9){display:none;}
@@ -156,6 +169,43 @@ table.tb tr:last-child td{border-bottom:none;}
 .premio-aw .row .nm.none{color:var(--txt3);font-weight:400;font-size:11px;}
 .premio-aw .row .vl{font-size:12px;font-weight:700;color:var(--txt1);font-variant-numeric:tabular-nums;white-space:nowrap;margin-left:auto;}
 .premio-empty{grid-column:1/-1;color:var(--txt3);font-size:11px;padding:14px 0;}
+/* Heatmap — desempenho diário do time (matriz vendedores × dias) */
+.hm-nav{display:flex;align-items:center;gap:8px;}
+.hm-nav button{background:var(--bg3);border:1px solid var(--bdr);color:var(--txt1);width:26px;height:26px;border-radius:7px;cursor:pointer;font-size:15px;line-height:1;padding:0;}
+.hm-nav button:hover{border-color:var(--green);color:var(--green);}
+.hm-nav .lbl{font-size:12px;color:var(--txt2);min-width:104px;text-align:center;font-weight:700;}
+.hm-wrap{overflow-x:auto;padding-bottom:4px;}
+.hm-matrix{display:grid;gap:3px;align-items:center;}
+.hm-mh{text-align:center;font-size:8px;color:var(--txt3);font-weight:700;line-height:1.15;}
+.hm-mh b{font-size:9px;color:var(--txt2);display:block;}
+.hm-mh.we b,.hm-mh.we{color:var(--amber);}
+.hm-corner,.hm-mh.tot{font-size:9px;color:var(--txt3);font-weight:700;text-align:center;}
+.hm-name{font-size:11px;font-weight:600;color:var(--txt1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:8px;cursor:pointer;}
+.hm-name:hover{color:var(--green);text-decoration:underline;}
+.hm-c{aspect-ratio:1;border-radius:4px;background:#212124;display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:700;font-variant-numeric:tabular-nums;color:#e9e9ec;cursor:pointer;min-width:22px;}
+.hm-c.z{color:#3f3f46;background:#1c1c1f;cursor:default;}
+.hm-c.off{background:transparent;cursor:default;}
+.hm-c.tot{background:var(--bg3);color:var(--txt1);font-weight:800;border-radius:5px;cursor:default;}
+.hm-hint{font-size:10px;color:var(--txt3);margin-top:11px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.hm-hint .sw{width:15px;height:10px;border-radius:3px;display:inline-block;}
+.hm-loading{color:var(--txt3);font-size:11px;padding:16px 2px;}
+/* Modal calendário (drill-down de 1 vendedor) — filho do <body> */
+.hmcal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.62);display:none;align-items:center;justify-content:center;z-index:200;padding:20px;}
+.hmcal-overlay.on{display:flex;}
+.hmcal{background:#1a1a1d;border:1px solid var(--bdr);border-radius:14px;width:min(560px,100%);padding:18px;}
+.hmcal-head{display:flex;align-items:center;gap:12px;margin-bottom:4px;}
+.hmcal-head .t{font-size:14px;font-weight:800;color:var(--txt1);}
+.hmcal-head .x{margin-left:auto;background:transparent;border:0;color:var(--txt2);font-size:18px;cursor:pointer;}
+.hmcal-meta{font-size:11px;color:var(--txt3);margin-bottom:13px;}
+.hmcal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;}
+.hmcal-dow{font-size:9px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--txt3);text-align:center;padding-bottom:2px;}
+.hmcal-cell{aspect-ratio:1;border-radius:7px;background:#212124;border:1px solid var(--bdr);position:relative;display:flex;align-items:center;justify-content:center;}
+.hmcal-cell.out{background:transparent;border:0;}
+.hmcal-cell .dn{position:absolute;top:3px;left:5px;font-size:8px;color:var(--txt2);font-weight:600;}
+.hmcal-cell .vv{font-size:12px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:6px;}
+.hmcal-cell .vv.zero{color:#52525b;font-weight:400;}
+.hmcal-legend{display:flex;align-items:center;gap:6px;margin-top:12px;font-size:10px;color:var(--txt3);}
+.hmcal-legend .sw{width:16px;height:10px;border-radius:3px;}
 table.tb tr:hover td{background:rgba(255,255,255,0.06);}
 
 .delta-badge{display:inline-block;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:700;}
@@ -525,6 +575,25 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
       <th class="r sortable" data-sort="metaDia" onclick="setVendSort('metaDia')" title="Meta do dia: quanto precisa vender HOJE pra bater a meta do mês. Distribui o que falta pelos dias restantes ponderado pelo dia-da-semana (sábado pesa mais que segunda).">Meta hoje</th>
       <th class="r sortable" data-sort="comissao" onclick="setVendSort('comissao')" title="Comissão sobre as vendas do período: 2% se atingiu 100% da meta, senão 0,75%. Cor = trajetória (previsão fim do mês ÷ meta): verde ≥100% · amarelo 95-99% · vermelho <95%">Comissão</th>
     </tr></thead><tbody id="tbody-vendedores"></tbody></table></div>
+  </div>
+
+  <div class="card c-heatmap">
+    <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+      <span>Desempenho diário do time</span>
+      <div class="hm-nav">
+        <button onclick="hmMonth(-1)" title="Mês anterior">‹</button>
+        <span class="lbl" id="hm-month-lbl">—</span>
+        <button onclick="hmMonth(1)" title="Próximo mês">›</button>
+      </div>
+    </div>
+    <div class="hm-wrap"><div id="hm-matrix" class="hm-matrix"><div class="hm-loading">Carregando…</div></div></div>
+    <div class="hm-hint">
+      <span>Receita por vendedor/dia · escala de cor global</span>
+      <span class="sw" style="background:rgba(34,197,94,.14)"></span>
+      <span class="sw" style="background:rgba(34,197,94,.45)"></span>
+      <span class="sw" style="background:rgba(34,197,94,.82)"></span>
+      <span style="margin-left:auto">Clique no nome para o calendário do vendedor · domingo fechado</span>
+    </div>
   </div>
 
   <div class="card c-pareto">
@@ -1244,6 +1313,110 @@ async function renderPremiacao(){
         premioAward('Faturamento',mFat,fmt)+premioAward('Ternos',mTer,fmtN))+
     '</div>';
   }).join('');
+}
+
+// ════════ Heatmap — desempenho diário do time (matriz vendedores × dias) ════════
+// Fonte: mvw_lojas_vend_dia (invariante ao período do dash — tem navegação de mês própria).
+var HM={month:null, cache:{}, inflight:{}, vendSel:null};
+var HMCAL={month:null};
+var HM_DOW=['S','T','Q','Q','S','S','D'];  // Seg..Dom (dowIdx: 0=Seg..6=Dom)
+function hmK(v){ return v>=1000 ? (v/1000).toFixed(1).replace('.',',')+'k' : String(Math.round(v)); }
+function hmUltimoDia(m){ var y=+m.slice(0,4),mo=+m.slice(5,7); return new Date(Date.UTC(y,mo,0)).getUTCDate(); }
+function hmNomeMes(m){ return MES_NOMES[+m.slice(5,7)-1]+' '+m.slice(0,4); }
+function hmDias(m){ var out=[],last=hmUltimoDia(m); for(var d=1;d<=last;d++) out.push(m+'-'+String(d).padStart(2,'0')); return out; }
+function hmAgg(rows){
+  var vend={};
+  (rows||[]).forEach(function(r){
+    var v=(r.vendedor||'').trim(); if(!v) return;
+    var d=(r.data_pedido||'').slice(0,10), val=parseFloat(r.receita||0);
+    if(!vend[v]) vend[v]={_tot:0};
+    vend[v][d]=(vend[v][d]||0)+val; vend[v]._tot+=val;
+  });
+  return {vend:vend};
+}
+function hmFetchMonth(m){
+  if(HM.cache[m]) return Promise.resolve(HM.cache[m]);
+  if(HM.inflight[m]) return HM.inflight[m];
+  var de=m+'-01', ate=m+'-'+String(hmUltimoDia(m)).padStart(2,'0');
+  var p=buscarTudo('mvw_lojas_vend_dia','select=vendedor,data_pedido,receita&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc')
+    .then(function(rows){ HM.cache[m]=hmAgg(rows); delete HM.inflight[m]; return HM.cache[m]; })
+    .catch(function(e){ console.warn('HM fetch',e); HM.cache[m]={vend:{}}; delete HM.inflight[m]; return HM.cache[m]; });
+  HM.inflight[m]=p; return p;
+}
+function hmInit(){ if(!HM.month) HM.month=hojeSP().slice(0,7); hmRenderMatrix(); hmFetchMonth(HM.month).then(hmRenderMatrix); }
+function hmMonth(delta){
+  var y=+HM.month.slice(0,4), mo=+HM.month.slice(5,7)+delta;
+  while(mo<1){mo+=12;y--;} while(mo>12){mo-=12;y++;}
+  HM.month=y+'-'+String(mo).padStart(2,'0');
+  hmRenderMatrix(); hmFetchMonth(HM.month).then(hmRenderMatrix);
+}
+function hmRenderMatrix(){
+  var box=document.getElementById('hm-matrix'); if(!box) return;
+  var lbl=document.getElementById('hm-month-lbl'); if(lbl) lbl.textContent=hmNomeMes(HM.month);
+  var data=HM.cache[HM.month];
+  if(!data){ box.innerHTML='<div class="hm-loading">Carregando…</div>'; box.style.gridTemplateColumns=''; return; }
+  var dias=hmDias(HM.month);
+  var vends=Object.keys(data.vend).filter(function(v){return v && v!=='Vendedor Não Identificado' && !NAO_VENDEDORES.has(v) && data.vend[v]._tot>0;})
+    .sort(function(a,b){return data.vend[b]._tot-data.vend[a]._tot;}).slice(0,25);
+  if(!vends.length){ box.innerHTML='<div class="hm-loading">Sem vendas neste mês.</div>'; box.style.gridTemplateColumns=''; return; }
+  var mx=0;
+  vends.forEach(function(v){ dias.forEach(function(ds){ var x=data.vend[v][ds]||0; if(x>mx)mx=x; }); });
+  if(mx<=0) mx=1;
+  box.style.gridTemplateColumns='120px repeat('+dias.length+',minmax(22px,1fr)) 44px';
+  var html='<div class="hm-corner"></div>';
+  dias.forEach(function(ds){ var wk=dowIdx(ds); var we=(wk>=5); html+='<div class="hm-mh'+(we?' we':'')+'"><b>'+ds.slice(8,10)+'</b>'+HM_DOW[wk]+'</div>'; });
+  html+='<div class="hm-mh tot">Σ</div>';
+  vends.forEach(function(v){
+    var vd=data.vend[v];
+    html+='<div class="hm-name" onclick="hmOpenVend(\''+v.replace(/'/g,"\\'")+'\')" title="Ver calendário de '+esc(v)+'">'+v+'</div>';
+    dias.forEach(function(ds){
+      var wk=dowIdx(ds), val=vd[ds]||0;
+      if(wk===6 && val<=0){ html+='<div class="hm-c off"></div>'; return; }
+      if(val<=0){ html+='<div class="hm-c z">·</div>'; return; }
+      var a=(0.12+0.72*(val/mx)).toFixed(2);
+      html+='<div class="hm-c" onclick="hmOpenVend(\''+v.replace(/'/g,"\\'")+'\')" style="background:rgba(34,197,94,'+a+')" title="'+esc(v)+' · '+ds.slice(8,10)+'/'+ds.slice(5,7)+': '+fmt(val)+'">'+hmK(val)+'</div>';
+    });
+    html+='<div class="hm-c tot" title="Total do mês">'+hmK(vd._tot)+'</div>';
+  });
+  box.innerHTML=html;
+}
+// ---- Drill-down: calendário mensal de 1 vendedor ----
+function hmOpenVend(nome){
+  HM.vendSel=nome; HMCAL.month=HM.month;
+  document.getElementById('hmcal-overlay').classList.add('on');
+  document.getElementById('hmcal-nome').textContent=nome;
+  hmRenderCal();
+}
+function hmCalClose(){ document.getElementById('hmcal-overlay').classList.remove('on'); }
+function hmCalMonth(delta){
+  var y=+HMCAL.month.slice(0,4), mo=+HMCAL.month.slice(5,7)+delta;
+  while(mo<1){mo+=12;y--;} while(mo>12){mo-=12;y++;}
+  HMCAL.month=y+'-'+String(mo).padStart(2,'0');
+  hmRenderCal();
+}
+function hmRenderCal(){
+  var nome=HM.vendSel, m=HMCAL.month;
+  var lbl=document.getElementById('hmcal-month-lbl'); if(lbl) lbl.textContent=hmNomeMes(m);
+  var grid=document.getElementById('hmcal-grid'), meta=document.getElementById('hmcal-meta');
+  var data=HM.cache[m];
+  if(!data){ grid.innerHTML=''; meta.textContent='Carregando…'; hmFetchMonth(m).then(function(){ if(HMCAL.month===m) hmRenderCal(); }); return; }
+  var vd=data.vend[nome]||{_tot:0};
+  var dias=hmDias(m), mx=0, tot=vd._tot||0, best=0, bestD=null;
+  dias.forEach(function(ds){ var x=vd[ds]||0; if(x>mx)mx=x; if(x>best){best=x;bestD=ds;} });
+  if(mx<=0) mx=1;
+  meta.textContent='Total R$ '+fmtN(Math.round(tot))+(bestD?' · melhor dia R$ '+fmtN(Math.round(best))+' ('+bestD.slice(8,10)+'/'+bestD.slice(5,7)+')':' · sem vendas no mês');
+  // header dias-da-semana
+  var html=['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'].map(function(d){return '<div class="hmcal-dow">'+d+'</div>';}).join('');
+  // alinhar 1º dia na coluna certa (dowIdx do dia 1)
+  var off=dowIdx(m+'-01');
+  for(var i=0;i<off;i++) html+='<div class="hmcal-cell out"></div>';
+  dias.forEach(function(ds){
+    var val=vd[ds]||0;
+    if(val<=0){ html+='<div class="hmcal-cell"><span class="dn">'+ds.slice(8,10)+'</span><span class="vv zero">—</span></div>'; return; }
+    var a=(0.14+0.66*(val/mx)).toFixed(2);
+    html+='<div class="hmcal-cell" style="background:rgba(34,197,94,'+a+')" title="'+ds+': '+fmt(val)+'"><span class="dn">'+ds.slice(8,10)+'</span><span class="vv">'+hmK(val)+'</span></div>';
+  });
+  grid.innerHTML=html;
 }
 
 // Escopo por produto: quando há SKU ou categoria selecionada, cada pedido passa a
@@ -3179,8 +3352,31 @@ async function salvarMetas(){
       carregar();
     }
   }
+  hmInit();  // heatmap do time — independente do período (mês próprio c/ navegação)
 })();
 </script>
+
+<!-- Modal calendário de vendedor (drill-down do heatmap) — FORA do <header> -->
+<div id="hmcal-overlay" class="hmcal-overlay" onclick="if(event.target===this)hmCalClose()">
+  <div class="hmcal">
+    <div class="hmcal-head">
+      <span class="t" id="hmcal-nome">Vendedor</span>
+      <div class="hm-nav">
+        <button onclick="hmCalMonth(-1)" title="Mês anterior">‹</button>
+        <span class="lbl" id="hmcal-month-lbl">—</span>
+        <button onclick="hmCalMonth(1)" title="Próximo mês">›</button>
+      </div>
+      <button class="x" onclick="hmCalClose()" title="Fechar">✕</button>
+    </div>
+    <div class="hmcal-meta" id="hmcal-meta">—</div>
+    <div class="hmcal-grid" id="hmcal-grid"></div>
+    <div class="hmcal-legend"><span>menos</span>
+      <span class="sw" style="background:rgba(34,197,94,.14)"></span>
+      <span class="sw" style="background:rgba(34,197,94,.45)"></span>
+      <span class="sw" style="background:rgba(34,197,94,.8)"></span><span>mais</span>
+      <span style="margin-left:auto">— = sem venda (fechado/folga)</span></div>
+  </div>
+</div>
 
 <!-- Drawer Metas (FORA do <header> — header tem backdrop-filter+isolation que
      criam stacking context novo e quebram position:fixed do drawer descendant) -->
