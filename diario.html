@@ -1,0 +1,252 @@
+<!doctype html><html lang="pt-BR"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Diário — Fusion BI</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="auth.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root{--bg:#0f1115;--panel:#171a21;--panel2:#1e222b;--line:#2a2f3a;--txt:#e7ebf2;--mut:#9aa3b2;--accent:#7c5cff;--accent2:#22d3ee;--green:#2fbf71;--red:#ef5350;--amber:#f5a623}
+  *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:14px}
+  .topbar{display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5}
+  .topbar b{font-weight:800}.topbar .accent{color:var(--accent)}
+  .btn{background:var(--panel2);border:1px solid var(--line);color:var(--txt);padding:7px 12px;border-radius:8px;cursor:pointer;font-size:13px;text-decoration:none}
+  .btn:hover{border-color:var(--accent)}
+  main{padding:18px;max-width:1200px;margin:0 auto}
+  .sec-h{display:flex;align-items:baseline;gap:10px;margin:22px 2px 10px}
+  .sec-h h2{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--mut);margin:0}
+  .sec-h a{font-size:12px;color:var(--accent2);text-decoration:none}.sec-h a:hover{text-decoration:underline}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .kpi .lbl{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+  .kpi .val{font-size:23px;font-weight:800;margin-top:6px;white-space:nowrap}.kpi .sub{color:var(--mut);font-size:12px;margin-top:3px}
+  .kpi.hero{background:linear-gradient(135deg,rgba(124,92,255,.14),rgba(124,92,255,.03));border-color:rgba(124,92,255,.30)}
+  .kpi.hero .val{color:#fff;font-size:26px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
+  .card h3{margin:0 0 10px;font-size:14px}.card h3 .hint{color:var(--mut);font-weight:400;font-size:12px}
+  .grupos{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}@media(max-width:820px){.grupos{grid-template-columns:repeat(2,1fr)}}
+  .gcard{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;position:relative;overflow:hidden}
+  .gcard .gname{font-size:12px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.4px}
+  .gcard .gval{font-size:21px;font-weight:800;margin-top:6px;white-space:nowrap}
+  .gcard .gsub{font-size:12px;color:var(--mut);margin-top:3px}
+  .gcard .gspark{position:absolute;bottom:0;left:0;right:0;height:34px;opacity:.5}
+  .up{color:var(--green)}.down{color:var(--red)}.flat{color:var(--mut)}
+  table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:right;padding:7px 9px;border-bottom:1px solid var(--line)}
+  th{color:var(--mut);font-weight:600;font-size:11px}th.l,td.l{text-align:left}
+  .grp-row td{background:rgba(255,255,255,.02);font-weight:700}
+  .delta{font-size:12px;font-weight:700}
+  .note{background:linear-gradient(135deg,rgba(124,92,255,.13),rgba(124,92,255,.035));border:1px solid rgba(124,92,255,.28);border-left:3px solid var(--accent);border-radius:12px;padding:12px 15px;margin-bottom:16px;font-size:13px;line-height:1.55}
+  .note b{color:#fff}.muted{color:var(--mut)}
+  .alerts{display:flex;flex-direction:column;gap:8px}
+  .alert{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--mut);border-radius:8px;padding:9px 12px;font-size:13px}
+  .alert.alta{border-left-color:var(--red)}.alert.media{border-left-color:var(--amber)}.alert.baixa{border-left-color:var(--accent2)}
+  .alert .sev{font-size:10px;text-transform:uppercase;font-weight:800;letter-spacing:.5px;padding:2px 7px;border-radius:20px;background:var(--panel2)}
+  .alert.alta .sev{color:var(--red)}.alert.media .sev{color:var(--amber)}.alert.baixa .sev{color:var(--accent2)}
+  .alert .cat{color:var(--mut);font-size:11px;margin-left:auto}
+  #loader{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;color:var(--mut)}
+</style></head>
+<body>
+<div class="topbar"><b>FUSION <span class="accent">Diário</span></b>
+  <span class="muted" id="datahoje" style="font-size:12px"></span>
+  <span style="flex:1"></span>
+  <span class="muted" id="who" style="font-size:12px"></span>
+  <a class="btn" href="/index.html">Menu</a><button class="btn" id="btnOut">Sair</button></div>
+<main>
+  <div class="note">Sua foto do dia — <b>todas as operações de venda</b> num lugar só. Vendas de hoje · ritmo do mês vs meta · margem de contribuição por canal · alertas. <span class="muted">Receita = <b>líquida</b> (bruto − devoluções). Clique nos títulos pra ir ao dash profundo. Margem = contribuição <b>variável</b> (antes de impostos e mídia).</span></div>
+
+  <!-- 1 + 2: HOJE + HERO MTD -->
+  <div class="kpis" id="topkpis"></div>
+
+  <!-- 3: CARDS POR GRUPO -->
+  <div class="sec-h"><h2>Por canal · mês corrente</h2><a href="/diretoria.html">ver Diretoria →</a></div>
+  <div class="grupos" id="grupos"></div>
+
+  <!-- 4: RITMO DIÁRIO -->
+  <div class="sec-h"><h2>Ritmo diário · últimos 60 dias</h2></div>
+  <div class="card"><canvas id="ch-ritmo" height="90"></canvas></div>
+
+  <!-- 5: SAÚDE DA MARGEM -->
+  <div class="sec-h"><h2>Saúde da margem · mês corrente</h2><a href="/ecommerce.html">ver Ecommerce →</a></div>
+  <div class="card"><div style="overflow-x:auto"><table id="tb-margem"><thead><tr>
+    <th class="l">Canal</th><th>Receita líq</th><th>Comissão</th><th>Frete</th><th>Devol.</th><th>CMV</th><th>Contribuição</th><th>%</th>
+  </tr></thead><tbody id="tb-margem-body"></tbody></table></div>
+  <div class="muted" style="font-size:11px;margin-top:8px">Contribuição variável = receita líq − comissão − afiliado − frete − CMV (antes de impostos/mídia). Lojas/Atacado sem comissão/frete na base. Atacado aqui = KWID WhatsApp (Flecha não tem CMV).</div></div>
+
+  <!-- 6: RADAR DE ALERTAS -->
+  <div class="sec-h"><h2>Radar · alertas</h2><a href="/marketing.html">ver Marketing →</a></div>
+  <div class="alerts" id="alerts"></div>
+</main>
+<div id="loader">Carregando…</div>
+<script>
+let SB='',ANON='';
+const CHARTS={};
+const GRUPOS=['Marketplaces','Lojas','Site','Atacado'];
+const GCOR={Marketplaces:'#7c5cff',Lojas:'#22d3ee',Site:'#2fbf71',Atacado:'#f5a623'};
+const rs=v=>'R$ '+(Math.round(v||0)).toLocaleString('pt-BR');
+const rsK=v=>{v=v||0;const a=Math.abs(v);if(a>=1e6)return 'R$ '+(v/1e6).toFixed(2)+'M';if(a>=1e3)return 'R$ '+(v/1e3).toFixed(0)+'k';return 'R$ '+Math.round(v);};
+const pct1=v=>(v==null||isNaN(v))?'—':(v*100).toFixed(1)+'%';
+const pct0=v=>(v==null||isNaN(v))?'—':Math.round(v*100)+'%';
+
+// fuso SP
+function hojeSP(){return new Date().toLocaleDateString('en-CA',{timeZone:'America/Sao_Paulo'});} // YYYY-MM-DD
+function somaDias(d,n){const dt=new Date(d+'T12:00:00');dt.setDate(dt.getDate()+n);return dt.toISOString().slice(0,10);}
+function inicioMes(d){return d.slice(0,7)+'-01';}
+
+async function getHeaders(){const s=await fusionAuth.getSession();return{apikey:ANON,Authorization:'Bearer '+(s?s.access_token:''),'Content-Type':'application/json'};}
+async function apiAll(table,qs,orderKey){
+  let all=[],off=0,tam=1000;const h=await getHeaders();
+  const ord=orderKey?('&order='+orderKey):'';
+  while(true){
+    const r=await fetch(SB+'/rest/v1/'+table+'?'+qs+ord+'&limit='+tam+'&offset='+off,{headers:h});
+    if(!r.ok)break;const lote=await r.json();all=all.concat(lote);
+    if(lote.length<tam)break;off+=tam;
+  }
+  return all;
+}
+
+// net-sales régua (bruto − devoluções)
+const netOf=r=>(+r.receita_bruta||0)-(+r.devolucoes||0);
+// classificador canal-first (espelha diretoria.html)
+function classificarGrupo(r){
+  const oc=(r.origem_conta||'').toLowerCase(), canal=(r.canal_nome_raw||''), loja=(r.loja_nome||'');
+  if(oc==='flecha')return 'Atacado';
+  if(oc==='kwid'&&loja==='Atacado WhatsApp')return 'Atacado';
+  if(oc==='kwid')return 'Lojas';
+  if(oc==='shopify'||/site pr[óo]prio/i.test(canal))return 'Site';
+  return 'Marketplaces';
+}
+
+const STATE={dir:[],margem:[],meta:{},alertas:[]};
+
+async function carregar(){
+  const hoje=hojeSP();
+  document.getElementById('datahoje').textContent='· '+new Date(hoje+'T12:00:00').toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long'});
+  const de=somaDias(hoje,-90);
+  const [dir,margem,metaRows,alertas]=await Promise.all([
+    apiAll('mvw_diretoria_dia','select=data_pedido,origem_conta,canal_nome_raw,loja_nome,receita_bruta,devolucoes&data_pedido=gte.'+de,'data_pedido.asc,origem_conta.asc,canal_nome_raw.asc,loja_nome.asc'),
+    apiAll('mvw_margem_canal_dia','select=data_pedido,grupo,canal,receita_liquida,comissao,afiliado,frete_seller,devolucoes,cmv,contribuicao&data_pedido=gte.'+de,'data_pedido.asc,grupo.asc,canal.asc,origem_conta.asc'),
+    apiAll('projecao_faturamento','select=ano_mes,macro_canal,valor&tipo=eq.projetado&versao=eq.1','ano_mes.asc'),
+    apiAll('marketing_alertas','select=data_ref,severidade,categoria,titulo,detalhe','data_ref.desc'),
+  ]);
+  STATE.dir=dir;STATE.margem=margem;STATE.alertas=alertas;
+  // meta por mês (soma macro_canais)
+  const meta={};metaRows.forEach(r=>{meta[r.ano_mes]=(meta[r.ano_mes]||0)+(+r.valor||0);});STATE.meta=meta;
+  render(hoje);
+  document.getElementById('loader').style.display='none';
+}
+
+function projMes(diasNet,hoje,mStart){
+  const byDow={};let observed=0;
+  diasNet.forEach(d=>{const dw=new Date(d.data+'T12:00:00').getDay();(byDow[dw]||(byDow[dw]={s:0,n:0}));byDow[dw].s+=d.net;byDow[dw].n++;observed+=d.net;});
+  const y=+mStart.slice(0,4),m=+mStart.slice(5,7),dim=new Date(y,m,0).getDate(),td=+hoje.slice(8,10);
+  let proj=observed;
+  for(let day=td+1;day<=dim;day++){const dw=new Date(y,m-1,day).getDay();const avg=(byDow[dw]&&byDow[dw].n)?byDow[dw].s/byDow[dw].n:(td?observed/td:0);proj+=avg;}
+  return {observed,proj};
+}
+
+function render(hoje){
+  const mStart=inicioMes(hoje), ontem=somaDias(hoje,-1), mesmoMesPassado=somaDias(hoje,-30);
+  // ── net por dia (todos grupos) ──
+  const netByDia={};STATE.dir.forEach(r=>{const d=r.data_pedido;netByDia[d]=(netByDia[d]||0)+netOf(r);});
+  const netDia=d=>netByDia[d]||0;
+  // ── 1: HOJE strip ──
+  const vHoje=netDia(hoje),vOntem=netDia(ontem),vMMP=netDia(mesmoMesPassado);
+  const dOntem=vOntem?(vHoje-vOntem)/vOntem:null, dMMP=vMMP?(vHoje-vMMP)/vMMP:null;
+  // ── 2: HERO MTD ──
+  const mtdRows=STATE.dir.filter(r=>r.data_pedido>=mStart&&r.data_pedido<=hoje);
+  const mtd=mtdRows.reduce((s,r)=>s+netOf(r),0);
+  const metaMes=STATE.meta[mStart]||0;
+  const diasNet=Object.keys(netByDia).filter(d=>d>=mStart&&d<=hoje).map(d=>({data:d,net:netByDia[d]}));
+  const {proj}=projMes(diasNet,hoje,mStart);
+  const deltaHTML=(d)=>d==null?'<span class="flat">—</span>':`<span class="${d>=0?'up':'down'}">${d>=0?'▲':'▼'} ${Math.abs(d*100).toFixed(0)}%</span>`;
+  document.getElementById('topkpis').innerHTML=[
+    {cls:'',lbl:'Hoje',val:rsK(vHoje),sub:'vs ontem '+deltaHTML(dOntem)+' · vs mês passado '+deltaHTML(dMMP)},
+    {cls:'hero',lbl:'MTD (mês corrente)',val:rsK(mtd),sub:'meta '+rsK(metaMes)+' · <b>'+pct0(metaMes?mtd/metaMes:null)+'</b> atingido'},
+    {cls:'hero',lbl:'Projeção de fechamento',val:rsK(proj),sub:(metaMes?(proj>=metaMes?'<span class="up">bate a meta ('+pct0(proj/metaMes)+')</span>':'<span class="down">'+pct0(proj/metaMes)+' da meta</span>'):'—')},
+  ].map(k=>`<div class="kpi ${k.cls}"><div class="lbl">${k.lbl}</div><div class="val">${k.val}</div><div class="sub">${k.sub}</div></div>`).join('');
+
+  // ── 3: CARDS POR GRUPO ──
+  // MTD por grupo + período anterior equivalente + sparkline 14d
+  const elapsed=Math.round((new Date(hoje+'T12:00:00')-new Date(mStart+'T12:00:00'))/864e5)+1;
+  const priorEnd=somaDias(mStart,-1), priorStart=somaDias(mStart,-elapsed);
+  const mtdG={},prevG={},sparkG={};GRUPOS.forEach(g=>{mtdG[g]=0;prevG[g]=0;sparkG[g]={};});
+  STATE.dir.forEach(r=>{const g=classificarGrupo(r),n=netOf(r),d=r.data_pedido;
+    if(d>=mStart&&d<=hoje)mtdG[g]+=n;
+    if(d>=priorStart&&d<=priorEnd)prevG[g]+=n;
+    if(d>somaDias(hoje,-14))sparkG[g][d]=(sparkG[g][d]||0)+n;});
+  // contribuição% por grupo (MTD) da margem MV
+  const contribG={};GRUPOS.forEach(g=>contribG[g]={net:0,c:0});
+  STATE.margem.filter(r=>r.data_pedido>=mStart&&r.data_pedido<=hoje).forEach(r=>{
+    const g=r.grupo;if(contribG[g]){contribG[g].net+=(+r.receita_liquida||0);contribG[g].c+=(+r.contribuicao||0);}});
+  document.getElementById('grupos').innerHTML=GRUPOS.map(g=>{
+    const cur=mtdG[g],prev=prevG[g],dlt=prev?(cur-prev)/prev:null;
+    const cg=contribG[g],cpct=cg&&cg.net?cg.c/cg.net:null;
+    return `<div class="gcard"><div class="gname" style="color:${GCOR[g]}">${g}</div>
+      <div class="gval">${rsK(cur)}</div>
+      <div class="gsub">${deltaHTML(dlt)} vs período ant. · contrib ${cpct==null?'—':'<b>'+pct0(cpct)+'</b>'}</div>
+      <canvas class="gspark" id="spark-${g}"></canvas></div>`;
+  }).join('');
+  GRUPOS.forEach(g=>{
+    const dias=[];for(let i=13;i>=0;i--)dias.push(somaDias(hoje,-i));
+    const data=dias.map(d=>sparkG[g][d]||0);
+    if(CHARTS['spark-'+g])CHARTS['spark-'+g].destroy();
+    const ctx=document.getElementById('spark-'+g);if(!ctx)return;
+    CHARTS['spark-'+g]=new Chart(ctx,{type:'line',data:{labels:dias,datasets:[{data,borderColor:GCOR[g],backgroundColor:GCOR[g]+'22',fill:true,tension:.35,pointRadius:0,borderWidth:1.5}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{enabled:false}},scales:{x:{display:false},y:{display:false}}}});
+  });
+
+  // ── 4: RITMO DIÁRIO 60d ──
+  const dias60=[];for(let i=59;i>=0;i--)dias60.push(somaDias(hoje,-i));
+  const serie=dias60.map(d=>netByDia[d]||0);
+  const metaDia=metaMes?metaMes/new Date(+mStart.slice(0,4),+mStart.slice(5,7),0).getDate():null;
+  if(CHARTS.ritmo)CHARTS.ritmo.destroy();
+  CHARTS.ritmo=new Chart(document.getElementById('ch-ritmo'),{type:'bar',
+    data:{labels:dias60.map(d=>d.slice(5)),datasets:[
+      {type:'bar',label:'Receita líq/dia',data:serie,backgroundColor:'rgba(124,92,255,.55)',borderRadius:3},
+      ...(metaDia?[{type:'line',label:'Meta/dia',data:dias60.map(()=>metaDia),borderColor:'#f5a623',borderDash:[5,4],pointRadius:0,borderWidth:1.5}]:[])]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#9aa3b2',boxWidth:12}}},
+      scales:{y:{ticks:{color:'#9aa3b2',callback:v=>'R$'+Math.round(v/1000)+'k'},grid:{color:'#2a2f3a'}},x:{ticks:{color:'#9aa3b2',maxTicksLimit:15},grid:{display:false}}}}});
+
+  // ── 5: SAÚDE DA MARGEM ──
+  renderMargem(mStart,hoje);
+
+  // ── 6: ALERTAS ──
+  const topRef=STATE.alertas.length?STATE.alertas[0].data_ref:null;
+  const hoje7=STATE.alertas.filter(a=>a.data_ref===topRef);
+  const sevOrd={alta:0,media:1,baixa:2};
+  hoje7.sort((a,b)=>(sevOrd[a.severidade]??3)-(sevOrd[b.severidade]??3));
+  document.getElementById('alerts').innerHTML=hoje7.length?hoje7.map(a=>
+    `<div class="alert ${a.severidade}"><span class="sev">${a.severidade}</span><span>${a.titulo}${a.detalhe?' <span class="muted">— '+a.detalhe+'</span>':''}</span><span class="cat">${a.categoria}</span></div>`).join('')
+    :'<div class="muted" style="padding:8px">Sem alertas ativos hoje. 🎉</div>';
+}
+
+function renderMargem(mStart,hoje){
+  const rows=STATE.margem.filter(r=>r.data_pedido>=mStart&&r.data_pedido<=hoje);
+  // agrega por (grupo, canal)
+  const byCanal={};
+  rows.forEach(r=>{const k=r.grupo+'|'+r.canal;(byCanal[k]||(byCanal[k]={grupo:r.grupo,canal:r.canal,net:0,com:0,afi:0,fre:0,dev:0,cmv:0,c:0}));
+    const o=byCanal[k];o.net+=(+r.receita_liquida||0);o.com+=(+r.comissao||0);o.afi+=(+r.afiliado||0);o.fre+=(+r.frete_seller||0);o.dev+=(+r.devolucoes||0);o.cmv+=(+r.cmv||0);o.c+=(+r.contribuicao||0);});
+  // agrupa: por grupo, ordena canais por net; linha de subtotal por grupo
+  const arr=Object.values(byCanal);
+  let html='';
+  GRUPOS.forEach(g=>{
+    const gc=arr.filter(x=>x.grupo===g).sort((a,b)=>b.net-a.net);
+    if(!gc.length)return;
+    const sub=gc.reduce((s,x)=>({net:s.net+x.net,com:s.com+x.com,afi:s.afi+x.afi,fre:s.fre+x.fre,dev:s.dev+x.dev,cmv:s.cmv+x.cmv,c:s.c+x.c}),{net:0,com:0,afi:0,fre:0,dev:0,cmv:0,c:0});
+    const cp=sub.net?sub.c/sub.net:null;
+    html+=`<tr class="grp-row"><td class="l" style="color:${GCOR[g]}">${g}</td><td>${rsK(sub.net)}</td><td>${pct0(sub.net?(sub.com+sub.afi)/sub.net:0)}</td><td>${pct0(sub.net?sub.fre/sub.net:0)}</td><td>${pct0(sub.net?sub.dev/sub.net:0)}</td><td>${pct0(sub.net?sub.cmv/sub.net:0)}</td><td>${rsK(sub.c)}</td><td class="${cp>=.30?'up':cp>=.15?'':'down'}"><b>${pct0(cp)}</b></td></tr>`;
+    if(gc.length>1) gc.forEach(x=>{const xp=x.net?x.c/x.net:null;
+      html+=`<tr><td class="l muted" style="padding-left:20px">${x.canal}</td><td>${rsK(x.net)}</td><td>${pct0(x.net?(x.com+x.afi)/x.net:0)}</td><td>${pct0(x.net?x.fre/x.net:0)}</td><td>${pct0(x.net?x.dev/x.net:0)}</td><td>${pct0(x.net?x.cmv/x.net:0)}</td><td>${rsK(x.c)}</td><td class="${xp>=.30?'up':xp>=.15?'':'down'}">${pct0(xp)}</td></tr>`;});
+  });
+  document.getElementById('tb-margem-body').innerHTML=html||'<tr><td colspan="8" class="l muted" style="padding:12px">Sem dados no mês.</td></tr>';
+}
+
+(async()=>{
+  const auth=await fusionAuth.requireAuth('diario');
+  if(!auth)return;
+  document.getElementById('who').textContent=(auth.role&&auth.role.nome)||auth.email||'';
+  SB=fusionAuth.SUPABASE_URL;ANON=fusionAuth.SUPABASE_ANON_KEY;
+  document.getElementById('btnOut').onclick=()=>fusionAuth.signOut();
+  try{await carregar();}catch(e){document.getElementById('loader').textContent='Erro: '+e.message;console.error(e);}
+})();
+</script>
+</body></html>
