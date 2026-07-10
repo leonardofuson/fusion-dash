@@ -98,69 +98,25 @@ body{
   min-height:1em;
 }
 
-/* MENU GRID */
-.menu-wrap{
-  width:100%;max-width:1100px;
-}
-.menu-header{
-  margin-bottom:1.5rem;
-}
-.menu-header h1{
-  font-size:24px;font-weight:600;margin-bottom:.3rem;
-}
+/* MENU — categorias + cards com letra cropada e fade na cor */
+.menu-wrap{width:100%;max-width:1160px;}
+.menu-header{margin-bottom:.5rem;}
+.menu-header h1{font-size:24px;font-weight:700;letter-spacing:-.02em;margin-bottom:.3rem;}
 .menu-header p{font-size:13px;color:var(--text-soft);}
-.menu-grid{
-  display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
-  gap:14px;
-}
-.menu-card{
-  background:var(--bg-card);border:1px solid var(--border);
-  border-radius:12px;padding:1.4rem;cursor:pointer;
-  transition:all .15s;text-decoration:none;color:inherit;
-  display:block;
-}
-.menu-card:hover{
-  background:var(--bg-card-hover);border-color:var(--accent);
-  transform:translateY(-2px);
-}
-.menu-card .icone{font-size:28px;margin-bottom:.6rem;}
-.menu-card .titulo{font-size:16px;font-weight:600;margin-bottom:.2rem;}
-.menu-card .descricao{font-size:12px;color:var(--text-soft);}
-
-/* Card de destaque (Max Chat) */
-.menu-card.destaque{
-  grid-column:1 / -1;
-  background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);
-  border-color:rgba(99,102,241,0.4);
-  padding:1.8rem 2rem;
-  display:flex;align-items:center;gap:1.2rem;
-  position:relative;overflow:hidden;
-}
-.menu-card.destaque::before{
-  content:'';position:absolute;top:0;left:0;right:0;height:3px;
-  background:linear-gradient(90deg,#6366f1,#8b5cf6,#ec4899);
-}
-.menu-card.destaque::after{
-  content:'';position:absolute;right:-40px;top:-40px;
-  width:160px;height:160px;border-radius:50%;
-  background:radial-gradient(circle,rgba(99,102,241,0.15) 0%,transparent 70%);
-  pointer-events:none;
-}
-.menu-card.destaque:hover{
-  border-color:rgba(99,102,241,0.7);
-  box-shadow:0 8px 32px rgba(99,102,241,0.2);
-  transform:translateY(-3px);
-}
-.menu-card.destaque .icone{font-size:36px;flex-shrink:0;margin-bottom:0;}
-.menu-card.destaque .card-text{flex:1;}
-.menu-card.destaque .titulo{font-size:20px;margin-bottom:.3rem;}
-.menu-card.destaque .descricao{font-size:13px;}
-.menu-card.destaque .badge-new{
-  display:inline-block;background:linear-gradient(135deg,#6366f1,#8b5cf6);
-  color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:4px;
-  letter-spacing:.06em;text-transform:uppercase;margin-left:8px;vertical-align:middle;
-}
+.cat{margin-top:24px;}
+.cat-h{display:flex;align-items:center;gap:10px;font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--cc);margin-bottom:13px;}
+.cat-h::before{content:'';width:9px;height:9px;border-radius:50%;background:var(--cc);box-shadow:0 0 12px var(--cc);}
+.cat-h::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,color-mix(in srgb,var(--cc) 35%,transparent),transparent);}
+.cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:15px;}
+.menu-card{position:relative;overflow:hidden;display:block;text-decoration:none;color:inherit;cursor:pointer;background:#111114;border:1px solid #26262d;border-radius:16px;min-height:126px;transition:transform .2s, border-color .2s;}
+.menu-card:hover{transform:translateY(-3px);border-color:color-mix(in srgb,var(--accent) 60%,#26262d);}
+.mc-sweep{position:absolute;inset:0;z-index:0;background:linear-gradient(105deg,color-mix(in srgb,var(--accent) 72%,#0c0c10) 0%,color-mix(in srgb,var(--accent) 30%,#0c0c10) 42%,#101014 100%);}
+.mc-mono{position:absolute;z-index:1;left:8px;top:50%;transform:translateY(-50%);font-size:240px;font-weight:800;line-height:.72;letter-spacing:-.05em;
+  background:linear-gradient(160deg,color-mix(in srgb,var(--accent) 22%,#fff),var(--accent));-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-stroke:1.3px color-mix(in srgb,var(--accent) 35%,#fff);}
+.mc-body{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;z-index:2;text-align:right;padding:22px 27px 22px 37%;}
+.mc-t{font-weight:800;letter-spacing:-.02em;margin-bottom:6px;font-size:19px;color:#fff;}
+.mc-d{line-height:1.42;font-size:12.5px;font-weight:600;color:#eceef4;}
+@media(max-width:768px){.cat-grid{grid-template-columns:1fr;}.mc-body{padding-left:42%;}}
 
 .hidden{display:none!important;}
 .loading-msg{text-align:center;color:var(--text-soft);font-size:13px;}
@@ -202,7 +158,7 @@ body{
       <h1 id="menu-greeting">Olá</h1>
       <p>Selecione um dashboard para acessar.</p>
     </div>
-    <div class="menu-grid" id="menu-grid"></div>
+    <div id="menu-grid"></div>
   </div>
 
   <!-- LOADING -->
@@ -240,39 +196,38 @@ async function init() {
   // Greeting
   const primeiroNome = (role.nome || role.email.split('@')[0]).split(' ')[0];
   $('menu-greeting').textContent = `Olá, ${primeiroNome}`;
-  // Cards
+  // Cards agrupados por categoria — só os dashes que o usuário tem E passam no restritoPara.
   const grid = $('menu-grid');
-  grid.innerHTML = '';
-  role.dashes.forEach(key => {
-    const meta = fusionAuth.DASHES[key];
-    if (!meta) return;
-    // Cards restritos por email (ex: max-chat-admin só pro Leo)
-    if (meta.restritoPara && !meta.restritoPara.includes((role.email || '').toLowerCase())) return;
-    const card = document.createElement('a');
-    card.href = meta.url;
-    if (meta.destaque) {
-      card.className = 'menu-card destaque';
-      card.innerHTML = `
-        <div class="icone">${meta.icone}</div>
-        <div class="card-text">
-          <div class="titulo">${meta.titulo}<span class="badge-new">Novo</span></div>
-          <div class="descricao">${meta.descricao}</div>
-        </div>
-      `;
-      grid.prepend(card);
-    } else {
-      card.className = 'menu-card';
-      card.innerHTML = `
-        <div class="icone">${meta.icone}</div>
-        <div class="titulo">${meta.titulo}</div>
-        <div class="descricao">${meta.descricao}</div>
-      `;
-      grid.appendChild(card);
-    }
+  const CAT_META = [
+    { key: 'vendas',       label: 'Vendas',       color: '#2563eb' },
+    { key: 'operacoes',    label: 'Operações',    color: '#059669' },
+    { key: 'inteligencia', label: 'Inteligência', color: '#7c3aed' },
+    { key: 'assistente',   label: 'Assistente',   color: '#52525b' },
+  ];
+  const email = (role.email || '').toLowerCase();
+  const allowed = new Set(role.dashes || []);
+  const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const inicial = (s) => (String(s || '?').trim()[0] || '?').toUpperCase();
+  let html = '';
+  CAT_META.forEach(cat => {
+    const keys = Object.keys(fusionAuth.DASHES).filter(k => {
+      const m = fusionAuth.DASHES[k];
+      if (!m || m.cat !== cat.key || !allowed.has(k)) return false;
+      if (m.restritoPara && !m.restritoPara.includes(email)) return false;
+      return true;
+    });
+    if (!keys.length) return;
+    html += '<div class="cat" style="--cc:' + cat.color + '"><div class="cat-h">' + cat.label + '</div><div class="cat-grid">';
+    keys.forEach(k => {
+      const m = fusionAuth.DASHES[k];
+      const ext = /^https?:/i.test(m.url) ? ' target="_blank" rel="noopener"' : '';
+      html += '<a class="menu-card" style="--accent:' + cat.color + '" href="' + esc(m.url) + '"' + ext + '>' +
+        '<span class="mc-sweep"></span><span class="mc-mono">' + inicial(m.titulo) + '</span>' +
+        '<div class="mc-body"><div class="mc-t">' + esc(m.titulo) + '</div><div class="mc-d">' + esc(m.descricao) + '</div></div></a>';
+    });
+    html += '</div></div>';
   });
-  if (!role.dashes.length) {
-    grid.innerHTML = '<p class="loading-msg">Você ainda não tem nenhum dashboard liberado.</p>';
-  }
+  grid.innerHTML = html || '<p class="loading-msg">Você ainda não tem nenhum dashboard liberado.</p>';
   show('menu-view');
 }
 

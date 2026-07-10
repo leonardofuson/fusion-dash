@@ -20,27 +20,26 @@
   });
 
   // Catálogo de dashes disponíveis (chave → metadados)
+  // `cat` agrupa os cards no portal por categoria (cores/seções em index.html): vendas | operacoes | inteligencia | assistente.
   const DASHES = {
-    diario:     { titulo: 'Diário',      descricao: 'Sua foto do dia: vendas por canal, ritmo vs meta, margem e alertas', url: '/diario.html', icone: '☀️', destaque: true },
-    'max-chat': { titulo: 'Max Chat',    descricao: 'Pergunte sobre vendas, estoque e mais — IA responde na hora', url: 'https://max-chat-frontend.onrender.com', icone: '🤖', destaque: true },
-    'max-chat-admin': { titulo: 'Max Chat — Admin', descricao: 'Qualidade do chat, falhas, sugestões', url: '/max-chat-admin.html', icone: '🛠️', restritoPara: ['leonardo@usefusion.com.br'] },
-    lojas:      { titulo: 'Lojas Físicas', descricao: 'Vendas das lojas físicas (Linx Microvix desde 01/06/2026)', url: '/lojas.html', icone: '🏬' },
-    ecommerce:  { titulo: 'E-commerce',  descricao: 'Canais digitais',           url: '/ecommerce.html',  icone: '🛒' },
-    diretoria:  { titulo: 'Diretoria',   descricao: 'Visão consolidada',         url: '/diretoria.html',  icone: '📊' },
-    // Dash "Cockpit Fusion" (cockpit.html) removido em 08/07/2026 — era port 1:1 da página "Cockpit"
-    // do fusion-financeiro (Cockpit.tsx: mesmas fontes dre_mensal/projecao_faturamento/entradas_caixa/
-    // extratos + mesmas seções + drawer Max). Acesso ao cockpit agora é via aba Cockpit do Financeiro.
-    projetos:   { titulo: 'Projetos',    descricao: 'Gestão de projetos estratégicos (Facção PR + Fábrica PY)', url: '/projetos.html', icone: '🏗️' },
-    // Dash "Conciliação" (cockpit-conciliacao.html) removido em 08/07/2026. A metade útil — a fila
-    // de classificação de dúvidas do fluxo_caixa — virou a página "Revisão de Caixa" no fusion-financeiro
-    // (/revisao). As tabelas de drift DRE-planilha×contas_pagar×extratos foram descartadas (dre_mensal
-    // parou em março/2026; DRE nativo é construído no fusion-financeiro).
-    estoque:    { titulo: 'Estoque',     descricao: 'Posição multi-canal',       url: '/estoque.html',    icone: '📦' },
-    compras:    { titulo: 'Compras',     descricao: 'Ordens e fornecedores',     url: '/compras.html',    icone: '🧾' },
-    financeiro: { titulo: 'Financeiro',  descricao: 'Contas a pagar, fluxo de caixa e DRE de resultado (multi-CNPJ)', url: '/financeiro.html', icone: '💰' },
-    crm:        { titulo: 'CRM',         descricao: 'Base de clientes 360°, segmentação RFM e histórico de atendimento', url: '/crm.html', icone: '👥' },
-    simulador:  { titulo: 'Simulador',   descricao: 'Margem por produto + curva ótima de ads', url: '/simulador.html', icone: '🎯' },
-    marketing:  { titulo: 'Marketing',   descricao: 'Mídia paga Meta + Google: lucro por SKU, MER, auditoria da agência', url: '/marketing.html', icone: '📣', restritoPara: ['leonardo@usefusion.com.br', 'allanjonnesj@gmail.com', 'tiago@usefusion.com.br', 'thiago.caleb@usefusion.com.br'] },
+    // Vendas
+    diario:     { titulo: 'Diário',        descricao: 'Sua foto do dia: vendas por canal, ritmo vs meta e alertas', url: '/diario.html', icone: '☀️', cat: 'vendas' },
+    ecommerce:  { titulo: 'E-commerce',    descricao: 'Canais digitais e marketplaces', url: '/ecommerce.html', icone: '🛒', cat: 'vendas' },
+    lojas:      { titulo: 'Lojas Físicas', descricao: 'Vendas das lojas físicas (Linx Microvix)', url: '/lojas.html', icone: '🏬', cat: 'vendas' },
+    diretoria:  { titulo: 'Diretoria',     descricao: 'Visão executiva consolidada por canal', url: '/diretoria.html', icone: '📊', cat: 'vendas' },
+    // Operações
+    estoque:    { titulo: 'Estoque',       descricao: 'Posição multi-canal de estoque', url: '/estoque.html', icone: '📦', cat: 'operacoes' },
+    compras:    { titulo: 'Compras',       descricao: 'Ordens de compra, produção e fornecedores', url: '/compras.html', icone: '🧾', cat: 'operacoes' },
+    financeiro: { titulo: 'Financeiro',    descricao: 'Contas a pagar, fluxo de caixa e DRE de resultado (multi-CNPJ)', url: '/financeiro.html', icone: '💰', cat: 'operacoes' },
+    // Inteligência
+    simulador:  { titulo: 'Simulador',     descricao: 'Margem por produto + curva ótima de ads', url: '/simulador.html', icone: '🎯', cat: 'inteligencia' },
+    crm:        { titulo: 'CRM',           descricao: 'Base 360°, segmentação RFM e histórico de atendimento', url: '/crm.html', icone: '👥', cat: 'inteligencia' },
+    marketing:  { titulo: 'Marketing',     descricao: 'Mídia paga Meta + Google: lucro por SKU, MER, auditoria da agência', url: '/marketing.html', icone: '📣', cat: 'inteligencia', restritoPara: ['leonardo@usefusion.com.br', 'allanjonnesj@gmail.com', 'tiago@usefusion.com.br', 'thiago.caleb@usefusion.com.br', 'gabsdev08@gmail.com'] },
+    // Assistente
+    'max-chat': { titulo: 'Max Chat',      descricao: 'Pergunte sobre vendas, estoque e mais — IA responde na hora', url: 'https://max-chat-frontend.onrender.com', icone: '🤖', cat: 'assistente' },
+    'max-chat-admin': { titulo: 'Max Chat — Admin', descricao: 'Qualidade do chat, falhas, sugestões', url: '/max-chat-admin.html', icone: '🛠️', restritoPara: ['leonardo@usefusion.com.br'], cat: 'assistente' },
+    // Projetos removido do portal (10/07/2026). Cockpit + Conciliação retirados 08/07/2026 (viraram abas do Financeiro);
+    // trafego.html/social.html/loja viraram abas DENTRO do marketing.html (consolidação 08/07).
   };
   // Consolidação no dash Marketing (08/07/2026): dashes standalone viraram abas DENTRO do marketing.html.
   //  - "Tráfego & Atribuição" (trafego.html) → aba "🌐 Funil" (Impressão→Clique→Sessão→Pedido + origens source/medium/link-in-bio).
