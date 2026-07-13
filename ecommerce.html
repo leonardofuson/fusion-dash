@@ -622,6 +622,17 @@ function custoPct(n){
   return CANAL_CUSTO[n]!==undefined?CANAL_CUSTO[n]:0.0;                   // hardcode = último recurso
 }
 
+// Fração devolvida do pedido. Devolução ESTORNA comissão + CMV (mercadoria volta como estoque
+// vendável — confirmado pelo Leo); frete de saída e taxa de pagamento NÃO estornam (afundados:
+// o pacote já voou). Base: doc da ML ("reintegramos a comissão de venda"), escrow reescrito da
+// Shopee, comissão do TikTok sobre base líquida de refunds; ASC 606 / IFRS 15 "right of return".
+// Mesma régua do SQL (mvw_ecommerce_*.fee_estornado / cmv_devolvido). Ver TODO_DEVOLUCOES_SETTLEMENT.md.
+function taxaDev(p){
+  var v=valorReceita(p); if(!(v>0)) return 0;
+  var d=parseFloat(p.valor_devolucao||0); if(!(d>0)) return 0;   // chargeback = perda total, não estorna
+  return Math.min(d/v,1);
+}
+
 // ── Helpers ──
 function fmt(n){return 'R$ '+Math.round(n||0).toLocaleString('pt-BR');}
 function fmtK(n){n=n||0;if(Math.abs(n)>=1e6)return 'R$ '+(n/1e6).toFixed(1)+'M';if(Math.abs(n)>=1e3)return 'R$ '+Math.round(n/1e3)+'k';return 'R$ '+Math.round(n);}
@@ -887,9 +898,10 @@ function calcPnLFromMV(rows,adsVal){
     receita+=rb;
     dev+=parseFloat(r.devolucoes||0);
     frete+=parseFloat(r.frete_seller||0);
-    com+=parseFloat(r.comissao||0);
+    com+=Math.max(parseFloat(r.comissao||0)-parseFloat(r.fee_estornado||0),0);  // comissão LÍQUIDA do estorno
     afiliados+=parseFloat(r.afiliado||0);
-    cmv+=rb*cmvPct(_nome);   // CMV pela proporção REAL por canal (first-paint; calcPnL real sobrescreve no recente)
+    // CMV estimado pela proporção real do canal, menos o CMV que voltou (mercadoria devolvida)
+    cmv+=Math.max(rb*cmvPct(_nome)-parseFloat(r.cmv_devolvido||0),0);
     ped+=parseInt(r.pedidos||0)-parseInt(r.cancelados||0);
   });
   frete+=freteReversoNoEscopo();  // reversa/troca do Site (Troque), agregado do período
@@ -1137,10 +1149,15 @@ async function carregar(){
         // Rateio proporcional pedido→item dos custos do pedido (pra KPIs ecommerce real por SKU).
         // Receita do pedido base = valorReceita(ped) (já inclui frete cliente p/ ML).
         var recPed=valorReceita(ped); var share=recPed>0?(it._receita/recPed):0;
-        it._fee=(parseFloat(ped.fee_canal)||0)*share;
+        // taxa_dev = fração devolvida do pedido. Devolução ESTORNA comissão e CMV (mercadoria
+        // volta vendável); frete e taxa de pagamento NÃO (afundados). Mesma régua da MV. (13/07)
+        var tDev=taxaDev(ped);
+        it._fee=(parseFloat(ped.fee_canal)||0)*share*(1-tDev);
         it._afiliado=(parseFloat(ped.comissao_afiliado)||0)*share;
         it._devolucao=(parseFloat(ped.valor_devolucao)||0)*share;
         it._freteSeller=(parseFloat(ped.frete_ml_seller)||0)*share;
+        // _custoUn continua CRU (é o custo unitário exibido). O CMV líquido do estorno vive em _cmv.
+        it._cmv=(it._custoUn||0)*it._qtd*(1-tDev);
       });
       STATE.itens=itens.filter(function(it){return it._sku_pai&&(!['cancelado','devolvido'].includes(it._canc));});
     }else{STATE.itens=[];}
@@ -1291,13 +1308,14 @@ function calcPnL(pedidos,itens,adsVal){
     // Antes o Site caía no frete do CLIENTE (p.frete) como proxy → superestimava ~2x (02/07/2026).
     frete+=parseFloat(p.frete_ml_seller||0);
     var fee=parseFloat(p.fee_canal||0);
-    comissao+=fee>0?fee:v*custoPct(p._nome);
+    // comissão LÍQUIDA do estorno de devolução (o marketplace devolve a comissão da venda desfeita)
+    comissao+=(fee>0?fee:v*custoPct(p._nome))*(1-taxaDev(p));
   });
   // CMV REAL dos itens carregados (período dentro da janela janelaItens — abr/mai/jun);
   // pedidos mais ANTIGOS que a janela (sem item) usam a proporção REAL por canal (cmvPct).
   var iniItens=janelaItens(DE);
-  if(itens&&itens.length>0){itens.forEach(function(it){cmv+=(it._custoUn||0)*it._qtd;});}
-  pedidos.forEach(function(p){if(p._cancelado)return;if((p.data_pedido||'')>=iniItens)return;cmv+=valorReceita(p)*cmvPct(p._nome);});
+  if(itens&&itens.length>0){itens.forEach(function(it){cmv+=(it._cmv!=null?it._cmv:(it._custoUn||0)*it._qtd);});}
+  pedidos.forEach(function(p){if(p._cancelado)return;if((p.data_pedido||'')>=iniItens)return;cmv+=valorReceita(p)*cmvPct(p._nome)*(1-taxaDev(p));});
   frete+=freteReversoNoEscopo();  // reversa/troca do Site (Troque tracking.price), agregado do período
   afiliados+=mlTaxaNoEscopo('afiliado');  // afiliado ML (CVAF, nível conta/período — não vem por pedido)
   var full=mlTaxaNoEscopo('full');        // Full ML (armazenagem CFWA + retirada CFRS), agregado do período
@@ -1472,12 +1490,15 @@ function renderCanalTableFromMV(rows){
     var c=byCanal[n];
     c.r+=parseFloat(r.receita_bruta||0);
     c.ped+=(parseInt(r.pedidos||0)-parseInt(r.cancelados||0));
-    c.fee+=parseFloat(r.comissao||0);
+    c.fee+=Math.max(parseFloat(r.comissao||0)-parseFloat(r.fee_estornado||0),0);  // líquida do estorno
     c.afiliado+=parseFloat(r.afiliado||0);
     c.frete+=parseFloat(r.frete_seller||0);
     c.dev+=parseFloat(r.devolucoes||0);
+    c.cmvDev=(c.cmvDev||0)+parseFloat(r.cmv_devolvido||0);   // CMV que voltou (estorna abaixo)
   });
-  try{document.getElementById('canal-tbody').innerHTML=_canalTbodyHTML(_canalRowsArr(byCanal,null));}catch(e){console.error('canalMV:',e);}
+  var cmvMV={};Object.keys(byCanal).forEach(function(n){
+    cmvMV[n]=Math.max(byCanal[n].r*cmvPct(n)-(byCanal[n].cmvDev||0),0);});
+  try{document.getElementById('canal-tbody').innerHTML=_canalTbodyHTML(_canalRowsArr(byCanal,cmvMV));}catch(e){console.error('canalMV:',e);}
 }
 // Linhas da tabela de canais para 1 produto focado (P&L por canal vem do skuGroups + ads por sku/canal).
 function _canalRowsProduto(g){
@@ -1506,13 +1527,13 @@ function renderCanalTable(){
     byCanal[n].dev+=parseFloat(p.valor_devolucao||0)+parseFloat(p.valor_chargeback||0);
     byCanal[n].afiliado+=parseFloat(p.comissao_afiliado||0);
     byCanal[n].frete+=parseFloat(p.frete_ml_seller||0);  // Site = subsídio frete grátis; reversa Troque à parte
-    var f=parseFloat(p.fee_canal||0);byCanal[n].fee+=f>0?f:v*custoPct(n);
+    var f=parseFloat(p.fee_canal||0);byCanal[n].fee+=(f>0?f:v*custoPct(n))*(1-taxaDev(p));  // líquida do estorno
   });
   // CMV por canal dos itens carregados; fallback proporção real por canal (cmvPct).
   var cmvByCanal={};
   (STATE.itens||[]).forEach(function(it){
     if(!cmvByCanal[it._canal])cmvByCanal[it._canal]=0;
-    cmvByCanal[it._canal]+=(it._custoUn||0)*it._qtd;
+    cmvByCanal[it._canal]+=(it._cmv!=null?it._cmv:(it._custoUn||0)*it._qtd);
   });
   document.getElementById('canal-tbody').innerHTML=_canalTbodyHTML(_canalRowsArr(byCanal,cmvByCanal));
 }
@@ -1742,7 +1763,7 @@ function pintarDowHeat(matrix){
 // continuam carregando em background pra enriquecer o drawer (variantes/fee/dev/frete) e o CMV real.
 async function fetchSkuMV(de,ate,big){
   // big period (YTD/12m): sku_dia pode passar de 50k linhas → teto maior (250k) pra não truncar.
-  return buscarTudo('mvw_ecommerce_sku_dia','select=sku_pai,nome,cat,canal_nome_raw,origem_conta,receita,qtd,cmv,fee,afiliado,devolucao,frete_seller&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc', big?250:undefined);
+  return buscarTudo('mvw_ecommerce_sku_dia','select=sku_pai,nome,cat,canal_nome_raw,origem_conta,receita,qtd,cmv,fee,afiliado,devolucao,frete_seller,fee_estornado,cmv_devolvido&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc', big?250:undefined);
 }
 // PERF (09/06): geo (UF/cidade) e pagamentos (método/parcelas) vêm de MV no paint imediato —
 // antes ficavam vazios até o fetch de 10-115k pedidos chegar. Validado A/B (0 divergências).
@@ -1756,7 +1777,7 @@ async function fetchPgtoMV(de,ate){
 // (via agruparSkusMV) E o heatmap dia-da-semana (renderDowHeatMV) com uma só leitura.
 async function fetchSkuMVData(de,ate){
   // aba Mensal = janela longa (6-24m); sku_dia ~110k linhas/ano → teto 250k pra não truncar.
-  return buscarTudo('mvw_ecommerce_sku_dia','select=sku_pai,nome,cat,canal_nome_raw,origem_conta,receita,qtd,cmv,fee,afiliado,devolucao,frete_seller,data_pedido&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc', 250);
+  return buscarTudo('mvw_ecommerce_sku_dia','select=sku_pai,nome,cat,canal_nome_raw,origem_conta,receita,qtd,cmv,fee,afiliado,devolucao,frete_seller,fee_estornado,cmv_devolvido,data_pedido&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc', 250);
 }
 function agruparSkusMV(rows){
   var map={};
@@ -1769,8 +1790,12 @@ function agruparSkusMV(rows){
     if(!map[k])map[k]={sku_pai:k,nome:r.nome||k,cat:r.cat||'OUTROS',custoUn:0,
       receita:0,qtd:0,custoTotal:0,fee:0,afiliado:0,devolucao:0,freteSeller:0,
       porCanal:{},pedidoIds:{},datas:{}};
-    var g=map[k];var rec=parseFloat(r.receita||0),q=parseFloat(r.qtd||0),cm=parseFloat(r.cmv||0);
-    var fe=parseFloat(r.fee||0),af=parseFloat(r.afiliado||0),dv=parseFloat(r.devolucao||0),fr=parseFloat(r.frete_seller||0);
+    var g=map[k];var rec=parseFloat(r.receita||0),q=parseFloat(r.qtd||0);
+    // Devolução ESTORNA comissão e CMV (mercadoria volta vendável); frete NÃO estorna (já voou).
+    // Ver TODO_DEVOLUCOES_SETTLEMENT.md §9. (13/07/2026)
+    var cm=Math.max(parseFloat(r.cmv||0)-parseFloat(r.cmv_devolvido||0),0);
+    var fe=Math.max(parseFloat(r.fee||0)-parseFloat(r.fee_estornado||0),0);
+    var af=parseFloat(r.afiliado||0),dv=parseFloat(r.devolucao||0),fr=parseFloat(r.frete_seller||0);
     g.receita+=rec;g.qtd+=q;g.custoTotal+=cm;g.fee+=fe;g.afiliado+=af;g.devolucao+=dv;g.freteSeller+=fr;
     if(!g.porCanal[canal])g.porCanal[canal]={qtd:0,receita:0,fee:0,afiliado:0,devolucao:0,freteSeller:0,custoTotal:0};
     var pc=g.porCanal[canal];pc.receita+=rec;pc.qtd+=q;pc.custoTotal+=cm;pc.fee+=fe;pc.afiliado+=af;pc.devolucao+=dv;pc.freteSeller+=fr;
@@ -1794,7 +1819,7 @@ function agruparSkus(itens){
       porCanal:{},pedidoIds:{},datas:{}};
     var g=map[k];
     g.receita+=it._receita; g.qtd+=it._qtd;
-    g.custoTotal+=(it._custoUn||0)*it._qtd;
+    g.custoTotal+=(it._cmv!=null?it._cmv:(it._custoUn||0)*it._qtd);
     g.fee+=it._fee||0; g.afiliado+=it._afiliado||0; g.devolucao+=it._devolucao||0;
     g.freteSeller+=it._freteSeller||0;
     if(!g.porCanal[c])g.porCanal[c]={qtd:0,receita:0,fee:0,afiliado:0,devolucao:0,freteSeller:0,custoTotal:0};
@@ -1802,7 +1827,7 @@ function agruparSkus(itens){
     pc.qtd+=it._qtd; pc.receita+=it._receita;
     pc.fee+=it._fee||0; pc.afiliado+=it._afiliado||0; pc.devolucao+=it._devolucao||0;
     pc.freteSeller+=it._freteSeller||0;
-    pc.custoTotal+=(it._custoUn||0)*it._qtd;
+    pc.custoTotal+=(it._cmv!=null?it._cmv:(it._custoUn||0)*it._qtd);
     if(it.pedido_id)g.pedidoIds[it.pedido_id]=true;
     var d=(it._data||'').slice(0,10);if(d){g.datas[d]=(g.datas[d]||0)+(it._qtd||0);}
   });
