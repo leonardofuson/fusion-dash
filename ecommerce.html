@@ -1412,15 +1412,32 @@ function renderKPIs(){
   var devPct=cur.receita>0?cur.devolucoes/cur.receita*100:0, prevDevP=prev.receita>0?prev.devolucoes/prev.receita*100:0;
   var temItens=fp?(gp&&gp.unidades>0):((STATE.itens||[]).length>0);var un=fp?(gp?gp.unidades:0):totUnidades();var pa=(temItens&&nPed>0)?un/nPed:0;
   var prevMp=prev.receita>0?prev.lucro/prev.receita*100:0;
+  // MARGEM DE CONTRIBUIÇÃO (mp) = Contribuição ÷ Bruta — ANTES do custo fixo.
+  // MARGEM LÍQUIDA (mpLiq)      = Result. Operacional ÷ Bruta — DEPOIS do custo fixo rateado.
+  // Até 13/07/2026 o KPI "Margem líquida %" mostrava a de CONTRIBUIÇÃO — rótulo enganoso
+  // (jun/26 ecom: contribuição 18,7% vs líquida real 12,3%). Agora são dois KPIs distintos.
+  var _roK=(cur.resultadoOper!=null?cur.resultadoOper:cur.lucro);
+  var _roKPrev=(prev.resultadoOper!=null?prev.resultadoOper:prev.lucro);
+  var mpLiq=cur.receita>0?_roK/cur.receita*100:0;
+  var prevMpLiq=prev.receita>0?_roKPrev/prev.receita*100:0;
   var tacos=cur.receita>0?cur.ads/cur.receita*100:0, prevTac=prev.receita>0?prev.ads/prev.receita*100:0;
   var mc=mp>=20?'#22c55e':(mp>=10?'#eab308':'#f43f5e'), dc=devPct<=5?'#22c55e':(devPct<=10?'#eab308':'#f43f5e'), ac=tacos<=8?'#22c55e':(tacos<=15?'#eab308':'#f43f5e');
+  var mlc=mpLiq>=12?'#22c55e':(mpLiq>=5?'#eab308':'#f43f5e');
   var html='';
   // LINHA 1 — Receita Bruta · Receita Líquida · Resultado · Margem % · Ticket Médio
   html+='<div class="kpi" style="--kpi-accent:#6366f1"><div class="kpi-lbl">Receita Bruta</div><div class="kpi-val">'+fmt(cur.receita)+'</div>'+(proj?'<div class="kpi-sub">proj. mês: '+fmt(proj)+'</div>':'')+'<div class="kpi-delta">'+deltaBadge(delta(cur.receita,prev.receita))+'</div></div>';
   html+='<div class="kpi" style="--kpi-accent:#06b6d4"><div class="kpi-lbl">Receita Líquida</div><div class="kpi-val">'+fmt(cur.liquida)+'</div><div class="kpi-sub">após comissão/dev/frete</div><div class="kpi-delta">'+deltaBadge(delta(cur.liquida,prev.liquida))+'</div></div>';
   var _ro=(cur.resultadoOper!=null?cur.resultadoOper:cur.lucro),_mpO=cur.receita>0?_ro/cur.receita*100:0,_roPrev=(prev.resultadoOper!=null?prev.resultadoOper:prev.lucro),_cf=cur.custoFixo||0;
   html+='<div class="kpi" style="--kpi-accent:'+(_ro>=0?'#22c55e':'#f43f5e')+'"><div class="kpi-lbl">Result. Operacional</div><div class="kpi-val" style="color:'+(_ro>=0?'#22c55e':'#f43f5e')+'">'+fmt(_ro)+'</div><div class="kpi-sub">margem '+fmtD(_mpO)+'% · após custo fixo '+fmtK(_cf)+' (contrib. '+fmtK(cur.lucro)+')</div><div class="kpi-delta">'+deltaBadge(delta(_ro,_roPrev))+'</div></div>';
-  html+='<div class="kpi" style="--kpi-accent:'+mc+'"><div class="kpi-lbl">Margem líquida %</div><div class="kpi-val" style="color:'+mc+'">'+fmtD(mp)+'%</div><div class="kpi-delta">'+deltaBadge(delta(mp,prevMp))+'</div></div>';
+  html+='<div class="kpi" style="--kpi-accent:'+mc+'" title="Margem de contribuição = Contribuição ÷ Receita Bruta. É ANTES do custo fixo — mede se o canal se paga na margem variável."><div class="kpi-lbl">Margem de contribuição %</div><div class="kpi-val" style="color:'+mc+'">'+fmtD(mp)+'%</div><div class="kpi-delta">'+deltaBadge(delta(mp,prevMp))+'</div></div>';
+  // Só faz sentido fora do foco de produto: NÃO há rateio de custo fixo por produto, então
+  // com um produto focado a "líquida" seria idêntica à contribuição — exatamente o rótulo
+  // enganoso que este KPI veio corrigir. Focado em produto → mostra '—'.
+  if(fp){
+    html+='<div class="kpi" style="--kpi-accent:#3f3f46" title="Custo fixo não é rateado por produto — a margem líquida só existe no nível do canal/total. Aqui vale a margem de contribuição."><div class="kpi-lbl">Margem líquida %</div><div class="kpi-val" style="color:var(--txt2)">—</div><div class="kpi-sub">sem rateio por produto</div></div>';
+  }else{
+    html+='<div class="kpi" style="--kpi-accent:'+mlc+'" title="Margem líquida = Resultado Operacional ÷ Receita Bruta, ou seja DEPOIS do custo fixo (opex ECOM rateado por receita). É o que sobra de verdade. Imposto ainda é flat 6,5%."><div class="kpi-lbl">Margem líquida %</div><div class="kpi-val" style="color:'+mlc+'">'+fmtD(mpLiq)+'%</div><div class="kpi-sub">após custo fixo</div><div class="kpi-delta">'+deltaBadge(delta(mpLiq,prevMpLiq))+'</div></div>';
+  }
   html+='<div class="kpi" style="--kpi-accent:#06b6d4"><div class="kpi-lbl">Ticket Médio</div><div class="kpi-val">'+fmt(tm)+'</div><div class="kpi-delta">'+deltaBadge(delta(tm,tmAnt))+'</div></div>';
   // LINHA 2 — Pedidos · Unidades · PA · Devolução % · Ads %
   html+='<div class="kpi" style="--kpi-accent:#22c55e"><div class="kpi-lbl">'+(fp?'Pedidos c/ produto':'Pedidos')+'</div><div class="kpi-val">'+fmtN(nPed)+'</div><div class="kpi-delta">'+deltaBadge(delta(nPed,pedAntN))+'</div></div>';
@@ -1936,7 +1953,7 @@ function renderEcommSkuList(){
     +'<th class="r sortable'+arrow('qtd')+'" onclick="setEcommSkuSort(\'qtd\')">Qtd</th>'
     +'<th class="r sortable'+arrow('devun')+'" onclick="setEcommSkuSort(\'devun\')" title="taxa de devolução em unidades (un devolvidas ÷ un vendidas); qtd em letra menor">Devol. %</th>'
     +'<th class="r sortable'+arrow('tacos')+'" onclick="setEcommSkuSort(\'tacos\')" title="TACoS: gasto em Ads (ML) ÷ receita do produto">TACoS</th>'
-    +'<th class="r sortable'+arrow('margemliq')+'" onclick="setEcommSkuSort(\'margemliq\')" title="margem líquida %: receita − CMV − comissão − afiliados − devolução − frete − ads − impostos (Full de conta não entra por produto)">Margem líq.</th>'
+    +'<th class="r sortable'+arrow('margemliq')+'" onclick="setEcommSkuSort(\'margemliq\')" title="margem de contribuição %: receita − CMV − comissão − afiliados − devolução − frete − ads − impostos. NÃO inclui custo fixo (não há rateio por produto), então é contribuição, não margem líquida.">Margem contrib.</th>'
     +'<th style="min-width:200px;">Distribuição por canal</th>'
     +'</tr>';
   listEl.innerHTML='<table class="tb"><thead>'+th+'</thead><tbody>'
@@ -2107,7 +2124,7 @@ function renderEcommSkuDetail(){
   html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Receita</div><div class="dr-kpi-val">'+fmtK(receita)+'</div><div class="dr-kpi-sub">'+fmt(receita)+'</div></div>';
   html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Pedidos</div><div class="dr-kpi-val">'+fmtN(nPedidos)+'</div><div class="dr-kpi-sub">Ticket: '+fmt(ticketMed)+'</div></div>';
   html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Unidades</div><div class="dr-kpi-val">'+fmtN(qtd)+'</div><div class="dr-kpi-sub">Preço/un: '+fmt(ticketUn)+'</div></div>';
-  html+=  '<div class="dr-kpi" title="Receita − CMV − Comissão − Afiliados ('+fmtK(afiliadoSku)+') − Devolução − Frete − Ads − Impostos 6,5% ('+fmtK(impostosSku)+'). Mesma régua da tabela Performance por canal. Full (armazenagem, nível conta) não entra por produto."><div class="dr-kpi-lbl">Margem líquida</div><div class="dr-kpi-val">'+fmtK(margemLiq)+'</div><div class="dr-kpi-sub"><span class="margem-pill '+mcls+'">'+Math.round(margemPct)+'%</span></div></div>';
+  html+=  '<div class="dr-kpi" title="Receita − CMV − Comissão − Afiliados ('+fmtK(afiliadoSku)+') − Devolução − Frete − Ads − Impostos 6,5% ('+fmtK(impostosSku)+'). Mesma régua da tabela Performance por canal. Full (armazenagem, nível conta) não entra por produto."><div class="dr-kpi-lbl">Margem de contribuição</div><div class="dr-kpi-val">'+fmtK(margemLiq)+'</div><div class="dr-kpi-sub"><span class="margem-pill '+mcls+'">'+Math.round(margemPct)+'%</span></div></div>';
   html+='</div>';
 
   // KPIs row 2 — comissão real / devolução / frete líquido / velocidade
