@@ -202,6 +202,24 @@
   #pane-shopify .kpi.paid{border-color:rgba(245,166,35,.35)}
   .grid2b{display:grid;grid-template-columns:1fr 1fr;gap:16px}
   @media(max-width:760px){.grid2b{grid-template-columns:1fr}}
+  /* Funil de conversão do site (aba Loja) — escala LINEAR de propósito: a queda brutal
+     entre "viu produto" e "carrinho" é a informação principal, achatar isso mentiria. */
+  .fu-bars{display:grid;grid-template-columns:repeat(5,1fr)}
+  .fu-step{display:flex;flex-direction:column;height:250px;padding:0 14px;border-left:1px solid var(--bd)}
+  .fu-step:first-child{border-left:0;padding-left:2px}
+  .fu-lab{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .fu-pct{font-size:1.5rem;font-weight:800;white-space:nowrap;margin-top:6px;line-height:1.1}
+  .fu-abs{font-size:13px;color:var(--mut);white-space:nowrap;margin-top:2px}
+  .fu-prev{font-size:11px;color:var(--mut);margin-top:6px}
+  .fu-prev b{color:#ef5350;font-weight:700}
+  .fu-bar{margin-top:auto;border-radius:6px 6px 0 0;background:linear-gradient(180deg,#7c5cff,#5b3fd6);min-height:5px}
+  .fu-step.real .fu-bar{background:linear-gradient(180deg,#2fbf71,#1e8f52)}
+  .fu-chips{display:inline-flex;gap:6px;margin-left:auto}
+  .fu-chips button{background:var(--bg2);border:1px solid var(--bd);color:var(--mut);border-radius:20px;padding:4px 12px;font-size:12px;font-weight:600;cursor:pointer}
+  .fu-chips button.on{background:rgba(124,92,255,.16);border-color:var(--accent);color:#e8e9ee}
+  .fu-good{color:#2fbf71;font-weight:700}
+  .fu-bad{color:#ef5350;font-weight:700}
+  @media(max-width:760px){.fu-bars{grid-template-columns:1fr 1fr}.fu-step{height:170px;border-left:0}}
 </style>
 </head>
 <body>
@@ -281,10 +299,24 @@
       <div class="note-lead">Performance do <b>Site Próprio (Shopify)</b> + o <b>tráfego pago</b> que o alimenta.</div>
       <div class="note-sub">É o outro lado da mesma história das outras abas: aqui você vê a <b>loja</b> (receita, pedidos, ticket, conversão, sessões) e como o anúncio se converte em venda no site. Receita = produto sem frete (igual ao ecommerce). Sessões via GA4 (último clique, atraso ~1-2 dias).</div>
       <div class="note-sub"><b>Novos clientes</b> = quem fez a <b>1ª compra no site</b> no período, identificado pelo <b>CPF do checkout</b> (o mesmo CPF liga site ↔ loja física). No Top Produtos, a coluna <b>Novos</b> mostra quais produtos <b>trazem gente nova</b> (estavam na 1ª compra). <b>Pedidos de TROCA não contam como recompra</b> — quando o cliente devolve por tamanho e refaz com cupom (`TROCA…`), é o mesmo pedido redimensionado, então ele segue como a compra original (não vira recorrente). <span class="muted">⚠️ Hoje o CPF cobre os últimos ~60 dias (limite da API Shopify); clientes cuja 1ª compra é anterior a isso ainda podem contar como "novos" — o número afina conforme o histórico de CPF acumula.</span></div>
+      <div class="note-sub"><b>Funil de conversão:</b> mede <b>sessões que chegaram a cada etapa</b> (mesma régua do card do Shopify), via GA4. As 4 primeiras etapas (sessão → viu produto → carrinho → checkout) vêm do GA4; o <b>último passo usa os PEDIDOS REAIS</b> da nossa base, não o <code>purchase</code> do GA4 — o GA4 <b>subconta ~45% das compras</b> (adblock/consent), então usá-lo fecharia o funil com um número falso. Por isso a taxa final do funil é <b>a mesma</b> do KPI "Taxa de conversão" acima. <span class="muted">⚠️ Não existe funil por página do produto: <code>begin_checkout</code>/<code>purchase</code> disparam no domínio de checkout do Shopify e não voltam pra nenhuma página da loja. Por isso a quebra é por <b>página de ENTRADA</b> (a que trouxe a sessão) — que é justamente a pergunta de mídia: "pra onde meu anúncio manda a pessoa, e essa página converte?". Nas quebras, o último passo é o <code>purchase</code> do GA4 (não dá pra dividir pedido real por device/página), então compare os segmentos <b>entre si</b>, não com o número absoluto de pedidos.</span></div>
       <div class="note-sub"><b>Dois CPAs — por que são diferentes:</b> <b>CPA Meta</b> = gasto da Meta ÷ compras que <b>a própria Meta atribui</b> (pixel). É o número do Gerenciador de Anúncios — <b>otimista</b>, porque a Meta reivindica compras que talvez viessem sozinhas. <b>CPA Shopify</b> = <b>todo</b> o gasto em ads ÷ <b>todos os pedidos reais</b> do site. Costuma ficar <b>mais baixo</b> aqui porque o denominador inclui pedidos orgânicos/diretos que o anúncio não pagou. <b>A verdade fica entre os dois</b> — o custo real por pedido incremental só um teste de holdout mede. Use o CPA Meta pra otimizar campanha e o CPA Shopify pra saber o custo de aquisição real do caixa.</div>
     </div>
     <div class="secTitle">🛍️ Loja — performance</div>
     <div class="kpis" id="sh-kpis-loja"></div>
+
+    <div class="secTitle">🔻 Funil de conversão — onde o site perde a venda</div>
+    <div class="card"><h3>Sessão → Viu produto → Carrinho → Checkout → Pedido <span class="hint">% das sessões que chegam em cada etapa · barra em escala real</span></h3>
+      <div class="fu-bars" id="fu-bars"></div>
+    </div>
+    <div class="card"><h3>Onde o funil vaza <span class="hint">quebra por segmento · ordenado por sessões</span>
+      <span class="fu-chips" id="fu-chips">
+        <button class="on" data-fu="canal">Canal</button><button data-fu="device">Device</button><button data-fu="landing">Página de entrada</button><button data-fu="produto">Produto</button>
+      </span></h3>
+      <div style="overflow-x:auto"><table><thead id="fu-th"></thead><tbody id="fu-tb"></tbody></table></div>
+      <div class="muted" style="font-size:11px;margin-top:10px" id="fu-foot"></div>
+    </div>
+
     <div class="secTitle paid">📣 Tráfego pago — anúncios que levam ao site</div>
     <div class="kpis" id="sh-kpis-paid"></div>
     <div style="display:flex;align-items:center;gap:10px;margin:16px 2px 10px">
@@ -514,6 +546,13 @@ function kpiSet(merRows,canalRows,trafegoRows){
   return {meta,goog,c,com,rec,cm2,cm3,un:c.unidades||0,ticket:c.unidades>0?rec/c.unidades:null,mer:meta>0?rec/meta:null,poas:meta>0?cm2/meta:null};
 }
 const pctDelta=(a,b)=>(b&&isFinite(b)&&b!==0)?(a-b)/b*100:null;
+const escH=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+// badge em PONTOS PERCENTUAIS (taxa de conversão) — o deltaBadge normal é % relativo
+function ppBadge(dpp){
+  if(dpp==null||isNaN(dpp)||Math.abs(dpp)<0.05) return '';
+  const cls=dpp>0?'up':'down';
+  return `<span class="delta-badge ${cls}" title="vs período anterior de mesma duração">${dpp>0?'+':''}${dpp.toFixed(1).replace('.',',')}pp</span>`;
+}
 function deltaBadge(d,neutral){
   if(d==null||isNaN(d)) return '';
   const cls=neutral?'flat':(d>=0.5?'up':(d<=-0.5?'down':'flat'));
@@ -1519,7 +1558,7 @@ async function carregarShopify(){
   const site='canal_nome_raw=eq.Site%20Pr%C3%B3prio';
   const dlen=ndays(STATE.de,STATE.ate), priorAte=somaDias(STATE.de,-1), priorDe=somaDias(STATE.de,-dlen);
   const ms=meses(STATE.de,STATE.ate);
-  const [ec,sku,adsMeta,novos,novosSku,skuPnl,conv,recompra]=await Promise.all([
+  const [ec,sku,adsMeta,novos,novosSku,skuPnl,conv,recompra,funil,funilLanding]=await Promise.all([
     buscarTudo('mvw_ecommerce_canal_dia','select=data_pedido,pedidos,receita_bruta,devolucoes&'+site+'&data_pedido=gte.'+priorDe+'&data_pedido=lte.'+STATE.ate+'&order=data_pedido.asc'),
     buscarTudo('mvw_ecommerce_sku_dia','select=data_pedido,sku_pai,nome,cat,receita,qtd,cmv&'+site+'&data_pedido=gte.'+STATE.de+'&data_pedido=lte.'+STATE.ate+'&order=data_pedido.asc'),
     // Meta: gasto + compras ATRIBUÍDAS pela Meta (unidades_diretas=omni_purchase) → CPA reportado pela plataforma
@@ -1529,18 +1568,96 @@ async function carregarShopify(){
     buscarTudo('mvw_site_novos_sku_dia','select=data_pedido,sku_pai,novos_clientes&data_pedido=gte.'+STATE.de+'&data_pedido=lte.'+STATE.ate+'&order=data_pedido.asc'),
     // gasto REAL de ads por sku_pai (ads_metrics item, meta+google) p/ o CPA/CAC por produto
     buscarTudo('mvw_site_ads_sku_dia','select=data_pedido,sku_pai,gasto&data_pedido=gte.'+STATE.de+'&data_pedido=lte.'+STATE.ate),
-    // conversão por produto (GA4 item-scope: views + compras por sku_pai)
-    buscarTudo('web_produto_dia','select=sku_pai,views,compras&data=gte.'+STATE.de+'&data=lte.'+STATE.ate),
+    // conversão por produto (GA4 item-scope: views + carrinho + checkout + compras por sku_pai)
+    buscarTudo('web_produto_dia','select=sku_pai,views,compras,add_to_cart,checkout&data=gte.'+STATE.de+'&data=lte.'+STATE.ate),
     // recompra (2ª+ compra por CPF, excl. troca) + quantas vieram de mídia paga (last-click Shopify)
     buscarTudo('mvw_site_recompra_dia','select=data_pedido,recompras,recompras_pagas&data_pedido=gte.'+priorDe+'&data_pedido=lte.'+STATE.ate+'&order=data_pedido.asc'),
+    // funil de conversão (GA4, sessões por etapa). total/canal/device cobrem cur+prev (Δ);
+    // landing só no período atual e com cauda cortada (>=3 sessões/dia) — senão são ~12k linhas.
+    buscarTudo('web_funil_dia','select=data,dim_tipo,dim_valor,sessoes,view_item,add_to_cart,checkout,purchase,receita&dim_tipo=in.(total,canal,device)&data=gte.'+priorDe+'&data=lte.'+STATE.ate+'&order=data.asc'),
+    buscarTudo('web_funil_dia','select=data,dim_tipo,dim_valor,sessoes,view_item,add_to_cart,checkout,purchase,receita&dim_tipo=eq.landing&sessoes=gte.3&data=gte.'+STATE.de+'&data=lte.'+STATE.ate+'&order=data.asc'),
   ]);
   const inCur=d=>d>=STATE.de&&d<=STATE.ate, inPrev=d=>d>=priorDe&&d<=priorAte;
   STATE.shop={key:STATE.de+'_'+STATE.ate, ecCur:ec.filter(r=>inCur(r.data_pedido)), ecPrev:ec.filter(r=>inPrev(r.data_pedido)), sku,
     adsMetaCur:adsMeta.filter(r=>inCur(r.data)), adsMetaPrev:adsMeta.filter(r=>inPrev(r.data)),
     novosCur:novos.filter(r=>inCur(r.data_pedido)), novosPrev:novos.filter(r=>inPrev(r.data_pedido)),
     novosSku, adsSku:skuPnl, conv,
-    recompraCur:recompra.filter(r=>inCur(r.data_pedido)), recompraPrev:recompra.filter(r=>inPrev(r.data_pedido))};
+    recompraCur:recompra.filter(r=>inCur(r.data_pedido)), recompraPrev:recompra.filter(r=>inPrev(r.data_pedido)),
+    funCur:funil.filter(r=>inCur(r.data)).concat(funilLanding), funPrev:funil.filter(r=>inPrev(r.data))};
   renderShopify();
+}
+// Soma as etapas do funil de um conjunto de linhas web_funil_dia, agrupando por dim_valor.
+// Só somar é correto: cada linha é "sessões daquele dia que atingiram a etapa" — sessão não
+// atravessa dia, então não há dupla contagem ao agregar o período.
+function funSoma(rows,tipo){
+  const by={};
+  (rows||[]).filter(r=>r.dim_tipo===tipo).forEach(r=>{
+    const a=by[r.dim_valor]||(by[r.dim_valor]={seg:r.dim_valor,sess:0,view:0,cart:0,chk:0,buy:0,rec:0});
+    a.sess+=+r.sessoes||0; a.view+=+r.view_item||0; a.cart+=+r.add_to_cart||0;
+    a.chk+=+r.checkout||0; a.buy+=+r.purchase||0; a.rec+=+r.receita||0;
+  });
+  return by;
+}
+STATE.fudim='canal';
+function renderFunil(){
+  if(!STATE.shop) return;
+  const cur=(funSoma(STATE.shop.funCur,'total'))['(total)']||{sess:0,view:0,cart:0,chk:0,buy:0};
+  const prv=(funSoma(STATE.shop.funPrev,'total'))['(total)']||null;
+  // último passo = PEDIDOS REAIS da base (o purchase do GA4 subconta ~45%)
+  const pedCur=STATE.shop.ecCur.reduce((s,r)=>s+(+r.pedidos||0),0);
+  const pedPrev=STATE.shop.ecPrev.reduce((s,r)=>s+(+r.pedidos||0),0);
+  const base=cur.sess||0;
+  const steps=[
+    {l:'Sessões',      n:cur.sess, p:null},
+    {l:'Viu produto',  n:cur.view, p:cur.sess},
+    {l:'Carrinho',     n:cur.cart, p:cur.view},
+    {l:'Checkout',     n:cur.chk,  p:cur.cart},
+    {l:'Pedidos',      n:pedCur,   p:cur.chk, real:true},
+  ];
+  const prevN=prv?[prv.sess,prv.view,prv.cart,prv.chk,pedPrev]:null;
+  const prevBase=prv?prv.sess:0;
+  document.getElementById('fu-bars').innerHTML=steps.map((s,i)=>{
+    const pct=base>0?s.n/base:0;
+    // Δ compara a TAXA (% das sessões), não o volume — volume sobe só porque houve mais tráfego.
+    const dh=(prevN&&prevBase>0&&i>0)?ppBadge(pct*100-(prevN[i]/prevBase)*100):'';
+    const passo=s.p>0?Math.round(s.n/s.p*100):null;
+    return '<div class="fu-step'+(s.real?' real':'')+'">'
+      +'<div class="fu-lab">'+s.l+'</div>'
+      +'<div class="fu-pct">'+(i===0?'100%':(pct*100).toFixed(pct<0.05?2:1).replace('.',',')+'%')+' '+dh+'</div>'
+      +'<div class="fu-abs">'+s.n.toLocaleString('pt-BR')+'</div>'
+      +(passo!==null?'<div class="fu-prev">'+passo+'% da etapa anterior · <b>−'+(100-passo)+'%</b></div>':'<div class="fu-prev">base do funil</div>')
+      +'<div class="fu-bar" style="height:'+Math.max(5,pct*150)+'px"></div></div>';
+  }).join('');
+  renderFunilTabela();
+}
+function renderFunilTabela(){
+  const dim=STATE.fudim, th=document.getElementById('fu-th'), tb=document.getElementById('fu-tb');
+  const convTot=(()=>{const t=(funSoma(STATE.shop.funCur,'total'))['(total)'];return t&&t.sess>0?t.buy/t.sess:0;})();
+  const cell=(v,ref)=>{const c=ref!=null?(v>ref?'fu-good':(v<ref*0.7?'fu-bad':'')):'';return '<td class="'+c+'">'+(v*100).toFixed(2).replace('.',',')+'%</td>';};
+  if(dim==='produto'){
+    const nome={}; (STATE.shop.sku||[]).forEach(r=>{nome[r.sku_pai]=r.nome;});
+    const by={};
+    (STATE.shop.conv||[]).forEach(r=>{const a=by[r.sku_pai]||(by[r.sku_pai]={seg:r.sku_pai,view:0,cart:0,chk:0,buy:0});
+      a.view+=+r.views||0; a.cart+=+r.add_to_cart||0; a.chk+=+r.checkout||0; a.buy+=+r.compras||0;});
+    const rows=Object.values(by).filter(r=>r.view>=50).sort((a,b)=>b.view-a.view).slice(0,15);
+    const cv=rows.reduce((s,r)=>s+r.buy,0)/Math.max(rows.reduce((s,r)=>s+r.view,0),1);
+    th.innerHTML='<tr><th class="l">Produto</th><th>Views</th><th>Carrinho</th><th>Checkout</th><th>Compras</th><th>Conversão</th></tr>';
+    tb.innerHTML=rows.length?rows.map(r=>'<tr><td class="l">'+escH(nome[r.seg]||r.seg)+'</td>'
+      +'<td>'+r.view.toLocaleString('pt-BR')+'</td>'+cell(r.view>0?r.cart/r.view:0)
+      +cell(r.view>0?r.chk/r.view:0)+'<td>'+Math.round(r.buy).toLocaleString('pt-BR')+'</td>'
+      +cell(r.view>0?r.buy/r.view:0,cv)+'</tr>').join(''):'<tr><td colspan="6" class="muted">Sem dados no período.</td></tr>';
+    document.getElementById('fu-foot').textContent='Funil por produto = item-scope do GA4 (views da página do produto → carrinho → checkout → compra). % sobre as VIEWS, não sobre sessões. Só produtos com ≥50 views. Verde = converte acima da média; vermelho = abaixo de 70% dela.';
+    return;
+  }
+  const by=funSoma(STATE.shop.funCur,dim);
+  const rows=Object.values(by).filter(r=>r.sess>0).sort((a,b)=>b.sess-a.sess).slice(0,15);
+  const lab={canal:'Canal',device:'Device',landing:'Página de entrada'}[dim];
+  th.innerHTML='<tr><th class="l">'+lab+'</th><th>Sessões</th><th>Carrinho</th><th>Checkout</th><th>Compra</th><th>Receita</th></tr>';
+  tb.innerHTML=rows.length?rows.map(r=>'<tr><td class="l">'+escH(r.seg)+'</td>'
+    +'<td>'+r.sess.toLocaleString('pt-BR')+'</td>'+cell(r.cart/r.sess)+cell(r.chk/r.sess)
+    +cell(r.buy/r.sess,convTot)+'<td>'+rs(r.rec)+'</td></tr>').join(''):'<tr><td colspan="6" class="muted">Sem dados no período.</td></tr>';
+  document.getElementById('fu-foot').textContent='% = sessões do segmento que chegaram à etapa. A coluna "Compra" usa o purchase do GA4 (subconta ~45%) — compare os segmentos ENTRE SI, não com o total de pedidos. Verde = converte acima da média do site; vermelho = abaixo de 70% dela.'
+    +(dim==='landing'?' Página de ENTRADA da sessão (não a página onde a pessoa comprou).':'');
 }
 // store KPIs: receita/pedidos/devol da MV de ecommerce; sessões do GA4 (STATE.trafego); gasto do STATE.mer;
 // adsMeta = ads_metrics Meta (gasto + compras atribuídas pela plataforma) p/ o CPA reportado
@@ -1601,8 +1718,13 @@ function renderShopify(){
     drawSpark('sh-s-sess',days,ser('sess'),'#2fbf71'); drawSpark('sh-s-meta',days,ser('meta'),'#f5a623');
     drawSpark('sh-s-novos',days,ser('novos'),'#7c5cff');
   });
-  renderShopifyTrend(); renderShopifyCanais(); renderShopifyProdutos();
+  renderFunil(); renderShopifyTrend(); renderShopifyCanais(); renderShopifyProdutos();
 }
+document.getElementById('fu-chips').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  document.querySelectorAll('#fu-chips button').forEach(x=>x.classList.toggle('on',x===b));
+  STATE.fudim=b.dataset.fu; renderFunilTabela();
+});
 function drawDual(id,labels,left,right){
   if(CHARTS[id])CHARTS[id].destroy();
   const ctx=document.getElementById(id);if(!ctx)return;
