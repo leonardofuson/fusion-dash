@@ -1398,8 +1398,12 @@ function calcPnL(pedidos,itens,adsVal){
     // fee>0 = liquidou → usa o REAL (líquido do estorno de devolução, que o marketplace
     // devolve na venda desfeita). fee=0 = não liquidou → estima comissão E afiliado
     // (mesmo gatilho: sem statement, nenhum dos dois existe ainda).
+    // ⚠️ NULL ≠ 0. NULL = não liquidou (sem statement) → estima. 0 = liquidou e a comissão
+    // líquida deu zero (devolução integral, ou o afiliado comeu o fee) → nada a estimar.
+    // Testar `fee>0` tratava os dois como iguais e cobrava comissão de quem já liquidou.
+    var liquidou=(p.fee_canal!==null&&p.fee_canal!==undefined&&p.fee_canal!=='');
     var fee=parseFloat(p.fee_canal||0), t=taxaDe(p._nome);
-    if(fee>0){
+    if(liquidou){
       comissao+=fee*(1-taxaDev(p));
       afiliados+=parseFloat(p.comissao_afiliado||0);
     }else{
@@ -1660,8 +1664,9 @@ function renderCanalTable(){
     c.dev+=parseFloat(p.valor_devolucao||0)+parseFloat(p.valor_chargeback||0);
     c.frete+=parseFloat(p.frete_ml_seller||0);  // Site = subsídio frete grátis; reversa Troque à parte
     // Fase 3 — MESMA regra do calcPnL (fee>0 = liquidou → real; senão estima comissão E afiliado).
+    var liq=(p.fee_canal!==null&&p.fee_canal!==undefined&&p.fee_canal!=='');   // NULL ≠ 0 (ver calcPnL)
     var f=parseFloat(p.fee_canal||0),t=taxaDe(n);
-    if(f>0){ c.fee+=f*(1-taxaDev(p)); c.afiliado+=parseFloat(p.comissao_afiliado||0); }
+    if(liq){ c.fee+=f*(1-taxaDev(p)); c.afiliado+=parseFloat(p.comissao_afiliado||0); }
     else{ var cE=v*(t.com||custoPct(n)),aE=v*(t.afil||0); c.fee+=cE; c.afiliado+=aE; c.est+=cE+aE; }
     var dE=devProv(n,p.data_pedido,v); c.dev+=dE; c.est+=dE;
   });
