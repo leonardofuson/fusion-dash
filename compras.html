@@ -713,6 +713,9 @@ var STATE = {
                      // ⚠️ NÃO usar pra cor de OP — a trava do banco recusa 217 delas. Só sobrevive no datalist de cor de INSUMO.
   coresEstilo: [],   // vw_cores_do_estilo: cores que a TRAVA do banco aceita (mesma view da msg de erro). Fonte da cor da OP.
   corSinonimo: [],   // cor_sinonimo: apelido -> cor canônica (por estilo). Resolve a cor do TECIDO na cor do PRODUTO.
+  tecidos: [],       // `tecido`: a IDENTIDADE do tecido (nome canônico). Fonte do datalist de cadastro.
+  tecidoAlias: [],   // `tecido_alias`: toda grafia (nome curto, typo, acento) -> tecido_id.
+  verTecidosSemSaldo: false,  // Nova OP: mostrar também tecido sem estoque no dropdown
   custosSku: [],     // custos_sku: snapshot materializado de CMV por SKU pai (populado por recalcular_custos_sku)
   tab: 'pipeline', drawerType: null,
   ganttExpanded: {},  // { sku_pai: true/false } - grupos expandidos
@@ -746,7 +749,7 @@ async function buscarTudo(tab, filtro) {
 
 async function carregar() {
   try {
-    var [ops, compras, costureiros, precos, insumos, consumo, planejamento, fornecedores, produtos, coresValidas, custosSku, saldoLocal, eficiencia, entregas, deparaNF, coresEstilo, corSinonimo] = await Promise.all([
+    var [ops, compras, costureiros, precos, insumos, consumo, planejamento, fornecedores, produtos, coresValidas, custosSku, saldoLocal, eficiencia, entregas, deparaNF, coresEstilo, corSinonimo, tecidos, tecidoAlias] = await Promise.all([
       buscarTudo('ordens_producao', 'select=*&order=criado_em.desc'),
       buscarTudo('ordens_compra', 'select=*&order=data_faturamento.desc'),
       buscarTudo('costureiros', 'select=*&order=nome'),
@@ -764,6 +767,8 @@ async function carregar() {
       buscarTudo('insumo_nf_depara', 'select=*&ativo=eq.true'),
       buscarTudo('vw_cores_do_estilo', 'select=sku_pai,cor&order=sku_pai,cor'),
       buscarTudo('cor_sinonimo', 'select=sku_pai,cor_apelido,cor_canonica'),
+      buscarTudo('tecido', 'select=id,nome&ativo=eq.true&order=nome'),
+      buscarTudo('tecido_alias', 'select=alias_norm,tecido_id'),
     ]);
     STATE.ops = ops;
     STATE.compras = compras;
@@ -777,6 +782,8 @@ async function carregar() {
     STATE.coresValidas = coresValidas;
     STATE.coresEstilo = coresEstilo || [];
     STATE.corSinonimo = corSinonimo || [];
+    STATE.tecidos = tecidos || [];          // identidade canônica do tecido (tabela `tecido`)
+    STATE.tecidoAlias = tecidoAlias || [];  // toda grafia já falada -> tecido_id
     STATE.custosSku = custosSku || [];
     STATE.saldoLocal = saldoLocal || [];
     STATE.eficienciaCostureiros = eficiencia || [];
@@ -5480,6 +5487,76 @@ function configurarBtnExcluir(handler, label) {
 // 2. Histórico de OPs com este SKU (qualquer status, exclui cancelado)
 // 3. estoque_insumos.skus_pai (legado — fallback)
 // Retorna array de nomes únicos. Vazio = sem restrição (todos os tecidos cadastrados).
+// ── Identidade do tecido (14/07/2026) ──────────────────────────────────────
+// O tecido era a última entidade sem identidade: nome era string livre, e o mesmo
+// tecido com duas grafias rachava o estoque (o rolo sumia da Nova OP). Agora existe
+// `tecido` (canônico) + `tecido_alias` (toda grafia). A trava vive no BANCO — isto
+// aqui é só a tela conversando com ela sem deixar a analista tomar erro no save.
+//
+// ⚠️ Espelha `fn_norm_tecido` do banco. Se mudar lá, mudar aqui.
+function normTecido(s) {
+  return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
+}
+
+// Resolve qualquer grafia → o tecido canônico. null = tecido desconhecido (novo).
+function resolverTecido(nome) {
+  var n = normTecido(nome);
+  if (!n) return null;
+  var canon = (STATE.tecidos || []).find(function(t){ return normTecido(t.nome) === n; });
+  if (canon) return canon;
+  var al = (STATE.tecidoAlias || []).find(function(a){ return a.alias_norm === n; });
+  if (!al) return null;
+  return (STATE.tecidos || []).find(function(t){ return t.id === al.tecido_id; }) || null;
+}
+
+// Chamado antes de salvar insumo. Nome conhecido (mesmo com typo/acento/nome curto)
+// → devolve o canônico. Nome novo → pergunta e cadastra a IDENTIDADE primeiro.
+// O banco tem a palavra final: se o "novo" for sósia de um existente, ele recusa
+// com o nome do sósia — é a trava anti-duplicata, a mesma do cadastro de produto.
+async function garantirTecidoCadastrado(nome) {
+  var t = resolverTecido(nome);
+  if (t) return t.nome;   // já existe (canônico ou apelido) → usa o canônico
+
+  if (!confirm('O tecido "' + nome + '" não existe no cadastro.\n\nCadastrar como TECIDO NOVO?\n\n' +
+               'Se for o mesmo tecido que já existe com outro nome, cancele e escolha o da lista — ' +
+               'dois nomes pro mesmo tecido racham o estoque: a analista escolhe um, e o rolo fica invisível no outro.')) {
+    return null;
+  }
+  var r = await fetch(SB_URL + '/rest/v1/tecido', {
+    method: 'POST',
+    headers: Object.assign({'Content-Type':'application/json','Prefer':'return=representation'}, await getAuthHeaders()),
+    body: JSON.stringify({ nome: nome.trim() })
+  });
+  if (!r.ok) {
+    var err = await r.text();
+    // O banco recusou — quase sempre por ser sósia de um tecido existente.
+    throw new Error('Não foi possível cadastrar o tecido "' + nome + '":\n\n' +
+      (err.match(/"message":"([^"]+)"/) || [,err])[1].replace(/\\"/g, '"'));
+  }
+  var novo = (await r.json())[0];
+  STATE.tecidos.push({ id: novo.id, nome: novo.nome });
+  return novo.nome;
+}
+
+// Tecido "vivo" = tem estoque em algum lugar. O BOM acumula tecido que saiu de linha
+// (TNPV01 lista 23, só 2 têm rolo), e o morto aparecia colado no vivo no dropdown da
+// Nova OP — escolher o morto dá "não temos metros". Filtro reversível (ver todos).
+function tecidoTemSaldo(nome) {
+  if (!nome) return false;
+  var alvo = nome.trim().toUpperCase();
+  return (STATE.insumos || []).some(function(i) {
+    return i.tipo === 'tecido' && (i.nome || '').trim().toUpperCase() === alvo
+        && (parseFloat(i.quantidade_atual) || 0) > 0.01;
+  });
+}
+
+function toggleTecidosSemSaldo(ev) {
+  if (ev) ev.preventDefault();
+  STATE.verTecidosSemSaldo = !STATE.verTecidosSemSaldo;
+  onProdutoOPChange();   // repinta os datalists das rows
+}
+
 function tecidosPermitidosParaSku(sku) {
   if (!sku) return [];
   var nomesSet = {};
@@ -5615,7 +5692,11 @@ function popularDatalistCores() {
   // Tecidos conhecidos (de estoque_insumos + ordens_compra)
   var dlT = document.getElementById('dl-tecidos-todos');
   if (dlT) {
-    dlT.innerHTML = nomesTecidosCadastrados().map(function(n){
+    // Fonte = `tecido` (identidade canônica), NÃO os nomes soltos de estoque_insumos.
+    // O banco recusa nome fora dessa lista; "+ novo tecido" (no save) é a única porta de entrada.
+    var canonicos = (STATE.tecidos || []).map(function(x){ return x.nome; });
+    if (!canonicos.length) canonicos = nomesTecidosCadastrados();  // fallback se a tabela não carregou
+    dlT.innerHTML = canonicos.map(function(n){
       return '<option value="' + n.replace(/"/g,'&quot;') + '">';
     }).join('');
   }
@@ -5871,6 +5952,7 @@ function buildOPCorRow(idx, firstRow) {
     '</div>' +
     '<div class="form-group"><label class="form-label">Tecido <small style="color:var(--txt3);font-weight:400">(digite pra buscar)</small></label>' +
       '<input class="form-input" data-field="tecido" list="dl-tecidos-row'+idx+'" placeholder="Selecione um produto primeiro" oninput="atualizarCoresTecidoRow('+idx+')" autocomplete="off">' +
+      '<small data-field="tecido-sem-saldo" style="display:block;margin-top:3px;font-size:11px"></small>' +
       '<datalist id="dl-tecidos-row'+idx+'"></datalist>' +
       '<div data-field="tecido-info" style="font-size:11px;color:var(--txt3);margin-top:4px;"></div>' +
     '</div>' +
@@ -5954,10 +6036,27 @@ function onProdutoOPChange() {
           });
           nomes = Object.keys(fallback).sort();
         }
+
+        // Esconde tecido MORTO (zero saldo em qualquer lugar). O BOM acumula tecido que a
+        // Fusion não usa há mais de um ano, e ele aparecia lado a lado com o vivo — o TNPV01
+        // oferecia 23 tecidos com apenas 2 em estoque. Escolher um morto dá "não temos metros".
+        // Não some pra sempre: o link "ver todos" reexibe (histórico não se apaga).
+        var vivos = nomes.filter(tecidoTemSaldo);
+        var ocultos = nomes.length - vivos.length;
+        if (!STATE.verTecidosSemSaldo && vivos.length) nomes = vivos;
+
         dlTec.innerHTML = nomes.map(function(n){return '<option value="'+n.replace(/"/g,'&quot;')+'">';}).join('');
         if (tecInput) {
-          if (nomes.length) tecInput.placeholder = 'Digite pra buscar (' + nomes.length + ' tecido' + (nomes.length>1?'s':'') + ' associado' + (nomes.length>1?'s':'') + ')';
+          if (nomes.length) tecInput.placeholder = 'Digite pra buscar (' + nomes.length + ' tecido' + (nomes.length>1?'s':'') + ' com estoque)';
           else tecInput.placeholder = 'Nenhum tecido associado a este produto';
+        }
+        var hintTec = row.querySelector('[data-field="tecido-sem-saldo"]');
+        if (hintTec) {
+          hintTec.innerHTML = (ocultos > 0 && !STATE.verTecidosSemSaldo && vivos.length)
+            ? '<span style="color:var(--txt3)">' + ocultos + ' tecido' + (ocultos>1?'s':'') + ' sem estoque oculto' + (ocultos>1?'s':'') + ' · <a href="#" onclick="toggleTecidosSemSaldo(event)" style="color:var(--accent)">ver todos</a></span>'
+            : (STATE.verTecidosSemSaldo
+                ? '<span style="color:var(--txt3)">mostrando também os sem estoque · <a href="#" onclick="toggleTecidosSemSaldo(event)" style="color:var(--accent)">só com estoque</a></span>'
+                : '');
         }
       }
     }
@@ -7893,6 +7992,22 @@ async function submitDrawer() {
     } else if (type === 'novo-insumo' || type === 'importar-nfe') {
       var insumos = coletarInsumosRows();
       if (!insumos.length) { alert('Preencha ao menos um tecido/insumo'); btn.textContent='Salvar'; btn.disabled=false; return; }
+
+      // Identidade do tecido (14/07/2026): resolve a grafia pro canônico ANTES de gravar.
+      // Nome conhecido com typo/acento/nome-curto vira o canônico; nome genuinamente novo
+      // passa pelo "+ novo tecido" (que o banco valida contra sósia). O banco recusa
+      // qualquer nome que não resolva — isto aqui só evita a analista tomar o erro no save.
+      for (var iT = 0; iT < insumos.length; iT++) {
+        if (insumos[iT].tipo !== 'tecido') continue;
+        var canonico;
+        try {
+          canonico = await garantirTecidoCadastrado(insumos[iT].nome);
+        } catch (e) {
+          alert(e.message); btn.textContent='Salvar'; btn.disabled=false; return;
+        }
+        if (!canonico) { btn.textContent='Salvar'; btn.disabled=false; return; }  // cancelou
+        insumos[iT].nome = canonico;
+      }
 
       // Guard (14/07/2026): NF de REMESSA não é NF de COMPRA.
       // A remessa é a NOSSA nota de saída do CD pro costureiro — o tecido dela já está no
