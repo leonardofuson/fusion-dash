@@ -387,6 +387,7 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
   <!-- 3. P&L WATERFALL -->
   <div class="card">
     <div class="card-title">P&L — Decomposição do Lucro</div>
+    <div id="wf-est-aviso" style="display:none;font-size:11.5px;line-height:1.5;color:#fbbf24;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.28);border-radius:8px;padding:8px 12px;margin-bottom:12px"></div>
     <div id="waterfall" class="wf-wrap"><div class="spin"></div></div>
   </div>
 
@@ -604,22 +605,69 @@ function cmvPct(nome){var n=(nome||'').toLowerCase();
   if(n.indexOf('site')>=0)return CMV_PCT_CANAL.site;
   if(n.indexOf('shein')>=0)return CMV_PCT_CANAL.shein;
   return CMV_PCT_GERAL;}
-// Comissão fallback: preferir a taxa REAL derivada de fee_canal (vw_sim_canal_taxas,
-// 3 meses fechados) sobre o hardcode CANAL_CUSTO. Só entra quando o fee_canal do pedido
-// ainda não maturou (ex: TikTok, statement lag ~15d). Mesma fonte do dash (fee_canal real).
-var CANAL_COMISSAO_REAL={};
-async function fetchComissaoReal(){
-  if(Object.keys(CANAL_COMISSAO_REAL).length) return CANAL_COMISSAO_REAL;  // 1x por sessão
+// ── Camada de estimativa (Fase 3 — 14/07/2026) ───────────────────────────────
+// PROBLEMA: o MTD se lisonjeava. Pedido que ainda não liquidou tinha custo ZERO, então a
+// margem do mês corrente era a melhor que ela jamais seria (TikTok: 85% da receita de julho
+// sem fee_canal; Site: 62%). E a MESMA comissão aparecia com valores diferentes em 4 telas,
+// porque o fallback só existia em calcPnL (TikTok jul: R$19,6k no waterfall vs R$3,2k na tabela).
+// FONTE ÚNICA em SQL (sql/2026-07-14_camada_estimativa.sql):
+//   vw_ecom_taxas_estim → taxas sobre pedidos LIQUIDADOS. ⚠️ NÃO usar vw_sim_canal_taxas aqui:
+//     ela divide o fee pela receita de TODOS os pedidos, inclusive os imaturos (fee=0), então
+//     vem DILUÍDA — TikTok 5,07% quando a taxa real é 7,88%. Estimar com ela reproduziria
+//     exatamente o viés otimista que esta camada existe pra matar.
+//   mvw_curva_devolucao → fator de maturidade por plataforma/dia (coortes fechadas).
+//   vw_ecom_canal_dia_est / vw_ecom_sku_dia_est → a MV + colunas *_est prontas.
+// As telas que leem MV consomem as colunas; o caminho por pedido (calcPnL) aplica a MESMA
+// regra com as MESMAS taxas — por isso os 4 números batem (validado: R$0,00 de diferença).
+// REGRA DE OURO: estimar só o BURACO, nunca por cima de um valor real.
+var EST={taxa:{},curva:{},ok:false};   // taxa[display]={com,afil,dev} · curva[plat][dias]=fator
+async function fetchEstimativa(){
+  if(EST.ok) return EST;                                     // 1x por sessão
   try{
-    var rows=await buscarTudo('vw_sim_canal_taxas','select=canal_nome_raw,comissao_pct&order=canal_nome_raw.asc');
-    var m={};(rows||[]).forEach(function(r){var d=getNome(r.canal_nome_raw,'');var p=parseFloat(r.comissao_pct||0)/100;if(p>0)m[d]=p;});
-    if(Object.keys(m).length)CANAL_COMISSAO_REAL=m;
-  }catch(e){/* falha → mantém hardcode CANAL_CUSTO */}
-  return CANAL_COMISSAO_REAL;
+    var r=await Promise.all([
+      buscarTudo('vw_ecom_taxas_estim','select=canal_nome_raw,comissao_pct,afiliado_pct,devolucao_pct&order=canal_nome_raw.asc'),
+      buscarTudo('mvw_curva_devolucao','select=plataforma,dias,fator&order=plataforma.asc')
+    ]);
+    (r[0]||[]).forEach(function(t){
+      EST.taxa[getNome(t.canal_nome_raw,'')]={
+        com:parseFloat(t.comissao_pct||0)/100,
+        afil:parseFloat(t.afiliado_pct||0)/100,
+        dev:parseFloat(t.devolucao_pct||0)/100};
+    });
+    (r[1]||[]).forEach(function(c){
+      (EST.curva[c.plataforma]=EST.curva[c.plataforma]||{})[+c.dias]=parseFloat(c.fator||0);
+    });
+    EST.ok=true;
+  }catch(e){ console.warn('[est] camada de estimativa indisponível:',e); }
+  return EST;
+}
+function taxaDe(n){return EST.taxa[n]||{com:0,afil:0,dev:0};}
+function platDe(nome){var n=(nome||'').toLowerCase();
+  if(n.indexOf('ml ')===0||n.indexOf('mercado livre')>=0)return 'ml';
+  if(n.indexOf('shopee')>=0)return 'shopee';
+  if(n.indexOf('tiktok')>=0)return 'tiktok';
+  if(n.indexOf('site')>=0)return 'site';
+  return null;}
+// Fator de maturidade da devolução. 1 = coorte madura, nada a provisionar.
+// Sem curva (Shein/Venda Direta) → 1, ou seja, provisão zero. Nunca chuta.
+function fatorMat(nome,dataPedido){
+  var p=platDe(nome); if(!p||!EST.curva[p]||!dataPedido) return 1;
+  var d=Math.round((Date.now()-new Date(dataPedido+'T12:00:00').getTime())/864e5);
+  if(d<0)d=0; if(d>90)d=90;
+  var f=EST.curva[p][d];
+  return (f===undefined||f===null)?1:f;
+}
+// Provisão de devolução (Bornhuetter-Ferguson): (1 − fator) × receita × taxa_hist.
+// Fator 1 (maduro) → 0. Fator 0 (venda de hoje) → provisão cheia. Sem divisão por zero,
+// sem explodir em pedido de ontem, e o real substitui a estimativa sozinho ao maturar.
+function devProv(nome,dataPedido,receita){
+  var t=taxaDe(nome); if(!(t.dev>0)) return 0;
+  return Math.max(0,1-fatorMat(nome,dataPedido))*(receita||0)*t.dev;
 }
 function custoPct(n){
-  if(CANAL_COMISSAO_REAL[n]!==undefined) return CANAL_COMISSAO_REAL[n];  // real (fee_canal) primeiro
-  return CANAL_CUSTO[n]!==undefined?CANAL_CUSTO[n]:0.0;                   // hardcode = último recurso
+  var t=EST.taxa[n];
+  if(t&&t.com>0) return t.com;                                // taxa real sobre liquidados
+  return CANAL_CUSTO[n]!==undefined?CANAL_CUSTO[n]:0.0;       // hardcode = último recurso
 }
 
 // Fração devolvida do pedido. Devolução ESTORNA comissão + CMV (mercadoria volta como estoque
@@ -711,7 +759,8 @@ async function fetchPedidos(de,ate){
 async function fetchAgregadoMV(de,ate){
   // order explícito (MV não tem coluna `id` — buscarTudo cairia no &order=id.asc)
   var f='select=*&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc';
-  return buscarTudo('mvw_ecommerce_canal_dia',f);
+  // Fase 3: a view = a MV + as colunas *_est. Mês fechado → *_est ≈ 0 e ela é idêntica à MV (A9).
+  return buscarTudo('vw_ecom_canal_dia_est',f);
 }
 // Devolução REAL do Site Próprio via Troquecommerce (RMA): inclui TROCAS (vale-crédito,
 // sem dinheiro de volta) que são invisíveis no refund Shopify. Coorte por data do pedido.
@@ -905,16 +954,20 @@ var idle = window.requestIdleCallback || function(fn){return setTimeout(fn,0);};
 function calcPnLFromMV(rows,adsVal){
   adsVal=adsVal||0;
   if(!rows||!rows.length)return{receita:0,devolucoes:0,frete:0,comissao:0,afiliados:0,cmv:0,ads:0,liquida:0,lucro:0,custoFixo:0,resultadoOper:0,pedidos:0};
-  var receita=0,dev=0,frete=0,com=0,afiliados=0,liquida=0,ped=0,cmv=0;
+  var receita=0,dev=0,frete=0,com=0,afiliados=0,liquida=0,ped=0,cmv=0,eC=0,eA=0,eD=0;
   rows.forEach(function(r){
     var n=r.canal_nome_raw, _nome=getNome(n,r.origem_conta);
     if(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[_nome])return;
     var rb=parseFloat(r.receita_bruta||0);
     receita+=rb;
-    dev+=parseFloat(r.devolucoes||0);
+    // Fase 3: as colunas *_est vêm prontas da view — são o BURACO a somar ao real
+    // (pedido que ainda não liquidou), nunca um substituto dele.
+    var cE=parseFloat(r.comissao_est||0), aE=parseFloat(r.afiliado_est||0), dE=parseFloat(r.devolucao_est||0);
+    eC+=cE; eA+=aE; eD+=dE;
+    dev+=parseFloat(r.devolucoes||0)+dE;
     frete+=parseFloat(r.frete_seller||0);
-    com+=Math.max(parseFloat(r.comissao||0)-parseFloat(r.fee_estornado||0),0);  // comissão LÍQUIDA do estorno
-    afiliados+=parseFloat(r.afiliado||0);
+    com+=Math.max(parseFloat(r.comissao||0)-parseFloat(r.fee_estornado||0),0)+cE;  // comissão LÍQUIDA do estorno + estimada
+    afiliados+=parseFloat(r.afiliado||0)+aE;
     // CMV estimado pela proporção real do canal, menos o CMV que voltou (mercadoria devolvida)
     cmv+=Math.max(rb*cmvPct(_nome)-parseFloat(r.cmv_devolvido||0),0);
     ped+=parseInt(r.pedidos||0)-parseInt(r.cancelados||0);
@@ -928,7 +981,7 @@ function calcPnLFromMV(rows,adsVal){
   liquida=receita-com-afiliados-dev-frete-full-taxasConta-reversa;
   var impostos=TAX_RATE*(receita-dev)+mlTaxaNoEscopo('difal');   // 6,5% flat + ICMS-DIFAL real
   var _lucro=liquida-adsVal-cmv-impostos;
-  return{receita:receita,devolucoes:dev,frete:frete,comissao:com,afiliados:afiliados,full:full,taxasConta:taxasConta,reversa:reversa,cmv:cmv,ads:adsVal,impostos:impostos,liquida:liquida,lucro:_lucro,custoFixo:0,resultadoOper:_lucro,pedidos:ped};
+  return{receita:receita,devolucoes:dev,frete:frete,comissao:com,afiliados:afiliados,full:full,taxasConta:taxasConta,reversa:reversa,cmv:cmv,ads:adsVal,impostos:impostos,liquida:liquida,lucro:_lucro,custoFixo:0,resultadoOper:_lucro,pedidos:ped,est:{com:eC,afil:eA,dev:eD,total:eC+eA+eD}};
 }
 async function fetchItensForIds(ids,tabela){
   if(!ids.length)return[];
@@ -1070,7 +1123,7 @@ async function carregar(){
     var pAds=fetchAds(DE,ATE).then(adsRowsToByCanal).catch(function(){return{};});
     var pAdsPrev=usarComp?fetchAds(ant.de,ant.ate).then(adsRowsToByCanal).catch(function(){return{};}):Promise.resolve({});
     var pDev=fetchDevItem(DE,ATE).then(devRowsToBySkuPai).catch(function(){return{};});
-    var pCom=fetchComissaoReal();  // taxa de comissão REAL por canal (fee_canal) p/ o fallback do custoPct
+    var pCom=fetchEstimativa();   // Fase 3: taxas (s/ liquidados) + curva de maturação
     var pSkuMV=fetchSkuMV(DE,ATE,bigPeriod).catch(function(){return[];});      // PERF: lista de produtos no paint imediato
     var pAdsItem=fetchAdsItem(DE,ATE).catch(function(){return[];});  // PERF: em paralelo (era serial após itens)
     // PERF (09/06): geo + pagamentos no paint imediato via MV — pinta assim que a MV
@@ -1274,11 +1327,12 @@ function renderWaterfall(){
   var prev=fp?{receita:0,liquida:0,lucro:0,comissao:0,afiliados:0,devolucoes:0,frete:0,cmv:0,ads:0,impostos:0,taxasConta:0,reversa:0,pedidos:0}:calcPnLFromMV(STATE.mvRowsPrev||[],adsFiltrado(STATE.adsByCanalPrev));
   // prev vem da MV (sem custo fixo por canal do mês anterior) → estima pela taxa atual, p/ delta honesto
   if((prev.custoFixo||0)===0&&cur.receita>0){var _rtF=(cur.custoFixo||0)/cur.receita;prev.custoFixo=_rtF*(prev.receita||0);prev.resultadoOper=(prev.lucro||0)-prev.custoFixo;}
+  var e=cur.est||{com:0,afil:0,dev:0,total:0};
   var items=[
     {lbl:'Receita Bruta',val:cur.receita,color:'#22c55e',prev:prev.receita},
-    {lbl:'− Comissão',val:-cur.comissao,color:'#f97316',prev:-prev.comissao},
-    {lbl:'− Afiliados',val:-(cur.afiliados||0),color:'#fb923c',prev:-(prev.afiliados||0)},
-    {lbl:'− Devoluções',val:-cur.devolucoes,color:'#f43f5e',prev:-prev.devolucoes},
+    {lbl:'− Comissão',val:-cur.comissao,color:'#f97316',prev:-prev.comissao,est:e.com},
+    {lbl:'− Afiliados',val:-(cur.afiliados||0),color:'#fb923c',prev:-(prev.afiliados||0),est:e.afil},
+    {lbl:'− Devoluções',val:-cur.devolucoes,color:'#f43f5e',prev:-prev.devolucoes,est:e.dev},
     {lbl:'− Frete',val:-cur.frete,color:'#8b5cf6',prev:-prev.frete},
     {lbl:'− Full',val:-(cur.full||0),color:'#0ea5e9',prev:-(prev.full||0)},
     {lbl:'− Taxas ML',val:-(cur.taxasConta||0),color:'#14b8a6',prev:-(prev.taxasConta||0)},
@@ -1296,14 +1350,26 @@ function renderWaterfall(){
   var html=items.map(function(item){
     var h=Math.max(Math.abs(item.val)/maxVal*140,8);
     var d=delta(Math.abs(item.val),Math.abs(item.prev));
+    // A6: a parte estimada da barra vem HACHURADA + rótulo "est.".
+    var eh=(item.est>0&&Math.abs(item.val)>0)?Math.min(h*(item.est/Math.abs(item.val)),h):0;
+    var hach=eh>0?'<div style="position:absolute;top:0;left:0;right:0;height:'+eh+'px;background:repeating-linear-gradient(45deg,rgba(255,255,255,.30) 0 3px,transparent 3px 6px);border-top:1px dashed rgba(255,255,255,.65)"></div>':'';
+    var tag=eh>0?'<span title="Estimado: '+fmtK(item.est)+' — pedidos que ainda não liquidaram" style="font-size:8px;padding:0 3px;border-radius:3px;background:rgba(251,191,36,.18);color:#fbbf24;font-weight:700;margin-left:3px">est.</span>':'';
     return'<div class="wf-bar">'+
       '<div class="wf-bar-val">'+fmtK(Math.abs(item.val))+'</div>'+
-      '<div class="wf-bar-inner" style="height:'+h+'px;background:'+item.color+'"></div>'+
-      '<div class="wf-bar-lbl">'+item.lbl+'</div>'+
+      '<div class="wf-bar-inner" style="position:relative;height:'+h+'px;background:'+item.color+'">'+hach+'</div>'+
+      '<div class="wf-bar-lbl">'+item.lbl+tag+'</div>'+
       '<div class="wf-bar-delta">'+deltaBadge(d)+'</div>'+
     '</div>';
   }).join('');
   document.getElementById('waterfall').innerHTML=html;
+  // Aviso: quanto do custo do período ainda é provisão (some sozinho conforme o real chega).
+  var av=document.getElementById('wf-est-aviso');
+  if(av){
+    if((e.total||0)>0&&cur.receita>0){
+      av.style.display='';
+      av.innerHTML='<b>'+fmtK(e.total)+'</b> ('+fmtD(e.total/cur.receita*100)+'% da receita) é <b>custo estimado</b> de pedidos que ainda não liquidaram — comissão, afiliado e provisão de devolução. Vai sumindo conforme o real chega. Sem isso, a margem do mês corrente seria a melhor que ela jamais será.';
+    }else av.style.display='none';
+  }
 }
 var _pnlMemo=null;  // PERF: evita recomputar calcPnL 2x no mesmo tick (renderWaterfall + renderKPIs)
 function calcPnL(pedidos,itens,adsVal){
@@ -1314,12 +1380,11 @@ function calcPnL(pedidos,itens,adsVal){
   // "valor de cancelados". Cancelados ficam fora da receita (filtro _canc).
   // fee_canal real de API (Fase 1-4); fallback custoPct só pra pedidos onde a
   // captura ainda não maturou (escrow Shopee D+X, statement TikTok D+15, etc).
-  var receita=0,devolucoes=0,frete=0,comissao=0,cmv=0,afiliados=0;
+  var receita=0,devolucoes=0,frete=0,comissao=0,cmv=0,afiliados=0,eC=0,eA=0,eD=0;
   pedidos.forEach(function(p){
     var v=valorReceita(p);
     if(p._cancelado) return;  // só cancelado fora; devolvido conta como venda bruta + devolução
     receita+=v;
-    afiliados+=parseFloat(p.comissao_afiliado||0);
     // valor_devolucao: refund parcial (faturado) ou reversão total (devolvido — no site é assim).
     // + valor_chargeback (estorno por contestação, perda total) na mesma linha de perdas.
     devolucoes+=parseFloat(p.valor_devolucao||0)+parseFloat(p.valor_chargeback||0);
@@ -1329,9 +1394,21 @@ function calcPnL(pedidos,itens,adsVal){
     // Reversa/troca do Site (Troque tracking.price) entra à parte via freteReversoNoEscopo().
     // Antes o Site caía no frete do CLIENTE (p.frete) como proxy → superestimava ~2x (02/07/2026).
     frete+=parseFloat(p.frete_ml_seller||0);
-    var fee=parseFloat(p.fee_canal||0);
-    // comissão LÍQUIDA do estorno de devolução (o marketplace devolve a comissão da venda desfeita)
-    comissao+=(fee>0?fee:v*custoPct(p._nome))*(1-taxaDev(p));
+    // Fase 3 — MESMA regra da view (vw_ecom_canal_dia_est), pedido a pedido:
+    // fee>0 = liquidou → usa o REAL (líquido do estorno de devolução, que o marketplace
+    // devolve na venda desfeita). fee=0 = não liquidou → estima comissão E afiliado
+    // (mesmo gatilho: sem statement, nenhum dos dois existe ainda).
+    var fee=parseFloat(p.fee_canal||0), t=taxaDe(p._nome);
+    if(fee>0){
+      comissao+=fee*(1-taxaDev(p));
+      afiliados+=parseFloat(p.comissao_afiliado||0);
+    }else{
+      var cE=v*(t.com||custoPct(p._nome)), aE=v*(t.afil||0);
+      comissao+=cE; afiliados+=aE; eC+=cE; eA+=aE;
+    }
+    // Provisão de devolução: o pedido de ontem mal começou a janela de devolução.
+    var dE=devProv(p._nome,p.data_pedido,v);
+    devolucoes+=dE; eD+=dE;
   });
   // CMV REAL dos itens carregados (período dentro da janela janelaItens — abr/mai/jun);
   // pedidos mais ANTIGOS que a janela (sem item) usam a proporção REAL por canal (cmvPct).
@@ -1351,7 +1428,7 @@ function calcPnL(pedidos,itens,adsVal){
   var impostos=TAX_RATE*(receita-devolucoes)+mlTaxaNoEscopo('difal');
   var lucro=liquida-adsVal-cmv-impostos;   // = Contribuição (antes do custo fixo)
   var resultadoOper=lucro-custoFixo;        // = Resultado Operacional (após custo fixo rateado)
-  var _r={receita:receita,devolucoes:devolucoes,comissao:comissao,afiliados:afiliados,full:full,taxasConta:taxasConta,reversa:reversa,cmv:cmv,frete:frete,ads:adsVal,impostos:impostos,liquida:liquida,lucro:lucro,custoFixo:custoFixo,resultadoOper:resultadoOper};
+  var _r={receita:receita,devolucoes:devolucoes,comissao:comissao,afiliados:afiliados,full:full,taxasConta:taxasConta,reversa:reversa,cmv:cmv,frete:frete,ads:adsVal,impostos:impostos,liquida:liquida,lucro:lucro,custoFixo:custoFixo,resultadoOper:resultadoOper,est:{com:eC,afil:eA,dev:eD,total:eC+eA+eD}};
   _pnlMemo={p:pedidos,i:itens,a:adsVal,f:custoFixo,r:_r};
   return _r;
 }
@@ -1493,7 +1570,8 @@ function _canalRowsArr(byCanal,cmvByCanal){
     var liquida=c.r-c.fee-afiliado-c.dev-frete-full-taxasConta-reversa;var resultado=liquida-ads-cmv-impostos;
     var custoFixo=(STATE.custoFixoByCanal&&STATE.custoFixoByCanal[n])||0;var resultadoOper=resultado-custoFixo;
     return{nome:n,cor:c.cor||getCor(n),r:c.r,ped:c.ped,fee:c.fee,afiliado:afiliado,full:full,dev:c.dev,frete:frete,
-      liquida:liquida,ads:ads,cmv:cmv,impostos:impostos,taxasConta:taxasConta,reversa:reversa,resultado:resultado,custoFixo:custoFixo,resultadoOper:resultadoOper,share:totalR>0?c.r/totalR*100:0};
+      liquida:liquida,ads:ads,cmv:cmv,impostos:impostos,taxasConta:taxasConta,reversa:reversa,resultado:resultado,custoFixo:custoFixo,resultadoOper:resultadoOper,
+      est:c.est||0,share:totalR>0?c.r/totalR*100:0};
   }).sort(function(a,b){return b.r-a.r;});
 }
 function _canalTbodyHTML(rows){
@@ -1503,8 +1581,11 @@ function _canalTbodyHTML(rows){
     var cls='canal-row';
     if(STATE.focusCanal===r.nome)cls+=' focused';
     else if(STATE.focusCanal)cls+=' dimmed';
+    // A6: linha com custo estimado é rotulada. O perigo de uma boa estimativa é ela
+    // parar de parecer uma estimativa.
+    var badge=(r.est>0)?' <span title="Inclui '+fmtK(r.est)+' de custo estimado — pedidos que ainda não liquidaram" style="font-size:9px;padding:1px 4px;border-radius:4px;background:rgba(251,191,36,.18);color:#fbbf24;font-weight:700;vertical-align:middle">est.</span>':'';
     return'<tr class="'+cls+'" onclick="focusCanal(\''+r.nome.replace(/'/g,"\\'")+'\')">' +
-      '<td><span class="canal-dot" style="color:'+r.cor+';background:'+r.cor+'"></span>'+r.nome+'</td>'+
+      '<td><span class="canal-dot" style="color:'+r.cor+';background:'+r.cor+'"></span>'+r.nome+badge+'</td>'+
       '<td class="r">'+fmtN(r.ped)+'</td>'+
       '<td class="r">'+fmtK(r.r)+'<div style="opacity:.5;font-size:.8em;font-weight:400;line-height:1.15;margin-top:1px">'+fmtD(r.share)+'% do total</div></td>'+
       '<td class="r">'+vp(r.fee,r.r)+'</td>'+
@@ -1533,14 +1614,18 @@ function renderCanalTableFromMV(rows){
     var n=getNome(r.canal_nome_raw,r.origem_conta);
     if(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[n])return;
     if(STATE.focusCanal&&n!==STATE.focusCanal)return;
-    if(!byCanal[n])byCanal[n]={r:0,ped:0,dev:0,frete:0,fee:0,afiliado:0,cor:getCor(n)};
+    if(!byCanal[n])byCanal[n]={r:0,ped:0,dev:0,frete:0,fee:0,afiliado:0,est:0,cor:getCor(n)};
     var c=byCanal[n];
+    // Fase 3: soma as colunas *_est da view (buraco dos pedidos que não liquidaram).
+    // MESMA regra do calcPnL — por isso a tabela e o waterfall batem.
+    var cE=parseFloat(r.comissao_est||0), aE=parseFloat(r.afiliado_est||0), dE=parseFloat(r.devolucao_est||0);
+    c.est+=cE+aE+dE;
     c.r+=parseFloat(r.receita_bruta||0);
     c.ped+=(parseInt(r.pedidos||0)-parseInt(r.cancelados||0));
-    c.fee+=Math.max(parseFloat(r.comissao||0)-parseFloat(r.fee_estornado||0),0);  // líquida do estorno
-    c.afiliado+=parseFloat(r.afiliado||0);
+    c.fee+=Math.max(parseFloat(r.comissao||0)-parseFloat(r.fee_estornado||0),0)+cE;  // líquida do estorno + estimada
+    c.afiliado+=parseFloat(r.afiliado||0)+aE;
     c.frete+=parseFloat(r.frete_seller||0);
-    c.dev+=parseFloat(r.devolucoes||0);
+    c.dev+=parseFloat(r.devolucoes||0)+dE;
     c.cmvDev=(c.cmvDev||0)+parseFloat(r.cmv_devolvido||0);   // CMV que voltou (estorna abaixo)
   });
   var cmvMV={};Object.keys(byCanal).forEach(function(n){
@@ -1555,7 +1640,8 @@ function _canalRowsProduto(g){
   return canais.map(function(n){var pc=g.porCanal[n];var ads=abp[n]||0;var cmv=pc.custoTotal;var afil=pc.afiliado||0;
     var imp=TAX_RATE*(pc.receita-pc.devolucao);var liquida=pc.receita-pc.fee-afil-pc.devolucao-pc.freteSeller;
     return{nome:n,cor:getCor(n),r:pc.receita,ped:pc.qtd,fee:pc.fee,afiliado:afil,dev:pc.devolucao,frete:pc.freteSeller,
-      liquida:liquida,ads:ads,cmv:cmv,impostos:imp,resultado:liquida-ads-cmv-imp,custoFixo:0,resultadoOper:liquida-ads-cmv-imp,share:totalR>0?pc.receita/totalR*100:0};
+      liquida:liquida,ads:ads,cmv:cmv,impostos:imp,resultado:liquida-ads-cmv-imp,custoFixo:0,resultadoOper:liquida-ads-cmv-imp,
+      est:pc.est||0,share:totalR>0?pc.receita/totalR*100:0};
   }).sort(function(a,b){return b.r-a.r;});
 }
 function renderCanalTable(){
@@ -1567,14 +1653,17 @@ function renderCanalTable(){
   var byCanal={};
   // Mesma lógica do P&L (calcPnL): só `cancelado` fora; `devolvido` conta como bruta + devolução.
   ped.forEach(function(p){
-    var n=p._nome;if(!byCanal[n])byCanal[n]={r:0,ped:0,dev:0,frete:0,fee:0,afiliado:0,cor:p._cor};
+    var n=p._nome;if(!byCanal[n])byCanal[n]={r:0,ped:0,dev:0,frete:0,fee:0,afiliado:0,est:0,cor:p._cor};
     if(p._cancelado)return;
-    var v=valorReceita(p);
-    byCanal[n].r+=v;byCanal[n].ped++;
-    byCanal[n].dev+=parseFloat(p.valor_devolucao||0)+parseFloat(p.valor_chargeback||0);
-    byCanal[n].afiliado+=parseFloat(p.comissao_afiliado||0);
-    byCanal[n].frete+=parseFloat(p.frete_ml_seller||0);  // Site = subsídio frete grátis; reversa Troque à parte
-    var f=parseFloat(p.fee_canal||0);byCanal[n].fee+=(f>0?f:v*custoPct(n))*(1-taxaDev(p));  // líquida do estorno
+    var v=valorReceita(p),c=byCanal[n];
+    c.r+=v;c.ped++;
+    c.dev+=parseFloat(p.valor_devolucao||0)+parseFloat(p.valor_chargeback||0);
+    c.frete+=parseFloat(p.frete_ml_seller||0);  // Site = subsídio frete grátis; reversa Troque à parte
+    // Fase 3 — MESMA regra do calcPnL (fee>0 = liquidou → real; senão estima comissão E afiliado).
+    var f=parseFloat(p.fee_canal||0),t=taxaDe(n);
+    if(f>0){ c.fee+=f*(1-taxaDev(p)); c.afiliado+=parseFloat(p.comissao_afiliado||0); }
+    else{ var cE=v*(t.com||custoPct(n)),aE=v*(t.afil||0); c.fee+=cE; c.afiliado+=aE; c.est+=cE+aE; }
+    var dE=devProv(n,p.data_pedido,v); c.dev+=dE; c.est+=dE;
   });
   // CMV por canal dos itens carregados; fallback proporção real por canal (cmvPct).
   var cmvByCanal={};
@@ -1810,7 +1899,7 @@ function pintarDowHeat(matrix){
 // continuam carregando em background pra enriquecer o drawer (variantes/fee/dev/frete) e o CMV real.
 async function fetchSkuMV(de,ate,big){
   // big period (YTD/12m): sku_dia pode passar de 50k linhas → teto maior (250k) pra não truncar.
-  return buscarTudo('mvw_ecommerce_sku_dia','select=sku_pai,nome,cat,canal_nome_raw,origem_conta,receita,qtd,cmv,fee,afiliado,devolucao,frete_seller,fee_estornado,cmv_devolvido&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc', big?250:undefined);
+  return buscarTudo('vw_ecom_sku_dia_est','select=sku_pai,nome,cat,canal_nome_raw,origem_conta,receita,qtd,cmv,fee,afiliado,devolucao,frete_seller,fee_estornado,cmv_devolvido,fee_est,afiliado_est,devolucao_est&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc', big?250:undefined);
 }
 // PERF (09/06): geo (UF/cidade) e pagamentos (método/parcelas) vêm de MV no paint imediato —
 // antes ficavam vazios até o fetch de 10-115k pedidos chegar. Validado A/B (0 divergências).
@@ -1824,7 +1913,7 @@ async function fetchPgtoMV(de,ate){
 // (via agruparSkusMV) E o heatmap dia-da-semana (renderDowHeatMV) com uma só leitura.
 async function fetchSkuMVData(de,ate){
   // aba Mensal = janela longa (6-24m); sku_dia ~110k linhas/ano → teto 250k pra não truncar.
-  return buscarTudo('mvw_ecommerce_sku_dia','select=sku_pai,nome,cat,canal_nome_raw,origem_conta,receita,qtd,cmv,fee,afiliado,devolucao,frete_seller,fee_estornado,cmv_devolvido,data_pedido&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc', 250);
+  return buscarTudo('vw_ecom_sku_dia_est','select=sku_pai,nome,cat,canal_nome_raw,origem_conta,receita,qtd,cmv,fee,afiliado,devolucao,frete_seller,fee_estornado,cmv_devolvido,fee_est,afiliado_est,devolucao_est,data_pedido&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc', 250);
 }
 function agruparSkusMV(rows){
   var map={};
@@ -1835,17 +1924,20 @@ function agruparSkusMV(rows){
     // e a margem por produto responderem ao chip mesmo saindo da MV. (08/07)
     if(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[canal])return;
     if(!map[k])map[k]={sku_pai:k,nome:r.nome||k,cat:r.cat||'OUTROS',custoUn:0,
-      receita:0,qtd:0,custoTotal:0,fee:0,afiliado:0,devolucao:0,freteSeller:0,
+      receita:0,qtd:0,custoTotal:0,fee:0,afiliado:0,devolucao:0,freteSeller:0,est:0,
       porCanal:{},pedidoIds:{},datas:{}};
     var g=map[k];var rec=parseFloat(r.receita||0),q=parseFloat(r.qtd||0);
     // Devolução ESTORNA comissão e CMV (mercadoria volta vendável); frete NÃO estorna (já voou).
     // Ver TODO_DEVOLUCOES_SETTLEMENT.md §9. (13/07/2026)
     var cm=Math.max(parseFloat(r.cmv||0)-parseFloat(r.cmv_devolvido||0),0);
-    var fe=Math.max(parseFloat(r.fee||0)-parseFloat(r.fee_estornado||0),0);
-    var af=parseFloat(r.afiliado||0),dv=parseFloat(r.devolucao||0),fr=parseFloat(r.frete_seller||0);
-    g.receita+=rec;g.qtd+=q;g.custoTotal+=cm;g.fee+=fe;g.afiliado+=af;g.devolucao+=dv;g.freteSeller+=fr;
-    if(!g.porCanal[canal])g.porCanal[canal]={qtd:0,receita:0,fee:0,afiliado:0,devolucao:0,freteSeller:0,custoTotal:0};
-    var pc=g.porCanal[canal];pc.receita+=rec;pc.qtd+=q;pc.custoTotal+=cm;pc.fee+=fe;pc.afiliado+=af;pc.devolucao+=dv;pc.freteSeller+=fr;
+    // Fase 3: soma o buraco estimado no MESMO grão da lista — é o que faz a margem por
+    // produto do TikTok parar de parecer boa demais (85% da receita de julho sem fee real).
+    var eF=parseFloat(r.fee_est||0),eA=parseFloat(r.afiliado_est||0),eD=parseFloat(r.devolucao_est||0);
+    var fe=Math.max(parseFloat(r.fee||0)-parseFloat(r.fee_estornado||0),0)+eF;
+    var af=parseFloat(r.afiliado||0)+eA,dv=parseFloat(r.devolucao||0)+eD,fr=parseFloat(r.frete_seller||0);
+    g.receita+=rec;g.qtd+=q;g.custoTotal+=cm;g.fee+=fe;g.afiliado+=af;g.devolucao+=dv;g.freteSeller+=fr;g.est+=eF+eA+eD;
+    if(!g.porCanal[canal])g.porCanal[canal]={qtd:0,receita:0,fee:0,afiliado:0,devolucao:0,freteSeller:0,custoTotal:0,est:0};
+    var pc=g.porCanal[canal];pc.receita+=rec;pc.qtd+=q;pc.custoTotal+=cm;pc.fee+=fe;pc.afiliado+=af;pc.devolucao+=dv;pc.freteSeller+=fr;pc.est+=eF+eA+eD;
   });
   STATE.skuGroups=Object.values(map).sort(function(a,b){return b.receita-a.receita;});
 }
