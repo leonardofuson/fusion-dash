@@ -709,7 +709,10 @@ async function getAuthHeaders() {
 var STATE = {
   ops: [], compras: [], costureiros: [], precos: [], cortadores: [],
   insumos: [], consumo: [], planejamento: [], fornecedores: [], produtos: [],
-  coresValidas: [],  // produto_cores_validas: fonte da verdade (sku_pai -> cor) ligando producao/compras/estoque ao cadastro
+  coresValidas: [],  // produto_cores_validas: legado CONTAMINADO (absorveu lixo histórico: códigos de tecido, DEFEITO, "32 CORES").
+                     // ⚠️ NÃO usar pra cor de OP — a trava do banco recusa 217 delas. Só sobrevive no datalist de cor de INSUMO.
+  coresEstilo: [],   // vw_cores_do_estilo: cores que a TRAVA do banco aceita (mesma view da msg de erro). Fonte da cor da OP.
+  corSinonimo: [],   // cor_sinonimo: apelido -> cor canônica (por estilo). Resolve a cor do TECIDO na cor do PRODUTO.
   custosSku: [],     // custos_sku: snapshot materializado de CMV por SKU pai (populado por recalcular_custos_sku)
   tab: 'pipeline', drawerType: null,
   ganttExpanded: {},  // { sku_pai: true/false } - grupos expandidos
@@ -743,7 +746,7 @@ async function buscarTudo(tab, filtro) {
 
 async function carregar() {
   try {
-    var [ops, compras, costureiros, precos, insumos, consumo, planejamento, fornecedores, produtos, coresValidas, custosSku, saldoLocal, eficiencia, entregas, deparaNF] = await Promise.all([
+    var [ops, compras, costureiros, precos, insumos, consumo, planejamento, fornecedores, produtos, coresValidas, custosSku, saldoLocal, eficiencia, entregas, deparaNF, coresEstilo, corSinonimo] = await Promise.all([
       buscarTudo('ordens_producao', 'select=*&order=criado_em.desc'),
       buscarTudo('ordens_compra', 'select=*&order=data_faturamento.desc'),
       buscarTudo('costureiros', 'select=*&order=nome'),
@@ -759,6 +762,8 @@ async function carregar() {
       buscarTudo('vw_eficiencia_costureiro_global', 'select=*&order=eficiencia.asc'),
       buscarTudo('producao_entregas', 'select=*&order=data_entrega.desc'),
       buscarTudo('insumo_nf_depara', 'select=*&ativo=eq.true'),
+      buscarTudo('vw_cores_do_estilo', 'select=sku_pai,cor&order=sku_pai,cor'),
+      buscarTudo('cor_sinonimo', 'select=sku_pai,cor_apelido,cor_canonica'),
     ]);
     STATE.ops = ops;
     STATE.compras = compras;
@@ -770,6 +775,8 @@ async function carregar() {
     STATE.fornecedores = fornecedores;
     STATE.produtos = produtos;
     STATE.coresValidas = coresValidas;
+    STATE.coresEstilo = coresEstilo || [];
+    STATE.corSinonimo = corSinonimo || [];
     STATE.custosSku = custosSku || [];
     STATE.saldoLocal = saldoLocal || [];
     STATE.eficienciaCostureiros = eficiencia || [];
@@ -5450,20 +5457,39 @@ function produtosPais() {
     .sort(function(a, b) { return a.nome.localeCompare(b.nome); });
 }
 
+// Cores que a OP pode ter. Fonte = `vw_cores_do_estilo` — a MESMA view que a trava do banco
+// (trg_op_match_produto) usa. UI e banco concordam por construção: o que aparece aqui, salva.
+//
+// ⚠️ NÃO usar `produto_cores_validas`: ela absorveu o histórico sujo (códigos de tecido, DEFEITO,
+// "32 CORES", "LX2 CAQUI"...) — 217 cores que o banco recusa. Oferecê-las = analista preenche a OP
+// inteira e toma erro no save. Ela também não tem 19 cores válidas (TNPV01 CHUMBO/PRETO...).
 function coresDoSKU(skuPai) {
-  // Fonte da verdade: produto_cores_validas (unifica cadastro + historico legitimo).
-  // Fallback pra produtos.cor caso a tabela ainda nao esteja carregada.
   if (!skuPai) return [];
   var set = {};
-  (STATE.coresValidas || []).forEach(function(c) {
-    if (c.sku_pai === skuPai && c.cor) set[c.cor] = 1;
+  (STATE.coresEstilo || []).forEach(function(c) {
+    if (c.sku_pai === skuPai && c.cor) set[c.cor.trim().toUpperCase()] = 1;
   });
-  if (!Object.keys(set).length) {
+  if (!Object.keys(set).length) {  // fallback: view ainda não carregou
     (STATE.produtos || []).forEach(function(p) {
       if ((p.sku_pai || p.sku) === skuPai && p.cor) set[p.cor.trim().toUpperCase()] = 1;
     });
   }
   return Object.keys(set).sort();
+}
+
+// A cor do TECIDO não é a cor do PRODUTO. O tecido "CHUMBO" faz a calça "CINZA CHUMBO" (CLMALHA)
+// ou "CINZA" (CLSJ01) — depende do estilo. Resolve por match exato → cor_sinonimo → nada
+// (nada = a analista escolhe na mão; é cor nova ou tecido estampado).
+function resolverCorProduto(skuPai, corTecido) {
+  if (!skuPai || !corTecido) return '';
+  var alvo = corTecido.trim().toUpperCase();
+  var cores = coresDoSKU(skuPai);
+  if (cores.indexOf(alvo) >= 0) return alvo;
+  var sin = (STATE.corSinonimo || []).find(function(s) {
+    return s.sku_pai === skuPai && (s.cor_apelido || '').trim().toUpperCase() === alvo;
+  });
+  if (sin && cores.indexOf((sin.cor_canonica || '').toUpperCase()) >= 0) return sin.cor_canonica.toUpperCase();
+  return '';
 }
 
 function popularDatalistCores() {
@@ -5757,6 +5783,11 @@ function buildOPCorRow(idx, firstRow) {
     '</div>' +
     '<div class="form-group"><label class="form-label">NF do tecido <small style="color:var(--txt3);font-weight:400">(auto — vinculada à opção escolhida)</small></label>' +
       '<input class="form-input" data-field="nf-tecido" type="text" readonly style="background:var(--bg3);color:var(--txt2)" placeholder="—"></div>' +
+    // A cor da OP é a cor do PRODUTO, não a do tecido. Antes era herdada do insumo (por isso
+    // "TECIDO F 23 01" virou cor de 4 OPs). Só oferece cor cadastrada — o banco recusa o resto.
+    '<div class="form-group"><label class="form-label">Cor do produto <small style="color:var(--txt3);font-weight:400">(cadastrada — é a cor que vai pra OP)</small></label>' +
+      '<select class="form-select" data-field="cor-produto"><option value="">Selecione o produto primeiro</option></select>' +
+      '<div data-field="cor-produto-info" style="font-size:11px;margin-top:4px;"></div></div>' +
     '<div class="form-row">' +
       '<div class="form-group"><label class="form-label">Metragem a produzir</label>' +
         '<input class="form-input" data-field="metragem" type="text" inputmode="decimal" placeholder="ex: 150" oninput="recalcularPecasRow('+idx+')"></div>' +
@@ -5938,9 +5969,58 @@ function atualizarCoresTecidoRow(idx) {
   atualizarSaldoRow(idx);
 }
 
+// Popula o select "Cor do produto" com as cores CADASTRADAS do estilo e tenta pré-selecionar
+// a partir da cor do tecido da NF escolhida (exato ou via cor_sinonimo). Não achou = fica vazio
+// e a analista escolhe — nunca inventa cor.
+function atualizarCorProdutoRow(idx) {
+  var row = document.getElementById('op-cor-row-'+idx);
+  if (!row) return;
+  var sel = row.querySelector('[data-field="cor-produto"]');
+  var info = row.querySelector('[data-field="cor-produto-info"]');
+  if (!sel) return;
+
+  var sku = extrairSkuProduto((document.getElementById('f-nova-produto') || {}).value || '');
+  if (!sku) {
+    sel.innerHTML = '<option value="">Selecione o produto primeiro</option>';
+    if (info) info.textContent = '';
+    return;
+  }
+  var cores = coresDoSKU(sku);
+  if (!cores.length) {
+    sel.innerHTML = '<option value="">Nenhuma cor cadastrada — cadastre o colorway em Produtos</option>';
+    if (info) info.innerHTML = '<span style="color:var(--red)">Sem colorway cadastrado: o banco vai recusar esta OP.</span>';
+    return;
+  }
+
+  // cor do tecido da NF selecionada (pode não existir ainda)
+  var corSel = row.querySelector('[data-field="cor"]');
+  var opt = corSel && corSel.selectedIndex >= 0 ? corSel.options[corSel.selectedIndex] : null;
+  var corTecido = (opt && opt.dataset && opt.dataset.cor) ? opt.dataset.cor : '';
+  var sugerida = resolverCorProduto(sku, corTecido);
+  // Preserva a escolha manual da analista — mas descarta se ficou órfã (ela trocou o produto
+  // e a cor antiga não existe no estilo novo).
+  var atual = sel.value;
+  if (atual && cores.indexOf(atual) < 0) atual = '';
+
+  sel.innerHTML = '<option value="">Selecione a cor...</option>' + cores.map(function(c) {
+    var s = (atual && atual === c) || (!atual && sugerida === c) ? ' selected' : '';
+    return '<option value="'+c+'"'+s+'>'+c+'</option>';
+  }).join('');
+
+  if (!info) return;
+  if (sel.value && corTecido && sel.value !== corTecido.trim().toUpperCase()) {
+    info.innerHTML = '<span style="color:var(--txt3)">Tecido "'+corTecido+'" → produto <strong>'+sel.value+'</strong></span>';
+  } else if (!sel.value && corTecido) {
+    info.innerHTML = '<span style="color:var(--amber)">Tecido "'+corTecido+'" não bate com nenhuma cor cadastrada de '+sku+'. Escolha a cor do produto.</span>';
+  } else {
+    info.textContent = '';
+  }
+}
+
 function atualizarSaldoRow(idx) {
   var row = document.getElementById('op-cor-row-'+idx);
   if (!row) return;
+  atualizarCorProdutoRow(idx);
   var corSel = row.querySelector('[data-field="cor"]');
   var opt = corSel && corSel.selectedIndex >= 0 ? corSel.options[corSel.selectedIndex] : null;
   var saldoEl = row.querySelector('[data-field="saldo"]');
@@ -6589,8 +6669,10 @@ function buildEditOPForm(op) {
     var sel = c === corAtual ? ' selected' : '';
     return '<option value="' + c + '"' + sel + '>' + c + '</option>';
   }).join('');
-  if (corAtual && coresDisp.indexOf(corAtual) < 0) {
-    corOpts += '<option value="' + corAtual + '" selected>' + corAtual + ' (custom)</option>';
+  // OPs antigas podem ter cor órfã (pré-trava). Mostra pra não perder o contexto, mas marcada —
+  // salvar assim é RECUSADO pelo banco (trg_op_match_produto). Tem que escolher uma cadastrada.
+  if (corAtual && coresDisp.indexOf(corAtual.toUpperCase()) < 0) {
+    corOpts += '<option value="' + corAtual + '" selected>' + corAtual + ' ⚠️ não cadastrada — escolha outra</option>';
   }
   var costOpts = STATE.costureiros.filter(function(c) { return c.ativo; }).map(function(c) {
     var sel = c.id === op.costureiro_id ? ' selected' : '';
@@ -7525,7 +7607,19 @@ async function submitDrawer() {
           continue;
         }
 
-        var corTexto = opt && opt.dataset.cor ? opt.dataset.cor : '';
+        // A cor da OP é a do PRODUTO (colorway cadastrado), não a do tecido. Herdar a cor do
+        // insumo foi o que colocou "TECIDO F 23 01" em 4 OPs — e a trava do banco recusa isso.
+        var corProdSel = row.querySelector('[data-field="cor-produto"]');
+        var corTexto = corProdSel ? (corProdSel.value || '').trim() : '';
+        var corTecidoRow = opt && opt.dataset.cor ? opt.dataset.cor : '';
+        if (!corTexto) {
+          alert('Cor #' + (r+1) + ': escolha a "Cor do produto".\n\n' +
+                (corTecidoRow
+                  ? 'O tecido é "' + corTecidoRow + '", que não bate com nenhuma cor cadastrada de ' + sku + '.\n\n'
+                  : '') +
+                'Se a cor é NOVA, cadastre o colorway na aba Produtos antes de abrir a OP.');
+          btn.textContent='Salvar'; btn.disabled=false; return;
+        }
         // Consumo digitado/auto-preenchido na row (editável)
         var consumoRow = parseFloat(row.querySelector('[data-field="consumo"]').value) || null;
         var insSelRow = insumoId ? STATE.insumos.find(function(x){return x.id===insumoId;}) : null;
