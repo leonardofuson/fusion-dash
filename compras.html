@@ -2231,6 +2231,7 @@ function renderHistoricoMovsInsumo(movs, insumo) {
     'retorno_cd': '⬅ Retorno',
     'saldo_inicial': '📍 Saldo inicial',
     'ajuste_compra': '🔧 Ajuste compra',
+    'devolucao_fornecedor': '↩ Devolvido ao fornecedor',
   };
   var rows = movs.map(function(m) {
     var data = m.criado_em ? new Date(m.criado_em).toLocaleDateString('pt-BR') : '—';
@@ -2533,6 +2534,86 @@ function buildTransferirTecidoForm(insumoId) {
     '<div class="form-group"><label class="form-label">Observação <small style="color:var(--txt3);font-weight:400">(opcional)</small></label>' +
       '<input id="f-trf-obs" class="form-input" type="text" placeholder="ex: retorno de saldo não utilizado">' +
     '</div>';
+}
+
+// ── Devolver tecido ao FORNECEDOR (14/07/2026) ─────────────────────────────
+// Tecido com defeito sai do COSTUREIRO direto pro fornecedor — não passa pelo CD.
+// É o único fluxo em que o tecido DEIXA a empresa: uma única mov NEGATIVA
+// (`devolucao_fornecedor`) na localização onde o tecido está. Continua
+// event-sourced — o trigger baixa `quantidade_atual` sozinho, sem PATCH em saldo.
+// Escopo: só estoque. Não gera crédito no financeiro (decisão do Leo, 14/07).
+var MOTIVOS_DEVOLUCAO = ['Defeito no tecido', 'Tonalidade fora do padrão', 'Metragem a menor', 'Tecido errado / trocado', 'Outro'];
+
+function abrirDevolucaoFornecedor(insumoId) {
+  var insumo = STATE.insumos.find(function(i) { return i.id === insumoId; });
+  if (!insumo) return;
+  STATE.devolvendoInsumoId = insumoId;
+  openDrawer('devolver-fornecedor');
+}
+
+function buildDevolucaoFornecedorForm(insumoId) {
+  var insumo = STATE.insumos.find(function(i) { return i.id === insumoId; }) || {};
+  var unidade = insumo.unidade || '';
+  var saldosPorLoc = (STATE.saldoLocalIdx || {})[insumoId] || {};
+  var origens = Object.keys(saldosPorLoc).filter(function(l){ return saldosPorLoc[l] > 0.001; });
+  origens.sort(function(a,b){ return saldosPorLoc[b] - saldosPorLoc[a]; });
+  var origemDefault = origens[0] || 'CD FUSION';
+
+  return '<div class="form-group" style="background:rgba(251,146,60,0.07);padding:12px;border-radius:8px;margin-bottom:12px">' +
+      '<div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px">Devolução ao fornecedor</div>' +
+      '<div style="font-weight:700;font-size:14px">' + (insumo.nome || '—') + '</div>' +
+      '<div style="font-size:12px;color:var(--txt2);margin-top:2px">Cor: ' + (insumo.cor || '—') +
+        (insumo.numero_nf ? ' · NF de compra: ' + insumo.numero_nf : '') + '</div>' +
+      '<div style="font-size:12px;color:var(--orange);margin-top:8px">Este tecido <strong>sai da empresa</strong> — vai do costureiro direto pro fornecedor, sem passar pelo CD. Pra mover entre CD e costureiros, use <strong>Transferir</strong>.</div>' +
+    '</div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label class="form-label">Sai de *</label>' +
+        '<select id="f-dev-origem" class="form-select" onchange="atualizarSaldoDevolucao()">' +
+          origens.map(function(l){
+            var sel = l===origemDefault ? ' selected' : '';
+            return '<option value="'+l.replace(/"/g,'&quot;')+'"'+sel+'>'+l+' ('+fmt(saldosPorLoc[l])+' '+unidade+')</option>';
+          }).join('') +
+        '</select>' +
+      '</div>' +
+      '<div class="form-group"><label class="form-label">Quantidade ('+unidade+') *</label>' +
+        '<input id="f-dev-qtde" class="form-input" type="number" step="0.01" min="0.01" placeholder="quanto está voltando">' +
+        '<small style="color:var(--txt3)" id="f-dev-saldo-hint">Saldo em ' + origemDefault + ': <strong>' + fmt(saldosPorLoc[origemDefault] || 0) + ' ' + unidade + '</strong></small>' +
+      '</div>' +
+    '</div>' +
+    '<div class="form-group"><label class="form-label">Motivo *</label>' +
+      '<select id="f-dev-motivo" class="form-select">' +
+        MOTIVOS_DEVOLUCAO.map(function(m){ return '<option value="'+m+'">'+m+'</option>'; }).join('') +
+      '</select>' +
+    '</div>' +
+    '<div class="form-group"><label class="form-label">NF de devolução <small style="color:var(--txt3);font-weight:400">(opcional — preencha quando a nota sair)</small></label>' +
+      '<input id="f-dev-nf" class="form-input" type="text" placeholder="Ex: 12345">' +
+    '</div>' +
+    '<div class="form-group"><label class="form-label">Observação <small style="color:var(--txt3);font-weight:400">(opcional)</small></label>' +
+      '<input id="f-dev-obs" class="form-input" type="text" placeholder="ex: rolo com furo no meio, avisado o fornecedor em 14/07">' +
+    '</div>';
+}
+
+function atualizarSaldoDevolucao() {
+  var insumoId = STATE.devolvendoInsumoId;
+  var origem = (document.getElementById('f-dev-origem') || {}).value;
+  var saldosPorLoc = (STATE.saldoLocalIdx || {})[insumoId] || {};
+  var insumo = (STATE.insumos || []).find(function(i){ return i.id === insumoId; }) || {};
+  var saldo = saldosPorLoc[origem] || 0;
+  var hint = document.getElementById('f-dev-saldo-hint');
+  if (hint) hint.innerHTML = 'Saldo em ' + origem + ': <strong>' + fmt(saldo) + ' ' + (insumo.unidade || '') + '</strong>';
+  var qtdInput = document.getElementById('f-dev-qtde');
+  if (qtdInput) qtdInput.setAttribute('max', saldo);
+}
+
+// Localização FÍSICA do tecido (event-log), que NÃO é a `estoque_insumos.localizacao`
+// — esta última é só a de CADASTRO e nunca é atualizada por transferência.
+// Confundir as duas foi o que jogou 1.000 KG na localização-fantasma "Histórico" (fix 14/07/2026).
+function localFisicoDoInsumo(insumoId, fallback) {
+  var saldos = (STATE.saldoLocalIdx || {})[insumoId] || {};
+  var locs = Object.keys(saldos).filter(function(l){ return Math.abs(saldos[l]) > 0.001; });
+  if (!locs.length) return fallback || 'CD FUSION';
+  locs.sort(function(a,b){ return saldos[b] - saldos[a]; });
+  return locs[0];
 }
 
 function atualizarSaldoTransferencia() {
@@ -3543,6 +3624,7 @@ function renderInsumos() {
           '<td onclick="event.stopPropagation()" style="text-align:center;white-space:nowrap">' +
             '<button class="btnf" style="font-size:10px;padding:3px 8px;margin-right:3px" onclick="openDrawerEditInsumo('+i.id+')" title="Editar tecido">Editar</button>' +
             (((Object.values(saldoPorLoc)).some(function(s){return s>0.001;}) || v.total > 0) ? '<button class="btnf ghost" style="font-size:10px;padding:3px 8px;margin-right:3px" onclick="abrirTransferenciaTecido('+i.id+')" title="Mover tecido entre CD e costureiros">Transferir</button>' : '') +
+            (((Object.values(saldoPorLoc)).some(function(s){return s>0.001;})) ? '<button class="btnf ghost" style="font-size:10px;padding:3px 8px;margin-right:3px;color:var(--orange);border-color:rgba(251,146,60,0.4)" onclick="abrirDevolucaoFornecedor('+i.id+')" title="Devolver tecido com defeito ao fornecedor (sai da empresa)">↩ Devolver</button>' : '') +
             '<button class="btnf ghost" style="font-size:10px;padding:3px 8px;color:var(--red);border-color:rgba(248,113,113,0.4)" onclick="excluirInsumo('+i.id+')" title="Excluir tecido">Excluir</button>' +
           '</td>' +
         '</tr>';
@@ -5301,6 +5383,9 @@ function openDrawer(type) {
   } else if (type === 'transferir-tecido') {
     title.textContent = 'Transferir Tecido';
     body.innerHTML = buildTransferirTecidoForm(STATE.transferindoInsumoId);
+  } else if (type === 'devolver-fornecedor') {
+    title.textContent = 'Devolver Tecido ao Fornecedor';
+    body.innerHTML = buildDevolucaoFornecedorForm(STATE.devolvendoInsumoId);
   } else if (type === 'transferir-nf') {
     title.textContent = 'Transferir Tecido (todas as NFs)';
     body.innerHTML = buildTransferirNFForm(STATE.transferindoNFKey);
@@ -7112,15 +7197,21 @@ async function submitDrawer() {
       await patchSupabase('estoque_insumos', ei.id, body);
 
       // Se Total Comprado mudou: gera mov de ajuste (trigger atualiza quantidade_atual)
+      //
+      // ⚠️ O ajuste vai pra onde o tecido ESTÁ (event-log), não pra `localizacaoNova` — que é a
+      // localização de CADASTRO e nunca é atualizada por transferência. Usar a de cadastro criava
+      // saldo numa localização onde não há tecido: foi assim que 1.000 KG de MALHA DIAGONAL foram
+      // parar na localização-fantasma "Histórico" enquanto o rolo estava na HD /JULIANA (fix 14/07/2026).
       if (Math.abs(deltaTotal) > 0.001) {
+        var locAjuste = localFisicoDoInsumo(ei.id, localizacaoNova);
         try {
           await postSupabase('movimentacao_insumos', [{
             insumo_id: ei.id,
             tipo_mov: 'ajuste_compra',
             quantidade: deltaTotal,  // positivo = comprou mais; negativo = corrigiu pra menos
-            localizacao: localizacaoNova,
+            localizacao: locAjuste,
             ordem_producao_id: null,
-            observacao: 'Ajuste manual Total Comprado (' + fmt(totalOriginal) + ' → ' + fmt(totalNovo) + ' ' + (body.unidade||'') + ')',
+            observacao: 'Ajuste manual Total Comprado (' + fmt(totalOriginal) + ' → ' + fmt(totalNovo) + ' ' + (body.unidade||'') + ') em ' + locAjuste,
           }]);
         } catch (e) { console.warn('Falha ao registrar ajuste compra:', e); alert('Insumo salvo, mas o ajuste de saldo falhou: ' + e.message); }
       }
@@ -7774,6 +7865,30 @@ async function submitDrawer() {
     } else if (type === 'novo-insumo' || type === 'importar-nfe') {
       var insumos = coletarInsumosRows();
       if (!insumos.length) { alert('Preencha ao menos um tecido/insumo'); btn.textContent='Salvar'; btn.disabled=false; return; }
+
+      // Guard (14/07/2026): NF de REMESSA não é NF de COMPRA.
+      // A remessa é a NOSSA nota de saída do CD pro costureiro — o tecido dela já está no
+      // sistema e já foi movido. Cadastrá-la como compra cria um GÊMEO fantasma: a OP consome
+      // o fantasma e o tecido real fica parado no costureiro pra sempre. Foi o que aconteceu
+      // com a NF 141753 (OPs 1614/1615/1616).
+      var nfsNovas = insumos.map(function(i){ return (i.numero_nf || '').trim(); }).filter(Boolean);
+      var nfsUnicas = nfsNovas.filter(function(n, ix){ return nfsNovas.indexOf(n) === ix; });
+      for (var iN = 0; iN < nfsUnicas.length; iN++) {
+        var rRem = await fetch(SB_URL + '/rest/v1/movimentacao_insumos?nf_remessa=eq.' +
+          encodeURIComponent(nfsUnicas[iN]) + '&select=localizacao,quantidade,criado_em&order=criado_em.asc&limit=3',
+          { headers: await getAuthHeaders() });
+        var remRows = rRem.ok ? await rRem.json() : [];
+        if (remRows.length) {
+          var destRem = remRows.filter(function(m){ return (parseFloat(m.quantidade)||0) > 0; })
+                               .map(function(m){ return m.localizacao; })[0] || remRows[0].localizacao;
+          var quandoRem = remRows[0].criado_em ? new Date(remRows[0].criado_em).toLocaleDateString('pt-BR') : '';
+          alert('A NF ' + nfsUnicas[iN] + ' já é uma NF de REMESSA (nossa nota de saída), não de compra.\n\n' +
+                'Ela foi usada em ' + quandoRem + ' pra mandar tecido pra "' + destRem + '" — esse tecido JÁ ESTÁ no sistema e JÁ ESTÁ no costureiro.\n\n' +
+                'Cadastrar de novo cria tecido fantasma: a OP consome o fantasma e o rolo de verdade fica parado no costureiro pra sempre.\n\n' +
+                'Se o tecido chegou mesmo, use a NF de COMPRA do fornecedor. Se ele já foi enviado, não precisa cadastrar nada.');
+          btn.textContent='Salvar'; btn.disabled=false; return;
+        }
+      }
       // Preserva qty original e zera quantidade_atual no insert (trigger soma via mov compra)
       var qtdsOriginais = insumos.map(function(i){ return parseFloat(i.quantidade_atual) || 0; });
       insumos.forEach(function(i){ i.quantidade_atual = 0; });
@@ -7851,6 +7966,61 @@ async function submitDrawer() {
       // Caminho rápido: atualiza o saldo na hora (otimista) + render instantâneo; reconcilia em
       // background. Evita o carregar() pesado (14 fetches) que fazia a tela demorar pra atualizar.
       aplicarDeltaSaldoLocal(movsTrf);
+      closeDrawer();
+      renderInsumos();
+      refrescarSaldoInsumos();
+      return;
+    } else if (type === 'devolver-fornecedor') {
+      var insumoIdDev = STATE.devolvendoInsumoId;
+      var insumoDev = STATE.insumos.find(function(i){ return i.id === insumoIdDev; });
+      if (!insumoDev) { alert('Insumo não encontrado'); btn.textContent='Salvar'; btn.disabled=false; return; }
+
+      var origemDev = (document.getElementById('f-dev-origem') || {}).value;
+      var qtdeDev = parseFloat(document.getElementById('f-dev-qtde').value);
+      var motivoDev = (document.getElementById('f-dev-motivo') || {}).value || 'Defeito no tecido';
+      var nfDev = ((document.getElementById('f-dev-nf') || {}).value || '').trim();
+      var obsDev = ((document.getElementById('f-dev-obs') || {}).value || '').trim();
+      var unDev = insumoDev.unidade || '';
+
+      if (!origemDev) { alert('Escolha de onde o tecido está saindo'); btn.textContent='Salvar'; btn.disabled=false; return; }
+      if (!qtdeDev || qtdeDev <= 0) { alert('Quantidade inválida'); btn.textContent='Salvar'; btn.disabled=false; return; }
+
+      var saldoDev = ((STATE.saldoLocalIdx || {})[insumoIdDev] || {})[origemDev] || 0;
+      if (qtdeDev > saldoDev + 0.001) {
+        alert('Não dá pra devolver ' + fmt(qtdeDev) + ' ' + unDev + ': há só ' + fmt(saldoDev) + ' ' + unDev + ' em "' + origemDev + '".');
+        btn.textContent='Salvar'; btn.disabled=false; return;
+      }
+
+      // Mesma trava da transferência: não deixar sair às cegas tecido comprometido com OP aberta.
+      // Aqui é mais grave — o tecido não volta pro CD, ele sai da empresa.
+      var comprDev = opsComprometidasNoLocal(insumoIdDev, origemDev);
+      if (comprDev.length) {
+        var listaDev = comprDev.map(function(o){ return '• OP #'+o.id+' — '+(o.sku_produto||o.produto||'')+' ('+fmt(o.quantidade_tecido_usada||0)+' '+unDev+')'; }).join('\n');
+        if (!confirm('⚠️ ATENÇÃO\n\nEste tecido está EM PRODUÇÃO em "'+origemDev+'" na(s) OP(s):\n'+listaDev+'\n\nDevolver ao fornecedor tira o tecido da empresa — a(s) OP(s) acima ficam SEM tecido pra produzir.\n\nDevolver mesmo assim?')) {
+          btn.textContent='Salvar'; btn.disabled=false; return;
+        }
+      }
+
+      if (!confirm('Devolver ao fornecedor?\n\n' + (insumoDev.nome||'') + ' — ' + (insumoDev.cor||'') +
+                   '\n' + fmt(qtdeDev) + ' ' + unDev + ' saindo de "' + origemDev + '"' +
+                   '\nMotivo: ' + motivoDev + (nfDev ? '\nNF de devolução: ' + nfDev : '') +
+                   '\n\nO tecido sai da empresa e o saldo baixa. Isso não gera crédito no financeiro.')) {
+        btn.textContent='Salvar'; btn.disabled=false; return;
+      }
+
+      var obsFinal = motivoDev + (obsDev ? ' — ' + obsDev : '') + ' (devolvido de ' + origemDev + ' ao fornecedor)';
+      var movsDev = [{
+        insumo_id: insumoIdDev,
+        tipo_mov: 'devolucao_fornecedor',
+        quantidade: -qtdeDev,           // única mov: o tecido deixa a empresa (não há destino interno)
+        localizacao: origemDev,
+        ordem_producao_id: null,
+        nf_remessa: nfDev || null,      // NF de devolução
+        observacao: obsFinal,
+      }];
+      await postSupabase('movimentacao_insumos', movsDev);
+      STATE.devolvendoInsumoId = null;
+      aplicarDeltaSaldoLocal(movsDev);
       closeDrawer();
       renderInsumos();
       refrescarSaldoInsumos();
