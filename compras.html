@@ -680,6 +680,7 @@ table.tb-historico{min-width:2000px;border-collapse:separate;border-spacing:0;}
 
 <!-- Datalists globais pra autocomplete com busca por substring (HTML5 nativo) -->
 <datalist id="dl-cores-todas"></datalist>
+<datalist id="dl-estampas-todas"></datalist>
 <datalist id="dl-produtos-fab"></datalist>
 <datalist id="dl-costureiros"></datalist>
 <datalist id="dl-tecidos-todos"></datalist>
@@ -709,12 +710,15 @@ async function getAuthHeaders() {
 var STATE = {
   ops: [], compras: [], costureiros: [], precos: [], cortadores: [],
   insumos: [], consumo: [], planejamento: [], fornecedores: [], produtos: [],
-  coresValidas: [],  // produto_cores_validas: legado CONTAMINADO (absorveu lixo histórico: códigos de tecido, DEFEITO, "32 CORES").
-                     // ⚠️ NÃO usar pra cor de OP — a trava do banco recusa 217 delas. Só sobrevive no datalist de cor de INSUMO.
+  coresTecido: [],   // `cor_tecido`: a IDENTIDADE da cor de TECIDO (vocabulário próprio, ≠ colorway do produto).
+                     // Substituiu `produto_cores_validas` (aposentada em 14/07 — misturava os dois vocabulários e
+                     // se auto-alimentava de OP/OC via trigger). O banco RECUSA cor de insumo fora desta lista.
   coresEstilo: [],   // vw_cores_do_estilo: cores que a TRAVA do banco aceita (mesma view da msg de erro). Fonte da cor da OP.
   corSinonimo: [],   // cor_sinonimo: apelido -> cor canônica (por estilo). Resolve a cor do TECIDO na cor do PRODUTO.
   tecidos: [],       // `tecido`: a IDENTIDADE do tecido (nome canônico). Fonte do datalist de cadastro.
   tecidoAlias: [],   // `tecido_alias`: toda grafia (nome curto, typo, acento) -> tecido_id.
+  estampas: [],      // `estampa`: tecido ESTAMPADO não tem cor, tem CÓDIGO de estampa (BT 09 03, F19).
+                     // Sem este campo, o código vazava pro campo `cor` (33 linhas) e de lá pra dentro da OP.
   verTecidosSemSaldo: false,  // Nova OP: mostrar também tecido sem estoque no dropdown
   custosSku: [],     // custos_sku: snapshot materializado de CMV por SKU pai (populado por recalcular_custos_sku)
   tab: 'pipeline', drawerType: null,
@@ -749,7 +753,7 @@ async function buscarTudo(tab, filtro) {
 
 async function carregar() {
   try {
-    var [ops, compras, costureiros, precos, insumos, consumo, planejamento, fornecedores, produtos, coresValidas, custosSku, saldoLocal, eficiencia, entregas, deparaNF, coresEstilo, corSinonimo, tecidos, tecidoAlias] = await Promise.all([
+    var [ops, compras, costureiros, precos, insumos, consumo, planejamento, fornecedores, produtos, coresTecido, custosSku, saldoLocal, eficiencia, entregas, deparaNF, coresEstilo, corSinonimo, tecidos, tecidoAlias, estampas] = await Promise.all([
       buscarTudo('ordens_producao', 'select=*&order=criado_em.desc'),
       buscarTudo('ordens_compra', 'select=*&order=data_faturamento.desc'),
       buscarTudo('costureiros', 'select=*&order=nome'),
@@ -759,7 +763,7 @@ async function carregar() {
       buscarTudo('planejamento_producao', 'select=*&order=data_calculo.desc&limit=50'),
       buscarTudo('fornecedores', 'select=*&ativo=eq.true&order=nome'),
       buscarTudo('produtos', 'select=id,sku,sku_pai,nome,categoria,tipo,cor,tamanho,ativo,fabricacao_propria&ativo=eq.true'),
-      buscarTudo('produto_cores_validas', 'select=sku_pai,cor,origem&ativo=eq.true&order=sku_pai,cor'),
+      buscarTudo('cor_tecido', 'select=id,nome,revisado&ativo=eq.true&order=nome'),
       buscarTudo('custos_sku', 'select=*&order=sku_pai'),
       buscarTudo('vw_insumo_saldo_local', 'select=*'),
       buscarTudo('vw_eficiencia_costureiro_global', 'select=*&order=eficiencia.asc'),
@@ -769,6 +773,7 @@ async function carregar() {
       buscarTudo('cor_sinonimo', 'select=sku_pai,cor_apelido,cor_canonica'),
       buscarTudo('tecido', 'select=id,nome&ativo=eq.true&order=nome'),
       buscarTudo('tecido_alias', 'select=alias_norm,tecido_id'),
+      buscarTudo('estampa', 'select=id,codigo&ativo=eq.true&order=codigo'),
     ]);
     STATE.ops = ops;
     STATE.compras = compras;
@@ -779,7 +784,8 @@ async function carregar() {
     STATE.planejamento = planejamento;
     STATE.fornecedores = fornecedores;
     STATE.produtos = produtos;
-    STATE.coresValidas = coresValidas;
+    STATE.coresTecido = coresTecido;
+    STATE.estampas = estampas || [];
     STATE.coresEstilo = coresEstilo || [];
     STATE.corSinonimo = corSinonimo || [];
     STATE.tecidos = tecidos || [];          // identidade canônica do tecido (tabela `tecido`)
@@ -5539,6 +5545,74 @@ async function garantirTecidoCadastrado(nome) {
   return novo.nome;
 }
 
+// ─── Cor de TECIDO (`cor_tecido`) ────────────────────────────────────────────
+// A cor do TECIDO não é a cor do PRODUTO. São dois vocabulários (o de tecido tem
+// nome comercial de fornecedor — SPA BLUE, THESEUS, ICE, MARSALA — que não é colorway).
+// O banco RECUSA cor de insumo fora de `cor_tecido`; esta é a porta de entrada.
+//
+// Modelo "Existing (Allow Add)" (padrão PTC FlexPLM): a analista PODE criar cor na hora,
+// mas cria um REGISTRO — não uma string. Ele nasce `revisado=false` e vira burndown na
+// tela de Tecidos. Fecha o banco sem travar a ponta.
+function resolverCorTecido(cor) {
+  var n = (cor || '').trim().toUpperCase();
+  if (!n) return null;
+  var norm = function(s){ return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ').trim(); };
+  return (STATE.coresTecido || []).find(function(c){ return norm(c.nome) === norm(n); }) || null;
+}
+
+// ─── ESTAMPA ─────────────────────────────────────────────────────────────────
+// Tecido estampado não tem cor — tem CÓDIGO de estampa. `estoque_insumos.estampa_id`
+// é FK: só aceita estampa cadastrada (o banco garante; não dá pra inventar nem por script).
+async function garantirEstampaCadastrada(codigo) {
+  if (!(codigo || '').trim()) return null;          // liso → sem estampa (legítimo)
+  var norm = function(s){ return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ').trim(); };
+  var alvo = norm(codigo);
+  var e = (STATE.estampas || []).find(function(x){ return norm(x.codigo) === alvo; });
+  if (e) return e.id;
+
+  if (!confirm('A estampa "' + codigo + '" não existe no cadastro.\n\nCadastrar como ESTAMPA NOVA?')) {
+    return false;   // false = cancelou (≠ null, que é "tecido liso")
+  }
+  var r = await fetch(SB_URL + '/rest/v1/estampa', {
+    method: 'POST',
+    headers: Object.assign({'Content-Type':'application/json','Prefer':'return=representation'}, await getAuthHeaders()),
+    body: JSON.stringify({ codigo: codigo.trim().toUpperCase(), revisado: false })
+  });
+  if (!r.ok) {
+    var err = await r.text();
+    throw new Error('Não foi possível cadastrar a estampa "' + codigo + '":\n\n' +
+      (err.match(/"message":"([^"]+)"/) || [,err])[1].replace(/\\"/g, '"'));
+  }
+  var novo = (await r.json())[0];
+  STATE.estampas.push({ id: novo.id, codigo: novo.codigo });
+  return novo.id;
+}
+
+async function garantirCorTecidoCadastrada(cor) {
+  if (!(cor || '').trim()) return '';        // sem cor é legítimo (tecido cru, aviamento)
+  var c = resolverCorTecido(cor);
+  if (c) return c.nome;                      // já existe → grava a canônica
+
+  if (!confirm('A cor de tecido "' + cor + '" não existe no cadastro.\n\nCadastrar como COR NOVA?\n\n' +
+               'Se for a mesma cor com outra grafia, cancele e escolha a da lista — ' +
+               'dois nomes pra mesma cor racham o vocabulário e o filtro de cor passa a mentir.')) {
+    return null;
+  }
+  var r = await fetch(SB_URL + '/rest/v1/cor_tecido', {
+    method: 'POST',
+    headers: Object.assign({'Content-Type':'application/json','Prefer':'return=representation'}, await getAuthHeaders()),
+    body: JSON.stringify({ nome: cor.trim().toUpperCase(), revisado: false })
+  });
+  if (!r.ok) {
+    var err = await r.text();
+    throw new Error('Não foi possível cadastrar a cor "' + cor + '":\n\n' +
+      (err.match(/"message":"([^"]+)"/) || [,err])[1].replace(/\\"/g, '"'));
+  }
+  var novo = (await r.json())[0];
+  STATE.coresTecido.push({ id: novo.id, nome: novo.nome, revisado: false });
+  return novo.nome;
+}
+
 // Tecido "vivo" = tem estoque em algum lugar. O BOM acumula tecido que saiu de linha
 // (TNPV01 lista 23, só 2 têm rolo), e o morto aparecia colado no vivo no dropdown da
 // Nova OP — escolher o morto dá "não temos metros". Filtro reversível (ver todos).
@@ -5636,9 +5710,10 @@ function produtosPais() {
 // Cores que a OP pode ter. Fonte = `vw_cores_do_estilo` — a MESMA view que a trava do banco
 // (trg_op_match_produto) usa. UI e banco concordam por construção: o que aparece aqui, salva.
 //
-// ⚠️ NÃO usar `produto_cores_validas`: ela absorveu o histórico sujo (códigos de tecido, DEFEITO,
-// "32 CORES", "LX2 CAQUI"...) — 217 cores que o banco recusa. Oferecê-las = analista preenche a OP
-// inteira e toma erro no save. Ela também não tem 19 cores válidas (TNPV01 CHUMBO/PRETO...).
+// ⚠️ A cor do PRODUTO nunca sai de `cor_tecido` (o vocabulário do TECIDO) — são coisas diferentes.
+// A antiga `produto_cores_validas` misturava as duas e foi APOSENTADA em 14/07/2026: ela se
+// auto-alimentava de OP/OC por trigger, então absorveu o histórico sujo (código de tecido virando
+// "cor de produto") e ainda envelhecia (217 cores que o banco recusa, 19 do cadastro faltando).
 function coresDoSKU(skuPai) {
   if (!skuPai) return [];
   var set = {};
@@ -5669,12 +5744,21 @@ function resolverCorProduto(skuPai, corTecido) {
 }
 
 function popularDatalistCores() {
-  // Cores (produto_cores_validas)
+  // Cor de TECIDO (`cor_tecido`) — NÃO é a cor do produto (colorway). São dois vocabulários:
+  // o tecido "CHUMBO" faz a calça "CINZA CHUMBO" (CLMALHA) ou "CINZA" (CLSJ01) — `cor_sinonimo` mapeia.
+  // O banco RECUSA cor de insumo fora desta lista; cor nova entra pelo cadastro (nasce não-revisada).
   var dl = document.getElementById('dl-cores-todas');
   if (dl) {
     var set = {};
-    (STATE.coresValidas || []).forEach(function(c){ if (c.cor) set[c.cor] = 1; });
+    (STATE.coresTecido || []).forEach(function(c){ if (c.nome) set[c.nome] = 1; });
     dl.innerHTML = Object.keys(set).sort().map(function(c){ return '<option value="'+c.replace(/"/g,'&quot;')+'">'; }).join('');
+  }
+  // Estampas (tecido estampado). Vazio = tecido liso (usa Cor).
+  var dlE = document.getElementById('dl-estampas-todas');
+  if (dlE) {
+    dlE.innerHTML = (STATE.estampas || []).map(function(e){
+      return '<option value="' + (e.codigo||'').replace(/"/g,'&quot;') + '">';
+    }).join('');
   }
   // Produtos de fabricacao propria — datalist com NOME do produto (SKU resolvido via lookup)
   var dlP = document.getElementById('dl-produtos-fab');
@@ -6491,7 +6575,7 @@ function nomesTecidosCadastrados() {
 
 function todasCoresConhecidas() {
   var set = {};
-  (STATE.coresValidas || []).forEach(function(c){ if (c.cor) set[c.cor] = 1; });
+  (STATE.coresTecido || []).forEach(function(c){ if (c.nome) set[c.nome] = 1; });
   return Object.keys(set).sort();
 }
 
@@ -6533,6 +6617,11 @@ function buildInsumoRow(idx, firstRow) {
       '<div class="form-group"><label class="form-label">Cor <small style="color:var(--txt3);font-weight:400">(digite pra buscar ou criar — será normalizada)</small></label>' +
         '<input class="form-input" data-field="cor" list="dl-cores-row'+idx+'" placeholder="Ex: PRETO" autocomplete="off">' +
         '<datalist id="dl-cores-row'+idx+'"></datalist>' +
+      '</div>' +
+      // Tecido ESTAMPADO não tem cor — tem código de estampa. Antes de existir este campo,
+      // o código vazava pro campo Cor ('BT 09 03', 'F19'…) e de lá pra dentro da OP.
+      '<div class="form-group"><label class="form-label">Estampa <small style="color:var(--txt3);font-weight:400">(só se estampado — deixe vazio se for liso)</small></label>' +
+        '<input class="form-input" data-field="estampa" list="dl-estampas-todas" placeholder="Ex: BT 09 03" autocomplete="off">' +
       '</div>' +
       '<div class="form-group"><label class="form-label">Unidade</label>' +
         '<select class="form-select" data-field="unidade"><option value="M">Metros (M)</option><option value="KG">Quilos (KG)</option><option value="UN">Unidades (UN)</option><option value="ROL">Rolos (ROL)</option></select></div>' +
@@ -6811,6 +6900,7 @@ function coletarInsumosRows() {
       subtipo: row.querySelector('[data-field="subtipo"]').value,
       nome: nome,
       cor: (row.querySelector('[data-field="cor"]').value || '').trim() || null,
+      estampa: ((row.querySelector('[data-field="estampa"]')||{}).value || '').trim() || null,
       unidade: row.querySelector('[data-field="unidade"]').value,
       quantidade_atual: parseFloat(row.querySelector('[data-field="qtd"]').value) || 0,
       valor_unitario_dentro: vDentro,
@@ -8007,6 +8097,34 @@ async function submitDrawer() {
         }
         if (!canonico) { btn.textContent='Salvar'; btn.disabled=false; return; }  // cancelou
         insumos[iT].nome = canonico;
+      }
+
+      // Identidade da COR do tecido (14/07/2026): mesma régua do nome. O banco recusa
+      // cor fora de `cor_tecido` — resolver aqui evita a analista tomar o erro no save.
+      for (var iC = 0; iC < insumos.length; iC++) {
+        if (!(insumos[iC].cor || '').trim()) continue;
+        var corCanon;
+        try {
+          corCanon = await garantirCorTecidoCadastrada(insumos[iC].cor);
+        } catch (e) {
+          alert(e.message); btn.textContent='Salvar'; btn.disabled=false; return;
+        }
+        if (corCanon === null) { btn.textContent='Salvar'; btn.disabled=false; return; }  // cancelou
+        insumos[iC].cor = corCanon;
+      }
+
+      // Estampa (tecido estampado): o texto vira `estampa_id` (a coluna é FK).
+      // Vazio = tecido liso → estampa_id null. `false` = a analista cancelou o cadastro.
+      for (var iE = 0; iE < insumos.length; iE++) {
+        var estId;
+        try {
+          estId = await garantirEstampaCadastrada(insumos[iE].estampa);
+        } catch (e) {
+          alert(e.message); btn.textContent='Salvar'; btn.disabled=false; return;
+        }
+        if (estId === false) { btn.textContent='Salvar'; btn.disabled=false; return; }  // cancelou
+        insumos[iE].estampa_id = estId;
+        delete insumos[iE].estampa;   // `estampa` (texto) não é coluna — só `estampa_id`
       }
 
       // Guard (14/07/2026): NF de REMESSA não é NF de COMPRA.
