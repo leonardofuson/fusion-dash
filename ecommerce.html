@@ -681,6 +681,24 @@ function taxaDev(p){
   return Math.min(d/v,1);
 }
 
+// Fase 4 (14/07/2026) — na ML o estorno é OBSERVADO, não presumido.
+// A ML congela o `sale_fee` na acreditação do pagamento e nunca mais o toca: o estorno da
+// comissão de uma venda devolvida NÃO existe no pedido, só como linha BONUS do billing ledger
+// (fusion_sync_ml_estornos.py → pedidos.fee_estornado). Antes disto o dash PRESUMIA
+// `comissão × fração devolvida` — em jun/26 isso dava R$17.343 contra os R$16.837 reais.
+// Nos outros canais o estorno já vem embutido na própria fonte (Shopee reescreve o escrow;
+// TikTok só liquida depois que a janela de devolução fecha; no Site a taxa não estorna),
+// então lá o modelo proporcional continua valendo.
+// ⚠️ Esta função e o CASE da vw_ecom_canal_dia_est têm que dizer a MESMA coisa — se divergirem,
+// o waterfall e a tabela de canal voltam a mostrar comissões diferentes (o bug que a Fase 3 matou).
+var LEDGER_ML_INI='2026-04-01';   // fronteira de cobertura do ledger (3 períodos varridos)
+function temEstornoReal(p){
+  // ⚠️ `_nome` é o nome NORMALIZADO pelo CMAP ('ML Fio' / 'ML Confecções') — NÃO o
+  // canal_nome_raw do banco ('Mercado Livre FIO'). Testar /^Mercado Livre/ aqui nunca casa,
+  // e o estorno real seria ignorado no waterfall EM SILÊNCIO (as 4 telas voltariam a divergir).
+  return /^ML /.test(p._nome||'') && (p.data_pedido||'')>=LEDGER_ML_INI;
+}
+
 // ── Helpers ──
 function fmt(n){return 'R$ '+Math.round(n||0).toLocaleString('pt-BR');}
 function fmtK(n){n=n||0;if(Math.abs(n)>=1e6)return 'R$ '+(n/1e6).toFixed(1)+'M';if(Math.abs(n)>=1e3)return 'R$ '+Math.round(n/1e3)+'k';return 'R$ '+Math.round(n);}
@@ -725,7 +743,7 @@ async function buscarTudo(tab,filtro,maxPagesOverride){
   }
   return todos;
 }
-var SEL_PED='id,data_pedido,valor_bruto,canal_nome_raw,origem_conta,status,frete,frete_ml_seller,uf,cidade,fee_canal,comissao_afiliado,valor_devolucao,valor_chargeback,devolucao_pipeline,metodo_pagamento,parcelas';
+var SEL_PED='id,data_pedido,valor_bruto,canal_nome_raw,origem_conta,status,frete,frete_ml_seller,uf,cidade,fee_canal,fee_estornado,comissao_afiliado,valor_devolucao,valor_chargeback,devolucao_pipeline,metodo_pagamento,parcelas';
 // Receita inclui frete cliente APENAS pra ML (vb ML = total_amount = só itens, frete fora).
 // Demais canais: vb JÁ INCLUI frete cliente (validado empiricamente 25/05):
 //   - TikTok:   vb = itens + frete (payment.total_amount)
@@ -1404,7 +1422,11 @@ function calcPnL(pedidos,itens,adsVal){
     var liquidou=(p.fee_canal!==null&&p.fee_canal!==undefined&&p.fee_canal!=='');
     var fee=parseFloat(p.fee_canal||0), t=taxaDe(p._nome);
     if(liquidou){
-      comissao+=fee*(1-taxaDev(p));
+      // ML dentro da cobertura do ledger → estorno OBSERVADO (0 é resposta legítima: a ML
+      // simplesmente não estornou). Demais canais → modelo proporcional. Ver temEstornoReal().
+      comissao+=temEstornoReal(p)
+        ? Math.max(fee-parseFloat(p.fee_estornado||0),0)
+        : fee*(1-taxaDev(p));
       afiliados+=parseFloat(p.comissao_afiliado||0);
     }else{
       var cE=v*(t.com||custoPct(p._nome)), aE=v*(t.afil||0);
