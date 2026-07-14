@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fusion — Estoque (sistema)</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;font-family:system-ui,-apple-system,sans-serif;}
+  html,body{height:100%;background:#09090b;color:#fafafa;overflow:hidden;}
+  #bar{height:38px;display:flex;align-items:center;gap:10px;padding:0 14px;background:#111114;border-bottom:1px solid #27272a;}
+  #bar a{color:#a1a1aa;text-decoration:none;font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;white-space:nowrap;}
+  #bar a:hover{color:#fff;}
+  #bar .sep{color:#3f3f46;}
+  #bar .tit{font-size:13px;font-weight:700;color:#fafafa;}
+  #frame{width:100%;height:calc(100vh - 38px);border:0;display:block;}
+  #load{position:absolute;inset:38px 0 0 0;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:.9rem;}
+</style>
+<!-- SDK do Supabase ANTES do auth.js (auth.js cria o client) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/auth.js"></script>
+</head>
+<body>
+  <div id="bar">
+    <img src="/logo-urso.png" alt="Fusion" style="height:22px;">
+    <span class="tit">Fusion <span style="color:#6366f1;font-weight:800;">Estoque</span></span>
+    <span class="sep">·</span>
+    <a href="/index.html">← Menu</a>
+  </div>
+  <div id="load">Abrindo Estoque…</div>
+  <iframe id="frame" title="Estoque" allow="clipboard-read; clipboard-write"></iframe>
+  <script>
+    // Renderiza o Produtos (app STANDALONE fusion-produtos) DENTRO do Fusion OS, passando a
+    // sessão já ativa do BI via hash (#sso=) → sem segundo login. O App.tsx lê o hash, aplica
+    // a sessão e limpa o hash. Re-injetado a cada visita.
+    (async function () {
+      const auth = await fusionAuth.requireAuth('estoque');
+      if (!auth) return; // requireAuth já redirecionou (sem sessão ou sem permissão)
+      const s = auth.session;
+      const ESTOQUE_URL = 'https://fusion-estoque-app.onrender.com';
+      const src = ESTOQUE_URL + '/#sso=' + encodeURIComponent(s.access_token) + '|' + encodeURIComponent(s.refresh_token);
+      const frame = document.getElementById('frame');
+      frame.onload = function () { const l = document.getElementById('load'); if (l) l.remove(); };
+      frame.src = src;
+    })();
+  </script>
+</body>
+</html>

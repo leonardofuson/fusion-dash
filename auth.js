@@ -31,6 +31,9 @@
     estoque:    { titulo: 'Estoque',       descricao: 'Posição multi-canal de estoque', url: '/estoque.html', icone: '📦', cat: 'operacoes' },
     compras:    { titulo: 'Compras',       descricao: 'Ordens de compra, produção e fornecedores', url: '/compras.html', icone: '🧾', cat: 'operacoes' },
     produtos:   { titulo: 'Produtos',      descricao: 'Base canônica de produtos, de-para universal e grade de medidas (POM)', url: '/produtos.html', icone: '👕', cat: 'operacoes' },
+    // Sistema de Estoque (app fusion-estoque-app). Roda EM PARALELO com o dash read-only
+    // `estoque` — quem vira a chave do tile é o Leo, depois de conferir a paridade.
+    'estoque-sistema': { titulo: 'Estoque (sistema)', descricao: 'Recebimento (entrada com custo), conciliação razão × espelho e a visão de saldo', url: '/estoque-sistema.html', icone: '📦', cat: 'operacoes' },
     financeiro: { titulo: 'Financeiro',    descricao: 'Contas a pagar, fluxo de caixa e DRE de resultado (multi-CNPJ)', url: '/financeiro.html', icone: '💰', cat: 'operacoes' },
     // Inteligência
     simulador:  { titulo: 'Simulador',     descricao: 'Margem por produto + curva ótima de ads', url: '/simulador.html', icone: '🎯', cat: 'inteligencia' },
