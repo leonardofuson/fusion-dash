@@ -2608,6 +2608,20 @@ function atualizarSaldoDevolucao() {
 // Localização FÍSICA do tecido (event-log), que NÃO é a `estoque_insumos.localizacao`
 // — esta última é só a de CADASTRO e nunca é atualizada por transferência.
 // Confundir as duas foi o que jogou 1.000 KG na localização-fantasma "Histórico" (fix 14/07/2026).
+// Quanto de tecido esta OP JÁ baixou (soma dos consumo_op dela). As entregas parciais baixam
+// tecido na hora; o fechamento Total precisa saber disso pra consumir só o que FALTA — senão
+// baixa o rolo inteiro por cima e a OP consome o dobro (bug corrigido em 14/07/2026).
+async function consumoJaBaixadoDaOP(opId) {
+  try {
+    var r = await fetch(SB_URL + '/rest/v1/movimentacao_insumos?ordem_producao_id=eq.' + opId +
+      '&tipo_mov=eq.consumo_op&select=quantidade', { headers: await getAuthHeaders() });
+    if (!r.ok) return 0;
+    var rows = await r.json();
+    // consumo_op é negativo; somamos o módulo = total já baixado
+    return rows.reduce(function(s, m) { return s + Math.abs(parseFloat(m.quantidade) || 0); }, 0);
+  } catch (e) { console.warn('Falha ao somar consumo já baixado da OP:', e); return 0; }
+}
+
 function localFisicoDoInsumo(insumoId, fallback) {
   var saldos = (STATE.saldoLocalIdx || {})[insumoId] || {};
   var locs = Object.keys(saldos).filter(function(l){ return Math.abs(saldos[l]) > 0.001; });
@@ -7323,20 +7337,34 @@ async function submitDrawer() {
       });
 
       // 2) Gera consumo_op
-      //    - TOTAL: usa consumo_real_total declarado (consumoRealInput)
-      //    - Parcial: fórmula qtde × consumo_por_peca (provisório — será reconciliado no fechamento)
+      //    - Parcial: fórmula qtde × consumo_por_peca (provisório — reconciliado no fechamento)
+      //    - TOTAL: `consumo_real_total` é o consumo da OP INTEIRA. As entregas parciais JÁ baixaram
+      //      tecido, então aqui só se consome o QUE FALTA (real − já baixado) — essa é a
+      //      "reconciliação no fechamento" que o código prometia e nunca fazia.
+      //
+      //      ⚠️ Até 14/07/2026 o fechamento baixava o rolo INTEIRO por cima das parciais → a OP
+      //      consumia ~2× o que recebeu. 25 OPs contaram 18.339 m/kg a mais e 32 insumos ficaram
+      //      com estoque NEGATIVO (impossível — e é o que fazia o MRP e o CMV mentirem).
+      //      Casos-farol: OP #1361 (4.014 KG de um rolo de 1.880) e OP #1506.
+      //
+      //      O delta pode ser NEGATIVO: se as parciais baixaram pelo BOM mais do que o costureiro
+      //      realmente gastou, o fechamento DEVOLVE a diferença (mov positiva). É o mesmo caminho.
       var consumoPorPeca = parseFloat(op.consumo_por_peca) || 0;
       var costuNome = costuName(op.costureiro_id);
       var metrosConsumidos;
+      var jaBaixadoOP = 0;
       if (tipoEntrega === 'total') {
-        metrosConsumidos = consumoRealInput;
+        jaBaixadoOP = await consumoJaBaixadoDaOP(op.id);
+        metrosConsumidos = consumoRealInput - jaBaixadoOP;
       } else {
         metrosConsumidos = totalEntrega * consumoPorPeca;
       }
-      if (op.insumo_id && metrosConsumidos > 0) {
-        try {
+      if (op.insumo_id) {
+        if (Math.abs(metrosConsumidos) > 0.001) try {
           var consumoObs = tipoEntrega === 'total'
-            ? 'Consumo TOTAL OP #' + op.id + ' (real=' + metrosConsumidos.toFixed(2) + (op.unidade||'M') + ', BOM=' + (totalEntrega * consumoPorPeca).toFixed(2) + ')'
+            ? (metrosConsumidos > 0
+                ? 'Consumo TOTAL OP #' + op.id + ' (real=' + consumoRealInput.toFixed(2) + (op.unidade||'M') + ', já baixado nas parciais=' + jaBaixadoOP.toFixed(2) + ', resta=' + metrosConsumidos.toFixed(2) + ')'
+                : 'Devolução no fechamento da OP #' + op.id + ' (as parciais baixaram ' + jaBaixadoOP.toFixed(2) + ' pelo BOM, real=' + consumoRealInput.toFixed(2) + ' — devolve ' + Math.abs(metrosConsumidos).toFixed(2) + ')')
             : 'Consumo parcial OP #' + op.id + ' (' + totalEntrega + ' pç × ' + consumoPorPeca + ')';
           await postSupabase('movimentacao_insumos', [{
             insumo_id: op.insumo_id, tipo_mov: 'consumo_op',
