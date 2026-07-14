@@ -717,6 +717,9 @@ var STATE = {
   corSinonimo: [],   // cor_sinonimo: apelido -> cor canônica (por estilo). Resolve a cor do TECIDO na cor do PRODUTO.
   tecidos: [],       // `tecido`: a IDENTIDADE do tecido (nome canônico). Fonte do datalist de cadastro.
   tecidoAlias: [],   // `tecido_alias`: toda grafia (nome curto, typo, acento) -> tecido_id.
+  corTecidoAlias: [],// `cor_tecido_alias`: sinônimo de cor de tecido (NAVY→AZUL MARINHO). Os 18 que
+                     // viviam HARDCODED na função normalizar_cor viraram DADO aqui (14/07).
+  estampaAlias: [],  // `estampa_alias`: grafia da NF -> estampa canônica
   estampas: [],      // `estampa`: tecido ESTAMPADO não tem cor, tem CÓDIGO de estampa (BT 09 03, F19).
                      // Sem este campo, o código vazava pro campo `cor` (33 linhas) e de lá pra dentro da OP.
   verTecidosSemSaldo: false,  // Nova OP: mostrar também tecido sem estoque no dropdown
@@ -753,7 +756,7 @@ async function buscarTudo(tab, filtro) {
 
 async function carregar() {
   try {
-    var [ops, compras, costureiros, precos, insumos, consumo, planejamento, fornecedores, produtos, coresTecido, custosSku, saldoLocal, eficiencia, entregas, deparaNF, coresEstilo, corSinonimo, tecidos, tecidoAlias, estampas] = await Promise.all([
+    var [ops, compras, costureiros, precos, insumos, consumo, planejamento, fornecedores, produtos, coresTecido, custosSku, saldoLocal, eficiencia, entregas, deparaNF, coresEstilo, corSinonimo, tecidos, tecidoAlias, estampas, corTecidoAlias, estampaAlias] = await Promise.all([
       buscarTudo('ordens_producao', 'select=*&order=criado_em.desc'),
       buscarTudo('ordens_compra', 'select=*&order=data_faturamento.desc'),
       buscarTudo('costureiros', 'select=*&order=nome'),
@@ -774,6 +777,8 @@ async function carregar() {
       buscarTudo('tecido', 'select=id,nome&ativo=eq.true&order=nome'),
       buscarTudo('tecido_alias', 'select=alias_norm,tecido_id'),
       buscarTudo('estampa', 'select=id,codigo&ativo=eq.true&order=codigo'),
+      buscarTudo('cor_tecido_alias', 'select=alias,alias_norm,cor_tecido_id'),
+      buscarTudo('estampa_alias', 'select=alias,estampa_id'),
     ]);
     STATE.ops = ops;
     STATE.compras = compras;
@@ -786,6 +791,8 @@ async function carregar() {
     STATE.produtos = produtos;
     STATE.coresTecido = coresTecido;
     STATE.estampas = estampas || [];
+    STATE.corTecidoAlias = corTecidoAlias || [];
+    STATE.estampaAlias = estampaAlias || [];   // 'TECIDO F 23 01' (grafia da NF) → 'F 23 01' (canônico)
     STATE.coresEstilo = coresEstilo || [];
     STATE.corSinonimo = corSinonimo || [];
     STATE.tecidos = tecidos || [];          // identidade canônica do tecido (tabela `tecido`)
@@ -5553,11 +5560,21 @@ async function garantirTecidoCadastrado(nome) {
 // Modelo "Existing (Allow Add)" (padrão PTC FlexPLM): a analista PODE criar cor na hora,
 // mas cria um REGISTRO — não uma string. Ele nasce `revisado=false` e vira burndown na
 // tela de Tecidos. Fecha o banco sem travar a ponta.
+// Resolve exatamente como o banco: nome canônico PRIMEIRO, alias DEPOIS.
+// ⚠️ Sem consultar o alias, a tela ofereceria "cadastrar cor nova" pra NAVY —
+// e o banco a resolveria pra AZUL MARINHO. UI e banco têm que concordar por construção.
+function normIdent(s) {
+  return (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase().replace(/[^A-Z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
 function resolverCorTecido(cor) {
-  var n = (cor || '').trim().toUpperCase();
-  if (!n) return null;
-  var norm = function(s){ return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ').trim(); };
-  return (STATE.coresTecido || []).find(function(c){ return norm(c.nome) === norm(n); }) || null;
+  var alvo = normIdent(cor);
+  if (!alvo) return null;
+  var c = (STATE.coresTecido || []).find(function(x){ return normIdent(x.nome) === alvo; });
+  if (c) return c;
+  var al = (STATE.corTecidoAlias || []).find(function(a){ return normIdent(a.alias) === alvo; });
+  if (!al) return null;
+  return (STATE.coresTecido || []).find(function(x){ return x.id === al.cor_tecido_id; }) || null;
 }
 
 // ─── ESTAMPA ─────────────────────────────────────────────────────────────────
@@ -5565,10 +5582,12 @@ function resolverCorTecido(cor) {
 // é FK: só aceita estampa cadastrada (o banco garante; não dá pra inventar nem por script).
 async function garantirEstampaCadastrada(codigo) {
   if (!(codigo || '').trim()) return null;          // liso → sem estampa (legítimo)
-  var norm = function(s){ return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ').trim(); };
-  var alvo = norm(codigo);
-  var e = (STATE.estampas || []).find(function(x){ return norm(x.codigo) === alvo; });
+  var alvo = normIdent(codigo);                     // MESMA regra do banco (fn_identidade_norm)
+  var e = (STATE.estampas || []).find(function(x){ return normIdent(x.codigo) === alvo; });
   if (e) return e.id;
+  // a grafia da NF ('TECIDO F 23 01') resolve pro canônico ('F 23 01') — não cria estampa nova
+  var al = (STATE.estampaAlias || []).find(function(a){ return normIdent(a.alias) === alvo; });
+  if (al) return al.estampa_id;
 
   if (!confirm('A estampa "' + codigo + '" não existe no cadastro.\n\nCadastrar como ESTAMPA NOVA?')) {
     return false;   // false = cancelou (≠ null, que é "tecido liso")
@@ -5631,31 +5650,39 @@ function toggleTecidosSemSaldo(ev) {
   onProdutoOPChange();   // repinta os datalists das rows
 }
 
+// A CHAVE É O `tecido_id`, não a string (14/07/2026 — W1.5b).
+// O nome é DISPLAY: vem do cadastro (`tecido`), nunca da string denormalizada.
+// Antes, casar por nome fazia o rolo sumir do dropdown se alguém renomeasse o
+// tecido (o mesmo bug do rename de costureiro, que fez "NFs sumirem" em junho).
 function tecidosPermitidosParaSku(sku) {
   if (!sku) return [];
-  var nomesSet = {};
-  var prioridade = []; // pra preservar ordem (BOM primeiro)
+  var vistos = {};
+  var prioridade = [];   // ordem importa: BOM primeiro
 
-  function add(nome) {
-    if (!nome) return;
-    var t = nome.trim();
-    if (!t || nomesSet[t.toUpperCase()]) return;
-    nomesSet[t.toUpperCase()] = 1;
-    prioridade.push(t);
+  function addId(tid) {
+    if (!tid || vistos[tid]) return;
+    var t = (STATE.tecidos || []).find(function(x){ return x.id === tid; });
+    if (!t) return;      // tecido inativo/inexistente → não oferece
+    vistos[tid] = 1;
+    prioridade.push(t.nome);
+  }
+  function addPorNome(nome) {           // só pro histórico, que guarda string
+    var t = resolverTecido(nome);       // grafia → canônico (mesma regra do banco)
+    if (t) addId(t.id);
   }
 
-  // 1. BOM
+  // 1. BOM (ficha técnica) — `tecido_id` é NOT NULL desde a W1.5b
   (STATE.consumo || []).forEach(function(c) {
-    if (c.sku_produto === sku && c.ativo !== false) add(c.tecido_nome);
+    if (c.sku_produto === sku && c.ativo !== false) addId(c.tecido_id);
   });
-  // 2. Histórico de OPs
+  // 2. Histórico de OPs (campo `tecido` é texto legado → resolve pelo alias)
   (STATE.ops || []).forEach(function(o) {
-    if (o.sku_produto === sku && o.status !== 'Cancelado' && o.tecido) add(o.tecido);
+    if (o.sku_produto === sku && o.status !== 'Cancelado' && o.tecido) addPorNome(o.tecido);
   });
-  // 3. Insumos com skus_pai contendo este SKU (legado)
+  // 3. Insumos marcados pra este SKU (legado `skus_pai`)
   (STATE.insumos || []).forEach(function(i) {
     if (i.tipo !== 'tecido') return;
-    if (i.skus_pai && i.skus_pai.indexOf(sku) >= 0) add(i.nome);
+    if (i.skus_pai && i.skus_pai.indexOf(sku) >= 0) addId(i.tecido_id);
   });
   return prioridade;
 }
@@ -8005,16 +8032,23 @@ async function submitDrawer() {
           var skuOp = opCriada.sku_produto;
           var consumo = parseFloat(opCriada.consumo_por_peca) || 0;
           if (!skuOp || !tecNome || consumo <= 0) return;
+          // dedup por tecido_id (a chave), não pela string
+          var tRef = resolverTecido(tecNome);
+          var tid = tRef ? tRef.id : null;
           var jaExiste = (STATE.consumo || []).some(function(c){
-            return c.sku_produto === skuOp
-              && (c.tecido_nome || '').trim().toUpperCase() === tecNome.toUpperCase()
-              && c.ativo !== false;
+            return c.sku_produto === skuOp && c.ativo !== false
+              && (tid ? c.tecido_id === tid
+                      : (c.tecido_nome || '').trim().toUpperCase() === tecNome.toUpperCase());
           });
           // Evita duplicatas dentro do mesmo lote (multi-row pra mesma cor)
-          var jaNoLote = bomNovas.some(function(b){ return b.sku_produto === skuOp && b.tecido_nome.toUpperCase() === tecNome.toUpperCase(); });
+          var jaNoLote = bomNovas.some(function(b){
+            return b.sku_produto === skuOp
+              && (tid ? b.tecido_id === tid : b.tecido_nome.toUpperCase() === tecNome.toUpperCase());
+          });
           if (!jaExiste && !jaNoLote) {
             bomNovas.push({
               sku_produto: skuOp,
+              tecido_id: tid,          // a FK é NOT NULL no banco desde a W1.5b
               tecido_nome: tecNome,
               tipo_tecido: opCriada.tipo_tecido || 'plano',
               consumo_por_peca: consumo,
