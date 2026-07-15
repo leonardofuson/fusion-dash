@@ -5185,7 +5185,14 @@ function populateFilters() {
 
   // Costureiro filter (Gantt)
   var selC = document.getElementById('flt-costureiro-gantt');
-  if (selC) selC.innerHTML = '<option value="">Todos costureiros</option>' + STATE.costureiros.map(function(c) { return '<option value="' + c.id + '">' + c.nome + '</option>'; }).join('');
+  // Só ativos (era o único dropdown que não filtrava — costureiro desativado seguia
+  // aparecendo aqui mesmo sem OP ativa, ex.: BLENDS/F&K/FERRANTELI). Mantém o
+  // desativado que ainda tenha OP ativa, pra não sumir o filtro de uma OP viva.
+  var idsComOpAtiva = {};
+  (STATE.ops || []).forEach(function(o){ if (o.status !== 'Entregue' && o.status !== 'Cancelado') idsComOpAtiva[o.costureiro_id] = 1; });
+  if (selC) selC.innerHTML = '<option value="">Todos costureiros</option>' +
+    STATE.costureiros.filter(function(c){ return c.ativo !== false || idsComOpAtiva[c.id]; })
+      .map(function(c) { return '<option value="' + c.id + '">' + c.nome + '</option>'; }).join('');
 }
 
 // Popula o dropdown de produto do Pipeline com APENAS os produtos da categoria selecionada
