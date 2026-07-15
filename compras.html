@@ -7806,20 +7806,29 @@ async function submitDrawer() {
       var movsExtras = [];
       if (statusAntigo === 'Em Produção' && novoStatus === 'Entregue' && op.insumo_id && metrosKg > 0) {
         // Consumo: tecido virou produto, sai do saldo total (-X no costureiro).
-        // Usa quantidade_tecido_usada (tecido enviado) — evita saldo negativo quando
-        // costureiro entrega + peças que o BOM previa (encaixe melhor).
-        // consumo_real_total preenchido pra alimentar view de eficiência.
+        // `metrosKg` = consumo da OP INTEIRA. As entregas parciais (e um fechamento
+        // anterior, se a OP foi reaberta) JÁ baixaram tecido — então aqui só se consome
+        // o QUE FALTA (real − já baixado). Sem isso, fechar por aqui baixa o rolo INTEIRO
+        // por cima das parciais → consumo dobrado (a mesma reconciliação que o caminho de
+        // Registrar Entrega ganhou em 14/07; este caminho tinha ficado de fora — bug que
+        // travava reabrir-e-fechar a OP #1505). Delta negativo → DEVOLVE pelo mesmo caminho.
         body.consumo_real_total = metrosKg;
-        movsExtras.push({
-          insumo_id: op.insumo_id, tipo_mov: 'consumo_op', quantidade: -metrosKg,
-          localizacao: costureiroNomeAtual, ordem_producao_id: op.id,
-          observacao: 'Consumo OP #' + op.id + ' (entrega ' + (dataEntregaReal||'?') + ')',
-        });
-        // Regra de descarte automático: se sobra no costureiro < consumo/peça, descartar
+        var jaBaixadoEdit = await consumoJaBaixadoDaOP(op.id);
+        var deltaConsumoEdit = metrosKg - jaBaixadoEdit;
+        if (Math.abs(deltaConsumoEdit) > 0.001) {
+          movsExtras.push({
+            insumo_id: op.insumo_id, tipo_mov: 'consumo_op', quantidade: -deltaConsumoEdit,
+            localizacao: costureiroNomeAtual, ordem_producao_id: op.id,
+            observacao: deltaConsumoEdit > 0
+              ? 'Consumo OP #' + op.id + ' no fechamento (real=' + metrosKg.toFixed(2) + ', já baixado=' + jaBaixadoEdit.toFixed(2) + ', resta=' + deltaConsumoEdit.toFixed(2) + ')'
+              : 'Devolução no fechamento da OP #' + op.id + ' (já baixado ' + jaBaixadoEdit.toFixed(2) + ' > real ' + metrosKg.toFixed(2) + ' — devolve ' + Math.abs(deltaConsumoEdit).toFixed(2) + ')',
+          });
+        }
+        // Descarte automático de retalho (< 1 peça) sobre o saldo QUE SOBRA após o delta.
         var consumoPorPecaEdit = parseFloat(op.consumo_por_peca) || 0;
-        if (consumoPorPecaEdit > 0) {
+        if (consumoPorPecaEdit > 0 && deltaConsumoEdit > 0) {
           var saldoCostuEdit = ((STATE.saldoLocalIdx || {})[op.insumo_id] || {})[costureiroNomeAtual] || 0;
-          var residuoEdit = saldoCostuEdit - metrosKg;
+          var residuoEdit = saldoCostuEdit - deltaConsumoEdit;
           if (residuoEdit > 0.001 && residuoEdit < consumoPorPecaEdit) {
             movsExtras.push({
               insumo_id: op.insumo_id, tipo_mov: 'consumo_op', quantidade: -residuoEdit,
