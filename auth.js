@@ -35,6 +35,7 @@
     // `estoque` — quem vira a chave do tile é o Leo, depois de conferir a paridade.
     'estoque-sistema': { titulo: 'Estoque (sistema)', descricao: 'Recebimento (entrada com custo), conciliação razão × espelho e a visão de saldo', url: '/estoque-sistema.html', icone: '📦', cat: 'operacoes' },
     financeiro: { titulo: 'Financeiro',    descricao: 'Contas a pagar, fluxo de caixa e DRE de resultado (multi-CNPJ)', url: '/financeiro.html', icone: '💰', cat: 'operacoes' },
+    aprovacoes: { titulo: 'Aprovações',    descricao: 'Fila de pagamento: conferência 3 vias e liberação da diretoria', url: '/aprovacoes.html', icone: '✅', cat: 'operacoes' },
     // Inteligência
     simulador:  { titulo: 'Simulador',     descricao: 'Margem por produto + curva ótima de ads', url: '/simulador.html', icone: '🎯', cat: 'inteligencia' },
     crm:        { titulo: 'CRM',           descricao: 'Base 360°, segmentação RFM e histórico de atendimento', url: '/crm.html', icone: '👥', cat: 'inteligencia' },
