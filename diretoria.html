@@ -211,6 +211,10 @@ function classificarGrupo(r){
   const oc=r.origem_conta;
   if(oc==='kwid'){
     if(r.loja_nome==='Atacado WhatsApp') return {grupo:'Atacado',sub:'Atacado WhatsApp (KWID)'};
+    // "Atacado Lojas" = atacado vendido DENTRO das lojas (depósito Linx cod 7, desde
+    // 06/07/2026). É atacado, não varejo — mesmo tratamento que o dash Lojas dá (lá fica
+    // fora dos KPIs/meta de varejo). Sem isso caía em Lojas Físicas e inflava o varejo.
+    if(r.loja_nome==='Atacado Lojas') return {grupo:'Atacado',sub:'Atacado Lojas (KWID)'};
     return {grupo:'Lojas',sub:r.loja_nome||'(sem loja)'};
   }
   if(oc==='flecha') return {grupo:'Atacado',sub:'Flecha'};
@@ -657,8 +661,8 @@ function renderTudo(allRows,pDE,pATE,wDe){
     data:{labels:lDl.map(d=>new Date(d+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})),datasets:[{label:'Lojas',data:lDl.map(d=>lDia[d]||0),borderColor:'#10b981',backgroundColor:'rgba(16,185,129,0.08)',fill:true,tension:0.4,pointRadius:2,borderWidth:2}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#71717a',maxTicksLimit:8,font:{size:10}},grid:{color:'rgba(255,255,255,0.04)'}},y:{ticks:{color:'#71717a',font:{size:10},callback:function(v){return 'R$'+Math.round(v/1000)+'k';}},grid:{color:'rgba(255,255,255,0.04)'}}}}});
 
-  // ── Atacado: barras por canal (Flecha / Atacado WhatsApp) + Δ ──
-  const ATAC_CORES={'Flecha':'#06B6D4','Atacado WhatsApp (KWID)':'#0EA5E9'};
+  // ── Atacado: barras por canal (Flecha / Atacado WhatsApp / Atacado Lojas) + Δ ──
+  const ATAC_CORES={'Flecha':'#06B6D4','Atacado WhatsApp (KWID)':'#0EA5E9','Atacado Lojas (KWID)':'#F97316'};
   const atac=Object.entries(A.subBy['Atacado']||{}).sort((a,b)=>liqOf(b[1])-liqOf(a[1]));
   const maxAt=Math.max(...atac.map(a=>liqOf(a[1])),1);
   document.getElementById('atacado-bars').innerHTML=atac.length?atac.map(([nome,a])=>{
