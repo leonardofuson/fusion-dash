@@ -98,10 +98,11 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
 @media(max-width:600px){.fc-stats{margin-left:0;}.fc-val{font-size:1.6rem;}}
 #dash-cards.mensal .c-hero{order:2;}
 #dash-cards.mensal .c-lojas{order:3;}
-#dash-cards.mensal #highlights{order:4;}
-#dash-cards.mensal .c-produtos{order:5;}
-#dash-cards.mensal .c-vend{order:6;}
-#dash-cards.mensal .c-pareto{order:7;}
+#dash-cards.mensal .c-atacado{order:4;}
+#dash-cards.mensal #highlights{order:5;}
+#dash-cards.mensal .c-produtos{order:6;}
+#dash-cards.mensal .c-vend{order:7;}
+#dash-cards.mensal .c-pareto{order:8;}
 /* Ordem da visão DIÁRIA (mobile-friendly): premiação por último, produtos logo
    após a tabela de vendedores. Explícito p/ não depender só do DOM. */
 #dash-cards:not(.mensal) .c-forecast{order:0;}
@@ -109,13 +110,29 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
 #dash-cards:not(.mensal) #highlights{order:2;}
 #dash-cards:not(.mensal) .c-hero{order:3;}
 #dash-cards:not(.mensal) .c-lojas{order:4;}
-#dash-cards:not(.mensal) .c-vend{order:5;}
-#dash-cards:not(.mensal) .c-produtos{order:6;}
-#dash-cards:not(.mensal) .c-pareto{order:7;}
-#dash-cards:not(.mensal) .c-prizes{order:8;}
-/* Mensal: tabela de vendedores sem Meta/Atg%/Prev/Comissão (col 9-12) */
-#dash-cards.mensal #thead-vendedores th:nth-child(n+9),
-#dash-cards.mensal #tbody-vendedores tr td:nth-child(n+9){display:none;}
+#dash-cards:not(.mensal) .c-atacado{order:5;}
+#dash-cards:not(.mensal) .c-vend{order:6;}
+#dash-cards:not(.mensal) .c-produtos{order:7;}
+#dash-cards:not(.mensal) .c-pareto{order:8;}
+#dash-cards:not(.mensal) .c-prizes{order:9;}
+/* Mensal: tabela de vendedores sem Meta/Atg%/Prev/Meta hoje/Comissão (col 10-14).
+   ⚠️ A coluna "Atacado" (5) empurrou tudo 1 pra direita — era n+9 antes dela existir. */
+#dash-cards.mensal #thead-vendedores th:nth-child(n+10),
+#dash-cards.mensal #tbody-vendedores tr td:nth-child(n+10){display:none;}
+/* Card Atacado Lojas — entidade separada do varejo (laranja, fora de meta/KPI) */
+.c-atacado{background:linear-gradient(135deg,rgba(249,115,22,0.10),rgba(249,115,22,0.03));border-color:rgba(249,115,22,0.35);}
+.atc-wrap{display:flex;align-items:center;gap:28px;flex-wrap:wrap;}
+.atc-main{display:flex;flex-direction:column;gap:2px;}
+.atc-lbl{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#f97316;}
+.atc-val{font-size:2.1rem;font-weight:800;color:var(--txt1);font-variant-numeric:tabular-nums;line-height:1.1;white-space:nowrap;}
+.atc-stats{display:flex;gap:24px;flex-wrap:wrap;margin-left:auto;}
+.atc-stat{display:flex;flex-direction:column;gap:1px;}
+.atc-stat-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--txt3);}
+.atc-stat-val{font-size:1.05rem;font-weight:800;color:var(--txt1);font-variant-numeric:tabular-nums;white-space:nowrap;}
+.atc-vends{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;}
+.atc-chip{background:rgba(249,115,22,0.10);border:1px solid rgba(249,115,22,0.28);border-radius:999px;padding:4px 11px;font-size:11px;color:var(--txt1);white-space:nowrap;}
+.atc-chip b{color:#f97316;font-variant-numeric:tabular-nums;}
+@media(max-width:600px){.atc-stats{margin-left:0;}.atc-val{font-size:1.6rem;}}
 @media(max-width:600px){.viewseg button{padding:10px 18px;font-size:13px;}.viewbar-hint{display:none;}}
 .card-title{font-size:13px;font-weight:700;color:var(--txt1);margin-bottom:14px;letter-spacing:0.02em;display:flex;align-items:center;justify-content:space-between;gap:8px;}
 .chart-wrap{position:relative;height:260px;}
@@ -547,6 +564,13 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
     <div class="canal-cards" id="loja-cards"></div>
   </div>
 
+  <!-- Atacado Lojas: entidade separada. NÃO entra nos KPIs do topo, nos cards por loja,
+       no Pareto/Top Produtos nem no atingimento de meta — só aqui e na coluna do vendedor. -->
+  <div class="card c-atacado" id="card-atacado" style="display:none;">
+    <div class="card-title">Atacado Lojas <button class="btn-export" onclick="exportImage('atacado')">Compartilhar</button></div>
+    <div id="atacado-body"></div>
+  </div>
+
 
 
   <div class="card c-produtos">
@@ -571,6 +595,7 @@ table.matrix td.mx-total{border-left:2px solid rgba(234,179,8,0.35);}
       <th class="sortable" data-sort="nome" onclick="setVendSort('nome')">Vendedor</th>
       <th class="sortable" data-sort="loja" onclick="setVendSort('loja')">Loja</th>
       <th class="r sortable" data-sort="fat" onclick="setVendSort('fat')">Faturamento</th>
+      <th class="r sortable" data-sort="atacado" onclick="setVendSort('atacado')" title="Atacado Lojas vendido no período. NÃO conta pro atingimento da meta (que é de varejo), mas é comissionado: 1,5% se bateu a meta, 0,75% se não.">Atacado</th>
       <th class="r sortable" data-sort="ped" onclick="setVendSort('ped')">Vendas</th>
       <th class="r sortable" data-sort="qtd" onclick="setVendSort('qtd')" title="Peças vendidas (unidades)">Peças</th>
       <th class="r sortable" data-sort="tm" onclick="setVendSort('tm')">TM</th>
@@ -638,11 +663,21 @@ function avatarHtml(nome,corFallback,rank){
     '<img src="/vendedores/'+firstTwo+'.jpg" onerror="this.src=\'/vendedores/'+first+'.jpg\';this.onerror=function(){this.style.display=\'none\'}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:50%;z-index:1;">'+
     '<span>'+ini+'</span></div></div>';
 }
-var IGNORAR_LOJA=['Atacado WhatsApp'];
+// "Atacado Lojas" = atacado vendido DENTRO das lojas físicas (depósito 7 do Linx, criado
+// jul/2026). É entidade SEPARADA do varejo: sai de todo KPI/card/Pareto/meta e aparece só
+// no card `.c-atacado` + coluna "Atacado" do quadro de vendedores (decisão Leo, 20/07/2026).
+// Por isso entra no IGNORAR_LOJA — que é o filtro único que já cobre os ~15 caminhos de
+// agregação do varejo. Os dados vêm de STATE.pedidosRaw (pré-filtro), via calcAtacado().
+var LOJA_ATACADO='Atacado Lojas';
+var IGNORAR_LOJA=['Atacado WhatsApp', LOJA_ATACADO];
 // Lojas físicas canônicas — SEMPRE aparecem (com R$0 quando não venderam no período),
 // pra não "sumir" em dia parado / início de mês. Outras lojas que aparecerem nos dados
-// (ex: Atacado Lojas) entram por cima.
+// entram por cima.
 var LOJAS_CANONICAS=['Marcolina','Oriente','Polo Plaza','Vautier','São Bernardo'];
+// Comissão: % sobre o realizado. Tier destravado por bater a meta — e a meta é medida
+// SÓ pelo varejo (atacado não conta pra atingimento), mas o atacado é remunerado no tier
+// que o varejo destravou. Atacado paga menos que varejo no tier alto (1,5% vs 2%).
+var COMISSAO={varejoMeta:0.02, varejoBase:0.0075, atacadoMeta:0.015, atacadoBase:0.0075};
 // Contas que NÃO são vendedor de verdade (não recebem comissão/meta; nunca semeadas no drawer).
 // Global — usado no quadro de vendedores E no guard do drawer de metas.
 var NAO_VENDEDORES=new Set(['Online SBC','Suporte Marcolina','Suporte Oriente','Suporte SBC',
@@ -1322,6 +1357,9 @@ function hmAgg(rows){
     var d=(r.data_pedido||'').slice(0,10);
     var rec=parseFloat(r.receita||0), q=(parseInt(r.pedidos||0,10)-parseInt(r.cancelados||0,10));
     var loja=(r.loja_nome||'').trim();
+    // Heatmap é de varejo: mesma régua da coluna Faturamento da tabela. Sem isso, um dia
+    // com 1 venda de atacado acenderia o calendário com receita que o Faturamento não tem.
+    if(IGNORAR_LOJA.indexOf(loja)>=0) return;
     if(!vend[v]) vend[v]={days:{}, _rec:0,_qtd:0, lojas:{}};
     var cell=vend[v].days[d]||(vend[v].days[d]={rec:0,qtd:0});
     cell.rec+=rec; cell.qtd+=q; vend[v]._rec+=rec; vend[v]._qtd+=q;
@@ -1447,6 +1485,10 @@ function escopoProduto(pedidos){
 function renderAll(){
   STATE.pedidos=filtrarPedidos(STATE.pedidosRaw);
   STATE.anteriores=filtrarPedidos(STATE.anterioresRaw);
+  // Atacado: só escopo de período (não segue filtro de produto/categoria — os itens do
+  // atacado nem são buscados, o fetch de itens exclui IGNORAR_LOJA). Calculado antes de
+  // renderVendedores, que usa STATE.atacado na coluna "Atacado" e na comissão.
+  STATE.atacado=calcAtacado();
   var _baseCur=STATE.vendSel?STATE.pedidos.filter(function(p){return p._vend===STATE.vendSel;}):STATE.pedidos;
   var _basePrev=STATE.vendSel?STATE.anteriores.filter(function(p){return p._vend===STATE.vendSel;}):STATE.anteriores;
   var _prodFiltro=STATE.skuSel||STATE.catSel;
@@ -1469,6 +1511,7 @@ function renderAll(){
   idle(function(){
     try{renderHero();}catch(e){console.error('renderHero:',e);}
     try{renderLojaCards();}catch(e){console.error('renderLojaCards:',e);}
+    try{renderAtacado();}catch(e){console.error('renderAtacado:',e);}
     try{renderPareto();}catch(e){console.error('renderPareto:',e);}
     if(STATE.skuSel){try{renderSkuDetail();}catch(e){console.error('renderSkuDetail:',e);}}
   });
@@ -1646,7 +1689,7 @@ function exportImage(tipo){
   // Header
   var header=document.createElement('div');
   header.style.cssText='font-size:14px;font-weight:700;margin-bottom:12px;color:#fafafa;';
-  var titles={'vendedores':'Top Vendedores','lojas':'Desempenho por Loja','produtos':'Venda de Produtos por Loja','top5vend':'Top 5 Vendedores','premiacao':'Premiação por loja'};
+  var titles={'vendedores':'Top Vendedores','lojas':'Desempenho por Loja','produtos':'Venda de Produtos por Loja','top5vend':'Top 5 Vendedores','premiacao':'Premiação por loja','atacado':'Atacado Lojas'};
   header.textContent=titles[tipo]||tipo;
   wrapper.appendChild(header);
 
@@ -1670,6 +1713,8 @@ function exportImage(tipo){
     sourceEl=document.querySelector('#highlights .hl-card');
   } else if(tipo==='premiacao'){
     sourceEl=document.getElementById('premiacao-grid');
+  } else if(tipo==='atacado'){
+    sourceEl=document.getElementById('atacado-body');
   } else {
     var legend=document.getElementById('sku-legend');
     if(legend) wrapper.appendChild(legend.cloneNode(true));
@@ -2202,8 +2247,16 @@ async function fetchDowProfile(){
     STATE.mtdLojaOntem=mLoja;
     var mVend={};
     try{
-      var vr=await buscarTudo('mvw_lojas_vend_dia','select=vendedor,data_pedido,receita&data_pedido=gte.'+im+'&data_pedido=lt.'+h+'&order=data_pedido.asc');
-      vr.forEach(function(r){var v=(r.vendedor||'').trim(); if(!v) return; mVend[v]=(mVend[v]||0)+parseFloat(r.receita||0);});
+      // ⚠️ PRECISA trazer loja_nome e filtrar IGNORAR_LOJA. Sem isso, o realizado que
+      // alimenta a "Meta hoje" incluiria Atacado Lojas / Atacado WhatsApp enquanto o
+      // Atg.% (que sai de STATE.pedidos, já filtrado) não — as duas colunas discordariam
+      // e a meta do dia apareceria menor do que realmente é.
+      var vr=await buscarTudo('mvw_lojas_vend_dia','select=vendedor,loja_nome,data_pedido,receita&data_pedido=gte.'+im+'&data_pedido=lt.'+h+'&order=data_pedido.asc');
+      vr.forEach(function(r){
+        var v=(r.vendedor||'').trim(); if(!v) return;
+        if(IGNORAR_LOJA.indexOf((r.loja_nome||'').trim())>=0) return;
+        mVend[v]=(mVend[v]||0)+parseFloat(r.receita||0);
+      });
     }catch(e){console.warn('mtdVend:',e);}
     STATE.mtdVendOntem=mVend;
   }catch(e){console.warn('dowW:',e); STATE.dowW={_g:[1,1,1,1,1,1.6,0]};}
@@ -2225,6 +2278,59 @@ function mesesNoRange(de,ate){
   var out=[], y=+de.slice(0,4), m=+de.slice(5,7), ey=+ate.slice(0,4), em=+ate.slice(5,7);
   while(y<ey||(y===ey&&m<=em)){ out.push(y+'-'+String(m).padStart(2,'0')); m++; if(m>12){m=1;y++;} }
   return out;
+}
+
+// ============================================================
+// 🟠 Atacado Lojas — entidade separada do varejo
+// ============================================================
+// Agrega de STATE.pedidosRaw (PRÉ-filtro) de propósito: filtrarPedidos descarta a loja
+// inteira via IGNORAR_LOJA, que é exatamente o que mantém o atacado fora dos KPIs, dos
+// cards de loja, do Pareto e do atingimento de meta. pedidosRaw já vem escopado ao
+// período do chip (fetchPedidos(DE,ATE)), então não precisa refiltrar por data.
+function calcAtacado(){
+  var out={fat:0, ped:0, tm:0, porVend:{}};
+  var CANC=['cancelado','devolvido'];
+  (STATE.pedidosRaw||[]).forEach(function(p){
+    if(getLoja(p.loja_nome,p.origem_conta)!==LOJA_ATACADO) return;
+    if(CANC.indexOf((p.status||'').toLowerCase())>=0) return;
+    var v=(p.vendedor||'').trim()||'Vendedor Não Identificado';
+    var val=parseFloat(p.valor_bruto||0);
+    out.fat+=val; out.ped++;
+    out.porVend[v]=(out.porVend[v]||0)+val;
+  });
+  out.tm=out.ped>0?out.fat/out.ped:0;
+  return out;
+}
+
+function renderAtacado(){
+  var card=document.getElementById('card-atacado');
+  if(!card) return;
+  var a=STATE.atacado||{fat:0,ped:0,tm:0,porVend:{}};
+  // Período sem atacado (ex: jun/26) → card some, não fica um zero órfão poluindo o dash.
+  if(!(a.ped>0)){ card.style.display='none'; return; }
+  card.style.display='';
+  var vends=Object.keys(a.porVend).sort(function(x,y){return a.porVend[y]-a.porVend[x];});
+  var chips=vends.map(function(v){
+    return '<span class="atc-chip">'+v+' <b>'+fmt(a.porVend[v])+'</b></span>';
+  }).join('');
+  document.getElementById('atacado-body').innerHTML=
+    '<div class="atc-wrap">'+
+      '<div class="atc-main">'+
+        '<div class="atc-lbl">Faturamento no período</div>'+
+        '<div class="atc-val">'+fmt(a.fat)+'</div>'+
+      '</div>'+
+      '<div class="atc-stats">'+
+        '<div class="atc-stat"><div class="atc-stat-lbl">Vendas</div><div class="atc-stat-val">'+fmtN(a.ped)+'</div></div>'+
+        '<div class="atc-stat"><div class="atc-stat-lbl">Ticket médio</div><div class="atc-stat-val">'+fmt(a.tm)+'</div></div>'+
+        '<div class="atc-stat"><div class="atc-stat-lbl">Vendedores</div><div class="atc-stat-val">'+fmtN(vends.length)+'</div></div>'+
+      '</div>'+
+    '</div>'+
+    (chips?'<div class="atc-vends">'+chips+'</div>':'')+
+    '<div style="margin-top:14px;font-size:11px;color:var(--txt3);line-height:1.5;">'+
+      'Venda de atacado feita dentro das lojas (depósito próprio no Linx). <b>Não entra</b> nos KPIs do topo, '+
+      'nos cards por loja, no Top Produtos nem no atingimento de meta — a meta é de varejo. '+
+      'Comissão de atacado: <b>1,5%</b> com a meta batida · <b>0,75%</b> sem.'+
+    '</div>';
 }
 
 function renderLojaCards(){
@@ -2798,6 +2904,21 @@ function renderVendedores(){
     Object.keys(qtdV).forEach(function(v){paVend[v]=pedV[v]>0?qtdV[v]/pedV[v]:null;});
   }
 
+  // Vendedor que no período SÓ vendeu atacado não aparece no `agg` (que sai de
+  // STATE.pedidos, já sem Atacado Lojas). Sem semear, o atacado dele ficaria invisível
+  // na tabela — dinheiro que existe e ninguém vê. Entra com varejo zerado, que é o fato.
+  // Só sem filtro de produto: com skuSel/catSel a tabela é "quem vendeu o produto X", e
+  // semear vendedor de atacado (cujos itens nem são carregados) poluiria esse recorte.
+  if(STATE.atacado && !STATE.skuSel && !STATE.catSel){
+    Object.keys(STATE.atacado.porVend).forEach(function(v){
+      // lojas{} semeado com o atacado → a coluna Loja mostra "Atacado Lojas" em vez de "—",
+      // que é o fato pra quem só vendeu atacado. Quem também vendeu varejo já tem lojas
+      // de varejo com valor maior, então a loja dominante dele não muda.
+      if(!agg[v]) agg[v]={nome:v,fat:0,ped:0,lojas:{}};
+      if(!Object.keys(agg[v].lojas).length) agg[v].lojas[LOJA_ATACADO]=STATE.atacado.porVend[v];
+    });
+  }
+
   // --- Meta / atingimento / previsão (period-aware: segue o mês do período) ---
   // NAO_VENDEDORES é global (definido no topo do script).
   var vm=calcVendMes();                 // fatMes (MTD do mês corrente) — base da projeção do resto do mês
@@ -2822,12 +2943,20 @@ function renderVendedores(){
     v.proj=realizado+remanescente;        // previsão até fim do mês (só projeta a parte do mês corrente)
     v.metaPct=v.meta>0?realizado/v.meta*100:-1;
     v.projPct=v.meta>0?v.proj/v.meta*100:-1;
-    // Comissão (regra hardcoded): atingiu 100% da meta → 2% sobre vendas; senão → 0,75%.
-    // Base = realizado do período (total do vendedor, não filtrado por produto).
+    // Comissão: o TIER é destravado por bater a meta, e a meta é medida SÓ pelo varejo
+    // (`realizado` já exclui Atacado Lojas, que sai no filtrarPedidos). O atacado é
+    // comissionado no tier que o varejo destravou, mas a % dele é menor no tier alto
+    // (1,5% vs 2%). Base do varejo = realizado do período, não filtrado por produto.
     // Contas que não são vendedor de verdade não recebem comissão (mostram —).
     v.realizado=realizado;
-    v.comissaoPct=NAO_VENDEDORES.has(v.nome)?0:((v.meta>0 && realizado>=v.meta)?0.02:0.0075);
-    v.comissao=realizado*v.comissaoPct;
+    v.atacado=(STATE.atacado&&STATE.atacado.porVend[v.nome])||0;
+    var bateuMeta=(v.meta>0 && realizado>=v.meta);
+    var naoVend=NAO_VENDEDORES.has(v.nome);
+    v.comissaoPct=naoVend?0:(bateuMeta?COMISSAO.varejoMeta:COMISSAO.varejoBase);
+    v.comissaoAtacadoPct=naoVend?0:(bateuMeta?COMISSAO.atacadoMeta:COMISSAO.atacadoBase);
+    v.comissaoVarejo=realizado*v.comissaoPct;
+    v.comissaoAtacado=v.atacado*v.comissaoAtacadoPct;
+    v.comissao=v.comissaoVarejo+v.comissaoAtacado;
     // Meta do dia (catch-up ponderado pelo dia-da-semana) — só no mês corrente aberto.
     // realAteOntem vem de STATE.mtdVendOntem (MV, INVARIANTE ao período), não de vm.fatOntem
     // (pedidosRaw escopado ao chip) — senão a Meta hoje mudava entre "Hoje" e "Este Mês".
@@ -2876,19 +3005,25 @@ function renderVendedores(){
     var comCor=v.meta>0?(v.projPct>=100?'var(--green)':(v.projPct>=95?'var(--amber)':'var(--red)')):'#a1a1aa';
     var metaDiaTxt=v.metaDia==null?'—':(v.metaDia<=0?'✓':fmt(v.metaDia));
     var metaDiaCor=v.metaDia===0?'var(--green)':comCor;
+    // Tooltip da comissão: quebra varejo × atacado quando há atacado, senão mantém o texto antigo.
+    function pctTxt(p){return (p*100).toFixed(2).replace('.',',')+'%';}
+    var comTitle=v.atacado>0
+      ? 'Varejo: '+pctTxt(v.comissaoPct)+' sobre '+fmt(v.realizado)+' = '+fmt(v.comissaoVarejo)+
+        '  |  Atacado: '+pctTxt(v.comissaoAtacadoPct)+' sobre '+fmt(v.atacado)+' = '+fmt(v.comissaoAtacado)
+      : pctTxt(v.comissaoPct)+' sobre '+fmt(v.realizado);
     var metaTd=
       '<td class="val">'+(v.meta>0?fmt(v.meta):'—')+'</td>'+
       '<td class="val" style="text-align:center;">'+atgBar+'</td>'+
       '<td class="val" style="color:'+prevCor+';font-weight:'+(v.meta>0?'800':'600')+';">'+(v.proj>0?fmt(v.proj):'—')+'</td>'+
       '<td class="val" style="color:'+metaDiaCor+';font-weight:800;" title="Quanto precisa vender HOJE pra bater a meta do mês (ponderado pelo dia-da-semana)">'+metaDiaTxt+'</td>'+
-      '<td class="val" style="color:'+comCor+';font-weight:700;" title="'+(v.comissaoPct*100).toFixed(2).replace('.',',')+'% sobre '+fmt(v.realizado)+'">'+(v.comissao>0?fmt(v.comissao):'—')+'</td>';
+      '<td class="val" style="color:'+comCor+';font-weight:700;" title="'+comTitle+'">'+(v.comissao>0?fmt(v.comissao):'—')+'</td>';
     var vEsc=v.nome.replace(/'/g,"\\'"), lEsc=(v.lojaTop||'').replace(/'/g,"\\'");
-    return '<tr style="cursor:pointer;'+activeStyle+'" onclick="selectVend(\''+vEsc+'\')"><td class="r">'+(i+1)+'</td><td style="font-weight:600"><span class="vend-hm" onclick="event.stopPropagation();hmOpenVend(\''+vEsc+'\',\''+lEsc+'\')" title="Ver heatmap diário deste vendedor">'+v.nome+'</span></td><td style="color:'+getCor(v.lojaTop)+'">'+lojaDisplay(v.lojaTop)+'</td><td class="val">'+fmt(v.fat)+'</td><td class="val">'+fmtN(v.ped)+'</td><td class="val">'+fmtN(v.qtd)+'</td><td class="val">'+fmt(tm)+'</td><td class="val">'+(pa!=null?fmtD(pa):'—')+'</td>'+metaTd+'</tr>';
+    return '<tr style="cursor:pointer;'+activeStyle+'" onclick="selectVend(\''+vEsc+'\')"><td class="r">'+(i+1)+'</td><td style="font-weight:600"><span class="vend-hm" onclick="event.stopPropagation();hmOpenVend(\''+vEsc+'\',\''+lEsc+'\')" title="Ver heatmap diário deste vendedor">'+v.nome+'</span></td><td style="color:'+getCor(v.lojaTop)+'">'+lojaDisplay(v.lojaTop)+'</td><td class="val">'+fmt(v.fat)+'</td><td class="val" style="color:'+(v.atacado>0?'#f97316':'inherit')+';font-weight:'+(v.atacado>0?'700':'400')+';">'+(v.atacado>0?fmt(v.atacado):'—')+'</td><td class="val">'+fmtN(v.ped)+'</td><td class="val">'+fmtN(v.qtd)+'</td><td class="val">'+fmt(tm)+'</td><td class="val">'+(pa!=null?fmtD(pa):'—')+'</td>'+metaTd+'</tr>';
   }).join('');
   var wrap=document.getElementById('tbody-vendedores').parentElement.parentElement.parentElement; // .tb-wrap-scroll
   // inject breadcrumb above the table
   document.getElementById('vend-breadcrumb-slot').innerHTML=breadcrumb;
-  document.getElementById('tbody-vendedores').innerHTML=html||'<tr><td colspan="13" style="text-align:center;color:#d4d4d8;padding:20px;">Sem vendedores no escopo.</td></tr>';
+  document.getElementById('tbody-vendedores').innerHTML=html||'<tr><td colspan="14" style="text-align:center;color:#d4d4d8;padding:20px;">Sem vendedores no escopo.</td></tr>';
 }
 
 // ============================================================
