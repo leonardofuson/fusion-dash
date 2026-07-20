@@ -319,11 +319,22 @@ Rodar após qualquer push em fusion-dash. **A skill [`fusion-sanity-check`](../.
 ```bash
 BASE="https://fusion-dash.onrender.com"
 
-# 1. Cada dash retorna 200 + HTML não-trivial (>20KB)
-for d in compras lojas ecommerce diretoria estoque financeiro projetos index; do
+# 1. Cada dash CHEIO retorna 200 + HTML não-trivial (>20KB)
+# ⚠️ NÃO incluir aqui os wrappers finos de app React (financeiro/crm/compras-react/produtos:
+# ~2-3KB por design, são iframe + gate) nem o portal index.html (~10KB) — a régua de 20KB
+# é só pra dash vanilla. `projetos` saiu do catálogo em 10/07/2026.
+for d in compras lojas ecommerce diretoria estoque; do
   size=$(curl -s -o /dev/null -w "%{size_download}" "$BASE/$d.html")
   echo "$d.html: ${size}B" && [ "$size" -gt 20000 ] || echo "  ⚠️ tamanho suspeito"
 done
+
+# 1b. Wrappers finos + portal: checar 200 + gate + destino do iframe (não tamanho)
+for d in financeiro crm compras-react produtos; do
+  W=$(curl -s "$BASE/$d.html")
+  echo "$W" | grep -q "requireAuth(" && echo "✅ $d.html com auth gate" || echo "🔴 $d.html sem requireAuth"
+  echo "$W" | grep -q "<iframe" && echo "✅ $d.html embute o app" || echo "🔴 $d.html sem iframe"
+done
+curl -s -o /dev/null -w "index.html HTTP %{http_code}\n" "$BASE/index.html"
 
 # 2. compras.html — invariantes do refactor Phase 2 (devem aparecer)
 HTML=$(curl -s "$BASE/compras.html")
