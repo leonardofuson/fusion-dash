@@ -836,18 +836,25 @@ async function fetchMLTaxas(de,ate){
   }
   // ML: afiliado (CVAF) + Full (CFWA+CFRS) + o RESTO DA FATURA, descoberto na auditoria de 13/07/2026
   // (a ML cobrou R$479.861 da Fio em junho e o P&L só enxergava R$379.093 — faltavam ~R$100k/mês):
-  //   taxasConta = custo por cobrar no Mercado Pago (CVVPRC, adquirência) + taxa de recebimento
-  //                (CVVFNU) + assessoria (CPAC) + débitos diversos (CDSDB/CESM)
+  //   taxasConta = assessoria (CPAC) + débitos diversos (CDSDB/CESM)
   //   difal      = ICMS-DIFAL (CDIFAL) → entra em IMPOSTOS
   //   reversa    = frete de DEVOLUÇÃO (CXDE/CXDED/CXDI/CXDID) → despesa nova, não estorno
   //   adsExtra   = campanha fora do Product Ads (CDLIT) → entra em ADS
   // ⚠️ parcelamento (CFONPN, ~R$42k/mês) é capturado no banco mas NÃO entra no P&L (decisão do Leo).
   // ⚠️ frete (CFFE/CFFI) NÃO entra aqui — frete_ml_seller já pega por pedido; seria dupla contagem.
+  // ⚠️ DUPLA CONTAGEM CORRIGIDA (20/07/2026): taxa_cobranca (CVVPRC, Custo por cobrar no Mercado
+  //    Pago) e taxa_recebimento (CVVFNU) FORAM removidos daqui. O ML `sale_fee` (fonte do fee_canal
+  //    por pedido) JÁ BUNDLA comissão + MP + recebimento — provado reconciliando o extrato de mai/26
+  //    (14.091 pedidos): fee_canal bate 99,7% ao centavo com (Custo por vender + Custo por cobrar MP
+  //    + Taxa de recebimento) vs só 51,6% com a comissão sozinha. A auditoria de 13/07 os somou aqui
+  //    ACHANDO que faltavam, mas já estavam no fee_canal → o MP+recebimento (~R$25k/mês Fio+Confec)
+  //    era subtraído 2×, DEPRIMINDO a margem do ML. Os estornos (BVVPRC/BVVFNU) vivem em fee_estornado,
+  //    simétrico ao gross no fee_canal. Ver memória project_ml_mp_double_count.
   var rows=await buscarTudo('ml_billing_taxas_mes','select=periodo_key,canal_nome_raw,afiliado,full_storage,full_retirada,assessoria,taxa_cobranca,taxa_recebimento,difal,reversa,ads_extra,outros&periodo_key=gte.'+deM+'&periodo_key=lte.'+ate+'&order=periodo_key.asc');
   (rows||[]).forEach(function(r){add(r.canal_nome_raw,(r.periodo_key||'').slice(0,7),{
     afiliado:parseFloat(r.afiliado||0),
     full:parseFloat(r.full_storage||0)+parseFloat(r.full_retirada||0),
-    taxasConta:parseFloat(r.taxa_cobranca||0)+parseFloat(r.taxa_recebimento||0)+parseFloat(r.assessoria||0)+parseFloat(r.outros||0),
+    taxasConta:parseFloat(r.assessoria||0)+parseFloat(r.outros||0),   // MP+recebimento saíram: já no fee_canal
     difal:parseFloat(r.difal||0),
     reversa:parseFloat(r.reversa||0),
     adsExtra:parseFloat(r.ads_extra||0)});});
