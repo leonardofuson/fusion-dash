@@ -257,12 +257,12 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
 .cecm-grp .lbl{padding-top:14px !important;}
 .cecm-grp .ll{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--txt3);}
 .cecm-grp td.c{padding-top:14px;}
-/* marcos (margens) — destaque MINIMALISTA: hairline + negrito, % em primário grande */
+/* marcos (margens) — dado destacado: % primário em cor de destaque (índigo claro) + R$ visível */
 .cecm-mile .lbl,.cecm-mile td.c{border-top:1px solid var(--bdr);}
-.cecm-mile .ll{font-weight:700;color:var(--txt1);font-size:12px;}
+.cecm-mile .ll{font-weight:700;color:#c7d2fe;font-size:12px;}
 .cecm-mile .ll .cm{font-size:9px;font-weight:700;color:var(--txt3);margin-left:6px;letter-spacing:.04em;}
-.cecm-mile .cv{font-weight:800;font-size:13.5px;}
-.cecm-mile .cs{color:var(--txt3);}
+.cecm-mile .cv{font-weight:800;font-size:14px;color:#a5b4fc;}
+.cecm-mile .cs{color:var(--txt1);font-weight:600;font-size:11px;}
 /* linha âncora — Custo Efetivo do Canal (accent ciano fino) */
 .cecm-anchor .lbl,.cecm-anchor td.c{border-top:1px solid rgba(6,182,212,.45);border-bottom:1px solid rgba(6,182,212,.2);}
 .cecm-anchor .ll{font-weight:800;color:var(--cyan);font-size:12px;}
@@ -1766,6 +1766,7 @@ function renderCustoCanal(){
       else if(row.k==='cred'){ cv='+'+fmtK(Math.abs(v)); cs='+'+fmtD(Math.abs(p))+'%'; }   // crédito: R$ verde
       else if(row.k==='cost'||row.k==='anchor'){ cv=fmtK(v); cs=fmtD(p)+'%'; } // custo/âncora: R$ grande, % pequeno
       else { cv=fmtD(p)+'%'; cs=fmtK(v); }                                     // MARGEM: % grande, R$ pequeno
+      // Resultado = verde/vermelho (linha de baixo, semântico); demais margens = índigo destaque via CSS.
       if(row.k==='result')cvStyle='color:'+(v>=0?'#22c55e':'#f43f5e')+';';
       var tdStyle=(row.k==='cred')?'color:#22c55e;':'';
       h+='<td class="c'+extra+'" style="'+tdStyle+'"><div class="cv" style="'+cvStyle+'">'+cv+'</div>'+(cs?'<div class="cs">'+cs+'</div>':'')+'</td>';
