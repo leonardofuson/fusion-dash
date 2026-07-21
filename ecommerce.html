@@ -227,7 +227,7 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
 .search-empty{padding:20px;text-align:center;color:var(--txt3);font-size:12px;}
 
 /* Drawer (Product Detail) */
-/* ── Custo Efetivo do Canal — MATRIZ comparativa (linhas = decomposição, colunas = canais) ── */
+/* ── Custo Efetivo do Canal — MATRIZ comparativa (minimalista) ── */
 .cec{margin-top:20px;padding:16px 18px 14px;background:var(--bg2);border:1px solid var(--bdr);border-radius:14px;}
 .cec-hd{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:3px;}
 .cec-tit{font-size:14px;font-weight:800;color:var(--txt1);letter-spacing:-.01em;}
@@ -236,39 +236,37 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
 .cecm{border-collapse:separate;border-spacing:0;width:100%;font-variant-numeric:tabular-nums;}
 .cecm th,.cecm td{padding:0;white-space:nowrap;}
 /* coluna 1 (rótulos) fixa na rolagem horizontal */
-.cecm .lbl{position:sticky;left:0;z-index:3;text-align:left;background:var(--bg2);padding:7px 14px 7px 2px;min-width:190px;}
+.cecm .lbl{position:sticky;left:0;z-index:3;text-align:left;background:var(--bg2);padding:7px 16px 7px 2px;min-width:186px;}
 .cecm thead .lbl{z-index:4;}
 /* cabeçalho de coluna: chip de cor + nome + receita + share */
-.cecm-ch{padding:8px 12px 9px !important;text-align:right;vertical-align:bottom;border-bottom:2px solid var(--bdr);min-width:118px;}
-.cecm-ch.tot{background:rgba(99,102,241,.09);}
-.cecm-ch-top{height:3px;border-radius:3px;margin-bottom:7px;}
-.cecm-ch-nm{font-size:11.5px;font-weight:800;color:var(--txt1);display:flex;align-items:center;gap:6px;justify-content:flex-end;}
+.cecm-ch{padding:6px 13px 9px !important;text-align:right;vertical-align:bottom;border-bottom:1px solid var(--bdr);min-width:120px;}
+.cecm-ch.tot{background:rgba(255,255,255,.035);}
+.cecm-ch-top{height:3px;border-radius:3px;margin-bottom:8px;opacity:.9;}
+.cecm-ch-nm{font-size:11.5px;font-weight:700;color:var(--txt1);display:flex;align-items:center;gap:6px;justify-content:flex-end;}
 .cecm-ch-dot{width:8px;height:8px;border-radius:50%;flex:none;}
-.cecm-ch-rec{font-size:12.5px;font-weight:800;color:var(--txt1);margin-top:3px;}
-.cecm-ch-shr{font-size:9.5px;color:var(--txt3);font-weight:600;}
-/* células de dado */
-.cecm td.c{text-align:right;padding:6px 12px;font-size:12px;color:var(--txt1);border-bottom:1px solid rgba(255,255,255,.035);}
-.cecm td.c.tot{background:rgba(99,102,241,.055);font-weight:700;}
-.cecm .c .cp{font-size:9.5px;color:var(--txt3);font-weight:500;margin-top:1px;}
-.cecm .c.tot .cp{color:var(--txt2);}
+.cecm-ch-rec{font-size:12.5px;font-weight:800;color:var(--txt1);margin-top:4px;}
+.cecm-ch-shr{font-size:10px;color:var(--txt3);font-weight:500;}
+/* células de dado — 2 números: primário (grande) + secundário (menor mas legível) */
+.cecm td.c{text-align:right;padding:6px 13px;border-bottom:1px solid rgba(255,255,255,.03);}
+.cecm td.c.tot{background:rgba(255,255,255,.028);}
+.cecm .cv{font-size:12.5px;font-weight:600;color:var(--txt1);line-height:1.15;}
+.cecm .cs{font-size:10.5px;font-weight:500;color:var(--txt2);line-height:1.2;margin-top:2px;}
 /* rótulos de linha */
 .cecm .lbl .ll{font-size:12px;color:var(--txt2);}
 .cecm .lbl .ll.ind{padding-left:14px;}
-.cecm-grp .lbl{padding-top:13px !important;}
+.cecm-grp .lbl{padding-top:14px !important;}
 .cecm-grp .ll{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--txt3);}
-.cecm-grp td.c{padding-top:13px;}
-/* marcos (CM1/CM2/CM3/Venda Líquida/Resultado) — banda + negrito */
-.cecm-mile .lbl,.cecm-mile td.c{background:rgba(255,255,255,.045);border-top:1px solid var(--bdr);border-bottom:1px solid var(--bdr);}
-.cecm-mile .lbl{background:linear-gradient(90deg,var(--bg2) 60%,rgba(255,255,255,.045));}
-.cecm-mile .ll{font-weight:800;color:var(--txt1);font-size:12px;}
-.cecm-mile .ll .cm{font-size:9px;font-weight:700;color:var(--txt3);margin-left:5px;letter-spacing:.04em;}
-.cecm-mile td.c{font-weight:800;font-size:12.5px;}
-.cecm-mile td.c.tot{background:rgba(99,102,241,.12);}
-/* linha âncora — Custo Efetivo do Canal */
-.cecm-anchor .lbl,.cecm-anchor td.c{background:rgba(6,182,212,.10);border-top:1px solid rgba(6,182,212,.35);border-bottom:1px solid rgba(6,182,212,.35);}
-.cecm-anchor .lbl{background:linear-gradient(90deg,var(--bg2) 55%,rgba(6,182,212,.10));}
+.cecm-grp td.c{padding-top:14px;}
+/* marcos (margens) — destaque MINIMALISTA: hairline + negrito, % em primário grande */
+.cecm-mile .lbl,.cecm-mile td.c{border-top:1px solid var(--bdr);}
+.cecm-mile .ll{font-weight:700;color:var(--txt1);font-size:12px;}
+.cecm-mile .ll .cm{font-size:9px;font-weight:700;color:var(--txt3);margin-left:6px;letter-spacing:.04em;}
+.cecm-mile .cv{font-weight:800;font-size:13.5px;}
+.cecm-mile .cs{color:var(--txt3);}
+/* linha âncora — Custo Efetivo do Canal (accent ciano fino) */
+.cecm-anchor .lbl,.cecm-anchor td.c{border-top:1px solid rgba(6,182,212,.45);border-bottom:1px solid rgba(6,182,212,.2);}
 .cecm-anchor .ll{font-weight:800;color:var(--cyan);font-size:12px;}
-.cecm-anchor td.c{font-weight:800;color:var(--cyan);}
+.cecm-anchor .cv{font-weight:800;color:var(--cyan);}
 .cec-note{margin-top:13px;font-size:10.5px;color:var(--txt3);line-height:1.55;}
 .cec-note b{color:var(--txt2);font-weight:700;}
 .drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);z-index:9998;opacity:0;pointer-events:none;transition:opacity 0.2s ease;}
@@ -1690,8 +1688,10 @@ function _cecCol(arr){
   o.custoCanal=o.fee+o.frete+o.full+o.taxas+o.reversa-o.rebate;   // cupom é DEFLATOR
   o.mCanal=o.mb-o.custoCanal;
   o.demanda=o.afil+o.ads;
-  o.cm3=o.mCanal-o.demanda;
-  o.resop=o.cm3-o.imp-o.cfixo;
+  // "Margem de Contribuição" = APÓS impostos, IDÊNTICA à coluna "Contribuição" da tabela
+  // Performance por canal e ao KPI "Margem de contribuição %". Reconcilia ao centavo. (20/07)
+  o.contrib=o.mCanal-o.demanda-o.imp;
+  o.resop=o.contrib-o.cfixo;
   return o;
 }
 function renderCustoCanal(){
@@ -1704,7 +1704,8 @@ function renderCustoCanal(){
   rows.forEach(function(r){cols.push({nome:r.nome,cor:r.cor||getCor(r.nome),d:_cecCol([r])});});
   var has=function(k){return cols[0].d[k]>0.005;};   // linha opcional só se o agregado tiver
 
-  // Spec das linhas (CMV NA FRENTE → CM1 → Custo Efetivo do Canal → CM2 → Demanda → CM3 → Resultado)
+  // Spec (CMV NA FRENTE → CM1 → Custo Efetivo do Canal → CM2 → Demanda → Impostos → Contribuição → Resultado).
+  // k='mile'/'result' → % é o número PRIMÁRIO (margem); demais → R$ é o primário, % secundário.
   var R=[
     {l:'Receita Bruta',      g:function(c){return c.r;},        k:'rec'},
     {l:'(−) Devoluções',     g:function(c){return c.dev;},      k:'cost',ind:1},
@@ -1723,26 +1724,23 @@ function renderCustoCanal(){
     {grp:'Custo de Demanda — eletivo (CPA/CPM), NÃO é taxa de canal'},
     {l:'Afiliados / creators',g:function(c){return c.afil;},    k:'cost',ind:1},
     {l:'Mídia paga',         g:function(c){return c.ads;},      k:'cost',ind:1},
-    {l:'= Contribuição',cm:'CM3',g:function(c){return c.cm3;},  k:'mile'},
     {l:'(−) Impostos',       g:function(c){return c.imp;},      k:'cost',ind:1},
+    {l:'= Margem de Contribuição',g:function(c){return c.contrib;},k:'mile'},
     {l:'(−) Custo fixo',     g:function(c){return c.cfixo;},    k:'cost',ind:1,opt:'cfixo'},
     {l:'= Resultado Operacional',g:function(c){return c.resop;},k:'result'}
   ];
   var pc=function(v,base){return base>0?v/base*100:0;};
-  // Intensidade de custo: vermelho com alpha ∝ |%| numa escala fixa 0→15% (comparável entre células).
-  var shade=function(pctv){var a=Math.min(Math.abs(pctv)/15,1)*0.42;return a>0.008?'background:rgba(244,63,94,'+a.toFixed(3)+');':'';};
-
   var totRec=cols[0].d.r;
   var h='<div class="cec"><div class="cec-hd"><div class="cec-tit">Custo Efetivo do Canal — comparativo</div>'+
         '<div class="cec-tit" style="color:var(--cyan)">'+fmtD(pc(cols[0].d.custoCanal,totRec))+'% <span style="font-size:10px;font-weight:600;color:var(--txt3)">no total</span></div></div>';
-  h+='<div class="cec-sub">Cascata de margem de contribuição (CM1 → CM2 → CM3) por canal. Cada % é sobre a <b>receita da própria coluna</b>. '+
-     'O <b>Custo Efetivo do Canal</b> (destaque ciano) é só o que a plataforma cobra pra transacionar — afiliados e mídia entram depois, no Custo de Demanda. '+
-     'Intensidade vermelha = peso do custo sobre a receita (mais forte = mais caro).</div>';
+  h+='<div class="cec-sub">Cascata de margem de contribuição por canal. Nas linhas de <b>margem</b> o número grande é o <b>%</b>; nas de custo, o <b>valor em R$</b> (o % vem abaixo). '+
+     'Todos os % são sobre a <b>receita da própria coluna</b>. O <b>Custo Efetivo do Canal</b> (ciano) é só o que a plataforma cobra; afiliados e mídia entram depois. '+
+     'Bate ao centavo com a tabela Performance por canal.</div>';
   h+='<div class="cec-scroll"><table class="cecm"><thead><tr>';
   h+='<th class="lbl"></th>';
   cols.forEach(function(c){
     var chip=c.cor?'<span class="cecm-ch-dot" style="background:'+c.cor+'"></span>':'';
-    var top=c.tot?'background:var(--blue)':('background:'+(c.cor||'#6B7280'));
+    var top=c.tot?'background:var(--txt3)':('background:'+(c.cor||'#6B7280'));
     var shr=totRec>0?pc(c.d.r,totRec):0;
     h+='<th class="cecm-ch'+(c.tot?' tot':'')+'">'+
        '<div class="cecm-ch-top" style="'+top+'"></div>'+
@@ -1758,28 +1756,28 @@ function renderCustoCanal(){
       cols.forEach(function(){h+='<td class="c"></td>';});
       h+='</tr>'; return;
     }
-    var rowCls=row.k==='mile'?'cecm-mile':(row.k==='anchor'?'cecm-anchor':(row.k==='result'?'cecm-mile':''));
+    var isMargin=(row.k==='mile'||row.k==='result');
+    var rowCls=isMargin?'cecm-mile':(row.k==='anchor'?'cecm-anchor':'');
     var cmTag=row.cm?' <span class="cm">'+row.cm+'</span>':'';
     h+='<tr class="'+rowCls+'"><td class="lbl"><span class="ll'+(row.ind?' ind':'')+'">'+row.l+cmTag+'</span></td>';
     cols.forEach(function(c){
-      var v=row.g(c.d), p=pc(v,c.d.r);
-      var st='', main='', sub='', extra=(c.tot?' tot':'');
-      if(row.k==='rec'){ main=fmtK(v); sub=''; }
-      else if(row.k==='cred'){ main='+'+fmtD(Math.abs(p))+'%'; sub=fmtK(Math.abs(v)); extra+=' cec-cred'; }
-      else if(row.k==='cost'){ main=fmtD(p)+'%'; sub=fmtK(v); st=shade(p); }
-      else if(row.k==='result'){ main=fmtD(p)+'%'; sub=fmtK(v); }
-      else { main=fmtD(p)+'%'; sub=fmtK(v); }   // mile / anchor
-      var col=(row.k==='cred')?'color:#22c55e;':(row.k==='result'?('color:'+(v>=0?'#22c55e':'#f43f5e')+';'):'');
-      h+='<td class="c'+extra+'" style="'+st+col+'"><div>'+main+'</div>'+(sub?'<div class="cp">'+sub+'</div>':'')+'</td>';
+      var v=row.g(c.d), p=pc(v,c.d.r), cv, cs='', extra=(c.tot?' tot':''), cvStyle='';
+      if(row.k==='rec'){ cv=fmtK(v); }                                         // receita: só R$
+      else if(row.k==='cred'){ cv='+'+fmtK(Math.abs(v)); cs='+'+fmtD(Math.abs(p))+'%'; }   // crédito: R$ verde
+      else if(row.k==='cost'||row.k==='anchor'){ cv=fmtK(v); cs=fmtD(p)+'%'; } // custo/âncora: R$ grande, % pequeno
+      else { cv=fmtD(p)+'%'; cs=fmtK(v); }                                     // MARGEM: % grande, R$ pequeno
+      if(row.k==='result')cvStyle='color:'+(v>=0?'#22c55e':'#f43f5e')+';';
+      var tdStyle=(row.k==='cred')?'color:#22c55e;':'';
+      h+='<td class="c'+extra+'" style="'+tdStyle+'"><div class="cv" style="'+cvStyle+'">'+cv+'</div>'+(cs?'<div class="cs">'+cs+'</div>':'')+'</td>';
     });
     h+='</tr>';
   });
   h+='</tbody></table></div>';
   var notas=[];
   if(has('rebate'))notas.push('<b>Cupom da plataforma</b> é crédito (verde): a TikTok banca o desconto e reembolsa, então ele <b>abate</b> o custo de canal — a comissão mostrada é a <b>bruta</b>.');
-  notas.push('<b>Afiliados e mídia ficam fora do Custo Efetivo do Canal</b> de propósito: são geração de demanda eletiva (CPA/CPM), não taxa contratual. Cada um em linha própria.');
+  notas.push('<b>Afiliados e mídia ficam fora do Custo Efetivo do Canal</b> de propósito: são geração de demanda eletiva (CPA/CPM), não taxa contratual.');
   if(cols.some(function(c){return !c.tot&&c.d.ads<0.005&&c.d.r>0;}))notas.push('<b>Mídia R$ 0</b> em algum canal é <b>lacuna de captura</b>, não zero medido — TikTok/Meta/Google faturam fora do extrato do marketplace.');
-  notas.push('Não é "take rate": take rate mede a receita da <b>plataforma</b> ÷ GMV. Isto é o custo do <b>vendedor</b>.');
+  notas.push('<b>Margem de Contribuição</b> e <b>Resultado Operacional</b> batem ao centavo com a tabela Performance por canal acima. Não é "take rate" (isso é a receita da plataforma ÷ GMV) — aqui é o custo do vendedor.');
   h+='<div class="cec-note">'+notas.map(function(n){return '• '+n;}).join('<br>')+'</div></div>';
   wrap.innerHTML=h;
 }
