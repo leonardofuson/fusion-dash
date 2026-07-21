@@ -805,8 +805,12 @@ function valorReceita(p){
             && (p.canal_nome_raw||'').indexOf('Mercado Livre')===0;
   return ehML ? vb : vb-parseFloat(p.frete||0);
 }
+// "Venda Direta" (canal id=58) = pedidos-espelho de cross-fulfilment Confec→Site (etiqueta
+// MANDAE/OLIST de item faccao vendido no Shopify), sem cliente_id. Não é canal de ecommerce —
+// excluído de TODAS as fontes do dash (fetch-level, single source). Decisão do Leo 21/07/2026.
+var EXCL_CANAL='&canal_nome_raw=neq.Venda%20Direta';
 function buildFilt(de,ate,cols){
-  return'select='+cols+'&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&origem_conta=in.(fio_e_trama,confeccoes,shopify,tiktok_shop)';
+  return'select='+cols+'&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&origem_conta=in.(fio_e_trama,confeccoes,shopify,tiktok_shop)'+EXCL_CANAL;
 }
 async function fetchPedidos(de,ate){
   var useTeste=(document.getElementById('chk-ml-teste')||{}).checked;
@@ -821,7 +825,7 @@ async function fetchPedidos(de,ate){
 // poucas centenas de linhas) e atualiza KPIs/Waterfall já. Detalhes vêm depois.
 async function fetchAgregadoMV(de,ate){
   // order explícito (MV não tem coluna `id` — buscarTudo cairia no &order=id.asc)
-  var f='select=*&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc';
+  var f='select=*&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+EXCL_CANAL+'&order=data_pedido.asc';
   // Fase 3: a view = a MV + as colunas *_est. Mês fechado → *_est ≈ 0 e ela é idêntica à MV (A9).
   return buscarTudo('vw_ecom_canal_dia_est',f);
 }
@@ -1006,7 +1010,7 @@ function adsFiltrado(byCanal){
 
 // localStorage cache (TTL 5min) — MV rows agregados (canal_dia + sku_dia ~ algumas
 // centenas de KB; cabe folgado no limite de ~5MB). Pedidos detalhados vêm do servidor.
-function cacheKey(de,ate){return 'ecomm_v1_'+de+'_'+ate;}
+function cacheKey(de,ate){return 'ecomm_v2_'+de+'_'+ate;}  // v2: exclui "Venda Direta" (21/07)
 function cacheGet(de,ate){
   try{
     var raw=localStorage.getItem(cacheKey(de,ate));
@@ -2115,15 +2119,15 @@ function pintarDowHeat(matrix){
 // continuam carregando em background pra enriquecer o drawer (variantes/fee/dev/frete) e o CMV real.
 async function fetchSkuMV(de,ate,big){
   // big period (YTD/12m): sku_dia pode passar de 50k linhas → teto maior (250k) pra não truncar.
-  return buscarTudo('vw_ecom_sku_dia_est','select=sku_pai,nome,cat,canal_nome_raw,origem_conta,receita,qtd,cmv,fee,afiliado,devolucao,frete_seller,fee_estornado,cmv_devolvido,fee_est,afiliado_est,devolucao_est,rebate&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc', big?250:undefined);
+  return buscarTudo('vw_ecom_sku_dia_est','select=sku_pai,nome,cat,canal_nome_raw,origem_conta,receita,qtd,cmv,fee,afiliado,devolucao,frete_seller,fee_estornado,cmv_devolvido,fee_est,afiliado_est,devolucao_est,rebate&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+EXCL_CANAL+'&order=data_pedido.asc', big?250:undefined);
 }
 // PERF (09/06): geo (UF/cidade) e pagamentos (método/parcelas) vêm de MV no paint imediato —
 // antes ficavam vazios até o fetch de 10-115k pedidos chegar. Validado A/B (0 divergências).
 async function fetchGeoMV(de,ate){
-  return buscarTudo('mvw_ecommerce_geo_dia','select=canal_nome_raw,origem_conta,uf,cidade,pedidos,receita&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=receita.desc');
+  return buscarTudo('mvw_ecommerce_geo_dia','select=canal_nome_raw,origem_conta,uf,cidade,pedidos,receita&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+EXCL_CANAL+'&order=receita.desc');
 }
 async function fetchPgtoMV(de,ate){
-  return buscarTudo('mvw_ecommerce_pgto_dia','select=canal_nome_raw,origem_conta,metodo_pagamento,parcelas,pedidos,receita&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=receita.desc');
+  return buscarTudo('mvw_ecommerce_pgto_dia','select=canal_nome_raw,origem_conta,metodo_pagamento,parcelas,pedidos,receita&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+EXCL_CANAL+'&order=receita.desc');
 }
 // Como fetchSkuMV, mas inclui data_pedido — usado pela aba Mensal pra alimentar Pareto
 // (via agruparSkusMV) E o heatmap dia-da-semana (renderDowHeatMV) com uma só leitura.
