@@ -870,7 +870,10 @@ async function fetchMLTaxas(de,ate){
   //   taxasConta = assessoria (CPAC) + débitos diversos (CDSDB/CESM)
   //   difal      = ICMS-DIFAL (CDIFAL) → entra em IMPOSTOS
   //   reversa    = frete de DEVOLUÇÃO (CXDE/CXDED/CXDI/CXDID) → despesa nova, não estorno
-  //   adsExtra   = campanha fora do Product Ads (CDLIT) → entra em ADS
+  //   adsExtra   = campanha fora do Product Ads (CDLIT = Mercado Clics). ⚠️ Lido mas NÃO somado
+  //                em ADS desde 22/07/2026 — virou linha DIÁRIA em ads_metrics
+  //                (produto_anuncio='MCLICS') via fusion_sync_ml_clics.py, e chega por fetchAds.
+  //                Fica aqui só como referência/conferência contra a fatura.
   // ⚠️ parcelamento (CFONPN, ~R$42k/mês) é capturado no banco mas NÃO entra no P&L (decisão do Leo).
   // ⚠️ frete (CFFE/CFFI) NÃO entra aqui — frete_ml_seller já pega por pedido; seria dupla contagem.
   // ⚠️ DUPLA CONTAGEM CORRIGIDA (20/07/2026): taxa_cobranca (CVVPRC, Custo por cobrar no Mercado
@@ -1052,7 +1055,9 @@ function calcPnLFromMV(rows,adsVal){
   var full=mlTaxaNoEscopo('full');        // Full ML (armazenagem + retirada)
   var taxasConta=mlTaxaNoEscopo('taxasConta');  // resto da fatura ML (adquirência, recebimento, assessoria…)
   var reversa=mlTaxaNoEscopo('reversa');        // frete de devolução (ML)
-  adsVal+=mlTaxaNoEscopo('adsExtra');
+  // adsExtra (CDLIT = Mercado Clics) NÃO é somado aqui desde 22/07/2026: virou linha diária
+  // em ads_metrics (produto_anuncio='MCLICS') via fusion_sync_ml_clics.py, e já entra em adsVal
+  // pelo fetchAds. Somar de novo aqui seria dupla contagem.
   liquida=receita-com-afiliados+rebate-dev-frete-full-taxasConta-reversa;
   var impostos=TAX_RATE*(receita-dev)+mlTaxaNoEscopo('difal');   // 6,5% flat + ICMS-DIFAL real
   var _lucro=liquida-adsVal-cmv-impostos;
@@ -1513,7 +1518,9 @@ function calcPnL(pedidos,itens,adsVal){
   // Resto da FATURA da ML (auditoria 13/07/2026 — ver fetchMLTaxas). Só existe a nível conta/período.
   var taxasConta=mlTaxaNoEscopo('taxasConta');  // custo por cobrar (adquirência) + recebimento + assessoria + diversos
   var reversa=mlTaxaNoEscopo('reversa');        // frete de DEVOLUÇÃO — despesa NOVA, não é estorno
-  adsVal+=mlTaxaNoEscopo('adsExtra');           // campanha fora do Product Ads (CDLIT)
+  // adsExtra (CDLIT = Mercado Clics): removido daqui em 22/07/2026 — agora é linha DIÁRIA em
+  // ads_metrics (produto_anuncio='MCLICS'), então já vem dentro de adsVal via fetchAds. Ver
+  // fusion_sync_ml_clics.py. Manter os dois = dupla contagem do gasto de mídia.
   // P&L: Bruta − Comissão − Afiliados + Cupom − Devoluções − Frete − Full − Taxas ML − Reversa = Líquida
   var liquida=receita-comissao-afiliados+rebate-devolucoes-frete-full-taxasConta-reversa;
   // Imposto = 6,5% flat sobre a venda líquida + ICMS-DIFAL REAL da fatura da ML (CDIFAL)
@@ -1651,7 +1658,7 @@ function _canalRowsArr(byCanal,cmvByCanal){
   return Object.keys(byCanal).map(function(n){
     var c=byCanal[n];var cmv=(cmvByCanal&&cmvByCanal[n])||c.r*cmvPct(n);
     var mt=(STATE.mlTaxas&&STATE.mlTaxas[n])||{afiliado:0,full:0,taxasConta:0,difal:0,reversa:0,adsExtra:0};  // taxas de conta ML por canal
-    var ads=((STATE.adsByCanal&&STATE.adsByCanal[n])||0)+(mt.adsExtra||0);
+    var ads=(STATE.adsByCanal&&STATE.adsByCanal[n])||0;  // MCLICS já está em ads_metrics (22/07/2026)
     // Imposto = 6,5% flat sobre a venda líquida + ICMS-DIFAL real da fatura da ML
     var impostos=TAX_RATE*(c.r-c.dev)+(mt.difal||0);
     var afiliado=(c.afiliado||0)+(mt.afiliado||0);                   // + afiliado ML (nível conta)
