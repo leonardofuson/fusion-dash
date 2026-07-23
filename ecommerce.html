@@ -985,13 +985,31 @@ function cacheSet(de,ate,data){
 }
 // Defer renders pesados (charts/heatmaps) pra não bloquear first paint.
 var idle = window.requestIdleCallback || function(fn){return setTimeout(fn,0);};
-function calcPnLFromMV(rows,adsVal){
+// skuRows (opcional): as linhas da MV de SKU do MESMO período (STATE.skuMVRows p/ o atual,
+// STATE.skuMVRowsPrev p/ o anterior). Quando presente, o CMV vem do REAL agregado no servidor
+// (item×custo, cobertura 100% — o mesmo de cmvByCanalMV), não da proporção cmvPct. Sem ele
+// (paint imediato antes da MV de SKU chegar), cai na proporção. Isto é o que mantém a margem
+// honesta sem depender dos itens crus no navegador. (23/07/2026)
+// applyFixo: aplica o custo fixo rateado no escopo (custoFixoNoEscopo). Só o cálculo do período
+// ATUAL passa true; o anterior fica 0 e o renderKPIs estima prev.custoFixo pela taxa atual (delta
+// honesto), e o paint imediato/big-period não têm o fetch de custo fixo ainda. (23/07)
+function calcPnLFromMV(rows,adsVal,skuRows,applyFixo){
   adsVal=adsVal||0;
   if(!rows||!rows.length)return{receita:0,devolucoes:0,frete:0,comissao:0,afiliados:0,rebate:0,cmv:0,ads:0,liquida:0,lucro:0,custoFixo:0,resultadoOper:0,pedidos:0};
+  var inScope=function(_nome){
+    if(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[_nome])return false;
+    if(STATE.focusCanal&&_nome!==STATE.focusCanal)return false;
+    return true;
+  };
   var receita=0,dev=0,frete=0,com=0,afiliados=0,rebate=0,liquida=0,ped=0,cmv=0,eC=0,eA=0,eD=0;
+  var cmvReal=(skuRows&&skuRows.length)?0:null;  // null = usar proporção (fallback)
+  if(cmvReal!==null){
+    skuRows.forEach(function(r){var _n=getNome(r.canal_nome_raw,r.origem_conta);if(!inScope(_n))return;
+      cmvReal+=Math.max(parseFloat(r.cmv||0)-parseFloat(r.cmv_devolvido||0),0);});
+  }
   rows.forEach(function(r){
     var n=r.canal_nome_raw, _nome=getNome(n,r.origem_conta);
-    if(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[_nome])return;
+    if(!inScope(_nome))return;
     var rb=parseFloat(r.receita_bruta||0);
     receita+=rb;
     // Fase 3: as colunas *_est vêm prontas da view — são o BURACO a somar ao real
@@ -1003,10 +1021,11 @@ function calcPnLFromMV(rows,adsVal){
     com+=Math.max(parseFloat(r.comissao||0)-parseFloat(r.fee_estornado||0),0)+cE;  // comissão LÍQUIDA do estorno + estimada
     afiliados+=parseFloat(r.afiliado||0)+aE;
     rebate+=parseFloat(r.rebate||0);   // cupom bancado pela plataforma (deflator) — 20/07/2026
-    // CMV estimado pela proporção real do canal, menos o CMV que voltou (mercadoria devolvida)
-    cmv+=Math.max(rb*cmvPct(_nome)-parseFloat(r.cmv_devolvido||0),0);
+    // CMV: REAL da MV de SKU se disponível; senão proporção real do canal, menos o CMV que voltou.
+    if(cmvReal===null)cmv+=Math.max(rb*cmvPct(_nome)-parseFloat(r.cmv_devolvido||0),0);
     ped+=parseInt(r.pedidos||0)-parseInt(r.cancelados||0);
   });
+  if(cmvReal!==null)cmv=cmvReal;
   frete+=freteReversoNoEscopo();  // reversa/troca do Site (Troque), agregado do período
   afiliados+=mlTaxaNoEscopo('afiliado');  // afiliado ML (nível conta/período)
   var full=mlTaxaNoEscopo('full');        // Full ML (armazenagem + retirada)
@@ -1018,7 +1037,8 @@ function calcPnLFromMV(rows,adsVal){
   liquida=receita-com-afiliados+rebate-dev-frete-full-taxasConta-reversa;
   var impostos=TAX_RATE*(receita-dev)+mlTaxaNoEscopo('difal');   // 6,5% flat + ICMS-DIFAL real
   var _lucro=liquida-adsVal-cmv-impostos;
-  return{receita:receita,devolucoes:dev,frete:frete,comissao:com,afiliados:afiliados,rebate:rebate,full:full,taxasConta:taxasConta,reversa:reversa,cmv:cmv,ads:adsVal,impostos:impostos,liquida:liquida,lucro:_lucro,custoFixo:0,resultadoOper:_lucro,pedidos:ped,est:{com:eC,afil:eA,dev:eD,total:eC+eA+eD}};
+  var custoFixo=applyFixo?custoFixoNoEscopo():0;   // fixo rateado no escopo (só no cálculo do período atual)
+  return{receita:receita,devolucoes:dev,frete:frete,comissao:com,afiliados:afiliados,rebate:rebate,full:full,taxasConta:taxasConta,reversa:reversa,cmv:cmv,ads:adsVal,impostos:impostos,liquida:liquida,lucro:_lucro,custoFixo:custoFixo,resultadoOper:_lucro-custoFixo,pedidos:ped,est:{com:eC,afil:eA,dev:eD,total:eC+eA+eD}};
 }
 async function fetchItensForIds(ids,tabela){
   if(!ids.length)return[];
@@ -1175,7 +1195,7 @@ async function carregar(){
       if(STATE.canais.length===0&&mvBig){var seen={};mvBig.forEach(function(r){var n=getNome(r.canal_nome_raw,r.origem_conta);if(!seen[n]){seen[n]=true;STATE.canaisSel[n]=true;}});STATE.canais=Object.keys(seen).sort();renderCanalChips();}
       try{
         var cB=calcPnLFromMV(mvBig,adsFiltrado(STATE.adsByCanal));
-        var pB=calcPnLFromMV(STATE.mvRowsPrev||[],adsFiltrado(STATE.adsByCanalPrev));
+        var pB=calcPnLFromMV(STATE.mvRowsPrev||[],adsFiltrado(STATE.adsByCanalPrev),STATE.skuMVRowsPrev);
         renderKPIsImediato(cB,pB);renderWaterfallImediato(cB,pB);renderCanalTableFromMV(mvBig);
         montarSkuGroups();renderTopProdutos();renderPareto();renderEcommSkuList();renderHero();
         // geo/pgto pintam sozinhos nos .then das suas MVs. DOW/alerts/PA dependem de pedido → off no longo.
@@ -1187,36 +1207,33 @@ async function carregar(){
       return;
     }
     bannerLongo(false);
-    // PERF (08/06): NÃO busca os pedidos detalhados do período anterior (fetch mais pesado, duplicado).
-    // Os Δ% vêm da MV anterior (mvRowsPrev, ~centenas de linhas vs 10-115k). Corta o load ~pela metade.
-    var fetches=[fetchPedidos(DE,ATE)];
-    var res=await Promise.all(fetches);
-    if(seq!==LOAD_SEQ)return;   // período mudou durante o fetch — aborta este load
-    STATE.pedidosRaw=res[0];
+    // ── SÓ MV (23/07/2026): o dash não busca mais pedidos/itens crus pro navegador.
+    // Todo número (receita/comissão/dev/CMV/pedidos/unidades) vem das MVs agregadas no
+    // servidor (canal_dia_est + sku_dia_est), geo/pgto das suas MVs, e o drawer de variante
+    // (grade×cor) faz fetch LAZY escopado por produto. Fim do fetch de ~5s + do gap de
+    // cobertura do CMV. STATE.pedidos*/itens ficam vazios (os blocos foram repontados).
+    STATE.pedidosRaw=[];STATE.pedidos=[];STATE.pedidosFull=[];STATE.itens=[];STATE.itensFocus=[];
+    STATE.adsBySkuPai={};STATE.adsBySkuPaiCanal={};
     fetchTroqueSite(DE,ATE).then(function(rows){STATE.troqueSite=rows;try{renderAlerts();}catch(e){}}).catch(function(){STATE.troqueSite=null;});
     fetchFreteReversoSite(DE,ATE).then(function(){_pnlMemo=null;try{renderWaterfall();renderKPIs();renderCanalTable();}catch(e){}}).catch(function(){STATE.freteReversoSite=0;});
     fetchMLTaxas(DE,ATE).then(function(){_pnlMemo=null;try{renderWaterfall();renderKPIs();renderCanalTable();}catch(e){}}).catch(function(){STATE.mlTaxas=null;});
     fetchCustoFixo(DE,ATE).then(function(){try{renderCanalTable();}catch(e){}}).catch(function(){STATE.custoFixoByCanal=null;});
-    if(STATE.canais.length===0){var seen={};STATE.pedidosRaw.forEach(function(p){if(shouldDedup(p))return;var n=getNome(p.canal_nome_raw,p.origem_conta);if(!seen[n]){seen[n]=true;STATE.canaisSel[n]=true;}});STATE.canais=Object.keys(seen).sort();renderCanalChips();}
 
-    // RENDER IMEDIATO — sem itens (waterfall, canais, geo, pagamentos, alertas)
-    STATE.itens=[];STATE.itensFocus=[];STATE.adsBySkuPai={};STATE.adsBySkuPaiCanal={};
     STATE.adsByCanal=await pAds;STATE.adsByCanalPrev=await pAdsPrev;STATE.devBySkuPai=await pDev;STATE.mvRowsPrev=await pMVprev;STATE.skuMVRows=await pSkuMV;STATE.skuMVRowsPrev=await pSkuMVprev;await pCom;
+    var mvNow=await pMV;STATE.mvRows=mvNow||[];
+    if(seq!==LOAD_SEQ)return;   // período mudou durante os fetches — aborta este load
+    // Lista de canais + chips saem da MV canal_dia (antes vinham dos pedidos crus).
+    if(STATE.canais.length===0&&STATE.mvRows.length){var seen={};STATE.mvRows.forEach(function(r){var n=getNome(r.canal_nome_raw,r.origem_conta);if(!seen[n]){seen[n]=true;STATE.canaisSel[n]=true;}});STATE.canais=Object.keys(seen).sort();renderCanalChips();}
     renderAll();
-    document.getElementById('upd').textContent='Atualizado '+new Date().toLocaleTimeString('pt-BR')+' · detalhe…';
+    document.getElementById('upd').textContent='Atualizado '+new Date().toLocaleTimeString('pt-BR');
 
-    // BACKGROUND — itens + produtos (pra rankings)
-    var inicio=janelaItens(DE);var skuDisponivel=(DE>=inicio)||(ATE>=inicio);
-    if(skuDisponivel){
-      var recentes=STATE.pedidosRaw.filter(function(p){return p.data_pedido>=inicio&&!shouldDedup(p);});
-      var ids=recentes.map(function(p){return p.id;}).filter(function(x){return x;});
-      var useTeste=(document.getElementById('chk-ml-teste')||{}).checked;
-      var itensTab=useTeste?'itens_pedido_ml_teste':'itens_pedido';
-      var itens=await fetchItensForIds(ids,itensTab);var prods=await fetchProdutos();
-      if(seq!==LOAD_SEQ)return;   // período mudou durante a carga de itens — aborta
-      // Ads ML REAL por SKU (anúncio→produto). Mapeia produto_id→sku_pai via produtos.
+    // Ads ML REAL por SKU (anúncio→produto): mapeia produto_id→sku_pai via `produtos`.
+    // NÃO precisa dos itens crus — só do cadastro de produtos + ads_metrics item-level.
+    // Roda async e re-renderiza os blocos que mostram ads por produto quando chega.
+    (async function(){
       try{
-        var adsItemRows=await pAdsItem;
+        var prods=await fetchProdutos();var adsItemRows=await pAdsItem;
+        if(seq!==LOAD_SEQ)return;
         STATE.adsBySkuPai={};STATE.adsBySkuPaiCanal={};
         adsItemRows.forEach(function(r){
           var prod=prods.byId[r.produto_id];if(!prod)return;
@@ -1226,43 +1243,11 @@ async function carregar(){
           if(!STATE.adsBySkuPaiCanal[sp])STATE.adsBySkuPaiCanal[sp]={};
           STATE.adsBySkuPaiCanal[sp][canal]=(STATE.adsBySkuPaiCanal[sp][canal]||0)+g;
         });
+        try{renderKPIs();renderCanalTable();renderTopProdutos();renderPareto();}catch(e){}
       }catch(e){console.warn('adsItem:',e);}
-      var pedById={};recentes.forEach(function(p){pedById[p.id]=p;});
-      itens.forEach(function(it){var ped=pedById[it.pedido_id];if(!ped)return;var prod=prods.byId[it.produto_id];if(!prod)return;
-        var skuPai=prod.sku_pai;var pai;
-        if(/^MAT-/i.test(skuPai)){skuPai=prod.sku;pai={nome:prod.nome,cat:prod.cat,custo:prod.custo};}else{pai=prods.bySku[skuPai]||{nome:prod.nome,cat:prod.cat,custo:prod.custo};}
-        var nomePai=pai.nome;if(!nomePai||nomePai==='Material/Insumo'||nomePai==='Desconhecido')nomePai=skuPai;
-        it._sku_pai=skuPai;it._nome=nomePai;it._cat=pai.cat||prod.cat;it._cor=prod.cor;it._tam=prod.tam;it._custoUn=parseFloat(pai.custo||prod.custo||0);
-        it._canal=getNome(ped.canal_nome_raw,ped.origem_conta);it._data=ped.data_pedido;
-        it._receita=(parseFloat(it.preco_unitario)||0)*(parseFloat(it.quantidade)||0)-(parseFloat(it.desconto_item)||0);
-        it._qtd=parseFloat(it.quantidade)||0;it._canc=(ped.status||'').toLowerCase();
-        // Rateio proporcional pedido→item dos custos do pedido (pra KPIs ecommerce real por SKU).
-        // Receita do pedido base = valorReceita(ped) (já inclui frete cliente p/ ML).
-        var recPed=valorReceita(ped); var share=recPed>0?(it._receita/recPed):0;
-        // taxa_dev = fração devolvida do pedido. Devolução ESTORNA comissão e CMV (mercadoria
-        // volta vendável); frete e taxa de pagamento NÃO (afundados). Mesma régua da MV. (13/07)
-        var tDev=taxaDev(ped);
-        it._fee=(parseFloat(ped.fee_canal)||0)*share*(1-tDev);
-        it._afiliado=(parseFloat(ped.comissao_afiliado)||0)*share;
-        it._rebate=(parseFloat(ped.rebate_canal)||0)*share;   // cupom plataforma (deflator) — 20/07
-        it._devolucao=(parseFloat(ped.valor_devolucao)||0)*share;
-        it._freteSeller=(parseFloat(ped.frete_ml_seller)||0)*share;
-        // _custoUn continua CRU (é o custo unitário exibido). O CMV líquido do estorno vive em _cmv.
-        it._cmv=(it._custoUn||0)*it._qtd*(1-tDev);
-      });
-      STATE.itens=itens.filter(function(it){return it._sku_pai&&(!['cancelado','devolvido'].includes(it._canc));});
-    }else{STATE.itens=[];}
-    // Itens carregaram → RE-RENDER autoritativo dos blocos que dependem de CMV real
-    // (waterfall/KPIs/tabela canal). Antes só re-renderizava Top Produtos/Pareto, então
-    // CMV/frete ficavam no valor do render-sem-itens (ou no da MV, o que vencesse a corrida)
-    // → coluna vinha vazia/0 de forma intermitente ao trocar período. (fix 02/06)
-    STATE.itensFocus=STATE.itens.filter(function(it){return canalItemOk(it._canal);});
-    montarSkuGroups();   // lista sempre da MV enriquecida (rápida); itens só p/ drawer/variante/unidades
-    [renderWaterfall,renderKPIs,renderCanalTable,renderTopProdutos,renderPareto].forEach(function(fn){
-      try{fn();}catch(e){console.error(fn.name+':',e);}});
-    document.getElementById('upd').textContent='Atualizado '+new Date().toLocaleTimeString('pt-BR');
+    })();
     // Salva cache pra próxima visita (TTL 5min)
-    try{var mvNow=await pMV;cacheSet(DE,ATE,{mv:mvNow,mvPrev:STATE.mvRowsPrev||null,sku:STATE.skuMVRows||null,geo:STATE.geoMVRows||null,pgto:STATE.pgtoMVRows||null});}catch(e){}
+    try{cacheSet(DE,ATE,{mv:mvNow,mvPrev:STATE.mvRowsPrev||null,sku:STATE.skuMVRows||null,geo:STATE.geoMVRows||null,pgto:STATE.pgtoMVRows||null});}catch(e){}
   }catch(err){console.error(err);document.getElementById('kpis').innerHTML='<div class="kpi"><div class="kpi-lbl">Erro</div><div class="kpi-val d-dn">!</div><div class="kpi-sub">'+err.message+'</div></div>';}
 }
 
@@ -1470,8 +1455,8 @@ function abrirWfDrill(k){
 }
 function renderWaterfall(){
   var fp=STATE.focusProduto, gp=fp?pnlProduto():null;
-  var cur=gp||calcPnL(STATE.pedidos,STATE.itensFocus,adsFiltrado(STATE.adsByCanal));
-  var prev=fp?{receita:0,liquida:0,lucro:0,comissao:0,afiliados:0,devolucoes:0,frete:0,cmv:0,ads:0,impostos:0,taxasConta:0,reversa:0,pedidos:0}:calcPnLFromMV(STATE.mvRowsPrev||[],adsFiltrado(STATE.adsByCanalPrev));
+  var cur=gp||calcPnLFromMV(STATE.mvRows,adsFiltrado(STATE.adsByCanal),STATE.skuMVRows,true);
+  var prev=fp?{receita:0,liquida:0,lucro:0,comissao:0,afiliados:0,devolucoes:0,frete:0,cmv:0,ads:0,impostos:0,taxasConta:0,reversa:0,pedidos:0}:calcPnLFromMV(STATE.mvRowsPrev||[],adsFiltrado(STATE.adsByCanalPrev),STATE.skuMVRowsPrev);
   // prev vem da MV (sem custo fixo por canal do mês anterior) → estima pela taxa atual, p/ delta honesto
   if((prev.custoFixo||0)===0&&cur.receita>0){var _rtF=(cur.custoFixo||0)/cur.receita;prev.custoFixo=_rtF*(prev.receita||0);prev.resultadoOper=(prev.lucro||0)-prev.custoFixo;}
   var e=cur.est||{com:0,afil:0,dev:0,total:0};
@@ -1605,7 +1590,19 @@ function projecaoMes(receita){
 // ── FILTRO GLOBAL DE PRODUTO ────────────────────────────────────────────────
 // Contagem de pedidos distintos de um produto — dos itens (skuGroups da MV não tem pedido_id).
 // Vazio até os itens carregarem em bg (o ticket médio do produto aparece progressivo).
-function nPedProduto(sku){var s={};(STATE.itensFocus||[]).forEach(function(it){if(it._sku_pai===sku&&it.pedido_id)s[it.pedido_id]=1;});return Object.keys(s).length;}
+// nº de pedidos de um produto — da MV de variante (n_ped, deduplicado por dia+canal, no escopo).
+// Antes vinha dos itens crus (STATE.itensFocus); desde 23/07 vem da MV lazy do drawer. Retorna 0
+// se a variante ainda não carregou (o load é disparado no renderKPIs quando há produto focado).
+function nPedProduto(sku){
+  if(!STATE.variMV)return 0;
+  var rows=STATE.variMV[sku+'|'+DE+'|'+ATE];
+  if(!rows||!rows.length)return 0;
+  var m={};rows.forEach(function(r){var n=getNome(r.canal_nome_raw,r.origem_conta);
+    if(STATE.focusCanal&&n!==STATE.focusCanal)return;
+    if(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[n])return;
+    m[r.data_pedido+'|'+n]=parseFloat(r.n_ped||0);});
+  return Object.values(m).reduce(function(a,b){return a+b;},0);
+}
 // P&L do produto focado, do skuGroups (rateio de fee/dev/frete já pronto). Respeita focusCanal.
 function pnlProduto(){
   var g=(STATE.skuGroups||[]).find(function(s){return s.sku_pai===STATE.focusProduto;});
@@ -1650,24 +1647,27 @@ function clearFocusProduto(){
   reRenderAtivo();
 }
 function reRenderAtivo(){
-  try{
-    if((STATE.itens||[]).length>0){renderAll();}   // período curto (itens carregados): filtro aplica na hora
-    else{carregar();}                              // período longo (só MV): recarrega pra não zerar os KPIs
-  }catch(e){console.warn('reRenderAtivo',e);}
+  // Tudo está em STATE como MV (canal_dia/sku_dia/geo/pgto) — renderAll re-agrega na hora com
+  // o novo filtro, sem refetch. Antes dependia de STATE.itens carregado; desde 23/07 não há
+  // itens crus, então é sempre renderAll (instantâneo).
+  try{renderAll();}catch(e){console.warn('reRenderAtivo',e);}
 }
 function renderKPIs(){
   var fp=STATE.focusProduto, gp=fp?pnlProduto():null;
-  var cur=gp||calcPnL(STATE.pedidos,STATE.itensFocus,adsFiltrado(STATE.adsByCanal));
-  var prev=fp?{receita:0,liquida:0,lucro:0,comissao:0,devolucoes:0,frete:0,cmv:0,ads:0,impostos:0,taxasConta:0,reversa:0,pedidos:0}:calcPnLFromMV(STATE.mvRowsPrev||[],adsFiltrado(STATE.adsByCanalPrev));
+  // Produto focado: garante que a MV de variante (contagem de pedidos → ticket/PA) esteja
+  // carregada. Idempotente; re-renderiza os KPIs quando chega.
+  if(fp&&(!STATE.variMV||STATE.variMV[fp+'|'+DE+'|'+ATE]===undefined))carregarVariante(fp);
+  var cur=gp||calcPnLFromMV(STATE.mvRows,adsFiltrado(STATE.adsByCanal),STATE.skuMVRows,true);
+  var prev=fp?{receita:0,liquida:0,lucro:0,comissao:0,devolucoes:0,frete:0,cmv:0,ads:0,impostos:0,taxasConta:0,reversa:0,pedidos:0}:calcPnLFromMV(STATE.mvRowsPrev||[],adsFiltrado(STATE.adsByCanalPrev),STATE.skuMVRowsPrev);
   if((prev.custoFixo||0)===0&&cur.receita>0){var _rtF=(cur.custoFixo||0)/cur.receita;prev.custoFixo=_rtF*(prev.receita||0);prev.resultadoOper=(prev.lucro||0)-prev.custoFixo;}  // estima custo fixo do mês anterior pela taxa atual (delta honesto)
-  var nPed=fp?(gp?gp.pedidos:0):STATE.pedidos.filter(function(p){return!p._canc;}).length;
+  var nPed=fp?(gp?gp.pedidos:0):(cur.pedidos||0);   // contagem de pedidos vem da MV canal_dia (não mais dos pedidos crus)
   var pedAntN=prev.pedidos||0;   // prev vem da MV (sem fetch detalhado anterior)
   var tm=nPed>0?cur.receita/nPed:0;
   var tmAnt=pedAntN>0?prev.receita/pedAntN:0;
   var mp=cur.receita>0?cur.lucro/cur.receita*100:0;
   var proj=fp?null:projecaoMes(cur.receita);
   var devPct=cur.receita>0?cur.devolucoes/cur.receita*100:0, prevDevP=prev.receita>0?prev.devolucoes/prev.receita*100:0;
-  var temItens=fp?(gp&&gp.unidades>0):((STATE.itens||[]).length>0);var un=fp?(gp?gp.unidades:0):totUnidades();var pa=(temItens&&nPed>0)?un/nPed:0;
+  var temItens=fp?(gp&&gp.unidades>0):((STATE.skuMVRows||[]).length>0);var un=fp?(gp?gp.unidades:0):totUnidades();var pa=(temItens&&nPed>0)?un/nPed:0;
   var prevMp=prev.receita>0?prev.lucro/prev.receita*100:0;
   // MARGEM DE CONTRIBUIÇÃO (mp) = Contribuição ÷ Bruta — ANTES do custo fixo.
   // MARGEM LÍQUIDA (mpLiq)      = Result. Operacional ÷ Bruta — DEPOIS do custo fixo rateado.
@@ -1933,8 +1933,11 @@ function renderCanalTableFromMV(rows){
     c.dev+=parseFloat(r.devolucoes||0)+dE;
     c.cmvDev=(c.cmvDev||0)+parseFloat(r.cmv_devolvido||0);   // CMV que voltou (estorna abaixo)
   });
+  // CMV REAL da MV de SKU (item×custo agregado no servidor, cobertura 100%) — mesma fonte do
+  // cmvByCanalMV/calcPnL. Fallback pra proporção só se a MV de SKU ainda não chegou (paint imediato).
+  var cmvReal=cmvByCanalMV();
   var cmvMV={};Object.keys(byCanal).forEach(function(n){
-    cmvMV[n]=Math.max(byCanal[n].r*cmvPct(n)-(byCanal[n].cmvDev||0),0);});
+    cmvMV[n]=(cmvReal&&cmvReal[n]!=null)?cmvReal[n]:Math.max(byCanal[n].r*cmvPct(n)-(byCanal[n].cmvDev||0),0);});
   try{var _rMV=_canalRowsArr(byCanal,cmvMV);STATE.canalRows=_rMV;
     _setCanalTbody(_canalTbodyHTML(_rMV));renderCustoCanal();}catch(e){console.error('canalMV:',e);}
 }
@@ -1956,40 +1959,11 @@ function renderCanalTable(){
     var _rP=gP?_canalRowsProduto(gP):[];STATE.canalRows=_rP;
     _setCanalTbody(gP?_canalTbodyHTML(_rP):'');renderCustoCanal();return;
   }
-  var ped=STATE.pedidosFull||STATE.pedidos;
-  var byCanal={};
-  // Mesma lógica do P&L (calcPnL): só `cancelado` fora; `devolvido` conta como bruta + devolução.
-  ped.forEach(function(p){
-    var n=p._nome;if(!byCanal[n])byCanal[n]={r:0,ped:0,dev:0,frete:0,fee:0,afiliado:0,rebate:0,est:0,cor:p._cor};
-    if(p._cancelado)return;
-    var v=valorReceita(p),c=byCanal[n];
-    c.r+=v;c.ped++;
-    c.dev+=parseFloat(p.valor_devolucao||0)+parseFloat(p.valor_chargeback||0);
-    c.frete+=parseFloat(p.frete_ml_seller||0);  // Site = subsídio frete grátis; reversa Troque à parte
-    // Fase 3 — MESMA regra do calcPnL (fee>0 = liquidou → real; senão estima comissão E afiliado).
-    var liq=(p.fee_canal!==null&&p.fee_canal!==undefined&&p.fee_canal!=='');   // NULL ≠ 0 (ver calcPnL)
-    var f=parseFloat(p.fee_canal||0),t=taxaDe(n);
-    c.rebate+=parseFloat(p.rebate_canal||0);   // cupom da plataforma (deflator) — 20/07/2026
-    if(liq){ c.fee+=f*(1-taxaDev(p)); c.afiliado+=parseFloat(p.comissao_afiliado||0); }
-    else{ var cE=v*(t.com||custoPct(n)),aE=v*(t.afil||0); c.fee+=cE; c.afiliado+=aE; c.est+=cE+aE; }
-    var dE=devProv(n,p.data_pedido,v); c.dev+=dE; c.est+=dE;
-  });
-  // CMV por canal — da MV sku-dia (REAL item×custo, agregada NO SERVIDOR, cobertura 100%).
-  // ⚠️ Antes vinha dos itens do cliente (STATE.itens), que tinham ~30% de BURACO de cobertura
-  // (o fetch não trazia todos os itens do período) → CMV subcontado ~30% e margem inflada
-  // (bug visto 23/07: dash mostrava CMV 30% quando o real é 44%). A MV não tem esse buraco.
-  // `cmv − cmv_devolvido` = CMV líquido do estorno (mesma régua do (1−tDev) por item).
-  // Fallback pros itens só se a MV não veio.
-  var cmvByCanal=cmvByCanalMV();
-  if(!cmvByCanal){
-    cmvByCanal={};
-    (STATE.itens||[]).forEach(function(it){
-      if(!cmvByCanal[it._canal])cmvByCanal[it._canal]=0;
-      cmvByCanal[it._canal]+=(it._cmv!=null?it._cmv:(it._custoUn||0)*it._qtd);
-    });
-  }
-  var _rD=_canalRowsArr(byCanal,cmvByCanal);STATE.canalRows=_rD;
-  _setCanalTbody(_canalTbodyHTML(_rD));renderCustoCanal();
+  // Não-foco: a tabela sai 100% das MVs (canal_dia_est para receita/comissão/dev/est +
+  // sku_dia para o CMV real via cmvByCanalMV). renderCanalTableFromMV é o caminho único e
+  // autoritativo desde 23/07 — antes esta função reconstruía byCanal dos pedidos crus
+  // (STATE.pedidos), que agora nem são buscados. Mesma régua *_est → bate ao centavo.
+  renderCanalTableFromMV(STATE.mvRows);
 }
 
 // ── HERO STACKED AREA ──
@@ -2017,7 +1991,7 @@ function renderHero(){
   if(!STATE.focusProduto && (STATE.focusCanal || STATE.heroMoM) && daysBetween(DE,ATE)<=31){
     var fc=STATE.focusCanal, curD={}, priD={};
     var inScope=function(n){if(fc)return n===fc;return !(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[n]);};
-    (STATE.pedidos||[]).forEach(function(p){if(p._canc)return;if(!inScope(p._nome))return;var dd=parseInt((p.data_pedido||'').slice(8,10),10);if(dd)curD[dd]=(curD[dd]||0)+valorReceita(p);});
+    (STATE.mvRows||[]).forEach(function(r){var n=getNome(r.canal_nome_raw,r.origem_conta);if(!inScope(n))return;var dd=parseInt((r.data_pedido||'').slice(8,10),10);if(dd)curD[dd]=(curD[dd]||0)+parseFloat(r.receita_bruta||0);});
     (STATE.mvRowsPrev||[]).forEach(function(r){if(!inScope(getNome(r.canal_nome_raw,r.origem_conta)))return;var dd=parseInt((r.data_pedido||'').slice(8,10),10);if(dd)priD[dd]=(priD[dd]||0)+parseFloat(r.receita_bruta||0);});
     var maxDom=Math.max(31, ...Object.keys(curD).concat(Object.keys(priD)).map(Number).concat([0]));
     var domLabels=[],curVals=[],priVals=[];
@@ -2043,18 +2017,18 @@ function renderHero(){
   }
   var diario={};var canais={};
   var selOk=function(n){return !(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[n]);};
+  var canalOk=function(n){return selOk(n)&&!(STATE.focusCanal&&n!==STATE.focusCanal);};
   if(STATE.focusProduto){
-    // Produto focado: série diária do produto (receita ou unidades) por canal, dos itens.
-    (STATE.itensFocus||[]).filter(function(it){return it._sku_pai===STATE.focusProduto;}).forEach(function(it){var st=it._canc||'';if(st==='cancelado'||st==='devolvido')return;var d=(it._data||'').slice(0,10);var n=it._canal;if(!d||!n||!selOk(n))return;if(!diario[d])diario[d]={};diario[d][n]=(diario[d][n]||0)+(isUn?(it._qtd||0):(it._receita||0));canais[n]=getCor(n);});
+    // Produto focado: série diária do produto (receita ou unidades) por canal, da MV de SKU.
+    (STATE.skuMVRows||[]).forEach(function(r){if(r.sku_pai!==STATE.focusProduto)return;var n=getNome(r.canal_nome_raw,r.origem_conta);if(!canalOk(n))return;var d=(r.data_pedido||'').slice(0,10);if(!d)return;if(!diario[d])diario[d]={};diario[d][n]=(diario[d][n]||0)+(isUn?parseFloat(r.qtd||0):parseFloat(r.receita||0));canais[n]=getCor(n);});
   }else if(isUn){
-    // Unidades vêm dos ITENS carregados (vw_pedidos_full não expõe quantidade).
-    // Só disponível no período com itens (~130d); fora disso o gráfico fica vazio.
-    (STATE.itensFocus||[]).forEach(function(it){var st=it._canc||'';if(st==='cancelado'||st==='devolvido')return;var d=(it._data||'').slice(0,10);var n=it._canal;if(!d||!n||!selOk(n))return;if(!diario[d])diario[d]={};diario[d][n]=(diario[d][n]||0)+(it._qtd||0);canais[n]=getCor(n);});
-  }else if(STATE.pedidos&&STATE.pedidos.length){
-    STATE.pedidos.forEach(function(p){if(p._canc)return;var d=(p.data_pedido||'').slice(0,10);if(!d)return;if(!diario[d])diario[d]={};diario[d][p._nome]=(diario[d][p._nome]||0)+valf(p);canais[p._nome]=p._cor;});
+    // Unidades por dia/canal — da MV de SKU (qtd). vw_pedidos_full não expunha quantidade;
+    // desde 23/07 sai da MV (sem itens crus), disponível em qualquer janela.
+    (STATE.skuMVRows||[]).forEach(function(r){var n=getNome(r.canal_nome_raw,r.origem_conta);if(!canalOk(n))return;var d=(r.data_pedido||'').slice(0,10);if(!d)return;if(!diario[d])diario[d]={};diario[d][n]=(diario[d][n]||0)+parseFloat(r.qtd||0);canais[n]=getCor(n);});
   }else{
-    // Período longo (sem pedidos detalhados): série diária da MV canal_dia (receita_bruta por dia/canal).
-    (STATE.mvRows||[]).forEach(function(r){var d=(r.data_pedido||'').slice(0,10);if(!d)return;var n=getNome(r.canal_nome_raw,r.origem_conta);if(!selOk(n))return;if(STATE.focusCanal&&n!==STATE.focusCanal)return;if(!diario[d])diario[d]={};diario[d][n]=(diario[d][n]||0)+parseFloat(r.receita_bruta||0);canais[n]=getCor(n);});
+    // Receita por dia/canal — da MV canal_dia (receita_bruta). Caminho único desde 23/07
+    // (antes usava STATE.pedidos cru; agora nem é buscado).
+    (STATE.mvRows||[]).forEach(function(r){var d=(r.data_pedido||'').slice(0,10);if(!d)return;var n=getNome(r.canal_nome_raw,r.origem_conta);if(!canalOk(n))return;if(!diario[d])diario[d]={};diario[d][n]=(diario[d][n]||0)+parseFloat(r.receita_bruta||0);canais[n]=getCor(n);});
   }
   var dias=Object.keys(diario).sort();
   var canaisL=Object.keys(canais).sort(function(a,b){var sa=0,sb=0;dias.forEach(function(d){sa+=diario[d][a]||0;sb+=diario[d][b]||0;});return sb-sa;});
@@ -2080,17 +2054,10 @@ function renderHero(){
 function _pedInfo(){var m={};(STATE.pedidos||[]).forEach(function(p){m[p.id]={uf:p.uf,cidade:p.cidade,metodo:p.metodo_pagamento,parcelas:p.parcelas};});return m;}
 function _itensProduto(){return (STATE.itensFocus||[]).filter(function(it){return it._sku_pai===STATE.focusProduto&&it._canc!=='cancelado'&&it._canc!=='devolvido';});}
 function renderGeo(){
-  var byUF={},byCity={};
-  if(STATE.focusProduto){var pm=_pedInfo();
-    _itensProduto().forEach(function(it){var o=pm[it.pedido_id];if(!o)return;var uf=(o.uf||'').trim().toUpperCase();if(!uf||uf.length!==2)return;var cidade=(o.cidade||'').trim();var v=it._receita||0;
-      if(!byUF[uf])byUF[uf]={r:0,n:0};byUF[uf].r+=v;byUF[uf].n++;
-      if(cidade){var ck=uf+'|'+cidade;if(!byCity[ck])byCity[ck]={uf:uf,cidade:cidade,r:0,n:0};byCity[ck].r+=v;byCity[ck].n++;}
-    });pintarGeo(byUF,byCity);return;}
-  STATE.pedidos.forEach(function(p){if(p._canc)return;var uf=(p.uf||'').trim().toUpperCase();if(!uf||uf.length!==2)return;var cidade=(p.cidade||'').trim();var v=valorReceita(p);
-    if(!byUF[uf])byUF[uf]={r:0,n:0};byUF[uf].r+=v;byUF[uf].n++;
-    if(cidade){var ck=uf+'|'+cidade;if(!byCity[ck])byCity[ck]={uf:uf,cidade:cidade,r:0,n:0};byCity[ck].r+=v;byCity[ck].n++;}
-  });
-  pintarGeo(byUF,byCity);
+  // Geo sai 100% da MV geo_dia (uf/cidade por canal/dia) — caminho único desde 23/07.
+  // ⚠️ A MV é por CANAL, não por SKU: com produto focado o mapa mostra o escopo de canais
+  // (não filtra pelo produto). Filtro geo por produto exigiria uma MV sku×uf (fora de escopo).
+  renderGeoMV(STATE.geoMVRows||[]);
 }
 // Paint imediato de geo via MV (linhas agregadas por dia/canal/uf/cidade). Aplica os
 // mesmos filtros que renderGeo herda de STATE.pedidos (focusCanal + canaisSel).
@@ -2125,17 +2092,9 @@ function geoSelectUF(uf){GEO_UF_SEL=GEO_UF_SEL===uf?null:uf;renderGeo();}
 
 // ── PAYMENTS ──
 function renderPayments(){
-  var methods={},installments={};
-  if(STATE.focusProduto){var pm=_pedInfo();
-    _itensProduto().forEach(function(it){var o=pm[it.pedido_id];if(!o)return;var m=o.metodo||'';var parc=parseInt(o.parcelas||0);var v=it._receita||0;
-      if(m){if(!methods[m])methods[m]={r:0,n:0};methods[m].r+=v;methods[m].n++;}
-      if(parc>0){var faixa=parc===1?'1x':(parc<=3?'2-3x':(parc<=6?'4-6x':'7-12x'));if(!installments[faixa])installments[faixa]={r:0,n:0};installments[faixa].r+=v;installments[faixa].n++;}
-    });pintarPayments(methods,installments);return;}
-  STATE.pedidos.forEach(function(p){if(p._canc)return;var m=p.metodo_pagamento||'';var parc=parseInt(p.parcelas||0);var v=valorReceita(p);
-    if(m){if(!methods[m])methods[m]={r:0,n:0};methods[m].r+=v;methods[m].n++;}
-    if(parc>0){var faixa=parc===1?'1x':(parc<=3?'2-3x':(parc<=6?'4-6x':'7-12x'));if(!installments[faixa])installments[faixa]={r:0,n:0};installments[faixa].r+=v;installments[faixa].n++;}
-  });
-  pintarPayments(methods,installments);
+  // Pagamentos saem 100% da MV pgto_dia (método/parcelas por canal/dia) — caminho único
+  // desde 23/07. Como a geo, é por CANAL: com produto focado mostra o escopo de canais.
+  renderPaymentsMV(STATE.pgtoMVRows||[]);
 }
 // Paint imediato de pagamentos via MV (agregada por dia/canal/método/parcelas).
 function renderPaymentsMV(rows){
@@ -2172,13 +2131,16 @@ function pintarPayments(methods,installments){
 var DIAS_SEM=['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
 function dowIdx(dstr){var dt=new Date(dstr+'T12:00:00Z');return(dt.getUTCDay()+6)%7;}
 function renderDowHeat(){
+  // Heatmap dia-da-semana × canal — 100% das MVs desde 23/07 (antes vinha dos pedidos crus).
+  // Receita = receita_bruta (inclui devolvido como bruta, igual ao KPI Receita Bruta e à
+  // tabela de canais). Respeita canaisSel (igual a pedidosFull), não o focusCanal.
   var matrix={};
+  var selOk=function(n){return !(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[n]);};
   if(STATE.focusProduto){
-    _itensProduto().forEach(function(it){var d=(it._data||'').slice(0,10);if(!d)return;var n=it._canal;if(!matrix[n])matrix[n]=new Array(7).fill(0);matrix[n][dowIdx(d)]+=it._receita||0;});
+    (STATE.skuMVRows||[]).forEach(function(r){if(r.sku_pai!==STATE.focusProduto)return;var n=getNome(r.canal_nome_raw,r.origem_conta);if(!selOk(n))return;var d=(r.data_pedido||'').slice(0,10);if(!d)return;if(!matrix[n])matrix[n]=new Array(7).fill(0);matrix[n][dowIdx(d)]+=parseFloat(r.receita||0);});
     pintarDowHeat(matrix);return;
   }
-  var ped=STATE.pedidosFull||STATE.pedidos;
-  ped.forEach(function(p){if(p._canc)return;var d=(p.data_pedido||'').slice(0,10);if(!d)return;if(!matrix[p._nome])matrix[p._nome]=new Array(7).fill(0);matrix[p._nome][dowIdx(d)]+=valorReceita(p);});
+  (STATE.mvRows||[]).forEach(function(r){var n=getNome(r.canal_nome_raw,r.origem_conta);if(!selOk(n))return;var d=(r.data_pedido||'').slice(0,10);if(!d)return;if(!matrix[n])matrix[n]=new Array(7).fill(0);matrix[n][dowIdx(d)]+=parseFloat(r.receita_bruta||0);});
   pintarDowHeat(matrix);
 }
 function pintarDowHeat(matrix){
@@ -2452,6 +2414,24 @@ async function carregarVelocidade(sku,key){
   }catch(e){STATE.velocData[key]={pronto:true,erro:true};}
   if(STATE.skuSel===sku) renderEcommSkuDetail();
 }
+// Fetch LAZY da variante (grade × cor) do produto aberto no drawer — escopado no sku_pai
+// clicado (dezenas de linhas), só quando o produto é selecionado. É o que substituiu o
+// fetch de TODOS os itens crus do período: a carga do dash não busca variante nenhuma;
+// o drawer busca a sua sob demanda. Mesmo padrão do carregarVelocidade. (23/07)
+async function carregarVariante(sku){
+  if(!STATE.variMV)STATE.variMV={};
+  var key=sku+'|'+DE+'|'+ATE;
+  if(STATE.variMV[key]!==undefined)return;   // já carregado ou carregando
+  STATE.variMV[key]=null;                     // marca "carregando"
+  try{
+    var f='select=data_pedido,canal_nome_raw,origem_conta,cor,tamanho,qtd,receita,n_ped'+
+      '&sku_pai=eq.'+encodeURIComponent(sku)+'&data_pedido=gte.'+DE+'&data_pedido=lte.'+ATE+'&order=data_pedido.asc';
+    STATE.variMV[key]=(await buscarTudo('mvw_ecom_sku_variante_dia',f))||[];
+  }catch(e){STATE.variMV[key]=[];}
+  // Produto focado usa n_ped p/ ticket/PA do topo → re-renderiza KPIs/Top quando chega.
+  if(STATE.focusProduto===sku){try{renderKPIs();renderTopProdutos();}catch(e){}}
+  if(STATE.skuSel===sku) renderEcommSkuDetail();
+}
 function renderEcommSkuDetail(){
   var wrap=document.getElementById('ecomm-sku-detail');
   if(!wrap)return;
@@ -2475,9 +2455,19 @@ function renderEcommSkuDetail(){
   // Painel destacado: top-border na cor do canal dominante + fundo próprio + respiro maior,
   // separando visualmente a lista de produtos do início da análise (pedido do Leo 10/06).
   wrap.style.cssText='margin-top:22px;padding:18px;background:var(--bg3);border:1px solid var(--bdr);border-top:3px solid '+corDom+';border-radius:12px;';
-  // Itens deste SKU (no escopo)
-  var itens=(STATE.itensFocus||[]).filter(function(it){return it._sku_pai===STATE.skuSel;});
-  var nPedidos=Object.keys(s.pedidoIds||{}).length||nPedProduto(STATE.skuSel);
+  // Itens deste SKU (no escopo) — da MV de variante (grade × cor), fetch lazy escopado.
+  // Antes vinha de STATE.itensFocus (itens crus do período, com o buraco de cobertura).
+  if(!STATE.variMV)STATE.variMV={};
+  var _vkey=STATE.skuSel+'|'+DE+'|'+ATE;
+  if(STATE.variMV[_vkey]===undefined)carregarVariante(STATE.skuSel);
+  var _vRows=(STATE.variMV[_vkey]||[]).filter(function(r){var n=getNome(r.canal_nome_raw,r.origem_conta);
+    if(STATE.focusCanal&&n!==STATE.focusCanal)return false;
+    if(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[n])return false;return true;});
+  var itens=_vRows.map(function(r){return {_tam:r.tamanho,_cor:r.cor,_qtd:parseFloat(r.qtd||0),_receita:parseFloat(r.receita||0),_data:r.data_pedido};});
+  // nº de pedidos do produto: n_ped da MV de variante, deduplicado por (dia, canal) — o valor
+  // é o mesmo em todas as linhas de variante do grupo, então conta uma vez por grupo.
+  var _npMap={};_vRows.forEach(function(r){_npMap[r.data_pedido+'|'+getNome(r.canal_nome_raw,r.origem_conta)]=parseFloat(r.n_ped||0);});
+  var nPedidos=Object.values(_npMap).reduce(function(a,b){return a+b;},0)||Object.keys(s.pedidoIds||{}).length;
 
   // KPIs ecommerce
   var receita=s.receita;var qtd=s.qtd;
@@ -2709,38 +2699,37 @@ function renderPareto(){
 
 // ── ALERTS ──
 function renderAlerts(){
-  var totalPed=STATE.pedidos.length;var cancPed=STATE.pedidos.filter(function(p){return p._cancelado;}).length;
-  var cancRate=totalPed>0?cancPed/totalPed*100:0;
+  // 100% das MVs desde 23/07 (antes vinha dos pedidos crus). Respeita canaisSel.
+  var selOk=function(n){return !(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[n]);};
   var alerts=[];
+  // Cancelamento — da MV canal_dia (pedidos + cancelados). Passa a refletir o REAL: o toggle
+  // "incluir cancelados" saiu do header (22/07), então STATE.pedidos já não trazia cancelado
+  // e este alerta vivia zerado. A MV tem a contagem de cancelados → alerta volta a funcionar.
+  var totPed=0,cancPed=0;
+  (STATE.mvRows||[]).forEach(function(r){var n=getNome(r.canal_nome_raw,r.origem_conta);if(!selOk(n))return;totPed+=parseInt(r.pedidos||0);cancPed+=parseInt(r.cancelados||0);});
+  var cancRate=totPed>0?cancPed/totPed*100:0;
   if(cancRate>=5)alerts.push({level:'red',text:'Taxa de cancelamento alta: '+fmtD(cancRate)+'% ('+fmtN(cancPed)+' pedidos)'});
   else if(cancRate>=2)alerts.push({level:'amber',text:'Taxa de cancelamento: '+fmtD(cancRate)+'%'});
 
   // Devolução REAL do Site Próprio via Troquecommerce (RMA): inclui TROCAS (vale-crédito)
   // invisíveis no refund Shopify. Mostra taxa operacional (incl. troca) e perda de caixa (estorno $).
-  if(STATE.troqueSite&&STATE.troqueSite.length){
+  if(STATE.troqueSite&&STATE.troqueSite.length&&selOk('Site Próprio')){
     var tOp=0,tCx=0,tTr=0,tRev=0;
     STATE.troqueSite.forEach(function(d){tOp+=parseFloat(d.valor_operacional||0);tCx+=parseFloat(d.valor_caixa||0);tTr+=parseFloat(d.valor_troca||0);tRev+=parseInt(d.reversas||0);});
-    var siteBruta=0;(STATE.pedidosFull||STATE.pedidos).forEach(function(p){if(p._cancelado)return;if(p._nome==='Site Próprio')siteBruta+=valorReceita(p);});
+    var siteBruta=0;(STATE.mvRows||[]).forEach(function(r){if(getNome(r.canal_nome_raw,r.origem_conta)!=='Site Próprio')return;siteBruta+=parseFloat(r.receita_bruta||0);});
     if(siteBruta>0&&tOp>0){
       var taxaOp=tOp/siteBruta*100,taxaCx=tCx/siteBruta*100;
       alerts.push({level: taxaOp>=12?'amber':'green',
         text:'Site Próprio — devolução real (Troque): '+fmtD(taxaOp)+'% operacional ('+fmtN(tRev)+' reversas, '+fmt(tTr)+' em troca/crédito) vs '+fmtD(taxaCx)+'% de perda de caixa (estorno). Trocas não saem no refund Shopify.'});
     }
   }
+  // (Early-warning TikTok "devoluções em processo" removido em 23/07: dependia de
+  //  pedidos.devolucao_pipeline por pedido, que não vem em nenhuma MV. Re-habilitável se
+  //  a coluna for agregada numa MV. O P&L usa devolução settled + a curva de provisão, que
+  //  não dependem disso.)
 
-  // Early-warning TikTok: devoluções em PROCESSO (endpoint dedicado) que o statement
-  // settled ainda não capturou. Sinaliza quando o pipeline supera o confirmado.
-  var pp=STATE.pedidosFull||STATE.pedidos;var tkPipe=0,tkSettled=0,tkBruta=0;
-  pp.forEach(function(p){if(p._cancelado)return;if((p._nome||'').indexOf('TikTok')<0)return;
-    tkPipe+=parseFloat(p.devolucao_pipeline||0);tkSettled+=parseFloat(p.valor_devolucao||0);tkBruta+=valorReceita(p);});
-  if(tkBruta>0&&tkPipe>tkSettled*1.3&&(tkPipe-tkSettled)>2000){
-    var pctPipe=tkPipe/tkBruta*100,pctSet=tkSettled/tkBruta*100;
-    alerts.push({level:'amber',text:'TikTok: '+fmt(tkPipe-tkSettled)+' em devoluções em processo ainda não liquidadas — pipeline '+fmtD(pctPipe)+'% vs '+fmtD(pctSet)+'% confirmado (settlement matura ~15d pós-entrega)'});
-  }
-
-  // Margem por canal
-  var ped=STATE.pedidosFull||STATE.pedidos;
-  var byCanal={};ped.forEach(function(p){if(p._canc)return;var n=p._nome;if(!byCanal[n])byCanal[n]=0;byCanal[n]+=valorReceita(p);});
+  // Margem por canal (estimativa grosseira p/ alerta) — receita_bruta da MV canal_dia.
+  var byCanal={};(STATE.mvRows||[]).forEach(function(r){var n=getNome(r.canal_nome_raw,r.origem_conta);if(!selOk(n))return;byCanal[n]=(byCanal[n]||0)+parseFloat(r.receita_bruta||0);});
   Object.keys(byCanal).forEach(function(n){var r=byCanal[n];var fee=r*custoPct(n);var cmv=r*cmvPct(n);var m=r-fee-cmv;var mp=r>0?m/r*100:0;
     if(mp<15)alerts.push({level:mp<5?'red':'amber',text:n+': margem estimada '+Math.round(mp)+'% — verificar custos'});});
 
@@ -2772,13 +2761,12 @@ function renderCanalCards(){
   var el=document.getElementById('canal-cards');if(!el)return;
   var selOk=function(n){return !(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[n]);};
   var hasPrev=(STATE.mvRowsPrev||[]).length>0;
-  // pedidosFull (não o pedidos filtrado por focusCanal) → os cards mostram TODOS os
-  // canais sempre, pra permitir alternar o foco clicando. Mesma lógica da tabela de canais.
-  var base=STATE.pedidosFull||STATE.pedidos;
+  // Cur e prev saem da MESMA fonte (canal_dia MV, receita_bruta por canal/dia) → cards
+  // mostram TODOS os canais sempre (foco por clique). Antes cur vinha dos pedidos crus
+  // (pedidosFull); desde 23/07 é MV, sem o fetch cru. receita_bruta já inclui devolvido
+  // como venda bruta (idêntico ao KPI Receita Bruta e à tabela de canais).
   var cur={},pri={};
-  // _cancelado (não _canc): igual à tabela de canais e ao KPI Receita Bruta — devolvido
-  // conta como venda bruta. Usar _canc subcontava Shopee/Site pelo valor devolvido.
-  base.forEach(function(p){if(p._cancelado)return;if(!selOk(p._nome))return;cur[p._nome]=(cur[p._nome]||0)+valorReceita(p);});
+  (STATE.mvRows||[]).forEach(function(r){var n=getNome(r.canal_nome_raw,r.origem_conta);if(!selOk(n))return;cur[n]=(cur[n]||0)+parseFloat(r.receita_bruta||0);});
   (STATE.mvRowsPrev||[]).forEach(function(r){var n=getNome(r.canal_nome_raw,r.origem_conta);if(!selOk(n))return;pri[n]=(pri[n]||0)+parseFloat(r.receita_bruta||0);});
   var nomes=Object.keys(cur).filter(function(n){return cur[n]>0;}).sort(function(a,b){return cur[b]-cur[a];});
   if(!nomes.length){el.innerHTML='';return;}
