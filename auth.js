@@ -25,6 +25,7 @@
     // Vendas
     diario:     { titulo: 'Diário',        descricao: 'Sua foto do dia: vendas por canal, ritmo vs meta e alertas', url: '/diario.html', icone: '☀️', cat: 'vendas' },
     ecommerce:  { titulo: 'E-commerce',    descricao: 'Canais digitais e marketplaces', url: '/ecommerce.html', icone: '🛒', cat: 'vendas' },
+    'vendas-historicas': { titulo: 'Vendas Históricas', descricao: 'Histórico mensal do ecommerce: receita, margem e mix por mês', url: '/vendas-historicas.html', icone: '📈', cat: 'vendas' },
     lojas:      { titulo: 'Lojas Físicas', descricao: 'Vendas das lojas físicas (Linx Microvix)', url: '/lojas.html', icone: '🏬', cat: 'vendas' },
     diretoria:  { titulo: 'Diretoria',     descricao: 'Visão executiva consolidada por canal', url: '/diretoria.html', icone: '📊', cat: 'vendas' },
     // Operações
