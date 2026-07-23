@@ -260,6 +260,27 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
 .wf-bar.wf-drillable{cursor:pointer;border-radius:7px;transition:background .15s;}
 .wf-bar.wf-drillable:hover{background:rgba(255,255,255,.05);}
 .wf-bar.wf-drillable .wf-bar-lbl{color:var(--cyan);font-weight:700;}
+/* ── B · barras de estrutura de custo por canal (22/07/2026) — substituiu o waterfall ── */
+.cbars{display:flex;flex-direction:column;gap:11px;}
+.cbrow{display:grid;grid-template-columns:132px 1fr;gap:12px;align-items:center;transition:opacity .15s;}
+.cbrow.dim{opacity:.4;}
+.cbrow.foc .cb-n{color:var(--cyan);}
+.cbrow.tot{padding-bottom:10px;margin-bottom:1px;border-bottom:1px solid var(--bdr);}
+.cbrow.tot .cb-n{font-weight:800;}
+.cb-name{min-width:0;cursor:pointer;}
+.cb-n{font-size:12.5px;font-weight:700;color:var(--txt1);display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cb-dot{width:9px;height:9px;border-radius:3px;flex:none;}
+.cb-r{font-size:11px;color:var(--txt3);margin-top:1px;font-variant-numeric:tabular-nums;}
+.cb-est{font-size:8px;font-weight:800;color:#fbbf24;background:rgba(251,191,36,.16);border-radius:3px;padding:0 3px;margin-left:5px;letter-spacing:.02em;}
+.cb-bar{display:flex;height:30px;border-radius:6px;overflow:hidden;background:var(--bg3);gap:2px;cursor:pointer;}
+.cb-seg{position:relative;height:100%;min-width:2px;transition:filter .12s;}
+.cb-seg.cb-drill{cursor:pointer;}
+.cb-seg.cb-drill:hover{filter:brightness(1.15);}
+.cb-pl{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.5);font-variant-numeric:tabular-nums;white-space:nowrap;}
+.cb-seg.cb-contrib .cb-pl{color:#04140c;text-shadow:none;}
+.cb-axis{display:grid;grid-template-columns:132px 1fr;gap:12px;margin-top:9px;}
+.cb-axis-t{display:flex;justify-content:space-between;font-size:10px;color:var(--txt3);}
+@media (max-width:560px){.cbrow,.cb-axis{grid-template-columns:94px 1fr;}}
 /* ── Matriz TRANSPOSTA (22/07/2026): linhas = canais, colunas = cascata de margem.
    O canal fica na 1ª coluna FIXA; rolar pra direita revela os números "fluindo atrás".
    Pensada pro mobile — poucas linhas (canais), muitas colunas (métricas). ── */
@@ -452,10 +473,10 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
        Legenda de canais dirige focusCanal (filtra o dash inteiro — fonte única, o
        gráfico nunca discorda dos KPIs acima). Barras de bloco abrem drill lateral. -->
   <div class="card">
-    <div class="card-title">P&L — Decomposição do Lucro</div>
+    <div class="card-title">Pra onde vai a receita — por canal</div>
     <div id="wf-legenda" style="margin:-2px 0 12px;"></div>
     <div id="wf-est-aviso" style="display:none;font-size:11.5px;line-height:1.5;color:#fbbf24;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.28);border-radius:8px;padding:8px 12px;margin-bottom:12px"></div>
-    <div id="waterfall" class="wf-wrap"><div class="spin"></div></div>
+    <div id="waterfall"><div class="spin"></div></div>
   </div>
 
   <!-- 4. PRODUTOS EM DESTAQUE (vs período anterior) -->
@@ -1385,30 +1406,8 @@ function renderKPIsImediato(cur,prev){
 function renderWaterfallImediato(cur,prev){
   // MESMA cascata do renderWaterfall (matriz CM1→CM2→CM3). Se divergisse, o primeiro paint
   // mostraria um gráfico e o fetch detalhado trocaria por outro — pior que esperar. (22/07)
-  var C=_wfCascata(cur), P=_wfCascata(prev);
   STATE.wfCur=cur; STATE.wfPrev=prev;
-  // Mesmas 8 barras do renderWaterfall (overview) — ver comentário lá. (22/07)
-  var items=[
-    {lbl:'Receita Bruta',val:cur.receita,color:'#22c55e',prev:prev.receita},
-    {lbl:'− CMV (estim)',val:-cur.cmv,color:'#ec4899',prev:-prev.cmv},
-    {lbl:'= Margem Bruta',cm:'CM1',val:C.mb,color:C.mb>=0?'#06b6d4':'#f43f5e',prev:P.mb},
-    {lbl:'− Custo do Canal',val:-C.custoCanal,color:'#f97316',prev:-P.custoCanal,drill:'canal'},
-    {lbl:'= Margem de Canal',cm:'CM2',val:C.mCanal,color:C.mCanal>=0?'#06b6d4':'#f43f5e',prev:P.mCanal},
-    {lbl:'− Custo de Demanda',val:-C.demanda,color:'#eab308',prev:-P.demanda,drill:'demanda'},
-    {lbl:'− Impostos',val:-(cur.impostos||0),color:'#64748b',prev:-(prev.impostos||0)},
-    {lbl:'= Contribuição',val:cur.lucro,color:cur.lucro>=0?'#22c55e':'#f43f5e',prev:prev.lucro}
-  ];
-  var maxVal=Math.max.apply(null,items.map(function(i){return Math.abs(i.val);}));
-  if(maxVal===0)maxVal=1;
-  var html=items.map(function(item){
-    var h=Math.max(Math.abs(item.val)/maxVal*140,8);
-    var d=delta(Math.abs(item.val),Math.abs(item.prev));
-    var cmTag=item.cm?'<span style="font-size:8px;font-weight:700;color:var(--txt3);margin-left:4px;letter-spacing:.04em">'+item.cm+'</span>':'';
-    var dr=item.drill?' wf-drillable':'', onc=item.drill?' onclick="abrirWfDrill(\''+item.drill+'\')"':'';
-    var car=item.drill?'<span style="font-size:8px;opacity:.9;margin-left:3px">▸</span>':'';
-    return'<div class="wf-bar'+dr+'"'+onc+'><div class="wf-bar-val">'+fmtK(Math.abs(item.val))+'</div><div class="wf-bar-inner" style="height:'+h+'px;background:'+item.color+'"></div><div class="wf-bar-lbl">'+item.lbl+cmTag+car+'</div><div class="wf-bar-delta">'+deltaBadge(d)+'</div></div>';
-  }).join('');
-  var wf=document.getElementById('waterfall');if(wf)wf.innerHTML=html;
+  drawCostBars();      // barras de estrutura de custo por canal (B) — ver drawCostBars
   renderWfLegenda();
 }
 
@@ -1428,19 +1427,74 @@ function _wfCascata(o){
 }
 // Legenda de canais do P&L — dirige focusCanal (filtra o dash inteiro). Mesmo componente
 // já usado na seção de produtos; STATE.canais mantém a lista estável mesmo com foco ativo.
+// Antes uma legenda de chips (dirigia focusCanal). Com as barras de estrutura de custo (B,
+// 22/07/2026) cada barra JÁ é um canal clicável — a legenda virou legenda de LEITURA das cores.
 function renderWfLegenda(){
   var el=document.getElementById('wf-legenda'); if(!el)return;
-  var chans=(STATE.canais&&STATE.canais.length)?STATE.canais.slice():[];
-  if(!chans.length){el.innerHTML='';return;}
-  var h='<div style="display:flex;flex-wrap:wrap;gap:6px;font-size:11px;font-weight:600;align-items:center;">';
-  h+='<span style="font-size:10px;color:var(--txt3);font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-right:2px;">Canal</span>';
-  var allOn=!STATE.focusCanal;
-  h+='<span onclick="focusCanal(null)" title="Ver todos os canais" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;padding:2px 9px;border-radius:6px;transition:all .15s;opacity:'+(allOn?'1':'.45')+';'+(allOn?'background:rgba(255,255,255,.08);outline:1px solid var(--bdr);':'')+'"><span style="color:#d4d4d8;">Todos</span></span>';
-  chans.forEach(function(c){
-    var foc=STATE.focusCanal===c, dim=STATE.focusCanal&&!foc, cor=getCor(c);
-    h+='<span onclick="focusCanal(\''+c.replace(/'/g,"\\'")+'\')" title="Ver só '+c+'" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;padding:2px 8px;border-radius:6px;transition:all .15s;opacity:'+(dim?'.4':'1')+';'+(foc?'background:'+cor+'22;outline:1px solid '+cor+';':'')+'"><span style="width:11px;height:11px;border-radius:3px;background:'+cor+';flex-shrink:0;"></span><span style="color:#d4d4d8;">'+c+'</span></span>';
-  });
+  var key=[['#f43f5e','Devol.'],['#ec4899','CMV'],['#f97316','Canal'],['#eab308','Demanda'],['#64748b','Impostos'],['#22c55e','Margem']];
+  var h='<div style="display:flex;flex-wrap:wrap;gap:5px 12px;align-items:center;font-size:11px;">';
+  key.forEach(function(k){h+='<span style="display:inline-flex;align-items:center;gap:5px;color:var(--txt2);font-weight:600"><span style="width:10px;height:10px;border-radius:3px;background:'+k[0]+'"></span>'+k[1]+'</span>';});
+  h+='<span style="color:var(--txt3);font-weight:500">— receita = 100%; <b style="color:var(--txt2)">clique num canal</b> pra focar o dash, <b style="color:var(--txt2)">clique em Canal/Demanda</b> pra detalhar.</span>';
   el.innerHTML=h+'</div>';
+}
+// ── B · ESTRUTURA DE CUSTO POR CANAL (escolha do Leo, 22/07/2026) ──────────────
+// Uma barra por canal, receita=100%. Cada custo é um pedaço; o verde que sobra é a Margem
+// de Contribuição — a margem em % É a largura. Substituiu o waterfall: nasce pro mobile e
+// compara canais no relance. Mesma matemática do _cecCol → reconcilia com a matriz e os KPIs.
+// flex-grow ∝ valor faz cada segmento pegar sua fatia SEM depender de somar 100% (robusto a
+// canal no prejuízo: custos passam de 100%, some o verde, e a margem vira rótulo vermelho).
+function drawCostBars(){
+  var wf=document.getElementById('waterfall'); if(!wf)return;
+  var rows=(STATE.canalRows||[]).filter(function(r){return (r.r||0)>0;})
+                                .sort(function(a,b){return b.r-a.r;});
+  var chRows;
+  if(rows.length){
+    chRows=[{nome:'Todos',cor:null,tot:1,d:_cecCol(rows),est:rows.reduce(function(s,r){return s+(r.est||0);},0)}];
+    rows.forEach(function(r){chRows.push({nome:r.nome,cor:r.cor||getCor(r.nome),d:_cecCol([r]),est:r.est||0});});
+  }else if(STATE.wfCur){
+    var c=STATE.wfCur, agg={r:c.receita,dev:c.devolucoes,cmv:c.cmv,fee:c.comissao,frete:c.frete,full:c.full||0,
+      taxasConta:c.taxasConta||0,reversa:c.reversa||0,rebate:c.rebate||0,afiliado:c.afiliados||0,ads:c.ads,
+      impostos:c.impostos||0,custoFixo:c.custoFixo||0};
+    chRows=[{nome:'Todos',cor:null,tot:1,d:_cecCol([agg]),est:(c.est&&c.est.total)||0}];
+  }else{ wf.innerHTML=''; return; }
+
+  var segs=[
+    {k:'dev',        c:'#f43f5e', lbl:'Dev'},
+    {k:'cmv',        c:'#ec4899', lbl:'CMV'},
+    {k:'custoCanal', c:'#f97316', lbl:'Canal',   drill:'canal'},
+    {k:'demanda',    c:'#eab308', lbl:'Demanda', drill:'demanda'},
+    {k:'imp',        c:'#64748b', lbl:'Imp'}
+  ];
+  var foc=STATE.focusCanal;
+  var h='<div class="cbars">';
+  chRows.forEach(function(ch){
+    var d=ch.d, rev=d.r||0, contrib=d.contrib||0, mgP=rev>0?contrib/rev*100:0;
+    var isFoc=(!ch.tot&&foc===ch.nome), dim=(foc&&!ch.tot&&!isFoc);
+    var click=ch.tot?'focusCanal(null)':'focusCanal(\''+ch.nome.replace(/'/g,"\\'")+'\')';
+    var estChip=ch.est>0.005?'<span class="cb-est" title="parte do custo ainda estimada (pedidos não liquidados)">est.</span>':'';
+    h+='<div class="cbrow'+(ch.tot?' tot':'')+(isFoc?' foc':'')+(dim?' dim':'')+'">';
+    h+='<div class="cb-name" onclick="'+click+'" title="'+(ch.tot?'Ver todos os canais':'Focar '+ch.nome)+'">'+
+       '<div class="cb-n">'+(ch.cor?'<span class="cb-dot" style="background:'+ch.cor+'"></span>':'')+(ch.tot?'Todos':ch.nome)+estChip+'</div>'+
+       '<div class="cb-r">'+fmtK(rev)+' · <b style="color:'+(mgP>=0?'#22c55e':'#f43f5e')+'">'+fmtD(mgP)+'% margem</b></div></div>';
+    h+='<div class="cb-bar" onclick="'+click+'">';
+    segs.forEach(function(s){
+      var v=d[s.k]||0; if(v<=0)return;
+      var w=rev>0?v/rev*100:0, showLbl=w>=9;
+      var onc=s.drill?' onclick="event.stopPropagation();abrirWfDrill(\''+s.drill+'\')"':'';
+      h+='<div class="cb-seg'+(s.drill?' cb-drill':'')+'" style="flex:'+v+' 0 0;background:'+s.c+'"'+onc+
+         ' title="'+s.lbl+': '+fmtK(v)+' ('+fmtD(w)+'%)'+(s.drill?' — clique pra detalhar':'')+'">'+
+         (showLbl?'<span class="cb-pl">'+s.lbl+(s.drill?' ▸':'')+'</span>':'')+'</div>';
+    });
+    if(contrib>0){
+      var w=rev>0?contrib/rev*100:0;
+      h+='<div class="cb-seg cb-contrib" style="flex:'+contrib+' 0 0" title="Margem de contribuição: '+fmtK(contrib)+' ('+fmtD(w)+'%)">'+
+         (w>=9?'<span class="cb-pl">'+fmtD(w)+'%</span>':'')+'</div>';
+    }
+    h+='</div></div>';
+  });
+  h+='</div>';
+  h+='<div class="cb-axis"><div></div><div class="cb-axis-t"><span>0% da receita</span><span>50%</span><span>margem &rarr;</span></div></div>';
+  wf.innerHTML=h;
 }
 // Drill lateral de um bloco de custo do P&L: composição + quebra por canal.
 var WF_DRILL={
@@ -1507,47 +1561,9 @@ function renderWaterfall(){
   // prev vem da MV (sem custo fixo por canal do mês anterior) → estima pela taxa atual, p/ delta honesto
   if((prev.custoFixo||0)===0&&cur.receita>0){var _rtF=(cur.custoFixo||0)/cur.receita;prev.custoFixo=_rtF*(prev.receita||0);prev.resultadoOper=(prev.lucro||0)-prev.custoFixo;}
   var e=cur.est||{com:0,afil:0,dev:0,total:0};
-  var C=_wfCascata(cur), P=_wfCascata(prev);
-  STATE.wfCur=cur; STATE.wfPrev=prev;   // o drill lateral lê daqui
-  // Mesma cascata da matriz de Custo Efetivo (CM1→CM2→CM3), com CMV NA FRENTE.
-  // Os dois blocos de custo viram UMA barra cada, clicável → drill lateral.
-  // ⚠️ O marco "= Receita Líquida" (receita − custos de canal, ANTES do CMV) saiu do
-  //    gráfico em 22/07/2026 ao alinhar com a matriz — nesta convenção ele é CM2 + CMV.
-  // OVERVIEW (22/07/2026): 8 barras — marcos de margem (CM1/CM2/Contrib) + os 2 baldes de
-  // custo com drill. Devoluções, Full, Taxas, Reversa e Custo Fixo viram detalhe no drill
-  // lateral e na matriz por canal. O gráfico é o resumo; a matriz é o detalhe.
-  var items=[
-    {lbl:'Receita Bruta',val:cur.receita,color:'#22c55e',prev:prev.receita},
-    {lbl:'− CMV',val:-cur.cmv,color:'#ec4899',prev:-prev.cmv},
-    {lbl:'= Margem Bruta',cm:'CM1',val:C.mb,color:C.mb>=0?'#06b6d4':'#f43f5e',prev:P.mb},
-    {lbl:'− Custo do Canal',val:-C.custoCanal,color:'#f97316',prev:-P.custoCanal,est:e.com,drill:'canal'},
-    {lbl:'= Margem de Canal',cm:'CM2',val:C.mCanal,color:C.mCanal>=0?'#06b6d4':'#f43f5e',prev:P.mCanal},
-    {lbl:'− Custo de Demanda',val:-C.demanda,color:'#eab308',prev:-P.demanda,est:e.afil,drill:'demanda'},
-    {lbl:'− Impostos',val:-(cur.impostos||0),color:'#64748b',prev:-(prev.impostos||0)},
-    {lbl:'= Contribuição',val:cur.lucro,color:cur.lucro>=0?'#22c55e':'#f43f5e',prev:prev.lucro}
-  ];
+  STATE.wfCur=cur; STATE.wfPrev=prev;   // o drill lateral e as barras leem daqui
+  drawCostBars();      // barras de estrutura de custo por canal (B, 22/07/2026)
   renderWfLegenda();
-  var maxVal=Math.max.apply(null,items.map(function(i){return Math.abs(i.val);}));
-  if(maxVal===0) maxVal=1;
-  var html=items.map(function(item){
-    var h=Math.max(Math.abs(item.val)/maxVal*140,8);
-    var d=delta(Math.abs(item.val),Math.abs(item.prev));
-    // A6: a parte estimada da barra vem HACHURADA + rótulo "est.".
-    var eh=(item.est>0&&Math.abs(item.val)>0)?Math.min(h*(item.est/Math.abs(item.val)),h):0;
-    var hach=eh>0?'<div style="position:absolute;top:0;left:0;right:0;height:'+eh+'px;background:repeating-linear-gradient(45deg,rgba(255,255,255,.30) 0 3px,transparent 3px 6px);border-top:1px dashed rgba(255,255,255,.65)"></div>':'';
-    var tag=eh>0?'<span title="Estimado: '+fmtK(item.est)+' — pedidos que ainda não liquidaram" style="font-size:8px;padding:0 3px;border-radius:3px;background:rgba(251,191,36,.18);color:#fbbf24;font-weight:700;margin-left:3px">est.</span>':'';
-    var cmTag=item.cm?'<span style="font-size:8px;font-weight:700;color:var(--txt3);margin-left:4px;letter-spacing:.04em">'+item.cm+'</span>':'';
-    var drill=item.drill?' wf-drillable':'';
-    var onc=item.drill?' onclick="abrirWfDrill(\''+item.drill+'\')" title="Clique pra abrir a composição de '+item.lbl.replace(/^− /,'')+'"':'';
-    var car=item.drill?'<span style="font-size:8px;opacity:.9;margin-left:3px">▸</span>':'';
-    return'<div class="wf-bar'+drill+'"'+onc+'>'+
-      '<div class="wf-bar-val">'+fmtK(Math.abs(item.val))+'</div>'+
-      '<div class="wf-bar-inner" style="position:relative;height:'+h+'px;background:'+item.color+'">'+hach+'</div>'+
-      '<div class="wf-bar-lbl">'+item.lbl+cmTag+car+tag+'</div>'+
-      '<div class="wf-bar-delta">'+deltaBadge(d)+'</div>'+
-    '</div>';
-  }).join('');
-  document.getElementById('waterfall').innerHTML=html;
   // Aviso: quanto do custo do período ainda é provisão (some sozinho conforme o real chega).
   var av=document.getElementById('wf-est-aviso');
   if(av){
@@ -1918,6 +1934,9 @@ function renderCustoCanal(){
   notas.push('<b>Contribuição</b> e <b>Result. Oper.</b> batem ao centavo com o waterfall e os KPIs do topo. Não é "take rate" (receita da plataforma ÷ GMV) — aqui é o custo do vendedor.');
   h+='<div class="cec-note">'+notas.map(function(n){return '• '+n;}).join('<br>')+'</div></div>';
   wrap.innerHTML=h;
+  // As barras de estrutura de custo (#waterfall) leem o MESMO STATE.canalRows — repinta aqui
+  // pra elas e a matriz sempre refletirem o mesmo dado (fecha o gap dos paints rápidos). (22/07)
+  try{drawCostBars();}catch(e){}
 }
 
 function _canalTbodyHTML(rows){
