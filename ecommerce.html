@@ -1488,6 +1488,22 @@ function renderWaterfall(){
   }
 }
 var _pnlMemo=null;  // PERF: evita recomputar calcPnL 2x no mesmo tick (renderWaterfall + renderKPIs)
+// CMV líquido (cmv − cmv_devolvido) por canal, da MV sku-dia (item×custo agregado NO SERVIDOR,
+// cobertura 100%). Substitui a soma dos itens do cliente, que chegavam com ~30% de BURACO de
+// cobertura (o fetch não trazia todos os itens do período) — o que subcontava o CMV e inflava
+// a margem (bug 23/07: dash mostrava CMV ~30% quando o real é ~44%). `cmv − cmv_devolvido` =
+// líquido do estorno, mesma régua do (1−tDev) por item. applyFocus respeita o focusCanal.
+function cmvByCanalMV(applyFocus){
+  var rows=STATE.skuMVRows||[]; if(!rows.length) return null;
+  var m={};
+  rows.forEach(function(r){
+    var n=getNome(r.canal_nome_raw,r.origem_conta);
+    if(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[n])return;
+    if(applyFocus&&STATE.focusCanal&&n!==STATE.focusCanal)return;
+    m[n]=(m[n]||0)+Math.max(parseFloat(r.cmv||0)-parseFloat(r.cmv_devolvido||0),0);
+  });
+  return m;
+}
 function calcPnL(pedidos,itens,adsVal){
   adsVal=adsVal||0;
   var custoFixo=custoFixoNoEscopo();  // fixo rateado no escopo — entra no memo key (muda com chips/fetch async)
@@ -1540,9 +1556,18 @@ function calcPnL(pedidos,itens,adsVal){
   });
   // CMV REAL dos itens carregados (período dentro da janela janelaItens — abr/mai/jun);
   // pedidos mais ANTIGOS que a janela (sem item) usam a proporção REAL por canal (cmvPct).
-  var iniItens=janelaItens(DE);
-  if(itens&&itens.length>0){itens.forEach(function(it){cmv+=(it._cmv!=null?it._cmv:(it._custoUn||0)*it._qtd);});}
-  pedidos.forEach(function(p){if(p._cancelado)return;if((p.data_pedido||'')>=iniItens)return;cmv+=valorReceita(p)*cmvPct(p._nome)*(1-taxaDev(p));});
+  // CMV da MV sku-dia (cobertura 100% do período DE..ATE) — NÃO dos itens do cliente, que
+  // chegavam com ~30% de buraco de cobertura e inflavam a margem (bug 23/07). Ver cmvByCanalMV.
+  var _cmvMap=cmvByCanalMV(true);
+  if(_cmvMap){
+    Object.keys(_cmvMap).forEach(function(n){cmv+=_cmvMap[n];});
+    // A MV cobre DE..ATE inteiro → NÃO roda o fallback de cmvPct (evitaria dupla contagem).
+  }else{
+    // Fallback (MV ausente): itens carregados na janela + cmvPct pros pedidos mais antigos.
+    var iniItens=janelaItens(DE);
+    if(itens&&itens.length>0){ itens.forEach(function(it){cmv+=(it._cmv!=null?it._cmv:(it._custoUn||0)*it._qtd);}); }
+    pedidos.forEach(function(p){if(p._cancelado)return;if((p.data_pedido||'')>=iniItens)return;cmv+=valorReceita(p)*cmvPct(p._nome)*(1-taxaDev(p));});
+  }
   frete+=freteReversoNoEscopo();  // reversa/troca do Site (Troque tracking.price), agregado do período
   afiliados+=mlTaxaNoEscopo('afiliado');  // afiliado ML (CVAF, nível conta/período — não vem por pedido)
   var full=mlTaxaNoEscopo('full');        // Full ML (armazenagem CFWA + retirada CFRS), agregado do período
@@ -1949,12 +1974,20 @@ function renderCanalTable(){
     else{ var cE=v*(t.com||custoPct(n)),aE=v*(t.afil||0); c.fee+=cE; c.afiliado+=aE; c.est+=cE+aE; }
     var dE=devProv(n,p.data_pedido,v); c.dev+=dE; c.est+=dE;
   });
-  // CMV por canal dos itens carregados; fallback proporção real por canal (cmvPct).
-  var cmvByCanal={};
-  (STATE.itens||[]).forEach(function(it){
-    if(!cmvByCanal[it._canal])cmvByCanal[it._canal]=0;
-    cmvByCanal[it._canal]+=(it._cmv!=null?it._cmv:(it._custoUn||0)*it._qtd);
-  });
+  // CMV por canal — da MV sku-dia (REAL item×custo, agregada NO SERVIDOR, cobertura 100%).
+  // ⚠️ Antes vinha dos itens do cliente (STATE.itens), que tinham ~30% de BURACO de cobertura
+  // (o fetch não trazia todos os itens do período) → CMV subcontado ~30% e margem inflada
+  // (bug visto 23/07: dash mostrava CMV 30% quando o real é 44%). A MV não tem esse buraco.
+  // `cmv − cmv_devolvido` = CMV líquido do estorno (mesma régua do (1−tDev) por item).
+  // Fallback pros itens só se a MV não veio.
+  var cmvByCanal=cmvByCanalMV();
+  if(!cmvByCanal){
+    cmvByCanal={};
+    (STATE.itens||[]).forEach(function(it){
+      if(!cmvByCanal[it._canal])cmvByCanal[it._canal]=0;
+      cmvByCanal[it._canal]+=(it._cmv!=null?it._cmv:(it._custoUn||0)*it._qtd);
+    });
+  }
   var _rD=_canalRowsArr(byCanal,cmvByCanal);STATE.canalRows=_rD;
   _setCanalTbody(_canalTbodyHTML(_rD));renderCustoCanal();
 }
