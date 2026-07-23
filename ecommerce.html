@@ -530,7 +530,7 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
 
 <script>
 var SB_URL='https://spulbhnmkomvgohzhfvj.supabase.co';
-var MAX_PAGES=50, BATCH_SZ=400;
+var MAX_PAGES=50, BATCH_SZ=700;  // 400→700 (22/07): menos chunks de itens (58→~34 no MTD); URL do in.(...) ~5KB, dentro do limite
 // Token de sequência de carga: trocar período rápido dispara carregar() concorrentes;
 // renders de um load antigo NÃO podem pintar por cima do load atual (causava coluna vazia/stale).
 var LOAD_SEQ=0;
@@ -619,7 +619,7 @@ async function fetchEstimativa(){
   if(EST.ok) return EST;                                     // 1x por sessão
   try{
     var r=await Promise.all([
-      buscarTudo('vw_ecom_taxas_estim','select=canal_nome_raw,comissao_pct,afiliado_pct,devolucao_pct&order=canal_nome_raw.asc'),
+      buscarTudo('mvw_ecom_taxas_estim','select=canal_nome_raw,comissao_pct,afiliado_pct,devolucao_pct&order=canal_nome_raw.asc'),
       buscarTudo('mvw_curva_devolucao','select=plataforma,dias,fator&order=plataforma.asc')
     ]);
     (r[0]||[]).forEach(function(t){
@@ -722,18 +722,26 @@ async function buscarTudo(tab,filtro,maxPagesOverride){
   // pagina o resto em ondas PARALELAS (era serial — 13 páginas em fila = ~7s). Se a
   // página 0 já vier < tam (caso comum: 1 batch de itens), retorna em 1 request só.
   // maxPagesOverride: teto maior pra MVs agregadas leves em período longo (ex: sku_dia ~110k linhas/ano).
-  var tam=1000,WAVE=12,capPag=maxPagesOverride||MAX_PAGES;  // 6→12 (22/07): o fetch grande (vw_pedidos_full ~24 páginas) fecha em 2 ondas em vez de 4 — corta metade dos round-trips p/ o us-west-2
+  // ⚠️ ONDA EXPANSÍVEL (22/07/2026, via profiling no browser): a versão WAVE=12 fixa
+  // disparava 12 páginas paralelas MESMO em tabela curta (geo/pgto/produtos/devolucoes têm
+  // 2-3 páginas) → ~10 requests vazios cada. Com o limite de ~6 conexões/host do browser,
+  // esses requests desperdiçados entopem o pipe e serializam tudo (medido: 177 requests /
+  // 32s no MTD). Agora a onda começa pequena (3) e dobra até 8 (~conexões do browser):
+  // tabela curta fecha em 1 onda (3 requests), tabela grande (vw_pedidos_full ~24 pág) cresce
+  // 3→6→8→8… enchendo o pipe sem estourar. Para na 1ª página incompleta.
+  var tam=1000,capPag=maxPagesOverride||MAX_PAGES;
   if(filtro.indexOf('order=')<0) filtro+='&order=id.asc';
   function pega(off){return fetch(SB_URL+'/rest/v1/'+tab+'?'+filtro+'&limit='+tam+'&offset='+off,{headers:AUTH_HEADERS}).then(function(r){if(!r.ok)throw new Error(tab+' HTTP '+r.status);return r.json();});}
   var p0=await pega(0);
   if(!Array.isArray(p0)||p0.length<tam) return p0||[];
-  var todos=p0.slice(),pag=1;
+  var todos=p0.slice(),pag=1,wave=3;
   while(pag<capPag){
     var ps=[];
-    for(var w=0;w<WAVE && pag<capPag;w++,pag++) ps.push(pega(pag*tam));
+    for(var w=0;w<wave && pag<capPag;w++,pag++) ps.push(pega(pag*tam));
     var lotes=await Promise.all(ps),fim=false;
     for(var i=0;i<lotes.length;i++){var lote=lotes[i];if(!Array.isArray(lote)||lote.length===0){fim=true;break;}todos=todos.concat(lote);if(lote.length<tam)fim=true;}
     if(fim)break;
+    wave=Math.min(wave*2,8);
   }
   return todos;
 }
