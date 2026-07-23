@@ -33,7 +33,7 @@
     // sessão já ativa do BI via hash (#sso=) → sem segundo login. O App.tsx lê o hash, aplica
     // a sessão e limpa o hash. Re-injetado a cada visita.
     (async function () {
-      const auth = await fusionAuth.requireAuth('estoque');
+      const auth = await fusionAuth.requireAuth('estoque-sistema');
       if (!auth) return; // requireAuth já redirecionou (sem sessão ou sem permissão)
       const s = auth.session;
       const ESTOQUE_URL = 'https://fusion-estoque-app.onrender.com';
