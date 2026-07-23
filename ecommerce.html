@@ -88,7 +88,8 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;}
 .cc-delta{font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;}
 .cc-up{color:#22c55e;} .cc-down{color:#f43f5e;} .cc-flat{color:var(--txt3);}
 .pd-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;}
-.pd{background:rgba(255,255,255,.02);border:1px solid var(--bdr);border-radius:10px;padding:10px 12px;}
+.pd{background:rgba(255,255,255,.02);border:1px solid var(--bdr);border-radius:10px;padding:10px 12px;cursor:pointer;transition:border-color .15s,background .15s;min-width:0;}
+.pd:hover{border-color:var(--accent);background:rgba(99,102,241,.08);}
 .pd-nome{font-size:12px;font-weight:600;color:var(--txt1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .pd-row{display:flex;justify-content:space-between;align-items:baseline;margin-top:4px;}
 .pd-val{font-size:15px;font-weight:800;color:var(--txt1);font-variant-numeric:tabular-nums;}
@@ -375,16 +376,24 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
 @media(max-width:768px){
   .kpi-grid{grid-template-columns:1fr 1fr;}
   .grid2{grid-template-columns:1fr;}
-  .wf-wrap{height:auto;flex-wrap:wrap;}
   .btn-back,.btn-logout-tb{padding:5px 10px;font-size:11px;}
   #user-info-tb{display:none;}
   .topbar{height:56px!important;padding:0 1rem!important;}
   .canal-tbl{font-size:11px;}
   .drawer{width:100vw;}
-  .dr-kpi-grid{grid-template-columns:1fr 1fr;}
-  .dr-kpi-val{font-size:1rem;}
+  /* Detalhe do produto: os grids são inline (repeat(4,1fr)/repeat(5,1fr)) → precisam de
+     !important pra virar 2 colunas no mobile, senão estouram o container (bug do 22/07). */
+  .dr-kpi-grid{grid-template-columns:1fr 1fr!important;}
+  .dr-kpi-val{font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .kpi-val{font-size:1.12rem;}       /* nowrap + overflow:hidden do .kpi cortava valores grandes no 2-col */
+  .sku-header{gap:10px!important;padding:12px!important;}
   .drawer-body{padding:14px 16px 24px;}
   .drawer-header{padding:14px 16px;}
+}
+/* telas bem estreitas: KPIs do topo e destaque em 1 coluna, sem apertar os números */
+@media(max-width:430px){
+  #kpis{grid-template-columns:1fr 1fr;}
+  .pd-grid{grid-template-columns:1fr;}
 }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -418,7 +427,6 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
       <input type="date" id="dt-ate" class="dinput">
       <button class="btnf" onclick="aplicarFiltro()">Filtrar</button>
     </div>
-    <label class="toggle"><input type="checkbox" id="chk-compare" checked onchange="carregar()"> vs anterior</label>
     <span id="upd" style="margin-left:auto;font-size:11px;color:var(--txt3);"></span>
   </div>
 
@@ -1169,13 +1177,15 @@ function periodoAnterior(de,ate){
 
 function setPeriodo(preset,el){
   var h=hojeSP(),de,ate=h;
-  switch(preset){case'hoje':de=h;break;case'ontem':de=somaDias(h,-1);ate=de;break;case'7d':de=somaDias(h,-6);break;case'30d':de=somaDias(h,-29);break;case'mtd':de=inicioMesSP();break;case'm-1':ate=somaDias(inicioMesSP(),-1);de=ate.slice(0,7)+'-01';break;case'qtd':de=inicioTrimestre();break;case'ytd':de=inicioAno();break;case'12m':de=somaDias(h,-364);break;default:de=somaDias(h,-29);}
+  // Só janelas ≤60 dias — este dash analisa o DIÁRIO (mês corrente + anterior). Histórico
+  // mensal/anual vive no dash Diretoria. Presets qtd/ytd/12m removidos em 22/07/2026.
+  switch(preset){case'hoje':de=h;break;case'ontem':de=somaDias(h,-1);ate=de;break;case'7d':de=somaDias(h,-6);break;case'30d':de=somaDias(h,-29);break;case'mtd':de=inicioMesSP();break;case'm-1':ate=somaDias(inicioMesSP(),-1);de=ate.slice(0,7)+'-01';break;default:de=somaDias(h,-29);}
   DE=de;ATE=ate;document.getElementById('dt-de').value=DE;document.getElementById('dt-ate').value=ATE;
   document.querySelectorAll('.chip[data-preset]').forEach(function(c){c.classList.remove('on');});if(el)el.classList.add('on');carregar();
 }
 function aplicarFiltro(){DE=document.getElementById('dt-de').value;ATE=document.getElementById('dt-ate').value;
   // Diário limitado a 60 dias (mês corrente + anterior). Histórico longo vive na Diretoria.
-  if(DE&&ATE&&daysBetween(DE,ATE)>62){DE=somaDias(ATE,-61);document.getElementById('dt-de').value=DE;
+  if(DE&&ATE&&daysBetween(DE,ATE)>60){DE=somaDias(ATE,-59);document.getElementById('dt-de').value=DE;
     alert('O diário mostra no máximo 60 dias (mês corrente + anterior). Ajustei o início para '+DE+'.\nPara histórico mais longo, use o dash Diretoria.');}
   document.querySelectorAll('.chip[data-preset]').forEach(function(c){c.classList.remove('on');});carregar();}
 function setStack(m){STATE.stackMode=m;document.getElementById('stk-abs').classList.toggle('on',m==='abs');document.getElementById('stk-pct').classList.toggle('on',m==='pct');renderHero();}
@@ -1221,7 +1231,7 @@ async function carregar(){
     document.getElementById('kpis').innerHTML='<div class="kpi"><div class="kpi-lbl">Carregando...</div><div class="spin"></div></div>';
   }
   try{
-    var usarComp=document.getElementById('chk-compare').checked;var ant=periodoAnterior(DE,ATE);
+    var usarComp=true;var ant=periodoAnterior(DE,ATE);  // comparação vs período anterior é SEMPRE ligada (toggle removido 22/07) — é o padrão do dash
     // Período longo (>50 dias ≈ >50k pedidos = teto do fetch detalhado): renderiza pela MV
     // agregada (KPIs/waterfall/canais/hero/geo/pgto/produtos) e PULA o fetch de pedidos detalhado,
     // que truncava em 50k linhas e subcontava YTD/QTD/12m. Pega QTD(90d)/YTD/12m; MTD/30d/m-1 seguem normal.
@@ -2877,20 +2887,31 @@ function renderProdutosDestaque(){
   var el=document.getElementById('prod-destaque');if(!el)return;
   var selOk=function(n){return !(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[n]);};
   var hasPrev=(STATE.skuMVRowsPrev||[]).length>0;
-  var cur={},pri={};
-  (STATE.skuGroups||[]).forEach(function(g){var nm=g.nome||g.sku_pai;cur[nm]=(cur[nm]||0)+g.receita;});
-  (STATE.skuMVRowsPrev||[]).forEach(function(r){var canal=getNome(r.canal_nome_raw,r.origem_conta);if(STATE.focusCanal&&canal!==STATE.focusCanal)return;if(!selOk(canal))return;var nm=r.nome||r.sku_pai;pri[nm]=(pri[nm]||0)+parseFloat(r.receita||0);});
-  var nomes=Object.keys(cur).filter(function(n){return cur[n]>0;}).sort(function(a,b){return cur[b]-cur[a];}).slice(0,8);
-  if(!nomes.length){el.innerHTML='<div style="color:var(--txt3);font-size:12px;">sem dados de produtos no período</div>';return;}
-  el.innerHTML=nomes.map(function(nm){
-    var c=cur[nm],p=pri[nm]||0,d=delta(c,p);
+  var cur={},pri={},nomeOf={};   // chaveado por sku_pai (pra clicar → abrir a análise do produto)
+  (STATE.skuGroups||[]).forEach(function(g){var k=g.sku_pai;if(!k)return;cur[k]=(cur[k]||0)+g.receita;nomeOf[k]=g.nome||k;});
+  (STATE.skuMVRowsPrev||[]).forEach(function(r){var canal=getNome(r.canal_nome_raw,r.origem_conta);if(STATE.focusCanal&&canal!==STATE.focusCanal)return;if(!selOk(canal))return;var k=r.sku_pai;if(!k)return;pri[k]=(pri[k]||0)+parseFloat(r.receita||0);});
+  var keys=Object.keys(cur).filter(function(k){return cur[k]>0;}).sort(function(a,b){return cur[b]-cur[a];}).slice(0,8);
+  if(!keys.length){el.innerHTML='<div style="color:var(--txt3);font-size:12px;">sem dados de produtos no período</div>';return;}
+  el.innerHTML=keys.map(function(k){
+    var c=cur[k],p=pri[k]||0,d=delta(c,p),nm=nomeOf[k];
     var cls=(d===null||isNaN(d))?'cc-flat':(d>=0.5?'cc-up':(d<=-0.5?'cc-down':'cc-flat'));
     var arrow=(d===null||isNaN(d))?'':(d>=0.5?'▲ ':(d<=-0.5?'▼ ':''));
     var pctS=!hasPrev?'—':((d===null||isNaN(d))?'novo':((d>=0?'+':'')+Math.round(d)+'%'));
-    return '<div class="pd"><div class="pd-nome" title="'+nm+'">'+nm+'</div>'
+    // Clicar o card abre direto a Análise por produto (pedido do Leo 22/07).
+    return '<div class="pd" onclick="abrirProduto(\''+k.replace(/'/g,"\\'")+'\')" title="Ver análise de '+nm.replace(/"/g,'')+'">'
+      +'<div class="pd-nome">'+nm+'</div>'
       +'<div class="pd-row"><span class="pd-val">'+fmtK(c)+'</span>'
       +'<span class="pd-delta '+cls+'" title="vs mês anterior">'+arrow+pctS+'</span></div></div>';
   }).join('');
+}
+// Abre a Análise por produto de um SKU e rola até ela (usado pelos cards de Produtos em
+// destaque e por navegação externa). Diferente de selectEcommSku (toggle da lista): sempre abre.
+function abrirProduto(sku){
+  STATE.skuSel=sku;
+  try{renderEcommSkuList();}catch(e){}
+  try{renderEcommSkuDetail();}catch(e){}
+  var el=document.getElementById('ecomm-sku-detail');
+  if(el)el.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
 // ═══════════════════ TAB MENSAL ═══════════════════
