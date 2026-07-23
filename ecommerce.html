@@ -254,36 +254,41 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
 /* rótulos de linha */
 .cecm .lbl .ll{font-size:12px;color:var(--txt2);}
 .cecm .lbl .ll.ind{padding-left:14px;}
-.cecm-grp .lbl{padding-top:14px !important;}
-.cecm-grp .ll{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--txt3);}
-.cecm-grp td.c{padding-top:14px;}
-/* marcos (margens) — dado destacado: % primário em cor de destaque (índigo claro) + R$ visível */
-.cecm-mile .lbl,.cecm-mile td.c{border-top:1px solid var(--bdr);}
-.cecm-mile .ll{font-weight:700;color:#c7d2fe;font-size:12px;}
-.cecm-mile .ll .cm{font-size:9px;font-weight:700;color:var(--txt3);margin-left:6px;letter-spacing:.04em;}
-.cecm-mile .cv{font-weight:800;font-size:14px;color:#a5b4fc;}
-.cecm-mile .cs{color:var(--txt1);font-weight:600;font-size:11px;}
-/* linha âncora — Custo Efetivo do Canal (accent ciano fino) */
-.cecm-anchor .lbl,.cecm-anchor td.c{border-top:1px solid rgba(6,182,212,.45);border-bottom:1px solid rgba(6,182,212,.2);}
-.cecm-anchor .ll{font-weight:800;color:var(--cyan);font-size:12px;}
-.cecm-anchor .cv{font-weight:800;color:var(--cyan);}
+/* (CSS das linhas .cecm-grp/.cecm-mile/.cecm-anchor removido em 22/07 junto da transposição —
+   a matriz agora é por COLUNA, ver .cecm-t / .milecol / .drillcol / .kidcol abaixo.) */
 /* barra de bloco do waterfall — clicável, abre o drill lateral (22/07/2026) */
 .wf-bar.wf-drillable{cursor:pointer;border-radius:7px;transition:background .15s;}
 .wf-bar.wf-drillable:hover{background:rgba(255,255,255,.05);}
 .wf-bar.wf-drillable .wf-bar-lbl{color:var(--cyan);font-weight:700;}
-/* drill-down (22/07/2026) — a linha-cabeçalho carrega o TOTAL do bloco e é clicável.
-   Nasce contraída; abrir revela as linhas .cecm-kid (data-g). Accent ciano igual à âncora,
-   que ela substituiu: o total do Custo Efetivo do Canal agora mora aqui. */
-.cecm-drill{cursor:pointer;transition:background .15s;}
-.cecm-drill:hover{background:rgba(6,182,212,.07);}
-.cecm-drill .lbl,.cecm-drill td.c{border-top:1px solid rgba(6,182,212,.45);border-bottom:1px solid rgba(6,182,212,.2);padding-top:12px;}
-.cecm-drill .ll{font-weight:800;color:var(--cyan);font-size:12px;display:inline-flex;align-items:baseline;gap:5px;}
-.cecm-drill .cv{font-weight:800;color:var(--cyan);}
-.cecm-car{display:inline-block;width:9px;font-size:9px;color:var(--cyan);opacity:.85;}
-.cecm-sub{font-size:9.5px;font-weight:600;text-transform:none;letter-spacing:0;color:var(--txt3);margin-left:2px;}
-.cecm-kid .lbl{background:var(--bg2);}
-.cecm-kid td.c,.cecm-kid .lbl{background-image:linear-gradient(rgba(6,182,212,.04),rgba(6,182,212,.04));}
-@media (max-width:768px){.cecm-sub{display:none;}}
+/* ── Matriz TRANSPOSTA (22/07/2026): linhas = canais, colunas = cascata de margem.
+   O canal fica na 1ª coluna FIXA; rolar pra direita revela os números "fluindo atrás".
+   Pensada pro mobile — poucas linhas (canais), muitas colunas (métricas). ── */
+.cecm-t .lbl.chn{min-width:120px;max-width:150px;background:var(--bg2);}
+.cecm-t thead .lbl.chn{z-index:4;}
+.cecm-t .chn-nm{font-size:12px;font-weight:700;color:var(--txt1);display:flex;align-items:center;gap:6px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cecm-t .chn-sub{font-size:10px;font-weight:500;color:var(--txt3);margin-top:2px;font-variant-numeric:tabular-nums;}
+/* cabeçalho de coluna (métrica) */
+.cecm-t .cecm-hc{text-align:right;vertical-align:bottom;padding:7px 12px 9px !important;min-width:74px;font-size:10px;font-weight:700;color:var(--txt2);border-bottom:1px solid var(--bdr);white-space:normal;line-height:1.25;letter-spacing:.01em;}
+.cecm-t .cecm-hc .cm{display:block;font-size:8px;font-weight:700;color:var(--txt3);margin-top:2px;letter-spacing:.04em;}
+.cecm-t .cecm-hc.milecol{color:#c7d2fe;background:rgba(99,102,241,.05);}
+.cecm-t .cecm-hc.drillcol{cursor:pointer;color:var(--cyan);background:rgba(6,182,212,.07);border-bottom-color:rgba(6,182,212,.4);transition:background .15s;}
+.cecm-t .cecm-hc.drillcol:hover{background:rgba(6,182,212,.15);}
+.cecm-t .cecm-hc.kidcol{color:var(--txt3);background:rgba(6,182,212,.04);font-weight:600;}
+.cecm-car{display:inline-block;width:9px;font-size:9px;color:var(--cyan);opacity:.9;margin-right:1px;}
+/* células de dado da transposta */
+.cecm-t td.c{text-align:right;padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.03);}
+.cecm-t td.milecol{background:rgba(99,102,241,.05);}
+.cecm-t td.milecol .cv{font-weight:800;font-size:13.5px;color:#a5b4fc;}
+.cecm-t td.milecol .cs{color:var(--txt1);font-weight:600;}
+.cecm-t td.drillcell{background:rgba(6,182,212,.07);}
+.cecm-t td.drillcell .cv{font-weight:800;color:var(--cyan);}
+.cecm-t td.kidcol{background:rgba(6,182,212,.04);}
+.cecm-t tr.cecm-totrow td{background:rgba(255,255,255,.028);}
+.cecm-t tr.cecm-totrow .chn-nm{color:var(--txt1);}
+.cecm-t tr.cecm-totrow td.milecol{background:rgba(99,102,241,.10);}
+.cecm-t tr.cecm-totrow td.drillcell{background:rgba(6,182,212,.12);}
+.cecm-t tbody tr:hover td{background:rgba(255,255,255,.02);}
+.cecm-t tbody tr.cecm-totrow:hover td{background:rgba(255,255,255,.045);}
 .cec-note{margin-top:13px;font-size:10.5px;color:var(--txt3);line-height:1.55;}
 .cec-note b{color:var(--txt2);font-weight:700;}
 .drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);z-index:9998;opacity:0;pointer-events:none;transition:opacity 0.2s ease;}
@@ -1382,17 +1387,16 @@ function renderWaterfallImediato(cur,prev){
   // mostraria um gráfico e o fetch detalhado trocaria por outro — pior que esperar. (22/07)
   var C=_wfCascata(cur), P=_wfCascata(prev);
   STATE.wfCur=cur; STATE.wfPrev=prev;
+  // Mesmas 8 barras do renderWaterfall (overview) — ver comentário lá. (22/07)
   var items=[
     {lbl:'Receita Bruta',val:cur.receita,color:'#22c55e',prev:prev.receita},
-    {lbl:'− Devoluções',val:-cur.devolucoes,color:'#f43f5e',prev:-prev.devolucoes},
-    {lbl:'= Venda Líquida',val:C.vendaLiq,color:'#06b6d4',prev:P.vendaLiq},
     {lbl:'− CMV (estim)',val:-cur.cmv,color:'#ec4899',prev:-prev.cmv},
     {lbl:'= Margem Bruta',cm:'CM1',val:C.mb,color:C.mb>=0?'#06b6d4':'#f43f5e',prev:P.mb},
-    {lbl:'− Custo Efetivo do Canal',val:-C.custoCanal,color:'#f97316',prev:-P.custoCanal,drill:'canal'},
+    {lbl:'− Custo do Canal',val:-C.custoCanal,color:'#f97316',prev:-P.custoCanal,drill:'canal'},
     {lbl:'= Margem de Canal',cm:'CM2',val:C.mCanal,color:C.mCanal>=0?'#06b6d4':'#f43f5e',prev:P.mCanal},
     {lbl:'− Custo de Demanda',val:-C.demanda,color:'#eab308',prev:-P.demanda,drill:'demanda'},
     {lbl:'− Impostos',val:-(cur.impostos||0),color:'#64748b',prev:-(prev.impostos||0)},
-    {lbl:'= Margem de Contribuição',val:cur.lucro,color:cur.lucro>=0?'#06b6d4':'#f43f5e',prev:prev.lucro}
+    {lbl:'= Contribuição',val:cur.lucro,color:cur.lucro>=0?'#22c55e':'#f43f5e',prev:prev.lucro}
   ];
   var maxVal=Math.max.apply(null,items.map(function(i){return Math.abs(i.val);}));
   if(maxVal===0)maxVal=1;
@@ -1509,19 +1513,18 @@ function renderWaterfall(){
   // Os dois blocos de custo viram UMA barra cada, clicável → drill lateral.
   // ⚠️ O marco "= Receita Líquida" (receita − custos de canal, ANTES do CMV) saiu do
   //    gráfico em 22/07/2026 ao alinhar com a matriz — nesta convenção ele é CM2 + CMV.
+  // OVERVIEW (22/07/2026): 8 barras — marcos de margem (CM1/CM2/Contrib) + os 2 baldes de
+  // custo com drill. Devoluções, Full, Taxas, Reversa e Custo Fixo viram detalhe no drill
+  // lateral e na matriz por canal. O gráfico é o resumo; a matriz é o detalhe.
   var items=[
     {lbl:'Receita Bruta',val:cur.receita,color:'#22c55e',prev:prev.receita},
-    {lbl:'− Devoluções',val:-cur.devolucoes,color:'#f43f5e',prev:-prev.devolucoes,est:e.dev},
-    {lbl:'= Venda Líquida',val:C.vendaLiq,color:'#06b6d4',prev:P.vendaLiq},
     {lbl:'− CMV',val:-cur.cmv,color:'#ec4899',prev:-prev.cmv},
     {lbl:'= Margem Bruta',cm:'CM1',val:C.mb,color:C.mb>=0?'#06b6d4':'#f43f5e',prev:P.mb},
-    {lbl:'− Custo Efetivo do Canal',val:-C.custoCanal,color:'#f97316',prev:-P.custoCanal,est:e.com,drill:'canal'},
+    {lbl:'− Custo do Canal',val:-C.custoCanal,color:'#f97316',prev:-P.custoCanal,est:e.com,drill:'canal'},
     {lbl:'= Margem de Canal',cm:'CM2',val:C.mCanal,color:C.mCanal>=0?'#06b6d4':'#f43f5e',prev:P.mCanal},
     {lbl:'− Custo de Demanda',val:-C.demanda,color:'#eab308',prev:-P.demanda,est:e.afil,drill:'demanda'},
     {lbl:'− Impostos',val:-(cur.impostos||0),color:'#64748b',prev:-(prev.impostos||0)},
-    {lbl:'= Margem de Contribuição',val:cur.lucro,color:cur.lucro>=0?'#06b6d4':'#f43f5e',prev:prev.lucro},
-    {lbl:'− Custo Fixo',val:-(cur.custoFixo||0),color:'#c084fc',prev:-(prev.custoFixo||0)},
-    {lbl:'= Result. Oper.',val:(cur.resultadoOper||0),color:(cur.resultadoOper||0)>=0?'#22c55e':'#f43f5e',prev:(prev.resultadoOper||0)}
+    {lbl:'= Contribuição',val:cur.lucro,color:cur.lucro>=0?'#22c55e':'#f43f5e',prev:prev.lucro}
   ];
   renderWfLegenda();
   var maxVal=Math.max.apply(null,items.map(function(i){return Math.abs(i.val);}));
@@ -1820,104 +1823,103 @@ function renderCustoCanal(){
   var rows=(STATE.canalRows||[]).filter(function(r){return (r.r||0)>0;})
                                 .sort(function(a,b){return b.r-a.r;});
   if(!rows.length){wrap.innerHTML='';return;}
-  // Colunas: "Todos" (agregado) + uma por canal. Cada célula = % da receita DA COLUNA.
-  var cols=[{nome:'Todos',cor:null,tot:true,d:_cecCol(rows)}];
-  rows.forEach(function(r){cols.push({nome:r.nome,cor:r.cor||getCor(r.nome),d:_cecCol([r])});});
-  var has=function(k){return cols[0].d[k]>0.005;};   // linha opcional só se o agregado tiver
-
-  // Spec (CMV NA FRENTE → CM1 → Custo Efetivo do Canal → CM2 → Demanda → Impostos → Contribuição → Resultado).
-  // k='mile'/'result' → % é o número PRIMÁRIO (margem); demais → R$ é o primário, % secundário.
-  var R=[
-    {l:'Receita Bruta',      g:function(c){return c.r;},        k:'rec'},
-    {l:'(−) Devoluções',     g:function(c){return c.dev;},      k:'cost',ind:1},
-    {l:'= Venda Líquida',    g:function(c){return c.vendaLiq;}, k:'mile'},
-    {l:'(−) CMV',            g:function(c){return c.cmv;},      k:'cost',ind:1},
-    {l:'= Margem Bruta',cm:'CM1',g:function(c){return c.mb;},   k:'mile'},
-    // Drill-downs (22/07/2026): o TOTAL vive na própria linha-cabeçalho, que é clicável.
-    // Nascem CONTRAÍDOS — a leitura default é a cascata (CM1→CM2→CM3), e o detalhe do
-    // que compõe cada bloco só aparece quando se pede.
-    {drill:'canal',l:'Custo Efetivo do Canal',sub:'o que a plataforma cobra pra transacionar',
-     g:function(c){return c.custoCanal;}},
-    {l:'Comissão',           g:function(c){return c.fee;},      k:'cost',ind:1,gk:'canal'},
-    {l:'Frete (seller)',     g:function(c){return c.frete;},    k:'cost',ind:1,gk:'canal'},
-    {l:'Full / armazenagem', g:function(c){return c.full;},     k:'cost',ind:1,gk:'canal',opt:'full'},
-    {l:'Taxas de conta',     g:function(c){return c.taxas;},    k:'cost',ind:1,gk:'canal',opt:'taxas'},
-    {l:'Logística reversa',  g:function(c){return c.reversa;},  k:'cost',ind:1,gk:'canal',opt:'reversa'},
-    {l:'(+) Cupom da plataforma',g:function(c){return c.rebate;},k:'cred',ind:1,gk:'canal',opt:'rebate'},
-    {l:'= Margem de Canal',cm:'CM2',g:function(c){return c.mCanal;},k:'mile'},
-    {drill:'demanda',l:'Custo de Demanda',sub:'eletivo (CPA/CPM), NÃO é taxa de canal',
-     g:function(c){return c.demanda;}},
-    {l:'Afiliados / creators',g:function(c){return c.afil;},    k:'cost',ind:1,gk:'demanda'},
-    {l:'Mídia paga',         g:function(c){return c.ads;},      k:'cost',ind:1,gk:'demanda'},
-    {l:'(−) Impostos',       g:function(c){return c.imp;},      k:'cost',ind:1},
-    {l:'= Margem de Contribuição',g:function(c){return c.contrib;},k:'mile'},
-    {l:'(−) Custo fixo',     g:function(c){return c.cfixo;},    k:'cost',ind:1,opt:'cfixo'},
-    {l:'= Resultado Operacional',g:function(c){return c.resop;},k:'result'}
-  ];
   var pc=function(v,base){return base>0?v/base*100:0;};
-  var totRec=cols[0].d.r;
-  var h='<div class="cec"><div class="cec-hd"><div class="cec-tit">Custo Efetivo do Canal — comparativo</div>'+
-        '<div class="cec-tit" style="color:var(--cyan)">'+fmtD(pc(cols[0].d.custoCanal,totRec))+'% <span style="font-size:10px;font-weight:600;color:var(--txt3)">no total</span></div></div>';
-  h+='<div class="cec-sub">Cascata de margem de contribuição por canal. Nas linhas de <b>margem</b> o número grande é o <b>%</b>; nas de custo, o <b>valor em R$</b> (o % vem abaixo). '+
-     'Todos os % são sobre a <b>receita da própria coluna</b>. O <b>Custo Efetivo do Canal</b> (ciano) é só o que a plataforma cobra; afiliados e mídia entram depois. '+
-     '<b>Custo Efetivo do Canal</b> e <b>Custo de Demanda</b> abrem o detalhe ao clicar — nascem contraídos.</div>';
-  h+='<div class="cec-scroll"><table class="cecm"><thead><tr>';
-  h+='<th class="lbl"></th>';
-  cols.forEach(function(c){
-    var chip=c.cor?'<span class="cecm-ch-dot" style="background:'+c.cor+'"></span>':'';
-    var top=c.tot?'background:var(--txt3)':('background:'+(c.cor||'#6B7280'));
-    var shr=totRec>0?pc(c.d.r,totRec):0;
-    h+='<th class="cecm-ch'+(c.tot?' tot':'')+'">'+
-       '<div class="cecm-ch-top" style="'+top+'"></div>'+
-       '<div class="cecm-ch-nm">'+chip+(c.tot?'Todos':c.nome)+'</div>'+
-       '<div class="cecm-ch-rec">'+fmtK(c.d.r)+'</div>'+
-       '<div class="cecm-ch-shr">'+(c.tot?'100% da receita':fmtD(shr)+'% do total')+'</div></th>';
+  // TRANSPOSTO (22/07/2026): LINHAS = canais (Todos + cada um), COLUNAS = a cascata de margem.
+  // No mobile o canal fica na 1ª coluna FIXA e você rola pra direita pros números; comparar
+  // canal a canal vira rolagem vertical (poucas linhas). Mesma matemática do _cecCol.
+  var agg=_cecCol(rows);
+  var chRows=[{nome:'Todos',cor:null,tot:true,d:agg}];
+  rows.forEach(function(r){chRows.push({nome:r.nome,cor:r.cor||getCor(r.nome),d:_cecCol([r])});});
+  var has=function(k){return agg[k]>0.005;};   // coluna opcional só se o total tiver
+
+  // Colunas — cascata CMV NA FRENTE → CM1 → Custo do Canal → CM2 → Demanda → Impostos →
+  // Contribuição → Resultado. k: rec|cost|cred|mile|result. drill: cabeçalho de bloco
+  // clicável (contraído por padrão). gk: coluna-filha (só aparece com o bloco aberto).
+  var COLS=[
+    {l:'Receita',        k:'rec',  g:function(c){return c.r;}},
+    {l:'Devol.',         k:'cost', g:function(c){return c.dev;}},
+    {l:'Venda Líq.',     k:'mile', g:function(c){return c.vendaLiq;}},
+    {l:'CMV',            k:'cost', g:function(c){return c.cmv;}},
+    {l:'Margem Bruta',cm:'CM1',k:'mile',g:function(c){return c.mb;}},
+    {drill:'canal',l:'Custo do Canal',g:function(c){return c.custoCanal;}},
+    {l:'Comissão',       k:'cost', gk:'canal', g:function(c){return c.fee;}},
+    {l:'Frete',          k:'cost', gk:'canal', g:function(c){return c.frete;}},
+    {l:'Full',           k:'cost', gk:'canal', g:function(c){return c.full;},   opt:'full'},
+    {l:'Taxas',          k:'cost', gk:'canal', g:function(c){return c.taxas;},  opt:'taxas'},
+    {l:'Reversa',        k:'cost', gk:'canal', g:function(c){return c.reversa;},opt:'reversa'},
+    {l:'Cupom',          k:'cred', gk:'canal', g:function(c){return c.rebate;}, opt:'rebate'},
+    {l:'Margem de Canal',cm:'CM2',k:'mile',g:function(c){return c.mCanal;}},
+    {drill:'demanda',l:'Custo de Demanda',g:function(c){return c.demanda;}},
+    {l:'Afiliados',      k:'cost', gk:'demanda', g:function(c){return c.afil;}},
+    {l:'Mídia',          k:'cost', gk:'demanda', g:function(c){return c.ads;}},
+    {l:'Impostos',       k:'cost', g:function(c){return c.imp;}},
+    {l:'Contribuição',   k:'mile', g:function(c){return c.contrib;}},
+    {l:'Custo Fixo',     k:'cost', g:function(c){return c.cfixo;}, opt:'cfixo'},
+    {l:'Result. Oper.',  k:'result', g:function(c){return c.resop;}}
+  ].filter(function(col){
+    if(col.opt&&!has(col.opt))return false;           // coluna opcional vazia no total → fora
+    if(col.gk&&!STATE.cecOpen[col.gk])return false;   // filha de bloco fechado → fora
+    return true;
+  });
+
+  var totRec=agg.r;
+  var h='<div class="cec"><div class="cec-hd"><div class="cec-tit">Resultado por Canal</div>'+
+        '<div class="cec-tit" style="color:var(--cyan)">'+fmtD(pc(agg.custoCanal,totRec))+'% <span style="font-size:10px;font-weight:600;color:var(--txt3)">custo de canal no total</span></div></div>';
+  h+='<div class="cec-sub">Cada linha é um canal; role pra direita pra ver a cascata de margem (o nome do canal fica <b>fixo</b>). '+
+     'Nas colunas de <b>margem</b> o número grande é o <b>%</b>; nas de custo, o <b>R$</b> (% abaixo, sobre a receita do canal). '+
+     '<b>Custo do Canal</b> e <b>Custo de Demanda</b> abrem o detalhe ao clicar no cabeçalho — nascem contraídos.</div>';
+
+  h+='<div class="cec-scroll"><table class="cecm cecm-t"><thead><tr>';
+  h+='<th class="lbl chn">Canal</th>';
+  COLS.forEach(function(col){
+    var cls='cecm-hc';
+    if(col.k==='mile'||col.k==='result')cls+=' milecol';
+    if(col.drill)cls+=' drillcol';
+    if(col.gk)cls+=' kidcol';
+    if(col.drill){
+      var op=!!STATE.cecOpen[col.drill];
+      h+='<th class="'+cls+(op?' open':'')+'" onclick="toggleCec(\''+col.drill+'\')" title="'+(op?'Recolher':'Abrir')+' o detalhe">'+
+         '<span class="cecm-car">'+(op?'▾':'▸')+'</span>'+col.l+'</th>';
+    }else{
+      var cm=col.cm?'<span class="cm">'+col.cm+'</span>':'';
+      h+='<th class="'+cls+'">'+col.l+cm+'</th>';
+    }
   });
   h+='</tr></thead><tbody>';
-  R.forEach(function(row){
-    if(row.opt&&!has(row.opt))return;   // linha opcional ausente no agregado → pula
-    if(row.drill){
-      // Linha-cabeçalho do drill-down: carrega o TOTAL do bloco e abre/fecha o detalhe.
-      var op=!!STATE.cecOpen[row.drill];
-      h+='<tr class="cecm-drill'+(op?' open':'')+'" onclick="toggleCec(\''+row.drill+'\')" '+
-         'title="'+(op?'Recolher':'Abrir')+' o detalhe de '+row.l+'">'+
-         '<td class="lbl"><span class="ll"><span class="cecm-car">'+(op?'▾':'▸')+'</span>'+row.l+
-         '<span class="cecm-sub">'+row.sub+'</span></span></td>';
-      cols.forEach(function(c){
-        var dv=row.g(c.d);
-        h+='<td class="c'+(c.tot?' tot':'')+'"><div class="cv">'+fmtK(dv)+'</div>'+
-           '<div class="cs">'+fmtD(pc(dv,c.d.r))+'%</div></td>';
-      });
-      h+='</tr>'; return;
-    }
-    var isMargin=(row.k==='mile'||row.k==='result');
-    var rowCls=isMargin?'cecm-mile':(row.k==='anchor'?'cecm-anchor':'');
-    if(row.gk)rowCls+=(rowCls?' ':'')+'cecm-kid';
-    var cmTag=row.cm?' <span class="cm">'+row.cm+'</span>':'';
-    var hide=(row.gk&&!STATE.cecOpen[row.gk])?' style="display:none"':'';
-    h+='<tr class="'+rowCls+'"'+(row.gk?' data-g="'+row.gk+'"':'')+hide+'><td class="lbl"><span class="ll'+(row.ind?' ind':'')+'">'+row.l+cmTag+'</span></td>';
-    cols.forEach(function(c){
-      var v=row.g(c.d), p=pc(v,c.d.r), cv, cs='', extra=(c.tot?' tot':''), cvStyle='';
-      if(row.k==='rec'){ cv=fmtK(v); }                                         // receita: só R$
-      else if(row.k==='cred'){ cv='+'+fmtK(Math.abs(v)); cs='+'+fmtD(Math.abs(p))+'%'; }   // crédito: R$ verde
-      else if(row.k==='cost'||row.k==='anchor'){ cv=fmtK(v); cs=fmtD(p)+'%'; } // custo/âncora: R$ grande, % pequeno
-      else { cv=fmtD(p)+'%'; cs=fmtK(v); }                                     // MARGEM: % grande, R$ pequeno
-      // Resultado = verde/vermelho (linha de baixo, semântico); demais margens = índigo destaque via CSS.
-      if(row.k==='result')cvStyle='color:'+(v>=0?'#22c55e':'#f43f5e')+';';
-      var tdStyle=(row.k==='cred')?'color:#22c55e;':'';
-      h+='<td class="c'+extra+'" style="'+tdStyle+'"><div class="cv" style="'+cvStyle+'">'+cv+'</div>'+(cs?'<div class="cs">'+cs+'</div>':'')+'</td>';
+
+  chRows.forEach(function(ch){
+    var d=ch.d, shr=totRec>0?pc(d.r,totRec):0;
+    var chip=ch.tot?'':'<span class="cecm-ch-dot" style="background:'+(ch.cor||'#6B7280')+'"></span>';
+    h+='<tr class="'+(ch.tot?'cecm-totrow':'')+'">';
+    h+='<td class="lbl chn"><div class="chn-nm">'+chip+(ch.tot?'Todos':ch.nome)+'</div>'+
+       '<div class="chn-sub">'+fmtK(d.r)+' · '+(ch.tot?'100%':fmtD(shr)+'%')+'</div></td>';
+    COLS.forEach(function(col){
+      var v=col.g(d), p=pc(v,d.r), cv, cs='', tdCls='c', cvStyle='';
+      if(col.k==='mile'||col.k==='result')tdCls+=' milecol';
+      if(col.drill)tdCls+=' drillcell';
+      if(col.gk)tdCls+=' kidcol';
+      if(ch.tot)tdCls+=' tot';
+      if(col.k==='rec'){ cv=fmtK(v); }
+      else if(col.k==='cred'){ cv='+'+fmtK(Math.abs(v)); cs='+'+fmtD(Math.abs(p))+'%'; }
+      else if(col.drill||col.k==='cost'){ cv=fmtK(v); cs=fmtD(p)+'%'; }   // custo/bloco: R$ grande, % pequeno
+      else { cv=fmtD(p)+'%'; cs=fmtK(v); }                                // margem: % grande, R$ pequeno
+      if(col.k==='result')cvStyle='color:'+(v>=0?'#22c55e':'#f43f5e')+';';
+      var tdStyle=(col.k==='cred')?'color:#22c55e;':'';
+      h+='<td class="'+tdCls+'" style="'+tdStyle+'"><div class="cv" style="'+cvStyle+'">'+cv+'</div>'+(cs?'<div class="cs">'+cs+'</div>':'')+'</td>';
     });
     h+='</tr>';
   });
   h+='</tbody></table></div>';
+
   var notas=[];
   if(has('rebate'))notas.push('<b>Cupom da plataforma</b> é crédito (verde): a TikTok banca o desconto e reembolsa, então ele <b>abate</b> o custo de canal — a comissão mostrada é a <b>bruta</b>.');
-  notas.push('<b>Afiliados e mídia ficam fora do Custo Efetivo do Canal</b> de propósito: são geração de demanda eletiva (CPA/CPM), não taxa contratual.');
-  if(cols.some(function(c){return !c.tot&&c.d.ads<0.005&&c.d.r>0;}))notas.push('<b>Mídia R$ 0</b> em algum canal é <b>lacuna de captura</b>, não zero medido — TikTok/Meta/Google faturam fora do extrato do marketplace.');
-  notas.push('<b>Margem de Contribuição</b> e <b>Resultado Operacional</b> batem ao centavo com o waterfall e os KPIs do topo. Não é "take rate" (isso é a receita da plataforma ÷ GMV) — aqui é o custo do vendedor.');
+  notas.push('<b>Afiliados e mídia (Custo de Demanda)</b> ficam fora do Custo do Canal de propósito: são geração de demanda eletiva (CPA/CPM), não taxa contratual.');
+  if(chRows.some(function(c){return !c.tot&&c.d.ads<0.005&&c.d.r>0;}))notas.push('<b>Mídia R$ 0</b> em algum canal é <b>lacuna de captura</b>, não zero medido — TikTok/Meta/Google faturam fora do extrato do marketplace.');
+  notas.push('<b>Contribuição</b> e <b>Result. Oper.</b> batem ao centavo com o waterfall e os KPIs do topo. Não é "take rate" (receita da plataforma ÷ GMV) — aqui é o custo do vendedor.');
   h+='<div class="cec-note">'+notas.map(function(n){return '• '+n;}).join('<br>')+'</div></div>';
   wrap.innerHTML=h;
 }
+
 function _canalTbodyHTML(rows){
   // 2 linhas por célula: valor em cima, % embaixo (facilita a leitura). (06/07)
   function vp(v,base){var p=base>0?v/base*100:0;return fmtK(v)+'<div style="opacity:.5;font-size:.8em;font-weight:400;line-height:1.15;margin-top:1px">'+fmtD(p)+'%</div>';}
