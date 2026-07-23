@@ -7,7 +7,7 @@
 - Login via Supabase Auth → JWT → PostgREST com RLS
 - Catálogo de dashes hardcoded em `auth.js` (objeto `DASHES`)
 - Cada dash usa `fusionAuth.requireAuth('key')` como gate
-- Dashes ativos: `lojas`, `ecommerce`, `diretoria`, `estoque`, `financeiro`, `compras`, `simulador`
+- Dashes ativos: `lojas`, `ecommerce`, `diretoria`, `estoque-sistema`, `financeiro`, `compras`, `simulador` (o `estoque` read-only foi **desativado 23/07/2026** — comentado no DASHES, substituído pelo `estoque-sistema` = fusion-estoque-app; `estoque.html` fica como fallback)
 - Padrão de fetch: 1 chamada em `vw_pedidos_full` (view UNION ALL + schema padronizado). **Antes 31/05/2026**: 2 chamadas paralelas a `pedidos` + `pedidos_historico` com `.concat()`. Tabelas físicas foram unificadas em `pedidos` única (473k rows, out/24→hoje); `pedidos_historico` virou backup `pedidos_historico_archived_20260531` (drop previsto 7-30d pós-estabilidade).
 - RLS em tudo (`pedidos`, `produtos`, `estoque`, `contas_pagar`, `user_roles`, `metas_lojas`) — sem login = sem dado
 
