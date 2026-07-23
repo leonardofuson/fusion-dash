@@ -907,7 +907,10 @@ function adsRowsToByCanal(rows){
 // Ads ML por ANÚNCIO→produto (level=item, produto_id resolvido no sync). Atribuição REAL por
 // SKU (sem rateio). Shopee não entra aqui (é shop-level, sem produto).
 async function fetchAdsItem(de,ate){
-  return buscarTudo('ads_metrics','select=produto_id,gasto,conta&plataforma=eq.mercado_ads&level=eq.item&produto_id=not.is.null&data=gte.'+de+'&data=lte.'+ate);
+  // Ads por SKU: Mercado Ads (produto_id resolvido) + Meta (identifica por sku_raw, sem produto_id).
+  // Google NÃO entra — vai p/ lojas físicas, MESMA régua do canal-level (fetchAds/adsRowsToByCanal).
+  // level=item = quebra por anúncio/produto (ML anúncio = SKU pai). (23/07)
+  return buscarTudo('ads_metrics','select=plataforma,produto_id,sku_raw,gasto,conta&plataforma=in.(mercado_ads,meta_ads)&level=eq.item&gasto=gt.0&data=gte.'+de+'&data=lte.'+ate);
 }
 // Devolução REAL por produto (claim→item→SKU), coorte por data do pedido. Tabela
 // devolucoes_item, todos os canais com item-level (ML+Site+TikTok+Shopee; Shein sem API).
@@ -1070,7 +1073,7 @@ async function fetchProdutos(){
     var custo=parseFloat(p.custo_total||0);
     if(custo===0&&p.sku_pai) custo=paiCusto[p.sku_pai]||0;
     byId[p.id]={sku:p.sku,sku_pai:p.sku_pai||p.sku,nome:p.nome||p.sku,cat:p.categoria||'OUTROS',cor:p.cor||'',tam:p.tamanho||'',custo:custo};
-    bySku[p.sku]={nome:p.nome||p.sku,cat:p.categoria||'OUTROS',custo:custo};
+    bySku[p.sku]={sku_pai:p.sku_pai||p.sku,nome:p.nome||p.sku,cat:p.categoria||'OUTROS',custo:custo};
   });
   PROD_CACHE={byId:byId,bySku:bySku};return PROD_CACHE;
 }
@@ -1236,9 +1239,20 @@ async function carregar(){
         if(seq!==LOAD_SEQ)return;
         STATE.adsBySkuPai={};STATE.adsBySkuPaiCanal={};
         adsItemRows.forEach(function(r){
-          var prod=prods.byId[r.produto_id];if(!prod)return;
-          var sp=prod.sku_pai||prod.sku;var g=parseFloat(r.gasto||0);
-          var canal=r.conta==='confeccoes'?getNome('Mercado Livre Confecções','confeccoes'):getNome('Mercado Livre FIO','fio_e_trama');
+          var g=parseFloat(r.gasto||0);if(!g)return;
+          var sp,canal;
+          if(r.plataforma==='meta_ads'){
+            // Meta identifica o produto por sku_raw (variante), sem produto_id → resolve pro sku_pai.
+            // Canal = 'Site Próprio', MESMA régua do canal-level (adsRowsToByCanal: Meta → Site).
+            var raw=(r.sku_raw||'').trim();if(!raw)return;
+            var pr=prods.bySku[raw];sp=pr?pr.sku_pai:raw.replace(/-[^-]*$/,'');
+            canal='Site Próprio';
+          }else{  // mercado_ads — anúncio→produto_id→sku_pai (ML anúncio = SKU pai), canal pela conta
+            var prod=prods.byId[r.produto_id];if(!prod)return;
+            sp=prod.sku_pai||prod.sku;
+            canal=r.conta==='confeccoes'?getNome('Mercado Livre Confecções','confeccoes'):getNome('Mercado Livre FIO','fio_e_trama');
+          }
+          if(!sp)return;
           STATE.adsBySkuPai[sp]=(STATE.adsBySkuPai[sp]||0)+g;
           if(!STATE.adsBySkuPaiCanal[sp])STATE.adsBySkuPaiCanal[sp]={};
           STATE.adsBySkuPaiCanal[sp][canal]=(STATE.adsBySkuPaiCanal[sp][canal]||0)+g;
