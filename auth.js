@@ -30,7 +30,7 @@
     diretoria:  { titulo: 'Diretoria',     descricao: 'Visão executiva consolidada por canal', url: '/diretoria.html', icone: '📊', cat: 'vendas' },
     // Operações
     estoque:    { titulo: 'Estoque',       descricao: 'Posição multi-canal de estoque', url: '/estoque.html', icone: '📦', cat: 'operacoes' },
-    compras:    { titulo: 'Compras',       descricao: 'Ordens de compra, produção e fornecedores', url: '/compras.html', icone: '🧾', cat: 'operacoes' },
+    compras:    { titulo: 'Compras',       descricao: 'Ordens de compra, produção e fornecedores', url: '/compras-react.html', icone: '🧾', cat: 'operacoes' },
     produtos:   { titulo: 'Produtos',      descricao: 'Base canônica de produtos, de-para universal e grade de medidas (POM)', url: '/produtos.html', icone: '👕', cat: 'operacoes' },
     // Sistema de Estoque (app fusion-estoque-app). Roda EM PARALELO com o dash read-only
     // `estoque` — quem vira a chave do tile é o Leo, depois de conferir a paridade.
