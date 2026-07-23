@@ -855,7 +855,7 @@ async function fetchAgregadoMV(de,ate){
   // order explícito (MV não tem coluna `id` — buscarTudo cairia no &order=id.asc)
   var f='select=*&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+EXCL_CANAL+'&order=data_pedido.asc';
   // Fase 3: a view = a MV + as colunas *_est. Mês fechado → *_est ≈ 0 e ela é idêntica à MV (A9).
-  return buscarTudo('vw_ecom_canal_dia_est',f);
+  return buscarTudo('mvw_ecom_canal_dia_est',f);
 }
 // Devolução REAL do Site Próprio via Troquecommerce (RMA): inclui TROCAS (vale-crédito,
 // sem dinheiro de volta) que são invisíveis no refund Shopify. Coorte por data do pedido.
@@ -2275,7 +2275,7 @@ function pintarDowHeat(matrix){
 // continuam carregando em background pra enriquecer o drawer (variantes/fee/dev/frete) e o CMV real.
 async function fetchSkuMV(de,ate,big){
   // big period (YTD/12m): sku_dia pode passar de 50k linhas → teto maior (250k) pra não truncar.
-  return buscarTudo('vw_ecom_sku_dia_est','select=sku_pai,nome,cat,canal_nome_raw,origem_conta,receita,qtd,cmv,fee,afiliado,devolucao,frete_seller,fee_estornado,cmv_devolvido,fee_est,afiliado_est,devolucao_est,rebate&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+EXCL_CANAL+'&order=data_pedido.asc', big?250:undefined);
+  return buscarTudo('mvw_ecom_sku_dia_est','select=sku_pai,nome,cat,canal_nome_raw,origem_conta,receita,qtd,cmv,fee,afiliado,devolucao,frete_seller,fee_estornado,cmv_devolvido,fee_est,afiliado_est,devolucao_est,rebate&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+EXCL_CANAL+'&order=data_pedido.asc', big?250:undefined);
 }
 // PERF (09/06): geo (UF/cidade) e pagamentos (método/parcelas) vêm de MV no paint imediato —
 // antes ficavam vazios até o fetch de 10-115k pedidos chegar. Validado A/B (0 divergências).
@@ -2289,7 +2289,7 @@ async function fetchPgtoMV(de,ate){
 // (via agruparSkusMV) E o heatmap dia-da-semana (renderDowHeatMV) com uma só leitura.
 async function fetchSkuMVData(de,ate){
   // aba Mensal = janela longa (6-24m); sku_dia ~110k linhas/ano → teto 250k pra não truncar.
-  return buscarTudo('vw_ecom_sku_dia_est','select=sku_pai,nome,cat,canal_nome_raw,origem_conta,receita,qtd,cmv,fee,afiliado,devolucao,frete_seller,fee_estornado,cmv_devolvido,fee_est,afiliado_est,devolucao_est,rebate,data_pedido&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc', 250);
+  return buscarTudo('mvw_ecom_sku_dia_est','select=sku_pai,nome,cat,canal_nome_raw,origem_conta,receita,qtd,cmv,fee,afiliado,devolucao,frete_seller,fee_estornado,cmv_devolvido,fee_est,afiliado_est,devolucao_est,rebate,data_pedido&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc', 250);
 }
 function agruparSkusMV(rows){
   var map={};
