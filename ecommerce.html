@@ -1345,7 +1345,7 @@ function _wfCascata(o){
 // 22/07/2026) cada barra JÁ é um canal clicável — a legenda virou legenda de LEITURA das cores.
 function renderWfLegenda(){
   var el=document.getElementById('wf-legenda'); if(!el)return;
-  var key=[['#f43f5e','Devol.'],['#ec4899','CMV'],['#f97316','Canal'],['#eab308','Demanda'],['#64748b','Impostos'],['#22c55e','Margem']];
+  var key=[['#ef4444','Devol.'],['#e0459b','CMV'],['#f97316','Canal'],['#eab308','Demanda'],['#64748b','Impostos'],['#16b364','Margem']];
   var h='<div style="display:flex;flex-wrap:wrap;gap:5px 12px;align-items:center;font-size:11px;">';
   key.forEach(function(k){h+='<span style="display:inline-flex;align-items:center;gap:5px;color:var(--txt2);font-weight:600"><span style="width:10px;height:10px;border-radius:3px;background:'+k[0]+'"></span>'+k[1]+'</span>';});
   h+='<span style="color:var(--txt3);font-weight:500">— receita = 100%; <b style="color:var(--txt2)">clique num canal</b> pra focar o dash, <b style="color:var(--txt2)">clique em Canal/Demanda</b> pra detalhar.</span>';
@@ -1373,8 +1373,8 @@ function drawCostBars(){
   }else{ wf.innerHTML=''; return; }
 
   var segs=[
-    {k:'dev',        c:'#f43f5e', lbl:'Dev'},
-    {k:'cmv',        c:'#ec4899', lbl:'CMV'},
+    {k:'dev',        c:'#ef4444', lbl:'Dev'},
+    {k:'cmv',        c:'#e0459b', lbl:'CMV'},
     {k:'custoCanal', c:'#f97316', lbl:'Canal',   drill:'canal'},
     {k:'demanda',    c:'#eab308', lbl:'Demanda', drill:'demanda'},
     {k:'imp',        c:'#64748b', lbl:'Imp'}
@@ -1401,7 +1401,7 @@ function drawCostBars(){
     });
     if(contrib>0){
       var w=rev>0?contrib/rev*100:0;
-      h+='<div class="cb-seg cb-contrib" style="flex:'+contrib+' 0 0" title="Margem de contribuição: '+fmtK(contrib)+' ('+fmtD(w)+'%)">'+
+      h+='<div class="cb-seg cb-contrib" style="flex:'+contrib+' 0 0;background:#16b364" title="Margem de contribuição: '+fmtK(contrib)+' ('+fmtD(w)+'%)">'+
          (w>=9?'<span class="cb-pl">'+fmtD(w)+'%</span>':'')+'</div>';
     }
     h+='</div></div>';
