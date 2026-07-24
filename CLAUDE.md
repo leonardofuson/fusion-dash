@@ -7,7 +7,7 @@
 - Login via Supabase Auth → JWT → PostgREST com RLS
 - Catálogo de dashes hardcoded em `auth.js` (objeto `DASHES`)
 - Cada dash usa `fusionAuth.requireAuth('key')` como gate
-- Dashes ativos: `lojas`, `ecommerce`, `diretoria`, `estoque-sistema`, `financeiro`, `compras`, `simulador` (o `estoque` read-only foi **desativado 23/07/2026** — comentado no DASHES, substituído pelo `estoque-sistema` = fusion-estoque-app; `estoque.html` fica como fallback)
+- Dashes ativos: `lojas`, `ecommerce`, `diretoria`, `estoque-sistema`, `financeiro`, `compras`, `simulador` (o `estoque` read-only foi **desativado 23/07/2026** — comentado no DASHES, substituído pelo `estoque-sistema` = fusion-estoque-app; `estoque.html` fica como fallback). O tile `compras` (`url: '/compras-react.html'`) hospeda o app React `fusion-compras`; o **vanilla `compras.html` foi APOSENTADO em 24/07/2026** — vira redirect pra `/compras-react.html` (fallback recuperável, não deletado), e o badge "React · beta" + link "sistema atual →" saíram do host bar
 - Padrão de fetch: 1 chamada em `vw_pedidos_full` (view UNION ALL + schema padronizado). **Antes 31/05/2026**: 2 chamadas paralelas a `pedidos` + `pedidos_historico` com `.concat()`. Tabelas físicas foram unificadas em `pedidos` única (473k rows, out/24→hoje); `pedidos_historico` virou backup `pedidos_historico_archived_20260531` (drop previsto 7-30d pós-estabilidade).
 - RLS em tudo (`pedidos`, `produtos`, `estoque`, `contas_pagar`, `user_roles`, `metas_lojas`) — sem login = sem dado
 
@@ -324,10 +324,12 @@ BASE="https://fusion-dash.onrender.com"
 # ⚠️ NÃO incluir aqui os wrappers finos de app React (financeiro/crm/compras-react/produtos:
 # ~2-3KB por design, são iframe + gate) nem o portal index.html (~10KB) — a régua de 20KB
 # é só pra dash vanilla. `projetos` saiu do catálogo em 10/07/2026.
-for d in compras lojas ecommerce diretoria estoque; do
+for d in lojas ecommerce diretoria estoque; do
   size=$(curl -s -o /dev/null -w "%{size_download}" "$BASE/$d.html")
   echo "$d.html: ${size}B" && [ "$size" -gt 20000 ] || echo "  ⚠️ tamanho suspeito"
 done
+# compras.html APOSENTADO 24/07 — agora é redirect (pequeno) pro compras-react.html; não checar >20KB
+curl -s "$BASE/compras.html" | grep -q "url=/compras-react.html" && echo "✅ compras.html redireciona pro React" || echo "🔴 compras.html não redireciona"
 
 # 1b. Wrappers finos + portal: checar 200 + gate + destino do iframe (não tamanho)
 for d in financeiro crm compras-react produtos; do
@@ -337,22 +339,13 @@ for d in financeiro crm compras-react produtos; do
 done
 curl -s -o /dev/null -w "index.html HTTP %{http_code}\n" "$BASE/index.html"
 
-# 2. compras.html — invariantes do refactor Phase 2 (devem aparecer)
-HTML=$(curl -s "$BASE/compras.html")
-echo "$HTML" | grep -q "'Em Produção'" && echo "✅ status novo presente" || echo "🔴 status novo ausente"
-echo "$HTML" | grep -q "vw_insumo_saldo_local" && echo "✅ view insumo carregada" || echo "🔴 view insumo ausente"
-echo "$HTML" | grep -q "renderReguaPagamentos" && echo "✅ régua pagamentos OK" || echo "🔴 régua ausente"
-echo "$HTML" | grep -q "tbody-regua-pagamentos" && echo "✅ tbody régua único" || echo "🔴 tbody régua ausente"
-
-# 3. compras.html — armadilhas conhecidas (NÃO devem aparecer)
-echo "$HTML" | grep -q "'Produzindo'" && echo "🔴 status antigo 'Produzindo' aparece" || echo "✅ sem status antigo"
-echo "$HTML" | grep -q "'cancelada'" && echo "🔴 status antigo 'cancelada' aparece (em ordens_producao)" || echo "✅ sem cancelada bare"
-echo "$HTML" | grep -cE '<tbody id="tbody-pagamentos"' | grep -qE '^[01]$' && echo "✅ tbody-pagamentos único ou ausente" || echo "🔴 tbody-pagamentos duplicado"
-# Detecta </script> literal dentro de string JS (literal `'</script>'` quebra o parser HTML)
-echo "$HTML" | grep -qE "'</script>'" && echo "🔴 </script> literal em string JS" || echo "✅ sem </script> literal"
-
-# 4. jsPDF carregado (necessário pra Sprint 7 do refactor)
-echo "$HTML" | grep -q "jspdf" && echo "✅ jsPDF presente" || echo "🔴 jsPDF ausente"
+# 2-4. compras.html vanilla — APOSENTADO 24/07/2026 (agora é redirect pro React).
+# Os invariantes do refactor Phase 2 (status novos, régua, tbody, jsPDF, </script> literal)
+# NÃO se aplicam mais ao HTML — a paridade vive no app React fusion-compras, checado pelo
+# `npm run build` + bundle servido (ver seção de deploy do fusion-compras). Aqui só confirmamos
+# que o vanilla redireciona e não é mais servido como sistema.
+curl -s "$BASE/compras-react.html" | grep -q "sistema atual" && echo "🔴 host bar ainda mostra link pro sistema velho" || echo "✅ host bar sem link pro sistema velho"
+curl -s "$BASE/compras-react.html" | grep -q "React · beta" && echo "🔴 badge beta ainda presente" || echo "✅ sem badge beta (é o sistema, não beta)"
 
 # 5. simulador.html — invariantes (4 abas + chamadas pra views + sem armadilhas)
 HTML=$(curl -s "$BASE/simulador.html")
