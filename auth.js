@@ -86,10 +86,16 @@
       await signOut();
       return null;
     }
-    if (requiredDash && !role.dashes.includes(requiredDash)) {
-      alert('Você não tem permissão para acessar este dashboard.');
-      window.location.href = '/index.html';
-      return null;
+    // requiredDash aceita string OU array (qualquer-um): útil pra dash embutido por
+    // outro app (ex.: estoque.html é embutido pelo estoque-sistema — quem tem
+    // 'estoque-sistema' também enxerga, sem precisar do legado 'estoque').
+    if (requiredDash) {
+      const needed = Array.isArray(requiredDash) ? requiredDash : [requiredDash];
+      if (!needed.some((d) => role.dashes.includes(d))) {
+        alert('Você não tem permissão para acessar este dashboard.');
+        window.location.href = '/index.html';
+        return null;
+      }
     }
     const headers = {
       apikey: SUPABASE_ANON_KEY,

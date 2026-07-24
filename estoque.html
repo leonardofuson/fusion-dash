@@ -1696,7 +1696,7 @@ window.addEventListener('resize', () => { if (DADOS) render(); });
 // INIT
 // ═══════════════════════════════════════════
 (async () => {
-  const auth = await fusionAuth.requireAuth('estoque');
+  const auth = await fusionAuth.requireAuth(['estoque', 'estoque-sistema']);
   if (!auth) return;
   AUTH_HEADERS = auth.headers;
   const ui = document.getElementById('user-info-tb');
