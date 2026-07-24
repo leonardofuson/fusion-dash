@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Fusion OS</title>
+<!-- Frame-buster: o portal NUNCA roda aninhado. Se um link dentro de um app (iframe)
+     navegar o iframe pra cá, quebramos pro topo — senão clicar num card aninharia outro
+     host (compras-react/estoque-sistema) e as barras empilhariam a cada ida e volta. -->
+<script>try{if(window.top!==window.self){window.top.location.replace(window.location.href);}}catch(e){window.top.location.href=window.location.href;}</script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
