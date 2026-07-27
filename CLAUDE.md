@@ -26,6 +26,17 @@ SDK inicializado com `{ persistSession: true, autoRefreshToken: true, detectSess
 - Logout só por: clique em "Sair" OU expiração do refresh token (~30 dias de inatividade)
 - Por design — se alguém reclamar "por que não me desloga?", é intencional
 
+## ⚠️ Iframe de 3º nível — storage particionado + frame-buster = a aba volta pro portal (27/07/2026)
+
+Sintoma: o tile abre e **fecha na hora**, voltando pro menu — e só pra alguns usuários (Edge/Safari sim, Chrome não), o que faz parecer problema de permissão. **Não é.**
+
+Cadeia do Estoque: `index.html` → `estoque-sistema.html` → iframe `fusion-estoque-app` → **iframe `fusion-dash/estoque.html`** (`Visao.tsx`). No 3º nível o `fusion-dash` é **third-party** (o top-level site passou a ser o `fusion-estoque-app`), então o browser **particiona o localStorage** e a sessão do portal **não existe** ali. `requireAuth` caía no branch "sem sessão" → `location.href='/index.html'` **dentro do frame** → o **frame-buster do `index.html` (linha 10)** fazia `window.top.location.replace(...)` e arrancava a aba inteira.
+
+**Regras que saíram disso:**
+- Todo dash embutido em **outro app** precisa de hand-off explícito `#sso=<access>|<refresh>` (o mesmo dos apps React) — **nunca** contar com sessão ambiente. Quem embute monta o src com a sessão; quem é embutido lê o hash e faz `setSession` **antes** do `requireAuth` (ver `estoque.html` INIT).
+- `requireAuth` **nunca navega quando está aninhado** (`estaAninhado()` nos 3 branches de falha) — navegar dentro de frame arma o frame-buster. Aninhado, avisa no próprio frame.
+- Ao debugar "usuário X não acessa o dash Y": conferir `user_roles.dashes` **e o browser dele**. Divergência por browser ⇒ storage/iframe, não permissão.
+
 ## ⚠️ JWT autoRefresh — não capturar AUTH_HEADERS estaticamente
 
 Token JWT expira em ~1h. **Não usar `var AUTH_HEADERS = auth.headers` capturado uma vez no load** — em sessões longas (form de cadastro multi-cor, etc) o POST sai com token expirado → `401 PGRST303 "JWT expired"`. Padrão em [compras.html](compras.html#L568) (24/04/2026): função async `getAuthHeaders()` lê `session.access_token` fresh via `fusionAuth.getSession()` antes de cada request. Aplicar nos demais dashes se aparecer 401 PGRST303.
