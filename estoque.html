@@ -1696,6 +1696,21 @@ window.addEventListener('resize', () => { if (DADOS) render(); });
 // INIT
 // ═══════════════════════════════════════════
 (async () => {
+  // Hand-off de sessão (#sso=<access>|<refresh>) — necessário quando este dash roda ANINHADO
+  // dentro do fusion-estoque-app (aba "Visão"). Ali o fusion-dash é third-party e o browser
+  // particiona o storage: a sessão do portal não é visível, e sem isso o requireAuth abaixo
+  // navegaria pra /index.html dentro do frame, cujo frame-buster arranca a aba pro portal.
+  // O hash não vai pro servidor e é apagado assim que lido. Ver fusion-estoque-app Visao.tsx.
+  const _sso = window.location.hash.match(/sso=([^|]+)\|([^&]+)/);
+  if (_sso) {
+    try {
+      await fusionAuth.sb.auth.setSession({
+        access_token: decodeURIComponent(_sso[1]),
+        refresh_token: decodeURIComponent(_sso[2]),
+      });
+    } catch (e) { /* token expirado → segue pro fluxo normal de auth */ }
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+  }
   const auth = await fusionAuth.requireAuth(['estoque', 'estoque-sistema']);
   if (!auth) return;
   AUTH_HEADERS = auth.headers;

@@ -74,14 +74,38 @@
 
   // Garante que existe sessão ativa E (se requiredDash informado) que o usuário tem permissão
   // Retorna {session, role, token, headers} ou null (e redireciona).
+  // Estamos dentro de um iframe? Se sim, NUNCA navegar pra /index.html: o portal tem
+  // frame-buster (index.html), então essa navegação arranca a ABA INTEIRA de volta pro menu.
+  // Sintoma clássico: o tile "abre e fecha na hora". Aninhado, avisar no próprio frame.
+  function estaAninhado() {
+    try { return window.top !== window.self; } catch (e) { return true; }
+  }
+  function avisarNoFrame(msg) {
+    document.body.innerHTML =
+      '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;' +
+      'font-family:system-ui,sans-serif;background:#09090b;color:#a1a1aa;padding:24px;text-align:center">' +
+      '<div><div style="color:#fafafa;font-weight:700;margin-bottom:6px">Sessão indisponível aqui</div>' +
+      '<div style="font-size:13px;max-width:460px">' + msg + '</div></div></div>';
+  }
+
   async function requireAuth(requiredDash) {
     const session = await getSession();
     if (!session) {
+      if (estaAninhado()) {
+        avisarNoFrame('Este painel está embutido em outro sistema e o navegador bloqueou o ' +
+          'acesso à sessão. Recarregue a página; se persistir, abra o painel em uma aba própria.');
+        return null;
+      }
       window.location.href = '/index.html';
       return null;
     }
     const role = await getUserRole(session);
     if (!role || !role.ativo) {
+      // Aninhado: signOut() redireciona pra /index.html → frame-buster → perde a aba inteira.
+      if (estaAninhado()) {
+        avisarNoFrame('Não foi possível ler suas permissões deste painel embutido.');
+        return null;
+      }
       alert('Seu usuário não tem permissões cadastradas ou está inativo.');
       await signOut();
       return null;
@@ -92,6 +116,10 @@
     if (requiredDash) {
       const needed = Array.isArray(requiredDash) ? requiredDash : [requiredDash];
       if (!needed.some((d) => role.dashes.includes(d))) {
+        if (estaAninhado()) {
+          avisarNoFrame('Seu perfil não tem este painel liberado (' + needed.join(' / ') + ').');
+          return null;
+        }
         alert('Você não tem permissão para acessar este dashboard.');
         window.location.href = '/index.html';
         return null;
