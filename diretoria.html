@@ -655,11 +655,17 @@ function renderTudo(allRows,pDE,pATE,wDe){
   const parcial={};
   parcial[mesAtual]=true;
   if(wDe.substring(8,10)!=='01') parcial[wDe.substring(0,7)]=true;
-  // MTD por mês (dias 1..diaHoje) — só usado no par [mês corrente × anterior].
+  // ⚠️ O corte do MTD é ONTEM (`diaHoje-1`), não hoje: HOJE ainda está sendo vendido e
+  // ingerido, e comparar um dia pela metade contra o mesmo dia INTEIRO do mês passado
+  // desconta a diferença do mês corrente. Medido em 08/08/2026: incluir hoje dava
+  // **+10,8%** onde a comparação de dias completos dava **+21,4%** — 10,6 pontos de
+  // crescimento comidos pelo dia em curso. É a mesma régua do `carregarVelocidade`
+  // do ecommerce.html. Dia 1º não tem dia completo nenhum ⇒ sem Δ (nunca 0%).
+  const diaCorte=diaHoje-1;
   const mtd={};
-  mensalRows.forEach(r=>{
+  if(diaCorte>=1) mensalRows.forEach(r=>{
     if(!r.data_pedido) return;
-    if(parseInt(r.data_pedido.substring(8,10),10)>diaHoje) return;
+    if(parseInt(r.data_pedido.substring(8,10),10)>diaCorte) return;
     const m=r.data_pedido.substring(0,7);
     mtd[m]=(mtd[m]||0)+(REC(r)-DEV(r));
   });
@@ -668,7 +674,8 @@ function renderTudo(allRows,pDE,pATE,wDe){
     const iAll=mesesAll.indexOf(m);
     if(iAll<=0) return null;                // sem mês anterior na janela
     const ant=mesesAll[iAll-1];
-    if(m===mesAtual){                       // parcial × parcial, mesma régua de dias
+    if(m===mesAtual){                       // parcial × parcial, mesma régua de dias COMPLETOS
+      if(diaCorte<1) return null;           // dia 1º: nada fechado pra comparar
       const d=delta(mtd[m]||0, mtd[ant]);
       if(d!==null) mtdUsado=true;
       return d;
@@ -680,7 +687,7 @@ function renderTudo(allRows,pDE,pATE,wDe){
   if(nota){
     const lblAtual=labMes[meses.indexOf(mesAtual)];
     nota.innerHTML='O rótulo em cima de cada coluna é o <b>total do mês</b> (soma dos 4 canais); embaixo dele, a <b>variação vs o mês anterior</b>.'+
-      (mtdUsado?` <b>${lblAtual}</b> está em curso, então a variação dele compara <b>dia 1–${diaHoje} contra dia 1–${diaHoje}</b> do mês anterior — não o mês fechado.`:'')+
+      (mtdUsado?` <b>${lblAtual}</b> está em curso, então a variação dele compara <b>dia 1–${diaCorte} contra dia 1–${diaCorte}</b> do mês anterior — só dias completos, o de hoje fica de fora dos dois lados.`:'')+
       ' Mês sem variação é mês sem base comparável (janela começa no meio do mês).';
   }
 
