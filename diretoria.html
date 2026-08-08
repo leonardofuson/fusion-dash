@@ -121,7 +121,7 @@ table.tb tr:hover td{background:rgba(255,255,255,0.02);}
   <div class="grid4" id="grupo-cards"></div>
 
   <div class="grid2">
-    <div class="card"><div class="card-title">Evolução mensal por canal <span style="color:var(--txt3);font-weight:400">· receita líquida · últimos 12 meses</span></div><div class="chart-wrap"><canvas id="chart-mensal"></canvas></div></div>
+    <div class="card"><div class="card-title">Evolução mensal por canal <span style="color:var(--txt3);font-weight:400">· receita líquida · últimos 12 meses</span></div><div class="chart-wrap"><canvas id="chart-mensal"></canvas></div><div id="mensal-nota" style="font-size:10px;color:var(--txt3);margin-top:10px;line-height:1.45;"></div></div>
     <div class="card"><div class="card-title">Mix de receita líquida por canal <span style="color:var(--txt3);font-weight:400">· período selecionado</span></div><div class="chart-wrap"><canvas id="chart-mix"></canvas></div></div>
   </div>
 
@@ -252,6 +252,13 @@ async function apiAll(p){
 }
 function fmt(n){ return 'R$ '+Math.round(n||0).toLocaleString('pt-BR'); }
 function fmtN(n){ return Math.round(n||0).toLocaleString('pt-BR'); }
+// Compacto pra rótulo em cima de coluna (espaço horizontal é escasso: 12 colunas).
+function fmtC(n){
+  const v=Math.abs(n||0);
+  if(v>=1e6) return 'R$ '+(n/1e6).toFixed(v>=1e7?1:2).replace('.',',')+'M';
+  if(v>=1e3) return 'R$ '+Math.round(n/1e3)+'k';
+  return 'R$ '+Math.round(n||0);
+}
 function fmtPct(n){ return (n||0).toFixed(1)+'%'; }
 // Δ% vs período anterior. null quando não há base de comparação (período anterior vazio).
 function delta(cur,prev){ if(prev===null||prev===undefined||prev===0) return null; return (cur-prev)/prev*100; }
@@ -352,6 +359,35 @@ function aplicarFiltro(){
   carregar();
 }
 function destroyChart(id){ if(charts[id]){ charts[id].destroy(); delete charts[id]; } }
+
+// ── Rótulo de TOTAL (e variação) em cima de cada coluna empilhada ──────────────
+// Plugin INLINE (registrado só nos charts de coluna, via `plugins:[totalTopo]`) —
+// não global, mesma regra do ChartDataLabels: registro global poluiria linhas/barras
+// dos outros 4 charts. Lê de `options.plugins.totalTopo = {totais:[], deltas:[]}`.
+// ⚠️ Exige `layout.padding.top` >= 30 no chart: o texto é desenhado ACIMA do topo da
+// pilha, e sem a folga ele é cortado silenciosamente pela borda do canvas.
+const totalTopo={
+  id:'totalTopo',
+  afterDatasetsDraw(chart,args,opts){
+    const tot=(opts&&opts.totais)||[]; const dl=(opts&&opts.deltas)||[];
+    const x=chart.scales.x, y=chart.scales.y; if(!x||!y) return;
+    const ctx=chart.ctx; ctx.save(); ctx.textAlign='center';
+    tot.forEach((t,i)=>{
+      if(!t) return;
+      const px=x.getPixelForValue(i), py=y.getPixelForValue(t);
+      const d=dl[i];
+      const temD=(d!==null&&d!==undefined&&isFinite(d));
+      ctx.font='700 10px Inter, sans-serif'; ctx.fillStyle='#e4e4e7';
+      ctx.fillText(fmtC(t), px, py-(temD?15:6));
+      if(temD){
+        ctx.font='700 9px Inter, sans-serif';
+        ctx.fillStyle=d>=0?'#10b981':'#ef4444';
+        ctx.fillText((d>=0?'▲':'▼')+' '+Math.abs(d).toFixed(0)+'%', px, py-4);
+      }
+    });
+    ctx.restore();
+  }
+};
 
 // ── HISTÓRICO POR PRODUTO (consolidado ecom+lojas, mensal — mvw_vendas_sku_mes) ──
 let SKU_HIST_ROWS=null, HIST_GRUPO='todos', HIST_METRIC='rev';
@@ -596,14 +632,72 @@ function renderTudo(allRows,pDE,pATE,wDe){
     const {grupo}=classificarGrupo(r);
     (porMes[m]=porMes[m]||{}); porMes[m][grupo]=(porMes[m][grupo]||0)+(REC(r)-DEV(r));
   });
-  const meses=Object.keys(porMes).sort().slice(-12);
+  // mesesAll tem 13 entradas (a janela de 365d abre no MEIO de um mês, então o mais
+  // antigo é parcial); o chart mostra os 12 últimos, mas o Δ do 1º exibido precisa
+  // enxergar o 13º pra ter base de comparação.
+  const mesesAll=Object.keys(porMes).sort();
+  const meses=mesesAll.slice(-12);
   const labMes=meses.map(m=>{ const [y,mo]=m.split('-'); return mo+'/'+y.slice(2); });
   const gruposMensal=GRUPO_ORDER.filter(g=>meses.some(m=>porMes[m]?.[g]));
+  const totAll={}; mesesAll.forEach(m=>totAll[m]=GRUPO_ORDER.reduce((s,g)=>s+(porMes[m]?.[g]||0),0));
+  const totMes=meses.map(m=>totAll[m]);
+
+  // ── Variação mês a mês — só onde a comparação é honesta ────────────────────
+  // Dois meses da janela são PARCIAIS e mentiriam num MoM ingênuo:
+  //  · o mês CORRENTE (fechou D dias de N) → daria um tombo que não existe
+  //    (em 07/08/2026: **−74%**, quando a verdade comparável é **+15%**);
+  //  · o mês em que a janela ABRE (365d atrás, dia ≠ 1) → infla o Δ do seguinte.
+  // Regra: mês corrente compara MTD × MTD (mesmos dias do mês anterior); par que
+  // tenha um parcial de qualquer lado não mostra Δ. ⚠️ Δ ausente ≠ Δ zero.
+  // ⚠️ Marcar o parcial pelo MÊS, nunca por posição no array — `slice(-12)` já pode
+  // ter descartado o mês de abertura, e aí `meses[0]` é um mês cheio inocente.
+  const hojeD=new Date(), mesAtual=hojeD.toISOString().substring(0,7), diaHoje=hojeD.getDate();
+  const parcial={};
+  parcial[mesAtual]=true;
+  if(wDe.substring(8,10)!=='01') parcial[wDe.substring(0,7)]=true;
+  // MTD por mês (dias 1..diaHoje) — só usado no par [mês corrente × anterior].
+  const mtd={};
+  mensalRows.forEach(r=>{
+    if(!r.data_pedido) return;
+    if(parseInt(r.data_pedido.substring(8,10),10)>diaHoje) return;
+    const m=r.data_pedido.substring(0,7);
+    mtd[m]=(mtd[m]||0)+(REC(r)-DEV(r));
+  });
+  let mtdUsado=false;
+  const deltaMes=meses.map(m=>{
+    const iAll=mesesAll.indexOf(m);
+    if(iAll<=0) return null;                // sem mês anterior na janela
+    const ant=mesesAll[iAll-1];
+    if(m===mesAtual){                       // parcial × parcial, mesma régua de dias
+      const d=delta(mtd[m]||0, mtd[ant]);
+      if(d!==null) mtdUsado=true;
+      return d;
+    }
+    if(parcial[m]||parcial[ant]) return null;
+    return delta(totAll[m], totAll[ant]);
+  });
+  const nota=document.getElementById('mensal-nota');
+  if(nota){
+    const lblAtual=labMes[meses.indexOf(mesAtual)];
+    nota.innerHTML='O rótulo em cima de cada coluna é o <b>total do mês</b> (soma dos 4 canais); embaixo dele, a <b>variação vs o mês anterior</b>.'+
+      (mtdUsado?` <b>${lblAtual}</b> está em curso, então a variação dele compara <b>dia 1–${diaHoje} contra dia 1–${diaHoje}</b> do mês anterior — não o mês fechado.`:'')+
+      ' Mês sem variação é mês sem base comparável (janela começa no meio do mês).';
+  }
+
   destroyChart('mensal');
   charts['mensal']=new Chart(document.getElementById('chart-mensal'),{
     type:'bar',
     data:{labels:labMes,datasets:gruposMensal.map(g=>({label:g,data:meses.map(m=>porMes[m]?.[g]||0),backgroundColor:GRUPO_CORES[g]+'CC',borderColor:GRUPO_CORES[g],borderWidth:1,borderRadius:3}))},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#a1a1aa',font:{size:10},padding:8,boxWidth:10}}},scales:{x:{stacked:true,ticks:{color:'#71717a',font:{size:10}},grid:{display:false}},y:{stacked:true,ticks:{color:'#71717a',font:{size:10},callback:function(v){return 'R$'+Math.round(v/1000)+'k';}},grid:{color:'rgba(255,255,255,0.04)'}}}}});
+    options:{responsive:true,maintainAspectRatio:false,
+      layout:{padding:{top:30}},   // ⚠️ folga pro rótulo de total; sem isso ele é cortado
+      plugins:{legend:{position:'bottom',labels:{color:'#a1a1aa',font:{size:10},padding:8,boxWidth:10}},
+        totalTopo:{totais:totMes,deltas:deltaMes},
+        tooltip:{callbacks:{footer:items=>{
+          const i=items[0].dataIndex, d=deltaMes[i];
+          return 'Total: '+fmt(totMes[i])+(d!==null&&isFinite(d)?`  ·  ${d>=0?'▲':'▼'} ${Math.abs(d).toFixed(1)}% vs mês anterior`:'');
+        }}}},
+      scales:{x:{stacked:true,ticks:{color:'#71717a',font:{size:10}},grid:{display:false}},y:{stacked:true,ticks:{color:'#71717a',font:{size:10},callback:function(v){return 'R$'+Math.round(v/1000)+'k';}},grid:{color:'rgba(255,255,255,0.04)'}}}},
+    plugins:[totalTopo]});
 
   // ── Mix doughnut por grande grupo (período selecionado) — % destacada na fatia ──
   destroyChart('mix');
@@ -760,10 +854,15 @@ function renderProjecao(allRows){
       {type:'line',label:'Meta',data:metaSerie,borderColor:'#f59e0b',backgroundColor:'transparent',borderWidth:2,pointRadius:3,pointBackgroundColor:'#f59e0b',tension:0.3,borderDash:[6,3],stack:'meta'}
     ]},
     options:{responsive:true,maintainAspectRatio:false,
+      layout:{padding:{top:26}},   // folga pro rótulo de total (mesma regra do chart mensal)
       plugins:{legend:{position:'bottom',labels:{color:'#a1a1aa',font:{size:11},padding:10,boxWidth:12}},
+        // Total = realizado + projeção do mês. Sem Δ aqui: a comparação relevante
+        // desta seção é contra a META (a linha), não contra o mês anterior.
+        totalTopo:{totais:realSerie.map((v,i)=>v+(foreInc[i]||0))},
         tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt(c.parsed.y)}}},
       scales:{x:{stacked:true,ticks:{color:'#71717a',font:{size:10}},grid:{display:false}},
-        y:{stacked:true,ticks:{color:'#71717a',font:{size:10},callback:v=>'R$'+Math.round(v/1000)+'k'},grid:{color:'rgba(255,255,255,0.04)'}}}}
+        y:{stacked:true,ticks:{color:'#71717a',font:{size:10},callback:v=>'R$'+Math.round(v/1000)+'k'},grid:{color:'rgba(255,255,255,0.04)'}}}},
+    plugins:[totalTopo]
   });
 }
 

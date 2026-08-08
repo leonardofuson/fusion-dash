@@ -7,7 +7,7 @@
 - Login via Supabase Auth → JWT → PostgREST com RLS
 - Catálogo de dashes hardcoded em `auth.js` (objeto `DASHES`)
 - Cada dash usa `fusionAuth.requireAuth('key')` como gate
-- Dashes ativos: `lojas`, `ecommerce`, `diretoria`, `estoque-sistema`, `financeiro`, `compras`, `simulador` (o `estoque` read-only foi **desativado 23/07/2026** — comentado no DASHES, substituído pelo `estoque-sistema` = fusion-estoque-app; `estoque.html` fica como fallback). O tile `compras` (`url: '/compras-react.html'`) hospeda o app React `fusion-compras`; o **vanilla `compras.html` foi APOSENTADO em 24/07/2026** — vira redirect pra `/compras-react.html` (fallback recuperável, não deletado), e o badge "React · beta" + link "sistema atual →" saíram do host bar
+- Dashes ativos: `lojas`, `ecommerce`, `diretoria`, `estoque-sistema`, `financeiro`, `compras`, `simulador` (o tile `estoque` read-only foi **aposentado em 23/07/2026** — comentado no DASHES, **substituído** pelo `estoque-sistema` = fusion-estoque-app; decisão fechada em 30/07, não volta como tile. **`estoque.html` não é fallback ocioso**: é a aba **Visão** dentro do app, então não pode ser deletado). O tile `compras` (`url: '/compras-react.html'`) hospeda o app React `fusion-compras`; o **vanilla `compras.html` foi APOSENTADO em 24/07/2026** — vira redirect pra `/compras-react.html` (fallback recuperável, não deletado), e o badge "React · beta" + link "sistema atual →" saíram do host bar
 - Padrão de fetch: 1 chamada em `vw_pedidos_full` (view UNION ALL + schema padronizado). **Antes 31/05/2026**: 2 chamadas paralelas a `pedidos` + `pedidos_historico` com `.concat()`. Tabelas físicas foram unificadas em `pedidos` única (473k rows, out/24→hoje); `pedidos_historico` virou backup `pedidos_historico_archived_20260531` (drop previsto 7-30d pós-estabilidade).
 - RLS em tudo (`pedidos`, `produtos`, `estoque`, `contas_pagar`, `user_roles`, `metas_lojas`) — sem login = sem dado
 
@@ -69,7 +69,7 @@ Token JWT expira em ~1h. **Não usar `var AUTH_HEADERS = auth.headers` capturado
 2. `POST {SUPABASE_URL}/rest/v1/user_roles` com `user_id`, `email`, `nome`, `role`, `dashes` (array), `ativo: true`
 
 - Roles usados: `diretoria`, `gerente`, `gestor` (campo livre, não controla acesso — quem controla é `dashes[]` + `ativo`)
-- Dashes disponíveis: `lojas`, `ecommerce`, `diretoria`, `estoque`, `compras`, `financeiro`
+- Dashes disponíveis (chaves de `user_roles.dashes[]`): `lojas`, `ecommerce`, `diretoria`, `estoque` (→ hoje abre o tile `estoque-sistema`), `compras`, `financeiro`, `produtos`, `crm`, `simulador`, `marketing`, `diario`, `aprovacoes`
 - Senha padrão inicial: `projetomax` (orientar troca no primeiro acesso)
 
 ## Adicionar novo dashboard (procedimento)
@@ -197,13 +197,15 @@ Fonte única: tabela `contas_pagar` (só Fio e Trama).
 - Drill-down 3 níveis por categoria hierárquica. Rótulos em `CAT_LABELS` (mapa hardcoded — atualizar se surgir nível novo).
 - Filtra fora `cancelada` E `cancelada_api` (função `processar()`).
 
-## Dash Estoque (`estoque.html`)
+## Dash Estoque (`estoque.html` — hoje a aba **Visão** do `fusion-estoque-app`)
+
+> Desde 23/07/2026 este HTML **não é mais um tile do portal**: ele é embutido pelo Sistema de Estoque (`Visao.tsx`). Continua vivo e mantido — o que mudou é quem o abre. Detalhe em [`../ESTOQUE.md`](../ESTOQUE.md) §7.
 
 **Conceitos-chave para código:**
 - Query filtra `ativo=eq.true` — correções de grade feitas via `ativo=false` no Supabase (NÃO deletar).
 - Whitelist fabricação própria (`SKU_FINALIZADOS`, 21 SKUs): `CLAFEL01, CLAF01, CLAJUSTE, CLTECH, CLMALHA, CLSJ01, CLMC01, CLOX01, CLDENIM01, CLSPIN01, CMBB, CMINDIANO, CMMC, CMEL01, CMLS01, CMPL01, CMGPD, SJPREMIUM, TNMC01, TNPV01, TNPVAJ`. **Manter sincronizado** em 3 lugares: `compras.html`, `estoque.html`, `fusion-sync/fusion_sync_producao.py`.
 - **Pipeline de custo**: dash consome `produtos.custo_total`. Pipeline completo (RPC `recalcular_custos_sku`, `custos_sku`) em [../fusion-sync/MRP.md](../fusion-sync/MRP.md).
-- Aba **Insumos** é stub (não implementada).
+- Aba **Insumos** é stub (não implementada) — o lado transacional de insumo vive no `fusion-compras`.
 - Render CLI disponível (`render login` se token expirar, `render jobs create` para disparar syncs).
 
 ## Dash Ecommerce (`ecommerce.html`)
@@ -224,6 +226,9 @@ Fonte única: tabela `contas_pagar` (só Fio e Trama).
   - **Rotulado na UI (A6)**: barra hachurada + chip "est." no waterfall, chip na tabela de canal, aviso com o total estimado. Uma boa estimativa é perigosa quando para de parecer estimativa.
   - **Magnitude (jul/26):** R$127,9k de custo que o dash não mostrava = **8,3 pontos** de margem inflada. Meses fechados: `*_est` ≈ 0 pra ML/Shopee (liquidam no ato) → zero regressão (A9).
 - **Real (API) vs estimado/proporcional no P&L** — régua completa em [../CUSTOS_POR_CANAL.md](../CUSTOS_POR_CANAL.md#real-api-vs-estimadoproporcional-no-pl-auditoria-08062026). Resumo: **banco só guarda valor real da API** (fee_canal/frete_ml_seller/valor_devolucao/valor_chargeback/devolucoes_item/ads_metrics; sem dado = 0/null, nada estimado gravado). **Reais**: receita, devolução (order + por produto), comissão madura, frete ML/TikTok/Shopee, ads ML+Shopee. **Estimados/proporcionais (fallback de tela)**: CMV de meses >130d (`cmvPct`), comissão não-maturada (`custoPct`), frete Site (usa frete do cliente como proxy), ads Meta/Google/TikTok (R$0, ausente). Shein tudo estimado até API direta ([../TODO_SHEIN_API.md](../TODO_SHEIN_API.md)).
+- **Custo Fixo rateado** (`fetchCustoFixo` → `vw_ecom_custo_fixo_canal_dia`): overhead ECOM ÷ receita, por absorção. ⚠️ **Mês de calendário fechado ≠ livro fechado** — pagamento dos últimos dias do mês é ingerido nos dias seguintes (janela do sync de AP é por **emissão**: 5d no sync, 30d no recon). A v2 virava pra taxa própria no dia 1º e por isso todo mês recém-fechado lia overhead baixo e margem alta; em 01/08/2026 isso virou catástrofe (julho: 1,30% vs ~6,2%, −R$173k de custo fixo, +4,9pp de margem falsa) por causa do apagão do token Tiny.
+  **Regra vigente (05/08/2026, `sql/2026-08-05_ecom_custo_fixo_mes_fechado.sql`)** — mês só é **elegível**, tanto pra ratear a si mesmo quanto pra compor o trailing, se passar em **duas travas automáticas**: (a) **completude** — travado em `em_aberto` com vencimento no mês ≤ **5%** do overhead ECOM que o mês pagou, medido no mesmo universo/peso do overhead; (b) **maturidade** — fechado há **≥ 10 dias**. Reprovou, cai no trailing dos 3 meses **elegíveis** mais recentes. A lista `mes_suspeito` continua existindo como escotilha manual mas está **vazia** — `2026-07` saiu, porque a trava (a) o pega sozinha e vai soltá-lo sozinha quando o AP for recuperado. Inspecionar sempre por **`vw_ecom_custo_fixo_saude_mes`** (`pct_travado`, `maduro`, `elegivel`, `motivo`, `ap_pago_total`) antes de discutir qualquer número de custo fixo.
+  **Limitação:** a trava (a) só vê título que existe e está travado; apagão total de ingestão (título que nunca chega) passa batido — é o que a coluna `ap_pago_total` da view de saúde serve pra flagrar a olho (jul/26: R$1,76M contra mediana ~R$3,1M). Não gatilha exclusão automática porque sazonalidade daria falso positivo.
 
 ## Dash Diretoria (`diretoria.html`)
 
@@ -237,11 +242,15 @@ Fonte única: tabela `contas_pagar` (só Fio e Trama).
 - **Classificação canal-first** (`classificarGrupo(row)` — toda row cai em 1 grupo, Σ grupos == total):
   - **Marketplaces**: `classificarCanal(canal_nome_raw)` ∈ {Mercado Livre, Shopee, Shein, TikTok Shop, Magalu}. Classificador por substring (`includes`) cobre as 15+ variantes históricas (`ML Fio e Trama`, `ML Confecções`, `Mercado Livre FIO`...). ⚠️ O `CANAL_MAP` exato-match antigo perdia ~R$13M de ML — não voltar pra ele.
   - **E-commerce (Site)**: canal = Site Próprio/web (ou fallback `origem_conta='shopify'`).
+    - 🔴 **"E-commerce" aqui é SÓ o Site Próprio — marketplaces são outro grupo.** O `ecommerce.html` usa a mesma palavra pra **marketplaces + site**. Magnitude da colisão (jul/26): card da Diretoria **R$ 245k** × dash Ecommerce **R$ 3,22M** — **13×**, mesmo nome, mesma pessoa abrindo os dois no mesmo dia. Já confundiu de verdade (Leo, 07/08/2026: "não entendo o número do ecommerce"). **Decisão 07/08/2026: NÃO renomear** — o rótulo fica "E-commerce"; a régua mora aqui. Ao responder qualquer pergunta sobre "quanto vendeu o ecommerce", **perguntar de qual dos dois se trata antes de dar o número**.
   - **Lojas Físicas**: `origem_conta='kwid'` via `loja_nome` normalizado (NÃO `canal_nome_raw`), exceto Atacado WhatsApp **e Atacado Lojas**.
   - **Atacado** (4º grupo, decisão 01/06/2026): `flecha` + KWID `loja_nome IN ('Atacado WhatsApp','Atacado Lojas')`. **`Atacado Lojas` entrou em 20/07/2026** — é atacado vendido dentro das lojas (depósito Linx cod 7); antes caía em Lojas Físicas e inflava o varejo. Alinhado com o `lojas.html`, onde já fica fora dos KPIs e da meta de varejo.
 - ⚠️ **`mvw_diretoria_dia` tira o frete da receita; o `lojas.html` não** — a MV faz `valor_bruto − frete` (regra "frete do cliente não é receita", exceto ML), enquanto o dash Lojas usa `valor_bruto` cru, que no Linx já vem com frete somado (`montar_pedido`: bruto − desconto + frete). Logo **KWID sempre bate um pouco menor no Diretoria**. Magnitude real: R$ 341 (jun/26) e R$ 418 (jul/26) = **0,02-0,04%** — imaterial, não perseguir. É um 2º componente do "gap residual" citado acima, além do `devolvido`.
 - Validar mudança no classificador: Σ dos 4 grupos deve bater com soma de todas as origens (`mvw_diretoria_dia`). 12m em 01/06: total R$46,3M = Mkt 60,5% + Lojas 29,8% + E-com 7,5% + Atacado 2,1%.
 - **Gráfico "Evolução mensal por canal" = SEMPRE últimos 12 meses** (independente do filtro); o resto (KPIs/cards/mix/barras/tabela) segue o período. Por isso o fetch cobre a união `[12m fixos + período anterior]` e fatia client-side (`cur`/`prev`/`mensalRows`).
+- **Rótulo de total + variação em cima da coluna (07/08/2026)**: plugin inline `totalTopo` (registrado em `plugins:[totalTopo]` só nos 2 charts de coluna — mensal e Projeção 2026; **nunca global**, mesma regra do `ChartDataLabels`) desenha o **total do mês** acima da pilha e, embaixo, o **Δ vs mês anterior**. Exige `layout.padding.top` ≥ 26 — sem a folga o texto é **cortado calado** pela borda do canvas. Na Projeção vai só o total (a comparação de lá é contra a linha de meta, não contra o mês anterior).
+  - ⚠️ **A janela de 12m tem 2 meses parciais e o MoM cru mente nos dois.** O mês **corrente** fechou D dias de N — em 07/08/2026 o MoM ingênuo dava **−74%** quando a verdade comparável era **+15%**. E o mês em que a **janela abre** (365d atrás, dia ≠ 1) infla o Δ do seguinte. Regra: mês corrente compara **MTD × MTD** (mesmos dias do mês anterior, dito na nota sob o gráfico); par com um parcial de qualquer lado **não mostra Δ**. **Δ ausente ≠ Δ zero.**
+  - ⚠️ Marcar o parcial **pelo mês** (`wDe.substring(0,7)`), nunca por posição — `Object.keys(porMes).sort().slice(-12)` já pode ter descartado o mês de abertura, e aí `meses[0]` é um mês cheio inocente que perde o Δ à toa. O array `mesesAll` (13 entradas) existe pra que o 1º mês exibido enxergue seu antecessor.
 - **Mix (doughnut)** mostra % em cada fatia via `chartjs-plugin-datalabels` (registrado **per-chart** em `plugins:[ChartDataLabels]`, não global — senão poluiria barras/linhas); esconde fatias <3%.
 - ⚠️ **Fetch DEVE paginar** (`apiAll()`, não `api()`): a MV tem ~4.4k linhas em 12m e o PostgREST corta em 1000. Sem paginar, `order=data_pedido.asc` trazia só as 1000 mais antigas e o período atual zerava (regressão 01/06, corrigida no mesmo dia). Ordem de paginação = chave única da MV (`data_pedido,origem_conta,canal_nome_raw,loja_nome`) pra offset exato. Ver [[feedback-postgrest-pagination]].
 - **Chip "Ano (YTD)"** (`setPeriodoYTD`): 1º jan do ano corrente → hoje.
