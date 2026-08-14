@@ -78,21 +78,6 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;-webkit-text-size-a
 .fpill-busca.tem-txt .busca-x{display:block;}
 .busca-x:hover{color:var(--txt1);}
 
-/* Totais por tamanho e por cor (14/08/2026) */
-.tg-card{background:var(--bg2);border:1px solid var(--bdr);border-radius:14px;padding:16px 18px;margin-bottom:1.25rem;}
-.tg-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
-.tg-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#d4d4d8;}
-.tg-sub{font-size:11px;color:var(--txt3);}
-.tg-cols{display:grid;grid-template-columns:1fr 1fr;gap:20px 28px;}
-.tg-colhead{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt3);
-  margin-bottom:7px;padding-bottom:5px;border-bottom:1px solid var(--bdr);}
-.tg-colhead span{opacity:.6;font-weight:600;}
-.tg-item{display:grid;grid-template-columns:64px 1fr 60px;align-items:center;gap:8px;margin-bottom:5px;}
-.tg-lbl{font-size:11px;color:var(--txt2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.tg-bar-wrap{background:var(--bg3);border-radius:4px;height:9px;overflow:hidden;}
-.tg-bar{height:100%;border-radius:4px;transition:width .3s;}
-.tg-val{font-size:11px;font-weight:700;color:var(--txt1);text-align:right;font-variant-numeric:tabular-nums;}
-@media(max-width:760px){.tg-cols{grid-template-columns:1fr;}}
 
 .fpill label{color:var(--txt3);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;white-space:nowrap;}
 .fpill select,.fpill input{border:none;outline:none;font-size:12px;font-family:inherit;color:var(--txt1);background:transparent;min-width:0;}
@@ -418,9 +403,6 @@ table.mtz tr.row-broken:hover td.tdc{background:rgba(234,179,8,0.12);}
     <div class="kpi"><div class="kpi-lbl">Carregando...</div><div class="spin"></div></div>
   </div>
 
-
-  <!-- Totais por tamanho e por cor -->
-  <div id="totais-grade"></div>
 
   <!-- Location cards -->
   <div class="loc-grid" id="loc-cards"></div>
@@ -958,7 +940,6 @@ function render() {
   }
 
   renderKPIs(pais, locF);
-  renderTotais(pais, locF);
   renderLocCards(pais, locF);
   renderCharts(pais, locF);
   renderProdList(pais, locF, nivel);
@@ -1025,73 +1006,6 @@ function abrirProd(id) {
   setTimeout(() => document.getElementById('body-' + id)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 120);
 }
 
-
-// ═══════════════════════════════════════════
-// TOTAIS POR TAMANHO E POR COR
-// ═══════════════════════════════════════════
-// A matriz tamanho × cor já existia DENTRO de cada produto expandido — mas pra responder
-// "quanto tenho de M no total?" era preciso abrir produto por produto e somar de cabeça.
-// Este container agrega o que está FILTRADO na tela (busca, categoria, chip, localização).
-function renderTotais(filtrados, locF) {
-  const el = document.getElementById('totais-grade');
-  if (!el) return;
-
-  const porTam = {}, porCor = {};
-  let total = 0;
-  const activeLocs = locF ? LOCS.filter(l => l.key === locF) : LOCS;
-  filtrados.forEach(p => {
-    Object.entries(p.cores).forEach(([cor, tams]) => {
-      Object.entries(tams).forEach(([tam, porLoc]) => {
-        const q = activeLocs.reduce((sum, l) => sum + (porLoc[l.key] || 0), 0);
-        if (q <= 0) return;
-        porTam[tam] = (porTam[tam] || 0) + q;
-        porCor[cor] = (porCor[cor] || 0) + q;
-        total += q;
-      });
-    });
-  });
-
-  if (!total) { el.innerHTML = ''; return; }
-
-  // tamanho segue a escala real (PP→GG, 36→56), não ordem alfabética — G viria antes de M.
-  const tams = Object.keys(porTam).sort((a, b) => {
-    const ia = ORDEM_TAM.indexOf(a), ib = ORDEM_TAM.indexOf(b);
-    if (ia >= 0 && ib >= 0) return ia - ib;
-    if (ia >= 0) return -1; if (ib >= 0) return 1;
-    return a.localeCompare(b);
-  });
-  const cors = Object.keys(porCor).sort((a, b) => porCor[b] - porCor[a]);
-
-  const maxT = Math.max(...tams.map(t => porTam[t]));
-  const maxC = Math.max(...cors.map(c => porCor[c]));
-  const pct = (v, m) => Math.max(4, Math.round(100 * v / m));
-
-  const barras = (chaves, mapa, max, cor) => chaves.map(k => `
-    <div class="tg-item" title="${safe(k)}: ${fmt(mapa[k])} un (${(100*mapa[k]/total).toFixed(1)}% do filtrado)">
-      <div class="tg-lbl">${safe(k)}</div>
-      <div class="tg-bar-wrap"><div class="tg-bar" style="width:${pct(mapa[k], max)}%;background:${cor}"></div></div>
-      <div class="tg-val">${fmt(mapa[k])}</div>
-    </div>`).join('');
-
-  const escopo = locF ? (LOCS.find(l => l.key === locF)?.label || locF) : 'todas as localizações';
-  el.innerHTML = `
-    <div class="tg-card">
-      <div class="tg-head">
-        <span class="tg-title">Total por tamanho e por cor</span>
-        <span class="tg-sub">${fmt(total)} peças · ${filtrados.length} produto(s) · ${escopo}</span>
-      </div>
-      <div class="tg-cols">
-        <div>
-          <div class="tg-colhead">Tamanho <span>${tams.length}</span></div>
-          ${barras(tams, porTam, maxT, 'var(--blue)')}
-        </div>
-        <div>
-          <div class="tg-colhead">Cor <span>${cors.length}</span></div>
-          ${barras(cors, porCor, maxC, 'var(--purple)')}
-        </div>
-      </div>
-    </div>`;
-}
 
 // ═══════════════════════════════════════════
 // RENDER LOCATION CARDS (Canal-Card pattern)
