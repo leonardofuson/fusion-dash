@@ -10,7 +10,7 @@ Ferramenta operacional pros gestores de canal (ML, TikTok, Shopee, Site Próprio
 3. Avaliar impacto de ações passadas (mudança de foto/texto/preço/budget) — antes/depois
 4. Salvar cenários para comparação e tomada de decisão
 
-> **Não substitui o dash de Marketing** (parqueado no Plano Mestre). Esse simulador é tático/transacional. O dash de Marketing seria estratégico (CAC, atribuição multi-canal, LTV).
+> **Não substitui o dash de Marketing** (hoje em `MARKETING.md`). Esse simulador é tático/transacional. O dash de Marketing seria estratégico (CAC, atribuição multi-canal, LTV).
 
 ## Abas
 
