@@ -65,6 +65,35 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;-webkit-text-size-a
 .chip.on{background:var(--green);border-color:var(--green);color:#fff;box-shadow:0 0 12px rgba(34,197,94,0.3);}
 .fpill{background:var(--bg2);border:1px solid var(--bdr);border-radius:8px;padding:7px 12px;display:flex;align-items:center;gap:6px;transition:all 0.2s;}
 .fpill:focus-within{border-color:var(--green);box-shadow:0 0 0 2px rgba(34,197,94,0.2);}
+/* A busca é a ação mais usada da tela e estava com o mesmo peso visual de "Categoria".
+   Ganha 2× a largura, borda própria e foco em cyan — some do meio da fila de filtros. */
+.fpill-busca{background:linear-gradient(180deg,rgba(6,182,212,0.10),rgba(6,182,212,0.03));
+  border-color:rgba(6,182,212,0.45);padding:9px 14px;}
+.fpill-busca:focus-within{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(6,182,212,0.25);}
+.fpill-busca input{font-size:13px;font-weight:600;width:100%;}
+.fpill-busca input::placeholder{color:#7b8b93;font-weight:500;}
+.busca-ico{font-size:13px;opacity:.85;line-height:1;}
+.busca-x{border:none;background:transparent;color:var(--txt3);font-size:17px;line-height:1;cursor:pointer;
+  padding:0 2px;display:none;}
+.fpill-busca.tem-txt .busca-x{display:block;}
+.busca-x:hover{color:var(--txt1);}
+
+/* Totais por tamanho e por cor (14/08/2026) */
+.tg-card{background:var(--bg2);border:1px solid var(--bdr);border-radius:14px;padding:16px 18px;margin-bottom:1.25rem;}
+.tg-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
+.tg-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#d4d4d8;}
+.tg-sub{font-size:11px;color:var(--txt3);}
+.tg-cols{display:grid;grid-template-columns:1fr 1fr;gap:20px 28px;}
+.tg-colhead{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt3);
+  margin-bottom:7px;padding-bottom:5px;border-bottom:1px solid var(--bdr);}
+.tg-colhead span{opacity:.6;font-weight:600;}
+.tg-item{display:grid;grid-template-columns:64px 1fr 60px;align-items:center;gap:8px;margin-bottom:5px;}
+.tg-lbl{font-size:11px;color:var(--txt2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tg-bar-wrap{background:var(--bg3);border-radius:4px;height:9px;overflow:hidden;}
+.tg-bar{height:100%;border-radius:4px;transition:width .3s;}
+.tg-val{font-size:11px;font-weight:700;color:var(--txt1);text-align:right;font-variant-numeric:tabular-nums;}
+@media(max-width:760px){.tg-cols{grid-template-columns:1fr;}}
+
 .fpill label{color:var(--txt3);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;white-space:nowrap;}
 .fpill select,.fpill input{border:none;outline:none;font-size:12px;font-family:inherit;color:var(--txt1);background:transparent;min-width:0;}
 .fpill select option{background:var(--bg2);}
@@ -326,7 +355,7 @@ table.mtz tr.row-broken:hover td.tdc{background:rgba(234,179,8,0.12);}
   <div class="topbar-actions">
     <span id="upd"></span>
     <span id="user-info-tb"></span>
-    <button id="btn-atualizar-estoque" class="btn-atualizar-estoque" onclick="atualizarEstoqueKwid()" title="Dispara o cron fusion-estoque (Tiny KWID + ML Full + Shopify + Shopee). Leva ~20min.">
+    <button id="btn-atualizar-estoque" class="btn-atualizar-estoque" onclick="atualizarEstoqueKwid()" title="Dispara o cron fusion-estoque (ML Full + Shopee + Upseller). O CD não passa mais por aqui — é do nosso razão desde 14/08/2026.">
       <span id="ae-icon">🔄</span>
       <span id="ae-text">Atualizar Estoque</span>
     </button>
@@ -350,9 +379,10 @@ table.mtz tr.row-broken:hover td.tdc{background:rgba(234,179,8,0.12);}
 
   <!-- Filtros -->
   <div class="filtros">
-    <div class="fpill" style="flex:1;min-width:140px;max-width:260px;">
-      <label>Buscar</label>
-      <input type="text" id="busca" placeholder="produto ou SKU..." autocomplete="off" autocorrect="off">
+    <div class="fpill fpill-busca" style="flex:2;min-width:240px;max-width:420px;">
+      <span class="busca-ico">🔎</span>
+      <input type="text" id="busca" placeholder="Buscar produto ou SKU…" autocomplete="off" autocorrect="off">
+      <button class="busca-x" id="busca-x" onclick="limparBusca()" title="limpar">×</button>
     </div>
     <div class="fpill">
       <label>Categoria</label>
@@ -361,10 +391,10 @@ table.mtz tr.row-broken:hover td.tdc{background:rgba(234,179,8,0.12);}
     <div class="fpill">
       <label>Ordenar</label>
       <select id="sel-sort">
-        <option value="nome">Nome A→Z</option>
         <option value="est-desc">Estoque ↓</option>
         <option value="est-asc">Estoque ↑</option>
         <option value="val-desc">Valor ↓</option>
+        <option value="nome">Nome A→Z</option>
       </select>
     </div>
     <div class="chips" id="chips-nivel">
@@ -380,10 +410,6 @@ table.mtz tr.row-broken:hover td.tdc{background:rgba(234,179,8,0.12);}
       <span class="btn-fab-icon" style="font-size:16px">⚠</span>
       <span class="btn-fab-txt">Grades Quebradas<small>tamanhos com furo</small></span>
     </button>
-    <button class="btn-fab btn-fab-cyan" id="btn-shopify-low" onclick="toggleFab('shopify_low')">
-      <span class="btn-fab-icon" style="font-size:16px">🛒</span>
-      <span class="btn-fab-txt">Shopify Baixo Estoque<small id="shopify-low-count">cobertura curta</small></span>
-    </button>
     <button class="btn-ghost" id="btn-exp" onclick="toggleExpandAll()">Expandir todos</button>
   </div>
 
@@ -392,8 +418,9 @@ table.mtz tr.row-broken:hover td.tdc{background:rgba(234,179,8,0.12);}
     <div class="kpi"><div class="kpi-lbl">Carregando...</div><div class="spin"></div></div>
   </div>
 
-  <!-- Shopify low-stock alert -->
-  <div id="shopify-alert"></div>
+
+  <!-- Totais por tamanho e por cor -->
+  <div id="totais-grade"></div>
 
   <!-- Location cards -->
   <div class="loc-grid" id="loc-cards"></div>
@@ -511,7 +538,7 @@ let EXP = {}, CH_ITEM_EXP = {};
 let expAll = false;
 let activeLoc = '';
 let CHARTS = { canal: null, cat: null, prods: null };
-const FAB_IDS = { fabprop: 'btn-fabprop', quebrada: 'btn-quebrada', shopify_low: 'btn-shopify-low' };
+const FAB_IDS = { fabprop: 'btn-fabprop', quebrada: 'btn-quebrada' };
 
 // ═══════════════════════════════════════════
 // HELPERS
@@ -574,7 +601,7 @@ async function apiAll(base) {
 }
 
 // localStorage cache TTL 5min (estoque muda pouco entre páginas)
-const EST_CACHE_KEY = 'estoque_data_v2';  // v2: vendaItens agora vem da MV (shape {sku_pai,qtd})
+const EST_CACHE_KEY = 'estoque_data_v3';  // v3: sem vendaItens (o alarme Shopify saiu em 14/08/2026)
 const EST_CACHE_TTL = 5 * 60 * 1000;
 function estCacheGet(){
   try{
@@ -595,28 +622,23 @@ const idle = window.requestIdleCallback || function(fn){return setTimeout(fn,0);
 // ═══════════════════════════════════════════
 async function carregar(_fromBgRefresh) {
   try {
-    // Janela de 30d pra velocidade de venda Shopify (dias de cobertura).
-    // Fonte: MV agregada por sku_pai/dia/canal (mvw_ecommerce_sku_dia) — ~0,5s vs ~15s do join
-    // direto em itens_pedido, que travava o load inteiro (todos os fetches em Promise.all).
-    // A MV já exclui cancelado/devolvido e agrega ao SKU pai; cobertura idêntica onde importa.
-    // order= explícito é obrigatório em MV (sem coluna id, apiAll cairia em order=id.asc → 400).
-    const d30 = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
-    const vendaQ = 'mvw_ecommerce_sku_dia?select=sku_pai,qtd&origem_conta=eq.shopify'
-      + '&data_pedido=gte.' + d30 + '&order=sku_pai.asc';
+    // ⚠️ O fetch de venda 30d do Shopify saiu em 14/08/2026 junto com o alarme que ele
+    // alimentava. O alarme lia `totPai(p,'shopify')`, e a localização `shopify` foi REMOVIDA
+    // em 06/07/2026 (virou `upseller`) — ele media estoque zero contra venda real e gritava
+    // ruptura pra catálogo inteiro. Um fetch a menos no Promise.all do load.
 
     // Cache local: hit válido (<5min) pinta tudo IMEDIATO e dispara fetch fresh em bg
-    let prods, est, vendaItens;
+    let prods, est;
     const cached = !_fromBgRefresh ? estCacheGet() : null;
     if (cached) {
-      prods = cached.prods; est = cached.est; vendaItens = cached.vendaItens;
+      prods = cached.prods; est = cached.est;
       setTimeout(() => carregar(true).catch(e => console.warn('estoque bg:', e)), 200);
     } else {
-      [prods, est, vendaItens] = await Promise.all([
+      [prods, est] = await Promise.all([
         apiAll('produtos?select=id,sku,descricao,nome,categoria,tipo,sku_pai,cor,tamanho,preco_venda,fabricacao_propria&ativo=eq.true'),
         apiAll('estoque?select=produto_id,sku,quantidade,localizacao'),
-        apiAll(vendaQ),
       ]);
-      estCacheSet({ prods, est, vendaItens });
+      estCacheSet({ prods, est });
     }
 
     // Popula SKU_FINALIZADOS a partir de produtos.fabricacao_propria (live, não-hardcoded)
@@ -714,20 +736,12 @@ async function carregar(_fromBgRefresh) {
     const pais     = Object.values(pBySku).filter(p => Object.keys(p.cores).length > 0 && !isTecido(p));
     const tecidos  = Object.values(pBySku).filter(p => Object.keys(p.cores).length > 0 &&  isTecido(p));
 
-    // Velocidade de venda Shopify 30d — a MV já vem agregada por SKU pai
-    const vendaShopify30d = {};
-    vendaItens.forEach(it => {
-      const parent = (it.sku_pai || '').trim().toUpperCase();
-      if (!parent) return;
-      vendaShopify30d[parent] = (vendaShopify30d[parent] || 0) + (it.qtd || 0);
-    });
-
     const cats = [...new Set(pais.map(p => p.categoria).filter(Boolean))].sort();
     const selCat = document.getElementById('sel-cat');
     selCat.innerHTML = '<option value="">Todas</option>';
     cats.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; selCat.appendChild(o); });
 
-    DADOS = { pais, tecidos, vendaShopify30d };
+    DADOS = { pais, tecidos };
     document.getElementById('upd').textContent = 'Atualizado ' + new Date().toLocaleTimeString('pt-BR');
     render();
   } catch (e) {
@@ -783,31 +797,6 @@ function sizeRunInfo(corObj, locKey) {
   return { total, comEstoque };
 }
 
-// ── Cobertura Shopify (dias) ──
-// dias = estoque Shopify / (vendas 30d Site Próprio / 30)
-// nível: critico ≤7d · atencao ≤15d · ok >15d · na = não vende no Shopify
-const SHOPIFY_COB_CRIT = 7, SHOPIFY_COB_ATEN = 15;
-function shopifyCob(p) {
-  const stock = totPai(p, 'shopify');
-  const venda30 = (DADOS && DADOS.vendaShopify30d || {})[p.sku.trim().toUpperCase()] || 0;
-  const vendaDia = venda30 / 30;
-  let dias, nivel;
-  if (venda30 <= 0) {
-    dias = stock > 0 ? Infinity : null;
-    nivel = 'na';
-  } else {
-    dias = vendaDia > 0 ? stock / vendaDia : Infinity;
-    if (dias <= SHOPIFY_COB_CRIT)      nivel = 'critico';
-    else if (dias <= SHOPIFY_COB_ATEN) nivel = 'atencao';
-    else                               nivel = 'ok';
-  }
-  return { stock, venda30, vendaDia, dias, nivel };
-}
-function fmtDias(d) {
-  if (d === null || d === undefined) return '—';
-  if (d === Infinity) return '∞';
-  return d < 10 ? d.toFixed(1) : Math.round(d).toString();
-}
 
 // ── Botão "Atualizar Estoque" — dispara cron fusion-estoque (modo fab-própria) ──
 // Usa RPC Supabase (pg_net + functions disparar_fusion_estoque / consultar_job_estoque
@@ -941,10 +930,8 @@ function render() {
   const locF   = activeLoc;
   const fabPropAtivo = document.getElementById('btn-fabprop').classList.contains('on');
   const quebradaAtivo = document.getElementById('btn-quebrada').classList.contains('on');
-  const shopifyLowAtivo = document.getElementById('btn-shopify-low')?.classList.contains('on');
   const nivel = fabPropAtivo ? 'fabprop'
     : quebradaAtivo ? 'quebrada'
-    : shopifyLowAtivo ? 'shopify_low'
     : (document.querySelector('#chips-nivel .chip.on')?.dataset?.nivel || 'todos');
   const sort   = document.getElementById('sel-sort').value;
 
@@ -952,10 +939,6 @@ function render() {
     const skuU = p.sku.trim().toUpperCase();
     if (nivel === 'fabprop' && !SKU_FINALIZADOS.has(skuU)) return false;
     if (nivel === 'quebrada' && !isQuebrada(p, locF || undefined)) return false;
-    if (nivel === 'shopify_low') {
-      const nv = shopifyCob(p).nivel;
-      if (nv !== 'critico' && nv !== 'atencao') return false;
-    }
     if (cat && p.categoria !== cat) return false;
     if (busca && !p.sku.toLowerCase().includes(busca) && !p.nome.toLowerCase().includes(busca)) return false;
     const t = totPai(p, locF || undefined);
@@ -964,10 +947,7 @@ function render() {
     return true;
   });
 
-  if (nivel === 'shopify_low') {
-    // mais crítico primeiro (menor cobertura)
-    pais.sort((a, b) => shopifyCob(a).dias - shopifyCob(b).dias);
-  } else if (sort === 'nome') {
+  if (sort === 'nome') {
     pais.sort((a, b) => a.categoria.localeCompare(b.categoria) || a.nome.localeCompare(b.nome));
   } else if (sort === 'est-desc') {
     pais.sort((a, b) => totPai(b) - totPai(a));
@@ -978,7 +958,7 @@ function render() {
   }
 
   renderKPIs(pais, locF);
-  renderShopifyAlert();
+  renderTotais(pais, locF);
   renderLocCards(pais, locF);
   renderCharts(pais, locF);
   renderProdList(pais, locF, nivel);
@@ -1035,78 +1015,82 @@ function renderKPIs(filtrados, locF) {
 // ═══════════════════════════════════════════
 // RENDER SHOPIFY ALERT (card de baixo estoque)
 // ═══════════════════════════════════════════
-function renderShopifyAlert() {
-  const el = document.getElementById('shopify-alert');
-  if (!el || !DADOS) return;
-
-  const criticos = [], atencao = [];
-  DADOS.pais.forEach(p => {
-    const c = shopifyCob(p);
-    if (c.nivel === 'critico')      criticos.push({ p, c });
-    else if (c.nivel === 'atencao') atencao.push({ p, c });
-  });
-  criticos.sort((a, b) => a.c.dias - b.c.dias);
-  const nC = criticos.length, nA = atencao.length;
-  const filtroOn = document.getElementById('btn-shopify-low')?.classList.contains('on');
-
-  const lowCountEl = document.getElementById('shopify-low-count');
-  if (lowCountEl) lowCountEl.textContent = (nC + nA) > 0 ? `${nC + nA} em alerta` : 'tudo ok';
-
-  if (nC === 0 && nA === 0) {
-    el.innerHTML = `<div class="sho-alert" style="--sho-accent:var(--green)">
-      <div class="sho-alert-head">
-        <span class="sho-alert-icon">🛒</span>
-        <span class="sho-alert-title">Shopify — Cobertura de Estoque</span>
-      </div>
-      <div class="sho-alert-empty">✅ Nenhum produto em risco de ruptura no Shopify</div>
-    </div>`;
-    return;
-  }
-
-  const accent = nC > 0 ? 'var(--red)' : 'var(--amber)';
-  const top = criticos.slice(0, 5).map(({ p, c }) => `
-    <div class="sho-row" onclick="abrirProd('${safe(p.sku)}')">
-      <span class="sho-row-dot" style="background:var(--red)"></span>
-      <span class="sho-row-name">${p.nome}</span>
-      <span class="sho-row-sku">${p.sku}</span>
-      <span class="sho-row-meta">${fmt(c.stock)} un · ${c.venda30}/30d</span>
-      <span class="sho-row-dias" style="color:var(--red)">${fmtDias(c.dias)}d</span>
-    </div>`).join('');
-
-  el.innerHTML = `<div class="sho-alert${filtroOn ? ' on' : ''}" style="--sho-accent:${accent}">
-    <div class="sho-alert-head" onclick="toggleFab('shopify_low')" title="Clique pra filtrar a lista">
-      <span class="sho-alert-icon">🛒</span>
-      <span class="sho-alert-title">Shopify — Baixo Estoque</span>
-      <span class="sho-alert-cta">${filtroOn ? '✓ filtrando lista' : 'ver na lista →'}</span>
-    </div>
-    <div class="sho-alert-body">
-      <div class="sho-counts" onclick="toggleFab('shopify_low')">
-        <div class="sho-count">
-          <span class="sho-count-val" style="color:var(--red)">${nC}</span>
-          <span class="sho-count-lbl">🔴 crítico<br>≤${SHOPIFY_COB_CRIT} dias</span>
-        </div>
-        <div class="sho-count">
-          <span class="sho-count-val" style="color:var(--amber)">${nA}</span>
-          <span class="sho-count-lbl">🟡 atenção<br>≤${SHOPIFY_COB_ATEN} dias</span>
-        </div>
-      </div>
-      ${top ? `<div class="sho-list">
-        <div class="sho-list-hd">Mais críticos — clique pra abrir</div>
-        ${top}
-      </div>` : ''}
-    </div>
-  </div>`;
-}
-
 function abrirProd(id) {
   document.querySelectorAll('#chips-nivel .chip').forEach(c => c.classList.remove('on'));
   Object.values(FAB_IDS).forEach(fid => document.getElementById(fid)?.classList.remove('on'));
-  document.getElementById('btn-shopify-low').classList.add('on');
   document.getElementById('busca').value = '';
   document.getElementById('sel-cat').value = '';
   EXP[id] = true;
   render();
   setTimeout(() => document.getElementById('body-' + id)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 120);
+}
+
+
+// ═══════════════════════════════════════════
+// TOTAIS POR TAMANHO E POR COR
+// ═══════════════════════════════════════════
+// A matriz tamanho × cor já existia DENTRO de cada produto expandido — mas pra responder
+// "quanto tenho de M no total?" era preciso abrir produto por produto e somar de cabeça.
+// Este container agrega o que está FILTRADO na tela (busca, categoria, chip, localização).
+function renderTotais(filtrados, locF) {
+  const el = document.getElementById('totais-grade');
+  if (!el) return;
+
+  const porTam = {}, porCor = {};
+  let total = 0;
+  const activeLocs = locF ? LOCS.filter(l => l.key === locF) : LOCS;
+  filtrados.forEach(p => {
+    Object.entries(p.cores).forEach(([cor, tams]) => {
+      Object.entries(tams).forEach(([tam, porLoc]) => {
+        const q = activeLocs.reduce((sum, l) => sum + (porLoc[l.key] || 0), 0);
+        if (q <= 0) return;
+        porTam[tam] = (porTam[tam] || 0) + q;
+        porCor[cor] = (porCor[cor] || 0) + q;
+        total += q;
+      });
+    });
+  });
+
+  if (!total) { el.innerHTML = ''; return; }
+
+  // tamanho segue a escala real (PP→GG, 36→56), não ordem alfabética — G viria antes de M.
+  const tams = Object.keys(porTam).sort((a, b) => {
+    const ia = ORDEM_TAM.indexOf(a), ib = ORDEM_TAM.indexOf(b);
+    if (ia >= 0 && ib >= 0) return ia - ib;
+    if (ia >= 0) return -1; if (ib >= 0) return 1;
+    return a.localeCompare(b);
+  });
+  const cors = Object.keys(porCor).sort((a, b) => porCor[b] - porCor[a]);
+
+  const maxT = Math.max(...tams.map(t => porTam[t]));
+  const maxC = Math.max(...cors.map(c => porCor[c]));
+  const pct = (v, m) => Math.max(4, Math.round(100 * v / m));
+
+  const barras = (chaves, mapa, max, cor) => chaves.map(k => `
+    <div class="tg-item" title="${safe(k)}: ${fmt(mapa[k])} un (${(100*mapa[k]/total).toFixed(1)}% do filtrado)">
+      <div class="tg-lbl">${safe(k)}</div>
+      <div class="tg-bar-wrap"><div class="tg-bar" style="width:${pct(mapa[k], max)}%;background:${cor}"></div></div>
+      <div class="tg-val">${fmt(mapa[k])}</div>
+    </div>`).join('');
+
+  const escopo = locF ? (LOCS.find(l => l.key === locF)?.label || locF) : 'todas as localizações';
+  el.innerHTML = `
+    <div class="tg-card">
+      <div class="tg-head">
+        <span class="tg-title">Total por tamanho e por cor</span>
+        <span class="tg-sub">${fmt(total)} peças · ${filtrados.length} produto(s) · ${escopo}</span>
+      </div>
+      <div class="tg-cols">
+        <div>
+          <div class="tg-colhead">Tamanho <span>${tams.length}</span></div>
+          ${barras(tams, porTam, maxT, 'var(--blue)')}
+        </div>
+        <div>
+          <div class="tg-colhead">Cor <span>${cors.length}</span></div>
+          ${barras(cors, porCor, maxC, 'var(--purple)')}
+        </div>
+      </div>
+    </div>`;
 }
 
 // ═══════════════════════════════════════════
@@ -1528,15 +1512,6 @@ function renderProd(pai, locF, modoQuebrada, nivel) {
 
   const totLabel = locF ? `TOTAL — ${LOCS.find(l => l.key === locF)?.label || ''}` : 'TOTAL';
 
-  // Badge de cobertura Shopify — só no modo filtro shopify_low
-  let cobBadge = '';
-  if (nivel === 'shopify_low') {
-    const c = shopifyCob(pai);
-    const cor = c.nivel === 'critico' ? 'var(--red)' : c.nivel === 'atencao' ? 'var(--amber)' : 'var(--green)';
-    const bg  = c.nivel === 'critico' ? 'rgba(244,63,94,0.15)' : c.nivel === 'atencao' ? 'rgba(234,179,8,0.15)' : 'rgba(34,197,94,0.15)';
-    cobBadge = `<span class="cob-badge" style="color:${cor};background:${bg}" title="Estoque Shopify ${fmt(c.stock)} un · vendas ${c.venda30} em 30d">🛒 ${fmtDias(c.dias)}d</span>`;
-  }
-
   const temQuebra = isQuebrada(pai, locF || undefined);
   return `<div class="prod${temQuebra ? ' prod-quebrada' : ''}">
     <div class="prod-head" onclick="toggleProd('${id}')">
@@ -1545,7 +1520,7 @@ function renderProd(pai, locF, modoQuebrada, nivel) {
         <span class="prod-name">${pai.nome}</span>
         <span class="prod-sku">${pai.sku}</span>
       </div>
-      ${cobBadge}
+      
       <span class="prod-cat">${pai.categoria || '—'}</span>
       <div class="prod-locs">${locDots}</div>
       <div class="prod-vals">
@@ -1689,6 +1664,17 @@ function toggleExpandAll() {
   el.addEventListener('input', render);
   el.addEventListener('change', render);
 });
+
+// o "×" só existe quando há o que limpar
+function syncBuscaX() {
+  const i = document.getElementById('busca');
+  i.closest('.fpill-busca')?.classList.toggle('tem-txt', !!i.value);
+}
+function limparBusca() {
+  const i = document.getElementById('busca');
+  i.value = ''; syncBuscaX(); render(); i.focus();
+}
+document.getElementById('busca').addEventListener('input', syncBuscaX);
 
 window.addEventListener('resize', () => { if (DADOS) render(); });
 
