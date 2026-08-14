@@ -77,6 +77,9 @@ body{background:var(--bg);color:var(--txt1);min-height:100vh;-webkit-text-size-a
   padding:0 2px;display:none;}
 .fpill-busca.tem-txt .busca-x{display:block;}
 .busca-x:hover{color:var(--txt1);}
+/* matriz consolidada dentro do card TOTAL — destaque leve pra separar das matrizes por canal */
+.mwrap-tot{margin-top:10px;border:1px solid rgba(99,102,241,0.25);border-radius:10px;overflow-x:auto;}
+.mwrap-tot .mtz tfoot td{font-weight:800;color:var(--txt1);background:rgba(99,102,241,0.10);}
 
 
 .fpill label{color:var(--txt3);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;white-space:nowrap;}
@@ -238,9 +241,6 @@ table.mtz tr.row-broken:hover td.tdc{background:rgba(234,179,8,0.12);}
 .total-label{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.10em;color:var(--blue);}
 .total-val{font-size:1.5rem;font-weight:800;color:var(--txt1);line-height:1;font-variant-numeric:tabular-nums;}
 .total-val-sub{font-size:11px;color:var(--txt3);font-weight:600;font-variant-numeric:tabular-nums;}
-.total-cores{display:flex;gap:6px;flex-wrap:wrap;}
-.total-cor-chip{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:7px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);font-size:11px;font-weight:600;color:var(--txt2);font-variant-numeric:tabular-nums;white-space:nowrap;}
-.total-cor-chip strong{color:var(--txt1);font-weight:800;margin-left:3px;}
 
 /* ── CHANNEL ACCORDION (cada canal abre sua matriz) ── */
 .ch-list{padding:0 16px 14px;display:flex;flex-direction:column;gap:6px;}
@@ -1369,8 +1369,17 @@ function renderProd(pai, locF, modoQuebrada, nivel) {
 
   const thTams = tams.map(t => `<th>${t}</th>`).join('');
 
-  // Chips de cor pro Total card (com size run badge)
-  const totCorChips = cors.map(c => {
+  // MATRIZ CONSOLIDADA — cor × tamanho somando TODOS os canais (14/08/2026).
+  // Antes aqui havia só chips de total POR COR: dava pra ver 3.169 de Azul Marinho e nenhuma
+  // pista de como isso se reparte na grade. A matriz por canal existia, mas obrigava a somar
+  // CD + ML Full + Shopee de cabeça pra responder "quanto tenho de 42 no total?".
+  // Respeita o filtro de localização: com um canal selecionado, ela vira a matriz daquele canal.
+  const linsTot = cors.map(c => {
+    const cells = tams.map(t => {
+      const q = activeLocs.reduce((sum, l) => sum + ((pai.cores[c][t] || {})[l.key] || 0), 0);
+      return `<td class="${hcls(q)}">${q === 0 ? '—' : fmt(q)}</td>`;
+    }).join('');
+    // o badge de grade quebrada valia a pena nos chips — segue, agora na linha da cor
     const run = sizeRunInfo(pai.cores[c], locF || undefined);
     let runBadge = '';
     if (c !== '(Modelo único)' && run.total > 1) {
@@ -1378,10 +1387,20 @@ function renderProd(pai, locF, modoQuebrada, nivel) {
       else if (run.comEstoque < run.total)  runBadge = ` <span class="run run-broken">${run.comEstoque}/${run.total}</span>`;
       else                                  runBadge = ` <span class="run run-ok">✓</span>`;
     }
-    return `<span class="total-cor-chip">
-      <span class="cor-dot" style="background:${corV(c)}"></span>${c}<strong>${fmt(tCor[c] || 0)}</strong>${runBadge}
-    </span>`;
+    return `<tr><td class="tdc"><span class="cor-dot" style="background:${corV(c)}"></span>${c}${runBadge}</td>`
+         + `${cells}<td class="tot">${(tCor[c] || 0) > 0 ? fmt(tCor[c]) : '—'}</td></tr>`;
   }).join('');
+
+  const tfTot = tams.map(t => {
+    const q = cors.reduce((sum, c) => sum + activeLocs.reduce((ss, l) => ss + ((pai.cores[c][t] || {})[l.key] || 0), 0), 0);
+    return `<td>${q === 0 ? '—' : fmt(q)}</td>`;
+  }).join('');
+
+  const matrizTotal = `<div class="mwrap mwrap-tot"><table class="mtz">
+      <thead><tr><th class="thc">Cor</th>${thTams}<th>Total</th></tr></thead>
+      <tbody>${linsTot}</tbody>
+      <tfoot><tr><td class="tdc">TOTAL</td>${tfTot}<td class="tot">${tot > 0 ? fmt(tot) : '—'}</td></tr></tfoot>
+    </table></div>`;
 
   // Accordion por canal — cada canal abre sua matriz cor × tam
   const chItems = LOCS.filter(l => bl[l.key] > 0 && (!locF || l.key === locF)).map(l => {
@@ -1450,7 +1469,7 @@ function renderProd(pai, locF, modoQuebrada, nivel) {
           <span class="total-val">${fmt(tot)}</span>
           <span class="total-val-sub">un · ${fmtR(val)}</span>
         </div>
-        ${totCorChips ? `<div class="total-cores">${totCorChips}</div>` : ''}
+        ${matrizTotal}
       </div>
       ${chItems ? `<div class="ch-list">${chItems}</div>` : ''}
     </div>
