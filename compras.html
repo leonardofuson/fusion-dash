@@ -7204,7 +7204,11 @@ async function imprimirOPFechamento(opId) {
   var hoje = new Date().toLocaleDateString('pt-BR');
 
   // Header com logo
-  var logo = await carregarImagemDataURL('/logo-marca.png');
+  // ⚠️ Versão PRETA: isto é papel. O `/logo-marca.png` virou o lockup BRANCO transparente
+  // (o portal é escuro) em 14/08/2026 — antes ele era branco sobre um retângulo escuro sólido,
+  // e era esse retângulo que o tornava visível no impresso. Sem trocar aqui, o PDF sairia com
+  // logo invisível, exatamente o que aconteceu com o urso branco nos PDFs de OP em 05/08/2026.
+  var logo = await carregarImagemDataURL('/logo-marca-preto.png');
   if (logo) {
     var logoH = 14, logoW = logo.w * (logoH / logo.h);
     doc.addImage(logo.dataURL, 'PNG', 15, 12, logoW, logoH);

@@ -1,4 +1,4 @@
-// auth.js — Camada de autenticação compartilhada do Fusion BI
+// auth.js — Camada de autenticação compartilhada do Fusion OS
 // Requer que o SDK do Supabase JS já tenha sido carregado via CDN ANTES deste script.
 
 (function () {
@@ -29,15 +29,20 @@
     lojas:      { titulo: 'Lojas Físicas', descricao: 'Vendas das lojas físicas (Linx Microvix)', url: '/lojas.html', icone: '🏬', cat: 'vendas' },
     diretoria:  { titulo: 'Diretoria',     descricao: 'Visão executiva consolidada por canal', url: '/diretoria.html', icone: '📊', cat: 'vendas' },
     // Operações
-    // estoque (read-only "Posição multi-canal") DESATIVADO 23/07/2026 — substituído pelo 'estoque-sistema' (fusion-estoque-app). Reativar = descomentar.
+    // estoque (read-only "Posição multi-canal") APOSENTADO 23/07/2026 — SUBSTITUÍDO pelo 'estoque-sistema'
+    // (fusion-estoque-app). Decisão fechada 30/07/2026: não volta como tile. O estoque.html segue vivo,
+    // mas como a aba "Visão" DENTRO do app (Visao.tsx) — por isso o arquivo não pode ser deletado.
     // estoque:    { titulo: 'Estoque',       descricao: 'Posição multi-canal de estoque', url: '/estoque.html', icone: '📦', cat: 'operacoes' },
     compras:    { titulo: 'Compras',       descricao: 'Ordens de compra, produção e fornecedores', url: '/compras-react.html', icone: '🧾', cat: 'operacoes' },
     produtos:   { titulo: 'Produtos',      descricao: 'Base canônica de produtos, de-para universal e grade de medidas (POM)', url: '/produtos.html', icone: '👕', cat: 'operacoes' },
-    // Sistema de Estoque (app fusion-estoque-app). Roda EM PARALELO com o dash read-only
-    // `estoque` — quem vira a chave do tile é o Leo, depois de conferir a paridade.
+    // Sistema de Estoque (app fusion-estoque-app) — é O sistema de estoque desde 23/07/2026.
+    // Gate continua pela chave 'estoque' em user_roles.dashes (ver requireAuth abaixo).
     'estoque-sistema': { titulo: 'Estoque (sistema)', descricao: 'Recebimento (entrada com custo), conciliação razão × espelho e a visão de saldo', url: '/estoque-sistema.html', icone: '📦', cat: 'operacoes' },
     financeiro: { titulo: 'Financeiro',    descricao: 'Contas a pagar, fluxo de caixa e DRE de resultado (multi-CNPJ)', url: '/financeiro.html', icone: '💰', cat: 'operacoes' },
     aprovacoes: { titulo: 'Aprovações',    descricao: 'Fila de pagamento: conferência 3 vias e liberação da diretoria', url: '/aprovacoes.html', icone: '✅', cat: 'operacoes' },
+    // Hub do Mercado Livre (app fusion-ml) — 14/08/2026. Abastecimento do Full (o que mandar
+    // do CD, em qual grade), reclamações por prazo e perguntas por tema. Gate: chave 'ml'.
+    ml:         { titulo: 'Mercado Livre',  descricao: 'O que mandar pro Full, reclamações por prazo e o que perguntam nos anúncios', url: '/ml.html', icone: '🟡', cat: 'operacoes' },
     // Inteligência
     simulador:  { titulo: 'Simulador',     descricao: 'Margem por produto + curva ótima de ads', url: '/simulador.html', icone: '🎯', cat: 'inteligencia' },
     crm:        { titulo: 'CRM',           descricao: 'Base 360°, segmentação RFM e histórico de atendimento', url: '/crm.html', icone: '👥', cat: 'inteligencia' },
