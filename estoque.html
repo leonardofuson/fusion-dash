@@ -257,6 +257,40 @@ table.mtz tr.row-broken:hover td.tdc{background:rgba(234,179,8,0.12);}
 .ch-item-body.open{display:block;}
 .ch-item-body .mwrap{margin-top:10px;}
 
+/* ── AJUSTE MANUAL (só o CD Principal) ── */
+.aj-btn{background:var(--ch-cor);color:#0a0a0a;border:0;border-radius:5px;padding:4px 10px;
+  font-size:10px;font-weight:800;letter-spacing:0.04em;cursor:pointer;flex-shrink:0;
+  text-transform:uppercase;transition:filter 0.15s,transform 0.1s;}
+.aj-btn:hover{filter:brightness(1.15);}
+.aj-btn:active{transform:translateY(1px);}
+.aj-box{display:none;margin-top:10px;padding:10px;border:1px solid var(--ch-cor);
+  border-radius:8px;background:rgba(34,197,94,0.06);}
+.aj-box.open{display:block;}
+.aj-hint{font-size:11px;line-height:1.6;color:var(--txt2);margin-bottom:9px;}
+.aj-hint b{color:var(--txt1);}
+.aj-in{width:46px;padding:3px 2px;text-align:center;font-size:11px;font-variant-numeric:tabular-nums;
+  background:rgba(0,0,0,0.35);border:1px solid var(--bdr);border-radius:4px;color:var(--txt1);outline:none;}
+.aj-in:focus{border-color:var(--ch-cor);}
+.aj-in::placeholder{color:#52525b;}
+/* tira as setinhas do number: elas roubam largura e ninguem clica nelas pra contar peca */
+.aj-in::-webkit-outer-spin-button,.aj-in::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+.aj-in[type=number]{-moz-appearance:textfield;}
+.aj-na{text-align:center;color:#71717a;font-size:11px;cursor:help;}
+.aj-foot{display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap;}
+.aj-mot{font-size:10px;color:var(--txt3);display:flex;align-items:center;gap:6px;flex:1;min-width:200px;}
+.aj-mot-in{flex:1;min-width:120px;padding:4px 8px;font-size:11px;background:rgba(0,0,0,0.35);
+  border:1px solid var(--bdr);border-radius:5px;color:var(--txt1);outline:none;}
+.aj-mot-in:focus{border-color:var(--ch-cor);}
+.aj-msg{font-size:10px;font-weight:700;}
+.aj-msg.err{color:var(--red);}
+.aj-msg.ok{color:var(--ch-cor);}
+.aj-btn-c{background:transparent;border:1px solid var(--bdr);color:var(--txt3);border-radius:5px;
+  padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;}
+.aj-btn-c:hover{color:var(--txt1);}
+.aj-btn-s{background:var(--ch-cor);color:#0a0a0a;border:0;border-radius:5px;padding:4px 12px;
+  font-size:10px;font-weight:800;cursor:pointer;}
+.aj-btn-s:disabled{opacity:0.45;cursor:default;}
+
 @media(max-width:480px){
   .total-card{margin:12px 12px 10px;padding:12px;}
   .total-val{font-size:1.3rem;}
@@ -670,6 +704,11 @@ async function carregar(_fromBgRefresh) {
         categoria: meta.categoria || '',
         preco: meta.preco_venda || 0,
         cores: {},
+        // AJUSTE MANUAL: a célula cor×tam precisa saber PARA QUAL código escrever. `cores`
+        // só guarda o número (e soma quando dois filhos caem na mesma cor+tamanho), então
+        // sem isto não há alvo. Guardamos a LISTA — se vier mais de um, a célula não é
+        // editável: escolher um dos dois seria chutar em qual variante o saldo cai.
+        skus: {},
       };
     });
 
@@ -681,6 +720,9 @@ async function carregar(_fromBgRefresh) {
       if (tem) {
         pai.cores[COR_GC] = { 'Único': {} };
         LOCS.forEach(l => { pai.cores[COR_GC]['Único'][l.key] = e[l.key] || 0; });
+        // o saldo desta célula é o do PRÓPRIO pai (estilo que é peça) — ver memória
+        // `project_estilo_soma_sku_pai`: 117 de 184 estilos são peça, não guarda-chuva.
+        pai.skus[COR_GC] = { 'Único': [pai.sku] };
       }
     });
 
@@ -701,6 +743,9 @@ async function carregar(_fromBgRefresh) {
       const tam = (p.tamanho || 'Único').trim();
       if (!pai.cores[cor]) pai.cores[cor] = {};
       if (!pai.cores[cor][tam]) pai.cores[cor][tam] = {};
+      if (!pai.skus[cor]) pai.skus[cor] = {};
+      if (!pai.skus[cor][tam]) pai.skus[cor][tam] = [];
+      if (p.sku && !pai.skus[cor][tam].includes(p.sku)) pai.skus[cor][tam].push(p.sku);
       const e = eBySku[skuU] || eById[p.id] || {};
       LOCS.forEach(l => {
         pai.cores[cor][tam][l.key] = (pai.cores[cor][tam][l.key] || 0) + (e[l.key] || 0);
@@ -1425,15 +1470,67 @@ function renderProd(pai, locF, modoQuebrada, nivel) {
       }).join('');
       tfoot = `<tfoot><tr><td class="tdc">TOTAL</td>${tfCells}<td class="tot">${v > 0 ? fmt(v) : '—'}</td></tr></tfoot>`;
     }
+    // ── AJUSTE MANUAL: só o CD Principal ──────────────────────────────────────
+    // O CD é a ÚNICA localização cujo saldo é nosso (é o razão, desde o cutover de
+    // 14/08/2026). As outras cinco são foto de sistema de terceiro — ML Full, Shopee e
+    // Ecommerce são reescritos pelo sync na próxima rodada, então deixar editar ali seria
+    // prometer uma alteração que some sozinha em algumas horas.
+    const editavel = (l.key === 'olist_kwid');
+    let btnAjuste = '', boxAjuste = '';
+    if (editavel) {
+      btnAjuste = `<button class="aj-btn" title="Corrigir o saldo do CD contando a prateleira"
+        onclick="event.stopPropagation();abrirAjuste('${lid}')">AJUSTE MANUAL</button>`;
+
+      const linsEdit = cors.map(c => {
+        const cells = tams.map(t => {
+          const q = (pai.cores[c][t] || {})[l.key] || 0;
+          const sks = ((pai.skus[c] || {})[t]) || [];
+          // sem código, ou com mais de um na mesma célula → não dá pra saber onde escrever.
+          // Célula muda, não célula que chuta: gravar num dos dois moveria saldo da variante errada.
+          if (sks.length !== 1) {
+            const motivo = sks.length === 0
+              ? 'Sem código de produto nesta célula — cadastre a variante no Produtos.'
+              : `Dois códigos na mesma cor+tamanho (${sks.join(', ')}) — resolva a duplicidade no Produtos.`;
+            return `<td class="aj-na" title="${motivo}">${sks.length === 0 ? '·' : '⚠'}</td>`;
+          }
+          return `<td><input class="aj-in" type="number" min="0" inputmode="numeric"
+            data-sku="${sks[0]}" data-era="${q}" placeholder="${q}"
+            title="${sks[0]} · hoje ${fmt(q)} un"></td>`;
+        }).join('');
+        return `<tr><td class="tdc"><span class="cor-dot" style="background:${corV(c)}"></span>${c}</td>${cells}</tr>`;
+      }).join('');
+
+      const hoje = new Date().toLocaleDateString('pt-BR');
+      boxAjuste = `<div class="aj-box" id="aj-${lid}">
+        <div class="aj-hint">✏️ Digite a quantidade que <b>REALMENTE existe</b> no estoque —
+          o sistema calcula a diferença sozinho e registra quem ajustou.
+          <b>Deixe em branco</b> o que você não contou.</div>
+        <div class="mwrap"><table class="mtz">
+          <thead><tr><th class="thc">Cor</th>${thTams}</tr></thead>
+          <tbody>${linsEdit}</tbody>
+        </table></div>
+        <div class="aj-foot">
+          <label class="aj-mot">Motivo
+            <input class="aj-mot-in" type="text" value="ajuste manual ${hoje}" maxlength="120">
+          </label>
+          <span class="aj-msg" id="ajmsg-${lid}"></span>
+          <button class="aj-btn-c" onclick="fecharAjuste('${lid}')">Cancelar</button>
+          <button class="aj-btn-s" id="ajsave-${lid}" onclick="salvarAjuste('${lid}')">Salvar ajuste</button>
+        </div>
+      </div>`;
+    }
+
     return `<div class="ch-item" style="--ch-cor:${l.cor}">
       <div class="ch-item-head" onclick="toggleCanalItem('${lid}')">
         <span class="ch-item-arrow${isItemOpen ? ' open' : ''}" id="carrow-${lid}">▶</span>
         <span class="ch-item-dot"></span>
         <span class="ch-item-name">${l.label}</span>
+        ${btnAjuste}
         <span class="ch-item-val">${fmt(v)} un</span>
         <span class="ch-item-pct">${fmtP(pct)}</span>
       </div>
       <div class="ch-item-body${isItemOpen ? ' open' : ''}" id="cibody-${lid}">
+        ${boxAjuste}
         <div class="mwrap"><table class="mtz">
           <thead><tr><th class="thc">Cor</th>${thTams}<th>Total</th></tr></thead>
           <tbody>${lins}</tbody>
@@ -1538,6 +1635,84 @@ function toggleCanalItem(lid) {
   CH_ITEM_EXP[lid] = !CH_ITEM_EXP[lid];
   document.getElementById('cibody-' + lid)?.classList.toggle('open', CH_ITEM_EXP[lid]);
   document.getElementById('carrow-' + lid)?.classList.toggle('open', CH_ITEM_EXP[lid]);
+}
+
+// ═══════════════════════════════════════════
+// AJUSTE MANUAL DO CD  (substituiu a aba "Contagem" do fusion-estoque-app em 17/08/2026)
+//
+// Quem conta a prateleira já está aqui olhando o saldo — mandá-lo trocar de aba pra
+// registrar o que acabou de contar era o atrito que matava o uso.
+//
+// ⚠️ NÃO é escrita nova no banco: chama `estoque_contar`, a MESMA RPC que a Contagem
+// chamava. Ela não sobrescreve saldo — grava um evento de ajuste no razão
+// (`movimentacao_estoque`, append-only) com a diferença, o motivo e o e-mail de quem fez;
+// o espelho segue pelo trigger `cd_espelha_razao`. A RPC recusa motivo vazio de propósito
+// ("contagem sem motivo é overwrite silencioso"), por isso o campo já vem preenchido.
+// ═══════════════════════════════════════════
+function abrirAjuste(lid) {
+  // se o container estiver fechado, abre junto — senão o clique não mostra nada
+  if (!CH_ITEM_EXP[lid]) toggleCanalItem(lid);
+  const box = document.getElementById('aj-' + lid);
+  if (!box) return;
+  box.classList.add('open');
+  box.querySelector('.aj-in')?.focus();
+}
+
+function fecharAjuste(lid) {
+  const box = document.getElementById('aj-' + lid);
+  if (!box) return;
+  box.classList.remove('open');
+  box.querySelectorAll('.aj-in').forEach(i => { i.value = ''; });
+  const msg = document.getElementById('ajmsg-' + lid);
+  if (msg) { msg.textContent = ''; msg.className = 'aj-msg'; }
+}
+
+async function salvarAjuste(lid) {
+  const box = document.getElementById('aj-' + lid);
+  const msg = document.getElementById('ajmsg-' + lid);
+  const btn = document.getElementById('ajsave-' + lid);
+  if (!box) return;
+
+  const motivo = (box.querySelector('.aj-mot-in')?.value || '').trim();
+  const setMsg = (txt, cls) => { if (msg) { msg.textContent = txt; msg.className = 'aj-msg ' + (cls || ''); } };
+
+  if (!motivo) { setMsg('Diga o motivo — ele fica gravado no razão.', 'err'); return; }
+
+  // só o que foi digitado E muda o número. Campo em branco = "não contei", não "zero".
+  const pend = [...box.querySelectorAll('.aj-in')]
+    .filter(i => i.value !== '' && parseInt(i.value, 10) !== parseInt(i.dataset.era, 10))
+    .map(i => ({ sku: i.dataset.sku, contado: parseInt(i.value, 10), era: parseInt(i.dataset.era, 10) }));
+
+  if (!pend.length) { setMsg('Nada mudou — digite as quantidades que estão diferentes.', 'err'); return; }
+  if (pend.some(p => isNaN(p.contado) || p.contado < 0)) {
+    setMsg('Quantidade inválida — use números inteiros, zero ou mais.', 'err'); return;
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Salvando…'; }
+  setMsg(`Lançando ${pend.length}…`, '');
+
+  let feitos = 0;
+  for (const p of pend) {
+    try {
+      await _rpc('estoque_contar', {
+        p_sku: p.sku, p_localizacao: 'olist_kwid',
+        p_contado: p.contado, p_motivo: motivo,
+      });
+      feitos++;
+    } catch (e) {
+      // erro por célula é MOSTRADO, não engolido: a RPC recusa SKU sem cadastro e entrada
+      // sem custo conhecido, e quem ajustou precisa saber qual peça não entrou.
+      setMsg(`${p.sku}: ${e.message.replace(/^estoque_contar:\s*/, '')}${feitos ? ` (${feitos} já lançado(s))` : ''}`, 'err');
+      if (btn) { btn.disabled = false; btn.textContent = 'Salvar ajuste'; }
+      if (feitos) await carregar(true);
+      return;
+    }
+  }
+
+  if (btn) { btn.disabled = false; btn.textContent = 'Salvar ajuste'; }
+  setMsg(`✓ ${feitos} ajuste(s) lançado(s).`, 'ok');
+  box.querySelectorAll('.aj-in').forEach(i => { i.value = ''; });
+  await carregar(true);
 }
 
 function setNivel(nivel, el) {
