@@ -50,6 +50,9 @@
     // Assistente
     'max-chat': { titulo: 'Max Chat',      descricao: 'Pergunte sobre vendas, estoque e mais — IA responde na hora', url: 'https://max-chat-frontend.onrender.com', icone: '🤖', cat: 'assistente' },
     'max-chat-admin': { titulo: 'Max Chat — Admin', descricao: 'Qualidade do chat, falhas, sugestões', url: '/max-chat-admin.html', icone: '🛠️', restritoPara: ['leonardo@usefusion.com.br'], cat: 'assistente' },
+
+    // Plataforma
+    monitor:    { titulo: 'Monitor',       descricao: 'Semáforo dos 22 jobs agendados: rodou, deu certo e o dado chegou', url: '/monitor.html', icone: '🚦', restritoPara: ['leonardo@usefusion.com.br'], cat: 'plataforma' },
     // Projetos removido do portal (10/07/2026). Cockpit + Conciliação retirados 08/07/2026 (viraram abas do Financeiro);
     // trafego.html/social.html/loja viraram abas DENTRO do marketing.html (consolidação 08/07).
   };

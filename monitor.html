@@ -1,0 +1,290 @@
+<!doctype html><html lang="pt-BR"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fusion OS — Monitor</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="auth.js"></script>
+<style>
+  :root{--bg:#0e1013;--panel:#171a21;--panel2:#1e222b;--line:#282d38;--txt:#e9edf4;--mut:#8a94a6;--dim:#5b6474;--accent:#7c5cff;--cy:#22d3ee;--green:#34d399;--red:#f87171;--amber:#fbbf24}
+  *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;font-size:14px}
+  .topbar{display:flex;align-items:center;gap:12px;padding:11px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(14,16,19,.96);backdrop-filter:blur(8px);z-index:10}
+  .topbar b{font-weight:800;letter-spacing:.2px}.topbar .accent{color:#2563eb}
+  .btn{background:var(--panel2);border:1px solid var(--line);color:var(--txt);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:13px;text-decoration:none}
+  .btn:hover{border-color:var(--accent)}
+  main{padding:18px 20px 60px;max-width:1180px;margin:0 auto}
+  .muted{color:var(--mut)}
+
+  /* ── VEREDITO: acima da dobra vai UMA pergunta respondida — estamos bem ou não.
+       Tudo o mais é scroll. Painel que abre com 22 linhas iguais obriga o olho a
+       varrer pra descobrir o que já era pra estar dito. ── */
+  .verdict{border-radius:16px;padding:22px 26px;margin-bottom:8px;border:1px solid var(--line);background:var(--panel);display:flex;align-items:center;gap:20px}
+  .verdict.ok{background:linear-gradient(140deg,rgba(52,211,153,.14),rgba(52,211,153,.02));border-color:rgba(52,211,153,.3)}
+  .verdict.bad{background:linear-gradient(140deg,rgba(248,113,113,.16),rgba(248,113,113,.02));border-color:rgba(248,113,113,.34)}
+  .verdict.warn{background:linear-gradient(140deg,rgba(251,191,36,.14),rgba(251,191,36,.02));border-color:rgba(251,191,36,.3)}
+  .verdict .em{font-size:42px;line-height:1}
+  .verdict h1{margin:0;font-size:27px;font-weight:800;letter-spacing:-.3px}
+  .verdict p{margin:5px 0 0;color:var(--mut);font-size:13.5px}
+  .verdict .tally{margin-left:auto;display:flex;gap:16px;text-align:center}
+  .verdict .tally div span{display:block;font-size:23px;font-weight:800;line-height:1.15}
+  .verdict .tally div small{color:var(--mut);font-size:10.5px;text-transform:uppercase;letter-spacing:.5px}
+
+  /* Banner de coletor parado. O painel PRECISA saber dizer que ele mesmo pode
+     estar mentindo — tela verde por dado velho é pior que tela vermelha. */
+  .stale{background:rgba(248,113,113,.13);border:1px solid rgba(248,113,113,.4);border-radius:11px;padding:12px 16px;margin:12px 0;font-size:13px;color:#fecaca}
+  .stale b{color:#fff}
+
+  .sec-h{display:flex;align-items:center;gap:10px;margin:26px 2px 11px}
+  .sec-h h2{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--mut);margin:0}
+  .sec-h .sp{flex:1}.sec-h .cnt{font-size:11px;color:var(--dim)}
+
+  /* ── Incidentes: timeline reverso-cronológico, o padrão de status page ── */
+  .inc{display:flex;gap:13px;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--red);border-radius:11px;padding:14px 17px;margin-bottom:9px}
+  .inc.amarelo{border-left-color:var(--amber)}
+  .inc .body{flex:1;min-width:0}
+  .inc .top{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .inc .sev{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;padding:2px 8px;border-radius:20px;background:rgba(248,113,113,.16);color:var(--red)}
+  .inc.amarelo .sev{background:rgba(251,191,36,.16);color:var(--amber)}
+  .inc .dom{font-size:10.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.4px}
+  .inc .since{margin-left:auto;font-size:11.5px;color:var(--mut);white-space:nowrap}
+  .inc .res{font-weight:700;margin:6px 0 4px;font-size:14.5px}
+  .inc .det{color:var(--mut);font-size:12.8px;line-height:1.55}
+
+  /* ── Grade de jobs por domínio ── */
+  .dom-h{display:flex;align-items:center;gap:9px;margin:22px 2px 9px}
+  .dom-h h3{margin:0;font-size:13px;font-weight:700}
+  .dom-h .pill{font-size:10px;padding:2px 8px;border-radius:20px;background:var(--panel2);color:var(--mut);border:1px solid var(--line)}
+  .jobs{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .job{display:grid;grid-template-columns:26px 1fr auto auto;gap:14px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)}
+  .job:last-child{border-bottom:none}
+  .job:hover{background:rgba(255,255,255,.017)}
+  .dot{width:11px;height:11px;border-radius:50%;justify-self:center}
+  .dot.verde{background:var(--green);box-shadow:0 0 7px rgba(52,211,153,.65)}
+  .dot.vermelho{background:var(--red);box-shadow:0 0 8px rgba(248,113,113,.75)}
+  .dot.amarelo{background:var(--amber);box-shadow:0 0 7px rgba(251,191,36,.6)}
+  .dot.cinza{background:var(--dim)}
+  .job .nm{font-weight:600;font-size:13.5px}
+  .job .ds{color:var(--dim);font-size:11.5px;margin-top:2px;line-height:1.4}
+  .job .mt{color:var(--mut);font-size:11.5px;margin-top:3px}
+  /* O chip carrega o estado em TEXTO, não só em cor: 8% dos homens não separam
+     vermelho de verde, e o semáforo inteiro depende dessa distinção. */
+  .chip{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:3px 9px;border-radius:20px;white-space:nowrap}
+  .chip.verde{background:rgba(52,211,153,.14);color:var(--green)}
+  .chip.vermelho{background:rgba(248,113,113,.16);color:var(--red)}
+  .chip.amarelo{background:rgba(251,191,36,.16);color:var(--amber)}
+  .chip.cinza{background:var(--panel2);color:var(--mut)}
+
+  /* ── Barra de 90 dias (padrão status page): o histórico inteiro num movimento
+       de olho. Padrão sistêmico aparece sozinho — se toda quarta tem barra
+       vermelha, isso salta antes de qualquer relatório. ── */
+  .strip90{display:flex;gap:1.5px;align-items:flex-end;height:26px}
+  .strip90 i{width:3.4px;border-radius:1.5px;background:var(--panel2);height:9px;display:block}
+  .strip90 i.ok{background:var(--green);height:16px;opacity:.82}
+  .strip90 i.bad{background:var(--red);height:26px}
+  .strip90 i.part{background:var(--amber);height:21px}
+  @media(max-width:900px){
+    .job{grid-template-columns:22px 1fr auto;gap:10px}
+    .strip90{display:none}
+  }
+  .legend{display:flex;gap:15px;align-items:center;font-size:11px;color:var(--dim);margin-top:14px;flex-wrap:wrap}
+  .legend b{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+  #loader{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;color:var(--mut);z-index:50}
+  .err{background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.4);border-radius:11px;padding:16px;color:#fecaca}
+</style></head>
+<body>
+<div class="topbar"><img src="/logo-urso.png" alt="Fusion" style="height:24px;"><b>Fusion <span class="accent">Monitor</span></b>
+  <span class="muted" id="atualizado" style="font-size:12px"></span>
+  <span style="flex:1"></span><span class="muted" id="who" style="font-size:12px"></span>
+  <a class="btn" href="/index.html">Menu</a><button class="btn" id="btnOut">Sair</button></div>
+<main>
+  <div id="alvo"></div>
+</main>
+<div id="loader">Carregando o estado dos jobs…</div>
+<script>
+let SB, ANON;
+const S = { jobs: [], dias: {} };
+
+async function headers(){
+  const s = await fusionAuth.getSession();
+  return { apikey: ANON, Authorization: 'Bearer ' + (s ? s.access_token : '') };
+}
+async function sbGet(path){
+  const r = await fetch(SB + '/rest/v1/' + path, { headers: await headers() });
+  // Erro precisa ESTOURAR. `const {data}=` que engole falha é como uma tela
+  // vazia vira "está tudo certo" — exatamente o que este painel existe pra evitar.
+  if(!r.ok) throw new Error(path.split('?')[0] + ': HTTP ' + r.status + ' ' + (await r.text()).slice(0,180));
+  return r.json();
+}
+
+const esc = s => String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function haQuanto(iso){
+  if(!iso) return 'nunca';
+  const m = (Date.now() - new Date(iso).getTime())/60000;
+  if(m < 1) return 'agora';
+  if(m < 60) return Math.round(m) + 'min';
+  if(m < 48*60) return (m/60).toFixed(1).replace('.0','') + 'h';
+  return Math.round(m/1440) + 'd';
+}
+function quando(iso){
+  if(!iso) return '—';
+  return new Date(iso).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+}
+const ROTULO = { verde:'OK', vermelho:'FALHOU', amarelo:'ATENÇÃO', cinza:'SEM DADO' };
+
+async function carregar(){
+  // Os incidentes vêm da view própria, não do join do painel: um job pode ter
+  // MAIS DE UM problema ao mesmo tempo (o fusion-sync-vigia tem dois), e o
+  // painel só carrega o pior de cada um. Ler os alarmes de lá esconderia
+  // justamente o segundo problema do job que está pior.
+  const [jobs, dias, incs] = await Promise.all([
+    sbGet('vw_monitor_painel?select=*&order=dominio.asc,nome.asc&limit=1000'),
+    sbGet('vw_monitor_dia?select=*&limit=10000'),
+    sbGet('vw_monitor_incidente_aberto?select=*&order=aberto_em.desc&limit=1000')
+  ]);
+  S.jobs = jobs;
+  S.incs = incs;
+  S.dias = {};
+  dias.forEach(d => { (S.dias[d.job_id] = S.dias[d.job_id] || {})[d.dia] = d; });
+  render();
+}
+
+function render(){
+  const j = S.jobs;
+  const cnt = { verde:0, amarelo:0, vermelho:0, cinza:0 };
+  j.forEach(x => cnt[x.estado || 'cinza']++);
+  const incidentes = S.incs || [];
+
+  let h = '';
+
+  // ── 1. Veredito ──
+  const bad = cnt.vermelho > 0, warn = !bad && cnt.amarelo > 0;
+  const cls = bad ? 'bad' : warn ? 'warn' : 'ok';
+  const em  = bad ? '🔴' : warn ? '🟡' : '🟢';
+  const tit = bad  ? (cnt.vermelho + (cnt.vermelho === 1 ? ' job com falha' : ' jobs com falha'))
+            : warn ? (cnt.amarelo + (cnt.amarelo === 1 ? ' job pedindo atenção' : ' jobs pedindo atenção'))
+            : 'Tudo certo';
+  const sub = bad || warn
+    ? 'Detalhe de cada um logo abaixo, com o que fazer.'
+    : 'Os ' + j.length + ' jobs agendados rodaram no horário e entregaram dado fresco.';
+  h += '<div class="verdict ' + cls + '"><div class="em">' + em + '</div>'
+     + '<div><h1>' + tit + '</h1><p>' + sub + '</p></div>'
+     + '<div class="tally">'
+     + '<div><span style="color:var(--green)">' + cnt.verde + '</span><small>ok</small></div>'
+     + '<div><span style="color:var(--amber)">' + cnt.amarelo + '</span><small>atenção</small></div>'
+     + '<div><span style="color:var(--red)">' + cnt.vermelho + '</span><small>falha</small></div>'
+     + '</div></div>';
+
+  // ── 2. O coletor está vivo? ──
+  // Se o próprio coletor parou, TODOS os estados abaixo são passado congelado.
+  // Dizer isso é obrigatório: um painel que não sabe admitir que envelheceu é a
+  // mesma armadilha que deixou o cron_vigia morto por 10 dias parecendo existir.
+  const av = j.map(x => x.avaliado_em).filter(Boolean).sort().pop();
+  const minAv = av ? (Date.now() - new Date(av).getTime())/60000 : Infinity;
+  if(minAv > 45){
+    h += '<div class="stale"><b>⚠️ O coletor não roda há ' + haQuanto(av) + '.</b> '
+       + 'Ele deveria rodar a cada 15min, então tudo abaixo é o último estado conhecido, '
+       + 'não o estado de agora. Conferir o cron <code>fusion-sync-monitor</code> no Render.</div>';
+  }
+
+  // ── 3. Incidentes abertos ──
+  if(incidentes.length){
+    h += '<div class="sec-h"><h2>Alarmes abertos</h2><span class="sp"></span>'
+       + '<span class="cnt">' + incidentes.length + ' · mais recente primeiro</span></div>';
+    incidentes.forEach(x => {
+      const sev = x.severidade === 'vermelho' ? 'vermelho' : 'amarelo';
+      h += '<div class="inc ' + sev + '"><div class="body">'
+         + '<div class="top"><span class="sev">' + esc(sev) + '</span>'
+         + '<span class="dom">' + esc(x.dominio) + '</span>'
+         + (x.email_aberto_em ? '' : '<span class="dom" style="color:var(--amber)">e-mail pendente</span>')
+         + '<span class="since">aberto há ' + haQuanto(x.aberto_em) + '</span></div>'
+         + '<div class="res">' + esc(x.resumo) + '</div>'
+         + '<div class="det">' + esc(x.detalhe) + '</div>'
+         + '</div></div>';
+    });
+  }
+
+  // ── 4. Todos os jobs, por domínio ──
+  h += '<div class="sec-h"><h2>Todos os jobs agendados</h2><span class="sp"></span>'
+     + '<span class="cnt">' + j.length + ' jobs · barra = últimos 90 dias</span></div>';
+
+  const dominios = [...new Set(j.map(x => x.dominio))];
+  dominios.forEach(d => {
+    const linhas = j.filter(x => x.dominio === d);
+    const ruins = linhas.filter(x => x.estado === 'vermelho').length;
+    h += '<div class="dom-h"><h3>' + esc(d) + '</h3>'
+       + '<span class="pill">' + linhas.length + '</span>'
+       + (ruins ? '<span class="pill" style="color:var(--red);border-color:rgba(248,113,113,.4)">'
+                  + ruins + ' com falha</span>' : '') + '</div><div class="jobs">';
+    linhas.forEach(x => {
+      const st = x.estado || 'cinza';
+      h += '<div class="job">'
+         + '<span class="dot ' + st + '" title="' + esc(ROTULO[st]) + '"></span>'
+         + '<div><div class="nm">' + esc(x.nome) + '</div>'
+         + (x.descricao ? '<div class="ds">' + esc(x.descricao) + '</div>' : '')
+         + '<div class="mt">rodou ' + haQuanto(x.ultima_exec_inicio) + ' atrás'
+         + (x.proxima_esperada ? ' · próxima ' + quando(x.proxima_esperada) + ' UTC' : '')
+         + (x.sucesso_30d ? ' · ' + esc(x.sucesso_30d) + ' ok em 30d' : '')
+         + (x.estado !== 'verde' && x.estado_desde ? ' · assim há ' + haQuanto(x.estado_desde) : '')
+         // Quando o job tem mais de um problema, dizer. O chip mostra só o pior,
+         // e "consertei o vermelho" com um amarelo ainda aberto embaixo é como
+         // um alarme volta a ficar invisível.
+         + (x.incidentes_abertos > 1 ? ' · <span style="color:var(--amber)">'
+              + x.incidentes_abertos + ' alarmes abertos</span>' : '')
+         + '</div></div>'
+         + '<div class="strip90">' + strip(x.id) + '</div>'
+         + '<span class="chip ' + st + '">' + ROTULO[st] + '</span>'
+         + '</div>';
+    });
+    h += '</div>';
+  });
+
+  h += '<div class="legend">'
+     + '<span><b style="background:var(--green)"></b>dia sem falha</span>'
+     + '<span><b style="background:var(--amber)"></b>dia com falha parcial</span>'
+     + '<span><b style="background:var(--red)"></b>dia com falha</span>'
+     + '<span><b style="background:var(--panel2)"></b>sem execução</span>'
+     + '<span style="margin-left:auto">horários em UTC, como o Render agenda</span></div>';
+
+  document.getElementById('alvo').innerHTML = h;
+  document.getElementById('atualizado').textContent =
+    '· atualizado ' + new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  const l = document.getElementById('loader'); if(l) l.remove();
+}
+
+// Barra de 90 dias. O PIOR resultado do dia vence: um dia com 47 sucessos e 1
+// falha é um dia com falha. Média esconderia exatamente o que se quer ver.
+function strip(jobId){
+  const m = S.dias[jobId] || {};
+  const out = [];
+  for(let i = 89; i >= 0; i--){
+    const d = new Date(); d.setDate(d.getDate() - i);
+    const iso = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    const r = m[iso];
+    let c = '', t = iso + ' · sem execução';
+    if(r){
+      if(r.falhas === 0){ c = 'ok'; t = iso + ' · ' + r.execucoes + ' execução(ões), tudo ok'; }
+      else if(r.falhas === r.execucoes){ c = 'bad'; t = iso + ' · ' + r.falhas + ' falha(s), nenhum sucesso'; }
+      else { c = 'part'; t = iso + ' · ' + r.falhas + ' de ' + r.execucoes + ' falharam'; }
+    }
+    out.push('<i class="' + c + '" title="' + t + '"></i>');
+  }
+  return out.join('');
+}
+
+(async () => {
+  const auth = await fusionAuth.requireAuth('monitor'); if(!auth) return;
+  document.getElementById('who').textContent = (auth.role && auth.role.nome) || auth.email || '';
+  SB = fusionAuth.SUPABASE_URL; ANON = fusionAuth.SUPABASE_ANON_KEY;
+  document.getElementById('btnOut').onclick = () => fusionAuth.signOut();
+  try {
+    await carregar();
+    setInterval(() => carregar().catch(e => console.error(e)), 60000);
+  } catch(e){
+    document.getElementById('loader').remove();
+    document.getElementById('alvo').innerHTML =
+      '<div class="err"><b>Não consegui carregar o estado dos jobs.</b><br>' + esc(e.message)
+      + '<br><br>A tela em branco seria pior: ela pareceria "nenhum alarme".</div>';
+    console.error(e);
+  }
+})();
+</script>
+</body></html>
