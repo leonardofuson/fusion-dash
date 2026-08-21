@@ -200,6 +200,24 @@ Service `fusion-sync-producao`: `SUPABASE_URL` + `SUPABASE_KEY` (service_role). 
 
 ## 14. Changelog
 
+- **2026-08-21** — **A moldura da ordem de compra virou uma só, nas DUAS portas** (tecido e
+  acabado). Pedido do Leo; migration `sql/2026-08-21_ordem_compra_moldura.sql`, decisão
+  `DECISOES.md` **#062**. (1) **Tipo de nota SAIU**: é fato da nota fiscal, que vem *depois* do
+  pedido — o campo era decalque de `PEDIDOS DE COMPRA.xlsx`, onde a folha era preenchida
+  retrospectivamente. Preenchimento medido: 0 de 5. A coluna fica, o **escritor** é que saiu.
+  (2) **`frete_por_conta`** (`nossa` | `fornecedor` | NULL) — `frete = 0` não distinguia "ele
+  entrega" de "ninguém preencheu"; sai no rodapé do PDF, no slot que o tipo de nota esvaziou.
+  (3) **"Data da entrega" virou "Data do pedido"** no formulário de tecido (o de acabado já
+  tinha as duas). (4) **Forma de pagamento é sugerida** do último pedido do fornecedor
+  (`vw_fornecedor_ultima_condicao`), editável — deduzida de transação de propósito: é o termo da
+  última negociação, não identidade.
+  - 🔎 **O item da data revelou um defeito que ninguém procurava:** o cabeçalho retroagia desde
+    12/08, mas **as linhas não** — `pedido_compra_criar` e `pedido_compra_produto_criar`
+    gravavam `ordens_compra.data_pedido = CURRENT_DATE`. Pedido retroativo saía com papel de uma
+    data e board de outra, discordância que só aparece no fechamento do mês. Corrigido nos dois.
+  - Canário `canario_pedido_compra.py` foi de 21 → **26 checks**; nasceu
+    `smoke_form_compra.py`, que abre as duas portas **logado** e lê os rótulos (build compilando
+    e rota desenhando não provam nada sobre um formulário atrás de um clique).
 - **2026-08-05** — **O PEDIDO DE PRODUÇÃO saiu da planilha e virou aba** (`fusion-compras` → **Pedidos**). Era uma aba de `' PEDIDO DE PRODUÇÃO.xlsx'` por contraparte (35 abas), impressa em PDF e enviada ao costureiro. **O dado das linhas já existia e estava vivo:** cada linha do formulário é uma **OP** — produto, NFe do tecido, cor, **grade em CURVA** (`grade_projetada`), metragem (`quantidade_tecido_usada`), R$/peça, e "peças proj." = metragem ÷ `consumo_por_peca`. As 7 linhas da folha da NL MODAS são 7 OPs do mesmo `op_grupo`. Faltava só a **moldura** (nº, comprador, forma de pagamento, observação, frete, desconto, data de entrega) e o ato de emitir.
   - **A linha NÃO é copiada pro pedido.** `ordens_producao.pedido_producao_id` aponta pro cabeçalho e o documento **lê** a OP. Uma tabela de itens duplicando produto/cor/grade/metragem criaria segunda verdade sobre a mesma peça: editar a OP deixaria o pedido mentindo. 1:N (e não casar com `op_grupo`) porque o grupo é "um estilo em N cores" e a folha tem 20 linhas — o pedido pode levar mais de um estilo. Trava `trg_pedprod_mesmo_costureiro`: OP de outro costureiro na mesma folha é **recusada** (imprimiria documento endereçado a quem não vai produzir). `sql/2026-08-05_pedido_producao.sql`.
   - **O PDF replica o desenho da planilha de propósito** — é o formato que o costureiro já sabe ler; trocar o desenho junto com a origem do dado obrigaria os dois lados a reaprender o documento na mesma semana. ⚠️ Não confundir `pedidoProducaoPdf.ts` (o **pedido**, antes da peça existir) com `opPdf.ts` (o **fechamento**, projetado × entregue, assinado no recebimento).
