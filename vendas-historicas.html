@@ -2648,9 +2648,9 @@ function renderEcommSkuDetail(){
   html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Devolução real</div><div class="dr-kpi-val">'+fmtD(devPct)+'%</div><div class="dr-kpi-sub"><span class="margem-pill '+devCls+'">'+fmtK(s.devolucao)+'</span>'+(dvSku.cnt>0?' · <b>'+fmtN(dvSku.cnt)+'</b> devoluções':'')+'</div></div>';
   html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Frete (custo seller)</div><div class="dr-kpi-val">'+fmtK(freteSeller)+'</div><div class="dr-kpi-sub"><span class="margem-pill '+fretCls+'">'+fmtD(fretePct)+'%</span> da receita</div></div>';
   html+=  '<div class="dr-kpi"><div class="dr-kpi-lbl">Ads (ML)</div><div class="dr-kpi-val">'+fmtK(adsSku)+'</div><div class="dr-kpi-sub"><span class="margem-pill '+adsCls+'">'+fmtD(adsPct)+'%</span> da receita</div></div>';
-  var velSub=!velPronto?'<span style="color:#71717a">calculando…</span>'
+  var velSub=!velPronto?'<span style="color:#8e929c">calculando…</span>'
     :(temPrev?(tendSym+' '+(tendPct>=0?'+':'')+Math.round(tendPct)+'% vs mês ant.')
-             :'<span style="color:#71717a">sem base mês ant.</span>');
+             :'<span style="color:#8e929c">sem base mês ant.</span>');
   var velTit=(velParcial?'Dias COMPLETOS (exclui hoje, parcial)':'un/dia')+' vs os MESMOS DIAS do mês anterior';
   html+=  '<div class="dr-kpi" title="'+velTit+'"><div class="dr-kpi-lbl">Velocidade'+(velParcial?' *':'')+'</div><div class="dr-kpi-val">'+(velPronto?fmtD(curVel):'—')+' un/d</div><div class="dr-kpi-sub" style="color:'+(temPrev?tendCor:'#71717a')+';">'+velSub+'</div></div>';
   html+='</div>';
