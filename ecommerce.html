@@ -348,6 +348,12 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
 .dr-heat-cell.lbl{background:transparent;color:var(--txt2);font-size:9px;text-transform:uppercase;letter-spacing:0.04em;justify-content:flex-start;padding-left:6px;}
 .dr-heat-cell.lbl-col{justify-content:center;padding-left:0;}
 .dr-heat-cell.corner{background:transparent;color:var(--txt3);font-size:8px;}
+/* Totalizadores marginais da matriz (pedido do Leo 24/08/2026). Fundo neutro de propósito:
+   se o total entrasse na escala de calor, seria sempre a célula mais quente da linha e
+   roubaria a leitura do heatmap, que é justamente comparar cor com cor. */
+.dr-heat-cell.tot{background:rgba(255,255,255,.07);color:var(--txt1);box-shadow:inset 0 0 0 1px var(--bdr);}
+.dr-heat-cell.tot.lbl{background:rgba(255,255,255,.07);color:var(--txt1);font-weight:700;}
+.dr-heat-cell.grand{background:rgba(99,102,241,.32);color:var(--txt1);box-shadow:inset 0 0 0 1px var(--bdr);}
 
 /* Drawer chart */
 .dr-chart{position:relative;height:200px;}
@@ -2620,10 +2626,20 @@ function renderEcommSkuDetail(){
   var hasGrade=(tams.length>1||cores.length>1)&&!(tams.length===1&&tams[0]==='-'&&cores.length===1&&cores[0]==='-');
   if(hasGrade){
     var maxQ=Math.max.apply(null,Object.values(byGC).concat([1]));
+    // Marginais DA MATRIZ — somam TUDO que a matriz desenha, inclusive as faixas '-'
+    // (s/cor, s/tam). É o que torna o totalizador conferível: dá pra somar a coluna com o
+    // dedo e chegar no total. As barras logo abaixo excluem '-' de propósito (lá a pergunta
+    // é "qual tamanho vende mais", e "sem tamanho" não é um tamanho) — por isso são contas
+    // separadas, e não a mesma variável reaproveitada.
+    var sumTam={},sumCor={},sumAll=0;
+    tams.forEach(function(t){var s=0;cores.forEach(function(c){s+=byGC[t+'__'+c]||0;});sumTam[t]=s;sumAll+=s;});
+    cores.forEach(function(c){var s=0;tams.forEach(function(t){s+=byGC[t+'__'+c]||0;});sumCor[c]=s;});
+    var _pc=function(v){return sumAll>0?' · '+(v/sumAll*100).toFixed(1)+'%':'';};
     html+='<div class="drawer-section" style="margin-bottom:18px;"><div class="drawer-section-title">Vendas por grade × cor (unidades)</div>';
-    html+=  '<div class="dr-heat" style="grid-template-columns:80px repeat('+cores.length+',minmax(48px,1fr));">';
+    html+=  '<div class="dr-heat" style="grid-template-columns:80px repeat('+cores.length+',minmax(48px,1fr)) 64px;">';
     html+=    '<div class="dr-heat-cell corner">tam ↓ / cor →</div>';
     cores.forEach(function(c){html+='<div class="dr-heat-cell lbl lbl-col" title="'+c+'">'+(c==='-'?'(s/cor)':(c.length>10?c.slice(0,9)+'…':c))+'</div>';});
+    html+=    '<div class="dr-heat-cell lbl lbl-col tot">Total</div>';
     tams.forEach(function(t){
       html+='<div class="dr-heat-cell lbl">'+(t==='-'?'(s/tam)':t)+'</div>';
       cores.forEach(function(c){var v=byGC[t+'__'+c]||0;
@@ -2631,7 +2647,13 @@ function renderEcommSkuDetail(){
         else{var intensity=v/maxQ;var bg='rgba(99,102,241,'+(0.15+intensity*0.6).toFixed(2)+')';
           html+='<div class="dr-heat-cell" style="background:'+bg+';" title="Tam '+t+' / '+c+': '+v+' un">'+v+'</div>';}
       });
+      html+='<div class="dr-heat-cell tot" title="Tamanho '+(t==='-'?'(sem tamanho)':t)+': '+fmtN(sumTam[t])+' un'+_pc(sumTam[t])+' do produto">'+fmtN(sumTam[t])+'</div>';
     });
+    html+=  '<div class="dr-heat-cell lbl tot">Total</div>';
+    cores.forEach(function(c){
+      html+='<div class="dr-heat-cell tot" title="'+(c==='-'?'(sem cor)':c)+': '+fmtN(sumCor[c])+' un'+_pc(sumCor[c])+' do produto">'+fmtN(sumCor[c])+'</div>';
+    });
+    html+=  '<div class="dr-heat-cell grand" title="Total do produto no período/filtros: '+fmtN(sumAll)+' un">'+fmtN(sumAll)+'</div>';
     html+=  '</div></div>';
     // Total de unidades por TAMANHO e por COR (marginais do heatmap)
     var totTam={},totCor={},totG=0;
