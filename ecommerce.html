@@ -1140,7 +1140,8 @@ function filtrarPedidos(lista){
 
 async function carregar(){
   if(!DE||!ATE)return;
-  var seq=++LOAD_SEQ;   // só este load pode renderizar; loads anteriores viram no-op
+  var seq=++LOAD_SEQ;
+  STATE.skuMVErro=null;   // motivo do último fetch de SKU que falhou — por load, nunca herdado   // só este load pode renderizar; loads anteriores viram no-op
   // Cache local: hit válido (<5min) pinta KPIs/Waterfall IMEDIATO antes do fetch
   var cached=cacheGet(DE,ATE);
   if(cached && cached.mv){
@@ -1173,7 +1174,12 @@ async function carregar(){
     var pAdsPrev=usarComp?fetchAds(ant.de,ant.ate).then(adsRowsToByCanal).catch(function(){return{};}):Promise.resolve({});
     var pDev=fetchDevItem(DE,ATE).then(devRowsToBySkuPai).catch(function(){return{};});
     var pCom=fetchEstimativa();   // Fase 3: taxas (s/ liquidados) + curva de maturação
-    var pSkuMV=fetchSkuMV(DE,ATE,bigPeriod).catch(function(){return[];});      // PERF: lista de produtos no paint imediato
+    var pSkuMV=fetchSkuMV(DE,ATE,bigPeriod).catch(function(e){STATE.skuMVErro=String((e&&e.message)||e);return[];});      // PERF: lista de produtos no paint imediato
+    // ⚠️ 31/08/2026: este `.catch` engolia HTTP 404 e virava lista vazia — e o KPI Unidades
+    // dizia "indisp. p/ período antigo" em TODO período. A MV `mvw_ecom_sku_dia_est` tinha
+    // sido derrubada por um CASCADE em 27/08 e ficou 4 dias fora sem ninguém ver. O catch
+    // FICA (a tela não pode morrer por causa da lista de produtos), mas agora guarda o
+    // motivo pra tela poder dizer a verdade. Ver DECISOES.md #108.
     var pAdsItem=fetchAdsItem(DE,ATE).catch(function(){return[];});  // PERF: em paralelo (era serial após itens)
     // PERF (09/06): geo + pagamentos no paint imediato via MV — pinta assim que a MV
     // chega (antes do fetch detalhado). renderAll() depois sobrescreve com dado idêntico.
@@ -1719,7 +1725,9 @@ function renderKPIs(){
   html+='<div class="kpi" style="--kpi-accent:#06b6d4"><div class="kpi-lbl">Ticket Médio</div><div class="kpi-val">'+fmt(tm)+'</div><div class="kpi-delta">'+deltaBadge(delta(tm,tmAnt))+'</div></div>';
   // LINHA 2 — Pedidos · Unidades · PA · Devolução % · Ads %
   html+='<div class="kpi" style="--kpi-accent:#22c55e"><div class="kpi-lbl">'+(fp?'Pedidos c/ produto':'Pedidos')+'</div><div class="kpi-val">'+fmtN(nPed)+'</div><div class="kpi-delta">'+deltaBadge(delta(nPed,pedAntN))+'</div></div>';
-  html+='<div class="kpi" style="--kpi-accent:#a78bfa"><div class="kpi-lbl">Unidades</div><div class="kpi-val">'+(temItens?fmtN(un):'—')+'</div><div class="kpi-sub">'+(temItens?'itens vendidos':'indisp. p/ período antigo')+'</div></div>';
+  // Tela vazia não pode mentir: se a fonte de itens FALHOU, dizer isso — não culpar o período.
+  var _unSub=temItens?'itens vendidos':(STATE.skuMVErro?'⚠ fonte de itens falhou ('+STATE.skuMVErro+')':'indisp. p/ período antigo');
+  html+='<div class="kpi" style="--kpi-accent:#a78bfa"><div class="kpi-lbl">Unidades</div><div class="kpi-val">'+(temItens?fmtN(un):'—')+'</div><div class="kpi-sub">'+_unSub+'</div></div>';
   html+='<div class="kpi" style="--kpi-accent:#a78bfa"><div class="kpi-lbl">PA · peças/pedido</div><div class="kpi-val">'+(temItens?fmtD(pa):'—')+'</div><div class="kpi-sub">unid. ÷ pedidos</div></div>';
   html+='<div class="kpi" style="--kpi-accent:'+dc+'"><div class="kpi-lbl">Devolução %</div><div class="kpi-val" style="color:'+dc+'">'+fmtD(devPct)+'%</div><div class="kpi-sub">'+fmtK(cur.devolucoes)+' · ant. '+fmtD(prevDevP)+'%</div></div>';
   html+='<div class="kpi" style="--kpi-accent:'+ac+'"><div class="kpi-lbl">Ads % (TACoS)</div><div class="kpi-val" style="color:'+ac+'">'+fmtD(tacos)+'%</div><div class="kpi-sub">'+fmtK(cur.ads)+' · ant. '+fmtD(prevTac)+'%</div></div>';
