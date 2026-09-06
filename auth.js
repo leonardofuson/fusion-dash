@@ -48,11 +48,19 @@
     crm:        { titulo: 'CRM',           descricao: 'Base 360°, segmentação RFM e histórico de atendimento', url: '/crm.html', icone: '👥', cat: 'inteligencia' },
     marketing:  { titulo: 'Marketing',     descricao: 'Mídia paga Meta + Google: lucro por SKU, MER, auditoria da agência', url: '/marketing.html', icone: '📣', cat: 'inteligencia', restritoPara: ['leonardo@usefusion.com.br', 'allanjonnesj@gmail.com', 'tiago@usefusion.com.br', 'thiago.caleb@usefusion.com.br', 'gabsdev08@gmail.com'] },
     // Assistente
-    'max-chat': { titulo: 'Max Chat',      descricao: 'Pergunte sobre vendas, estoque e mais — IA responde na hora', url: 'https://max-chat-frontend.onrender.com', icone: '🤖', cat: 'assistente' },
+    // 'max-chat' SUSPENSO em 06/09/2026 (decisão do Leo). O chat teve 48 conversas / 168
+    // mensagens na vida inteira e a última foi em 16/06/2026 — 82 dias sem ninguém abrir.
+    // Suspensos no Render: `max-chat-frontend` (esta url) + os crons `max-chat-snapshots` e
+    // `max-chat-apply-sugestoes` (que não tinha o que aplicar desde 03/05). Tabelas `max_chat_*`
+    // PRESERVADAS — religar é resume + descomentar esta linha.
+    // ⚠️ O web service `max-chat` (max-chat-2vs0.onrender.com) segue NO AR de propósito: o
+    // analista LLM do Marketing (`marketing.html` → /api/marketing/analista) e o
+    // `max-chat-admin.html` rodam nele. Suspender o backend derruba os dois.
+    // 'max-chat': { titulo: 'Max Chat',      descricao: 'Pergunte sobre vendas, estoque e mais — IA responde na hora', url: 'https://max-chat-frontend.onrender.com', icone: '🤖', cat: 'assistente' },
     'max-chat-admin': { titulo: 'Max Chat — Admin', descricao: 'Qualidade do chat, falhas, sugestões', url: '/max-chat-admin.html', icone: '🛠️', restritoPara: ['leonardo@usefusion.com.br'], cat: 'assistente' },
 
     // Plataforma
-    monitor:    { titulo: 'Monitor',       descricao: 'Semáforo dos 22 jobs agendados: rodou, deu certo e o dado chegou', url: '/monitor.html', icone: '🚦', restritoPara: ['leonardo@usefusion.com.br'], cat: 'plataforma' },
+    monitor:    { titulo: 'Monitor',       descricao: 'Semáforo dos jobs agendados: rodou, deu certo e o dado chegou', url: '/monitor.html', icone: '🚦', restritoPara: ['leonardo@usefusion.com.br'], cat: 'plataforma' },
     // Projetos removido do portal (10/07/2026). Cockpit + Conciliação retirados 08/07/2026 (viraram abas do Financeiro);
     // trafego.html/social.html/loja viraram abas DENTRO do marketing.html (consolidação 08/07).
   };
