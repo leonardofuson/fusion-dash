@@ -1179,7 +1179,7 @@ async function carregar(){
     // dizia "indisp. p/ período antigo" em TODO período. A MV `mvw_ecom_sku_dia_est` tinha
     // sido derrubada por um CASCADE em 27/08 e ficou 4 dias fora sem ninguém ver. O catch
     // FICA (a tela não pode morrer por causa da lista de produtos), mas agora guarda o
-    // motivo pra tela poder dizer a verdade. Ver DECISOES.md #108.
+    // motivo pra tela poder dizer a verdade. Ver DECISOES.md #126.
     var pAdsItem=fetchAdsItem(DE,ATE).catch(function(){return[];});  // PERF: em paralelo (era serial após itens)
     // PERF (09/06): geo + pagamentos no paint imediato via MV — pinta assim que a MV
     // chega (antes do fetch detalhado). renderAll() depois sobrescreve com dado idêntico.
