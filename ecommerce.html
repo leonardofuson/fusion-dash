@@ -1602,7 +1602,8 @@ function calcPnL(pedidos,itens,adsVal){
 
 // ── KPIs ──
 // Unidades (itens vendidos) do escopo atual — só disponível quando itens carregaram (período recente).
-function totUnidades(){return (STATE.skuGroups||[]).reduce(function(s,g){return s+(g.qtd||0);},0);}
+// kit fora: as peças dele já vêm como linhas próprias (#166/#168) — contar o kit dobraria a unidade
+function totUnidades(){return (STATE.skuGroups||[]).reduce(function(s,g){return g.isKit?s:s+(g.qtd||0);},0);}
 // Projeção de fechamento do mês por run-rate — só quando o período = mês corrente (MTD) incluindo hoje.
 function projecaoMes(receita){
   try{
@@ -2196,7 +2197,17 @@ function pintarDowHeat(matrix){
 // continuam carregando em background pra enriquecer o drawer (variantes/fee/dev/frete) e o CMV real.
 async function fetchSkuMV(de,ate,big){
   // big period (YTD/12m): sku_dia pode passar de 50k linhas → teto maior (250k) pra não truncar.
-  return buscarTudo('mvw_ecom_sku_dia_est','select=sku_pai,nome,cat,canal_nome_raw,origem_conta,receita,qtd,cmv,fee,afiliado,devolucao,frete_seller,fee_estornado,cmv_devolvido,fee_est,afiliado_est,devolucao_est,rebate&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+EXCL_CANAL+'&order=data_pedido.asc', big?250:undefined);
+  var pMV=buscarTudo('mvw_ecom_sku_dia_est','select=sku_pai,nome,cat,canal_nome_raw,origem_conta,receita,qtd,cmv,fee,afiliado,devolucao,frete_seller,fee_estornado,cmv_devolvido,fee_est,afiliado_est,devolucao_est,rebate&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+EXCL_CANAL+'&order=data_pedido.asc', big?250:undefined);
+  // KIT (17/09/2026, DECISOES #168): o rateio (#166) põe o valor do kit nas PEÇAS e deixa a linha
+  // do kit com receita 0. Estas linhas trazem o que foi para as peças, em `receita_kit`, com receita
+  // e qtd ZERO — só a lista de produtos lê o campo, para exibir o kit cheio. Nenhum total soma isso.
+  // Falhou? o kit volta a aparecer só com o resto, nunca derruba a lista.
+  var pKit=buscarTudo('vw_ecom_kit_valor_pecas_dia','select=sku_pai,canal_nome_raw,origem_conta,receita_nas_pecas&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+EXCL_CANAL+'&order=data_pedido.asc')
+    .catch(function(e){console.warn('kit valor nas peças:',e);return[];});
+  var mv=await pMV, kit=await pKit;
+  return (mv||[]).concat((kit||[]).map(function(k){
+    return {sku_pai:k.sku_pai,nome:null,cat:'KIT',canal_nome_raw:k.canal_nome_raw,origem_conta:k.origem_conta,receita:0,qtd:0,cmv:0,receita_kit:k.receita_nas_pecas};
+  }));
 }
 // PERF (09/06): geo (UF/cidade) e pagamentos (método/parcelas) vêm de MV no paint imediato —
 // antes ficavam vazios até o fetch de 10-115k pedidos chegar. Validado A/B (0 divergências).
@@ -2216,9 +2227,13 @@ function agruparSkusMV(rows){
     // e a margem por produto responderem ao chip mesmo saindo da MV. (08/07)
     if(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[canal])return;
     if(!map[k])map[k]={sku_pai:k,nome:r.nome||k,cat:r.cat||'OUTROS',custoUn:0,
-      receita:0,qtd:0,custoTotal:0,fee:0,afiliado:0,rebate:0,devolucao:0,freteSeller:0,est:0,
+      receita:0,qtd:0,custoTotal:0,fee:0,afiliado:0,rebate:0,devolucao:0,freteSeller:0,est:0,receitaKit:0,
       porCanal:{},pedidoIds:{},datas:{}};
     var g=map[k];var rec=parseFloat(r.receita||0),q=parseFloat(r.qtd||0);
+    if(r.nome&&g.nome===k)g.nome=r.nome;   // linha sintética do kit chega sem nome
+    var rk=parseFloat(r.receita_kit||0);
+    if(rk){g.receitaKit+=rk;if(!g.porCanal[canal])g.porCanal[canal]={qtd:0,receita:0,fee:0,afiliado:0,rebate:0,devolucao:0,freteSeller:0,custoTotal:0,est:0};
+      g.porCanal[canal].receitaKit=(g.porCanal[canal].receitaKit||0)+rk;return;}
     // Devolução ESTORNA comissão e CMV (mercadoria volta vendável); frete NÃO estorna (já voou).
     // Ver TODO_DEVOLUCOES_SETTLEMENT.md §9. (13/07/2026)
     var cm=Math.max(parseFloat(r.cmv||0)-parseFloat(r.cmv_devolvido||0),0);
@@ -2232,8 +2247,13 @@ function agruparSkusMV(rows){
     if(!g.porCanal[canal])g.porCanal[canal]={qtd:0,receita:0,fee:0,afiliado:0,rebate:0,devolucao:0,freteSeller:0,custoTotal:0,est:0};
     var pc=g.porCanal[canal];pc.receita+=rec;pc.qtd+=q;pc.custoTotal+=cm;pc.fee+=fe;pc.afiliado+=af;pc.rebate+=rbt;pc.devolucao+=dv;pc.freteSeller+=fr;pc.est+=eF+eA+eD;
   });
-  STATE.skuGroups=Object.values(map).sort(function(a,b){return b.receita-a.receita;});
+  // KIT = linha de VITRINE: valor cheio (o que ficou no kit + o que o rateio pôs nas peças), fora de
+  // todo total/unidade/pareto — as peças já carregam esse dinheiro. `receita` segue sendo só o que é
+  // do kit, pra nenhuma conta de P&L enxergar o valor duas vezes. (#168)
+  Object.values(map).forEach(function(g){g.isKit=(g.cat==='KIT');g.receitaCheia=g.receita+(g.receitaKit||0);});
+  STATE.skuGroups=Object.values(map).sort(function(a,b){return b.receitaCheia-a.receitaCheia;});
 }
+function recExib(g){return g&&g.isKit?g.receitaCheia:(g?g.receita:0);}
 // MV enriquecida (08/07) já traz fee/afiliado/devolução/frete_seller rateados por produto → a lista
 // e a margem saem 100% da MV (rápido, e o toggle de chip re-agrega centenas de linhas em vez de dezenas
 // de milhares de itens). Itens seguem carregando em bg só p/ o drawer (variante cor/tam), modo unidades
@@ -2314,8 +2334,9 @@ function renderEcommSkuList(){
   (STATE.skuMVRowsPrev||[]).forEach(function(r){var canal=getNome(r.canal_nome_raw,r.origem_conta);
     if(STATE.focusCanal&&canal!==STATE.focusCanal)return;
     if(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[canal])return;
-    priBySku[r.sku_pai]=(priBySku[r.sku_pai]||0)+parseFloat(r.receita||0);});
-  function growthOf(s){var pr=priBySku[s.sku_pai]||0;return pr>0?(s.receita-pr)/pr*100:(s.receita>0?null:0);}
+    // kit compara cheio com cheio: receita_kit só existe nas linhas sintéticas do kit
+    priBySku[r.sku_pai]=(priBySku[r.sku_pai]||0)+parseFloat(r.receita||0)+parseFloat(r.receita_kit||0);});
+  function growthOf(s){var pr=priBySku[s.sku_pai]||0,cur=recExib(s);return pr>0?(cur-pr)/pr*100:(cur>0?null:0);}
   // Ads do produto somando só os canais visíveis (respeita focusCanal, igual ao drawer).
   function adsOf(s){return Object.keys(s.porCanal||{}).reduce(function(a,c){return a+(((STATE.adsBySkuPaiCanal||{})[s.sku_pai]||{})[c]||0);},0);}
   function tacosOf(s){return s.receita>0?adsOf(s)/s.receita*100:0;}                       // TACoS = ads ÷ receita
@@ -2335,6 +2356,7 @@ function renderEcommSkuList(){
     if(sk==='devun'){va=devUnPctOf(a);vb=devUnPctOf(b);return (va-vb)*sd;}
     if(sk==='tacos'){va=tacosOf(a);vb=tacosOf(b);return (va-vb)*sd;}
     if(sk==='margemliq'){va=margemLiqPctOf(a);vb=margemLiqPctOf(b);return (va-vb)*sd;}
+    if(sk==='receita'){va=recExib(a);vb=recExib(b);return (va-vb)*sd;}
     va=a[sk]||0;vb=b[sk]||0;return (va-vb)*sd;
   });
   if(countEl)countEl.textContent=groups.length+' produtos';
@@ -2374,10 +2396,10 @@ function renderEcommSkuList(){
   listEl.innerHTML='<table class="tb"><thead>'+th+'</thead><tbody>'
     +lista.map(function(s){
       var sel=STATE.skuSel===s.sku_pai?'style="background:rgba(99,102,241,0.18);cursor:pointer"':'style="cursor:pointer"';
-      var totalP=s.receita||0;
+      var totalP=recExib(s);
       var bar='<div style="display:flex;height:18px;border-radius:4px;overflow:hidden;background:var(--bg);">';
       canaisCols.forEach(function(c){
-        var r=s.porCanal[c]?s.porCanal[c].receita:0;if(r<=0)return;
+        var r=s.porCanal[c]?s.porCanal[c].receita+(s.isKit?(s.porCanal[c].receitaKit||0):0):0;if(r<=0)return;
         var pct=totalP>0?r/totalP*100:0;var cor=getCor(c);
         var label=pct>=10?Math.round(pct)+'%':'';
         // Clicar um segmento filtra o dashboard por aquele canal (stopPropagation pra não
@@ -2402,12 +2424,16 @@ function renderEcommSkuList(){
       var mlCls=mlPct>=20?'good':(mlPct>=10?'mid':'bad');
       return '<tr '+sel+' onclick="selectEcommSku(\''+s.sku_pai.replace(/'/g,"\\'")+'\')">'
         +'<td style="font-weight:600;max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="'+(s.nome||s.sku_pai)+'"><div>'+(s.nome||s.sku_pai)+'</div><div style="font-size:9px;color:var(--txt3);font-family:monospace;">'+s.sku_pai+'</div></td>'
-        +'<td class="r val" style="font-weight:700;">'+fmt(s.receita)+'</td>'
+        +(s.isKit
+          ? '<td class="r val" style="font-weight:700;" title="Valor cheio do kit. '+fmt(s.receitaKit||0)+' já está na receita das peças que ele contém — por isso o kit não entra em total nenhum.">'+fmt(s.receitaCheia)+'<div style="font-size:9px;font-weight:600;color:var(--txt2);white-space:nowrap;">kit · fora do total</div></td>'
+          : '<td class="r val" style="font-weight:700;">'+fmt(s.receita)+'</td>')
         +'<td class="r">'+(!hasPrevSku?'<span style="color:var(--txt3)">—</span>':(function(){var g=growthOf(s);return g===null?'<span style="color:#22c55e;font-size:10px;font-weight:700">novo</span>':deltaBadge(g);})())+'</td>'
         +'<td class="r val">'+fmtN(s.qtd)+'</td>'
         +'<td class="r" title="devolução em unidades (un devolvidas ÷ un vendidas)">'+devCell+'</td>'
         +'<td class="r">'+tacosCell+'</td>'
-        +'<td class="r"><span class="margem-pill '+mlCls+'">'+Math.round(mlPct)+'%</span></td>'
+        +(s.isKit
+          ? '<td class="r" title="margem do kit mora nas peças (CMV e receita delas)"><span style="color:var(--txt3)">—</span></td>'
+          : '<td class="r"><span class="margem-pill '+mlCls+'">'+Math.round(mlPct)+'%</span></td>')
         +'<td>'+bar+'</td>'
         +'</tr>';
     }).join('')+'</tbody></table>';
@@ -2706,11 +2732,13 @@ function renderEcommSkuDetail(){
 
 // ── PARETO ──
 function renderPareto(){
-  var top=STATE.skuGroups.slice(0,20);
+  // kit fora do pareto: o valor dele já está nas peças (#168) — entrar aqui contaria duas vezes
+  var semKit=(STATE.skuGroups||[]).filter(function(s){return !s.isKit;}).sort(function(a,b){return b.receita-a.receita;});
+  var top=semKit.slice(0,20);
   var labels=top.map(function(s){var n=s.nome||s.sku_pai;return n.length>24?n.slice(0,22)+'…':n;});
   var fullNames=top.map(function(s){return s.nome||s.sku_pai;});
   var receita=top.map(function(s){return s.receita;});
-  var tot=STATE.skuGroups.reduce(function(s,x){return s+x.receita;},0);
+  var tot=semKit.reduce(function(s,x){return s+x.receita;},0);
   var cum=0;var cumPct=receita.map(function(v){cum+=v;return tot>0?cum/tot*100:0;});
   if(CHARTS.pareto)CHARTS.pareto.destroy();
   var paretoEl=document.getElementById('chart-pareto');
@@ -2824,7 +2852,8 @@ function renderProdutosDestaque(){
   var selOk=function(n){return !(STATE.canaisSel&&Object.keys(STATE.canaisSel).length>0&&!STATE.canaisSel[n]);};
   var hasPrev=(STATE.skuMVRowsPrev||[]).length>0;
   var cur={},pri={},nomeOf={};   // chaveado por sku_pai (pra clicar → abrir a análise do produto)
-  (STATE.skuGroups||[]).forEach(function(g){var k=g.sku_pai;if(!k)return;cur[k]=(cur[k]||0)+g.receita;nomeOf[k]=g.nome||k;});
+  // kit fica na lista de produtos, não nos destaques: o tile dele ao lado do da calça mostraria o mesmo dinheiro duas vezes (#168)
+  (STATE.skuGroups||[]).forEach(function(g){var k=g.sku_pai;if(!k||g.isKit)return;cur[k]=(cur[k]||0)+g.receita;nomeOf[k]=g.nome||k;});
   (STATE.skuMVRowsPrev||[]).forEach(function(r){var canal=getNome(r.canal_nome_raw,r.origem_conta);if(STATE.focusCanal&&canal!==STATE.focusCanal)return;if(!selOk(canal))return;var k=r.sku_pai;if(!k)return;pri[k]=(pri[k]||0)+parseFloat(r.receita||0);});
   var keys=Object.keys(cur).filter(function(k){return cur[k]>0;}).sort(function(a,b){return cur[b]-cur[a];}).slice(0,8);
   if(!keys.length){el.innerHTML='<div style="color:var(--txt3);font-size:12px;">sem dados de produtos no período</div>';return;}
