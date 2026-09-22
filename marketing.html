@@ -9,17 +9,30 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
+  /* ── PALETA (22/09/2026): alinhada com os outros 6 dashes do portal ──────────────────
+     Este era o ÚNICO dash fora do sistema: rodava uma paleta azul-acinzentada própria
+     (#0f1115/#171a21/#2a2f3a) e a fonte do sistema, enquanto lojas · ecommerce · estoque ·
+     diretoria · simulador · index e os 3 apps React rodam a rampa ZINC + Inter. Os NOMES dos
+     tokens ficaram como estavam (--panel, --line, --mut…) — só os VALORES mudaram, então
+     nenhuma regra existente precisou ser reescrita.
+     ⚠️ O accent VIOLETA fica: #7c5cff é a cor da categoria "Inteligência" no portal
+     (CAT_META do index.html). Cada dash herda a cor da sua seção — não é desvio, é a regra. */
   :root{
-    --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --line:#2a2f3a;
-    --txt:#e7e9ee; --mut:#9aa3b2; --accent:#7c5cff; --accent2:#22d3ee;
-    --green:#2fbf71; --red:#ef5350; --amber:#f5a623;
+    --bg:#09090b; --panel:#18181b; --panel2:#27272a; --line:#2a2a2e;
+    /* accent de TEXTO: o #7c5cff da marca dá 4,08:1 no painel — ok pra fundo e borda
+       (piso 3:1 de componente), abaixo do piso de 4,5:1 de TEXTO. Medido, não no olho. */
+    --accent-txt:#9a80ff;
+    --txt:#fafafa; --mut:#a1a1aa; --accent:#7c5cff; --accent2:#22d3ee;
+    --green:#22c55e; --red:#f43f5e; --amber:#eab308;
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.45 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font:14px/1.45 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
   a{color:inherit}
   .topbar{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:14px;
-    padding:10px 18px;background:#12141a;border-bottom:1px solid var(--line);flex-wrap:wrap}
+    padding:10px 18px;background:#111113;border-bottom:1px solid var(--line);flex-wrap:wrap}
   .topbar .logo{font-weight:800;font-size:16px;letter-spacing:.3px}
   .topbar .logo span{color:#7c3aed}
   .topbar .sep{flex:1}
@@ -45,9 +58,21 @@
   .subchip .n{font-weight:400;opacity:.75;margin-left:5px}
   .pane{display:none}.pane.on{display:block}
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:12px;margin-bottom:18px}
-  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
-  .kpi .lbl{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center}
-  .kpi .val{font-size:24px;font-weight:800;margin-top:6px}
+  /* KPI — o tratamento que ecommerce/lojas/simulador já tinham e este dash não:
+     gradiente sutil, fio de accent no topo e elevação no hover. */
+  .kpi{position:relative;overflow:hidden;border:1px solid var(--line);border-radius:14px;padding:15px 16px;
+    background:linear-gradient(145deg,var(--panel) 0%,#141416 100%);
+    transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
+  .kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;
+    background:var(--kpi-accent,var(--accent));opacity:.65}
+  .kpi:hover{transform:translateY(-2px);box-shadow:0 6px 22px rgba(0,0,0,.35);border-color:#3f3f46}
+  .kpi.accent{--kpi-accent:var(--green)}
+  .kpi.paid{--kpi-accent:var(--amber)}
+  .kpi .lbl{color:var(--mut);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;
+    display:flex;align-items:center}
+  /* ⚠️ nowrap é regra do fusion-dash/CLAUDE.md: R$ nunca quebra do número. Faltava aqui. */
+  .kpi .val{font-size:1.45rem;font-weight:800;margin-top:7px;white-space:nowrap;
+    font-variant-numeric:tabular-nums;letter-spacing:-.01em}
   .info{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;
     background:var(--panel2);border:1px solid var(--line);color:var(--mut);font-size:9px;font-style:normal;
     cursor:help;margin-left:6px;position:relative;flex:none;text-transform:none}
@@ -66,23 +91,62 @@
   details.gloss .gbody{padding:14px 16px;color:var(--mut);font-size:13px;line-height:1.6}
   details.gloss .gi{position:relative;padding-left:18px;margin:0 0 11px}
   details.gloss .gi:last-child{margin-bottom:0}
-  details.gloss .gi::before{content:'▸';position:absolute;left:2px;color:var(--accent);font-weight:700}
+  details.gloss .gi::before{content:'▸';position:absolute;left:2px;color:var(--accent-txt);font-weight:700}
   details.gloss b{color:var(--txt)}
   details.gloss code{background:var(--panel2);padding:1px 5px;border-radius:4px;color:var(--accent2);font-size:12px}
   .kpi .sub{color:var(--mut);font-size:12px;margin-top:2px}
   .kpi.accent .val{color:var(--accent2)}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
-  .card h3{margin:0 0 12px;font-size:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px;
+    font-variant-numeric:tabular-nums}
+  /* tabular-nums no card inteiro: sem isso a coluna de números DANÇA a cada render
+     (largura de dígito variável). Os outros dashes já tinham; este não. */
+  .card h3{margin:0 0 14px;font-size:13px;font-weight:700;letter-spacing:.01em;
+    display:flex;align-items:baseline;flex-wrap:wrap;gap:0 6px}
   .card .hint{color:var(--mut);font-size:12px;font-weight:400;margin-left:6px}
-  table{width:100%;border-collapse:collapse;font-size:13px}
-  th,td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+  table{width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px}
+  th,td{padding:9px 12px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
   th:first-child,td:first-child{text-align:left}
-  th{color:var(--mut);font-weight:600;cursor:pointer;user-select:none;position:sticky;top:0;background:var(--panel);z-index:3;box-shadow:inset 0 -1px 0 var(--line)}
-  th.sorted::after{content:' ▾';color:var(--accent)}
+  th{color:var(--mut);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+    cursor:pointer;user-select:none;position:sticky;top:0;background:var(--panel);z-index:3;
+    box-shadow:inset 0 -1px 0 var(--line);padding-top:11px;padding-bottom:11px}
+  /* seta que diz a DIREÇÃO (era só '▾', que não distinguia asc de desc) */
+  th.sorted::after{content:' ▼';color:var(--accent-txt);font-size:8px}
+  th.sorted.asc::after{content:' ▲'}
+  tbody tr{transition:background .12s}
+  tbody tr:hover td{background:rgba(255,255,255,.045)}
+  tbody tr:last-child td{border-bottom:none}
+  /* linha de TOTAL — o <tfoot> já existia no DOM e não tinha uma linha de CSS */
+  tfoot td{background:rgba(255,255,255,.05);font-weight:800;color:var(--txt);
+    border-top:1px solid #3f3f46;border-bottom:none;position:sticky;bottom:0;z-index:2}
+  /* 1ª coluna fixa com profundidade: a tabela de mídia tem 14 colunas e rola lateralmente —
+     sem isso você perde de vista QUAL campanha está lendo. */
+  .tbl-fix tbody td:first-child,.tbl-fix tfoot td:first-child{position:sticky;left:0;z-index:2;
+    background:var(--panel);box-shadow:6px 0 9px -6px rgba(0,0,0,.7);border-right:1px solid var(--line)}
+  .tbl-fix tbody tr:hover td:first-child{background:#1f1f23}
+  .tbl-fix thead th:first-child{position:sticky;left:0;z-index:4;background:var(--panel);
+    box-shadow:6px 0 9px -6px rgba(0,0,0,.7);border-right:1px solid var(--line)}
+  /* barra DENTRO da célula (padrão do lojas.html): a coluna deixa de ser só número e
+     passa a mostrar a proporção sem gastar uma coluna a mais */
+  .cellbar{position:relative;display:block;height:19px;border-radius:5px;overflow:hidden;
+    background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.05);min-width:74px}
+  .cellbar .fill{position:absolute;left:0;top:0;bottom:0;border-radius:4px 0 0 4px;
+    background:linear-gradient(90deg,rgba(124,92,255,.85),rgba(124,92,255,.45));
+    transition:width .5s cubic-bezier(.4,0,.2,1)}
+  .cellbar .txt{position:relative;z-index:1;display:block;text-align:right;padding-right:6px;
+    line-height:19px;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;
+    text-shadow:0 1px 2px rgba(0,0,0,.65)}
+  /* célula com fundo semântico (padrão do estoque.html) — faixa, não gradiente contínuo:
+     3 estados que a pessoa consegue nomear valem mais que 100 tons que ela não distingue */
+  td.h-bad {background:rgba(244,63,94,.14);color:#fda4af}
+  td.h-warn{background:rgba(234,179,8,.12);color:#fde047}
+  td.h-good{background:rgba(34,197,94,.12);color:#86efac}
+  tbody tr:hover td.h-bad{background:rgba(244,63,94,.2)}
+  tbody tr:hover td.h-warn{background:rgba(234,179,8,.18)}
+  tbody tr:hover td.h-good{background:rgba(34,197,94,.18)}
   tbody tr:hover{background:var(--panel2)}
   tr.parent{cursor:pointer}
   tr.parent>td:first-child{font-weight:600}
-  .exp{display:inline-block;width:12px;color:var(--accent);font-size:11px}
+  .exp{display:inline-block;width:12px;color:var(--accent-txt);font-size:11px}
   tr.child>td{background:rgba(124,92,255,.05);font-size:12px;border-bottom:1px solid #20242d}
   td.kidcell{padding-left:30px!important;color:var(--mut)}
   tr.pnl>td{background:#13161d;padding:9px 14px;border-bottom:1px solid #20242d}
@@ -110,14 +174,22 @@
   .md-alerta .tit{font-weight:700;color:var(--txt);margin-bottom:5px}
   .md-alerta ul{margin:6px 0 0;padding-left:18px;color:var(--mut);line-height:1.7}
   .md-alerta b{color:var(--txt)}
-  .fun{display:grid;gap:7px}
-  .fun-row{display:grid;grid-template-columns:150px 1fr 120px 110px;align-items:center;gap:12px;font-size:13px}
-  .fun-row .et{color:var(--mut)}
-  .fun-row .ba{height:26px;border-radius:5px;background:linear-gradient(90deg,var(--accent),var(--accent2));min-width:2px}
-  .fun-row .vl{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
-  .fun-row .tx{text-align:right;color:var(--mut);font-size:12px}
+  /* Funil — etapa é ORDINAL (a ordem É o dado), então uma cor só em degraus de
+     luminosidade, nunca 6 cores diferentes: cor categórica aqui gastaria o canal de
+     identidade pra recodificar o que a posição já diz. Rampa violeta de 6 degraus
+     validada contra o fundo do card (#171a21): monotonia, ΔL>=0.06, ponta escura 2,16:1. */
+  .funil{width:100%;display:block;overflow:visible}
+  .funil .et{fill:var(--txt);font-size:12.5px;font-weight:600}
+  .funil .sub{fill:var(--mut);font-size:10.5px}
+  .funil .vl{fill:var(--txt);font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}
+  .funil .tx{fill:var(--mut);font-size:11.5px;font-variant-numeric:tabular-nums}
+  .funil .tx.leak{fill:var(--amber);font-weight:700}
+  .funil .band{transition:opacity .12s}
+  .funil g.st:hover .band{opacity:.82}
+  .funil g.st{cursor:default}
   .fun-ref{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:12px;padding-top:11px;border-top:1px solid var(--line);font-size:12px;color:var(--mut)}
   .fun-ref b{color:var(--txt)}
+  .fun-nota{margin-top:9px;font-size:11.5px;color:var(--mut);line-height:1.6}
   .casc{font-size:13px}
   .casc-row{display:grid;grid-template-columns:1fr 120px 46px;align-items:center;gap:10px;padding:6px 2px}
   .casc-row .lbl2{display:flex;align-items:center;gap:9px;min-width:0;color:var(--mut)}
@@ -204,7 +276,7 @@
   /* Loja (Shopify) pane */
   #pane-shopify .secTitle,#pane-funil .secTitle{font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--mut);margin:20px 2px 8px;display:flex;align-items:center;gap:8px}
   #pane-shopify .secTitle::before,#pane-funil .secTitle::before{content:'';width:8px;height:8px;border-radius:2px;background:var(--accent)}
-  #pane-shopify .secTitle.paid::before,#pane-funil .secTitle.paid::before{background:#f5a623}
+  #pane-shopify .secTitle.paid::before,#pane-funil .secTitle.paid::before{background:#eab308}
   .fn-row{display:grid;grid-template-columns:160px 1fr 124px;align-items:center;gap:12px;margin:9px 0}
   .fn-label{font-size:12px;color:var(--mut);font-weight:600;text-align:right}
   .fn-bar-wrap{background:var(--panel2);border-radius:8px;overflow:hidden}
@@ -221,7 +293,7 @@
   .org-heat .hc{height:24px;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#0b0d12;font-weight:700}
   .org-heat .hl{color:var(--mut);display:flex;align-items:center;padding:0 4px}
   .b-reel,.b-feed{padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700}
-  .b-reel{background:rgba(124,92,255,.16);color:var(--accent)}
+  .b-reel{background:rgba(124,92,255,.16);color:var(--accent-txt)}
   .b-feed{background:rgba(34,211,238,.16);color:var(--accent2)}
   #pane-shopify td.l,#pane-shopify th.l{text-align:left}
   #pane-shopify .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:middle}
@@ -237,14 +309,14 @@
   .fu-pct{font-size:1.5rem;font-weight:800;white-space:nowrap;margin-top:6px;line-height:1.1}
   .fu-abs{font-size:13px;color:var(--mut);white-space:nowrap;margin-top:2px}
   .fu-prev{font-size:11px;color:var(--mut);margin-top:6px}
-  .fu-prev b{color:#ef5350;font-weight:700}
+  .fu-prev b{color:#f43f5e;font-weight:700}
   .fu-bar{margin-top:auto;border-radius:6px 6px 0 0;background:linear-gradient(180deg,#7c5cff,#5b3fd6);min-height:5px}
-  .fu-step.real .fu-bar{background:linear-gradient(180deg,#2fbf71,#1e8f52)}
+  .fu-step.real .fu-bar{background:linear-gradient(180deg,#22c55e,#15803d)}
   .fu-chips{display:inline-flex;gap:6px;margin-left:auto}
   .fu-chips button{background:var(--bg2);border:1px solid var(--bd);color:var(--mut);border-radius:20px;padding:4px 12px;font-size:12px;font-weight:600;cursor:pointer}
   .fu-chips button.on{background:rgba(124,92,255,.16);border-color:var(--accent);color:#e8e9ee}
-  .fu-good{color:#2fbf71;font-weight:700}
-  .fu-bad{color:#ef5350;font-weight:700}
+  .fu-good{color:#22c55e;font-weight:700}
+  .fu-bad{color:#f43f5e;font-weight:700}
   @media(max-width:760px){.fu-bars{grid-template-columns:1fr 1fr}.fu-step{height:170px;border-left:0}}
 </style>
 </head>
@@ -322,7 +394,7 @@
          mvw_marketing_mer_dia: aquele é valor_bruto cru, com frete e sem filtrar status, e faria
          a linha do gráfico discordar do KPI "Receita Site" logo acima. -->
     <div class="card">
-      <h3>Investimento × Receita × MER <span class="hint">Meta → site · barra = receita, linha preta = investimento, linha verde = MER (eixo direito) · no diário, dias de gasto incompleto saem da linha</span></h3>
+      <h3>Investimento × Receita × MER <span class="hint">Meta → site · barra = receita, linha clara = investimento, linha âmbar = MER (eixo direito) · no diário, dias de gasto incompleto saem da linha</span></h3>
       <canvas id="ch-combo" style="max-height:340px"></canvas>
     </div>
   </section>
@@ -350,7 +422,7 @@
       <span class="muted" id="md-conta" style="font-size:11px"></span>
     </div>
     <div class="card" style="padding:0;overflow:auto">
-      <table id="tbl-midia"><thead><tr>
+      <table id="tbl-midia" class="tbl-fix"><thead><tr>
         <th data-k="nome" class="l">Nome</th>
         <th data-k="cpm" title="Custo por mil impressões">CPM</th>
         <th data-k="alcance" title="Pessoas distintas alcançadas">Alcance</th>
@@ -790,9 +862,9 @@ function renderGeral(){
     drawSpark('sk-gasto',dts,ds.map(x=>x.gasto),'#7c5cff');
     drawSpark('sk-rec',dts,ds.map(x=>x.receita),'#22d3ee');
     drawSpark('sk-cm2',dts,ds.map(x=>x.cm2),'#22d3ee');
-    drawSpark('sk-cm3',dts,ds.map(x=>x.cm2-x.gasto),'#2fbf71');
-    drawSpark('sk-mer',dts,ds.map(x=>x.gasto>0?x.receita/x.gasto:null),'#2fbf71');
-    drawSpark('sk-poas',dts,ds.map(x=>x.gasto>0?x.cm2/x.gasto:null),'#f5a623');
+    drawSpark('sk-cm3',dts,ds.map(x=>x.cm2-x.gasto),'#22c55e');
+    drawSpark('sk-mer',dts,ds.map(x=>x.gasto>0?x.receita/x.gasto:null),'#22c55e');
+    drawSpark('sk-poas',dts,ds.map(x=>x.gasto>0?x.cm2/x.gasto:null),'#eab308');
   });
   renderCascade(c, meta, com);
   idle(renderTrendCharts);
@@ -813,16 +885,16 @@ function renderCascade(c, meta, com){
   const psTxt=com.paidShare!=null?Math.round(com.paidShare*100)+'% atrib. a ads':'sem dado GA4';
   el.innerHTML=
     row('Receita gerada',rec,'sub','#22d3ee')+
-    row('CMV (custo do produto)',c.cogs,'ded','#ef5350',true)+
+    row('CMV (custo do produto)',c.cogs,'ded','#f43f5e',true)+
     row('CM1 — margem bruta',c.cm1,'sub','#22d3ee')+
-    row('Comissão',c.fee,'ded','#ef5350',true)+
-    (c.frete>0?row('Frete',c.frete,'ded','#ef5350',true):'')+
-    row('Devolução',c.devolucao,'ded','#ef5350',true)+
+    row('Comissão',c.fee,'ded','#f43f5e',true)+
+    (c.frete>0?row('Frete',c.frete,'ded','#f43f5e',true):'')+
+    row('Devolução',c.devolucao,'ded','#f43f5e',true)+
     row('CM2 — margem de contribuição',c.cm2,'sub','#22d3ee')+
-    row('Anúncios (Meta)',meta,'ded','#ef5350',true)+
-    row(`Comissão agência (2% · ${psTxt})`,com.agencia,'ded','#ef5350',true)+
-    row('Comissão gerente (0,65% do líquido)',com.gerente,'ded','#ef5350',true)+
-    row('CM3 — lucro final',cm3,'tot',cm3>=0?'#2fbf71':'#ef5350');
+    row('Anúncios (Meta)',meta,'ded','#f43f5e',true)+
+    row(`Comissão agência (2% · ${psTxt})`,com.agencia,'ded','#f43f5e',true)+
+    row('Comissão gerente (0,65% do líquido)',com.gerente,'ded','#f43f5e',true)+
+    row('CM3 — lucro final',cm3,'tot',cm3>=0?'#22c55e':'#f43f5e');
 }
 
 // ---------- curva de retornos decrescentes (ponto ótimo de gasto, nível canal) ----------
@@ -966,14 +1038,14 @@ function renderOrganico(){
     data:{labels:conta.map(r=>(r.data||'').slice(5)),datasets:[
       {label:'Seguidores',data:conta.map(r=>r.seguidores),borderColor:'#7c5cff',yAxisID:'y',tension:.3,pointRadius:0},
       {label:'Alcance/dia',data:conta.map(r=>r.reach),borderColor:'#22d3ee',yAxisID:'y1',tension:.3,pointRadius:0}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#9aa3b2',boxWidth:12}}},scales:{
-      y:{position:'left',ticks:{color:'#9aa3b2'},grid:{color:'#2a2f3a'}},
-      y1:{position:'right',ticks:{color:'#9aa3b2'},grid:{display:false}},x:{ticks:{color:'#9aa3b2',maxTicksLimit:12},grid:{display:false}}}}});
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#a1a1aa',boxWidth:12}}},scales:{
+      y:{position:'left',ticks:{color:'#a1a1aa'},grid:{color:'#2a2f3a'}},
+      y1:{position:'right',ticks:{color:'#a1a1aa'},grid:{display:false}},x:{ticks:{color:'#a1a1aa',maxTicksLimit:12},grid:{display:false}}}}});
   // engajamento por formato
   if(CHARTS['org-fmt'])CHARTS['org-fmt'].destroy();
   CHARTS['org-fmt']=new Chart(document.getElementById('org-ch-fmt'),{type:'bar',
     data:{labels:['Reels','Feed'],datasets:[{label:'Engaj. médio',data:[erF(reels)*100,erF(feed)*100],backgroundColor:['#7c5cff','#22d3ee']}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{color:'#9aa3b2',callback:v=>v+'%'},grid:{color:'#2a2f3a'}},x:{ticks:{color:'#9aa3b2'},grid:{display:false}}}}});
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{color:'#a1a1aa',callback:v=>v+'%'},grid:{color:'#2a2f3a'}},x:{ticks:{color:'#a1a1aa'},grid:{display:false}}}}});
   // heatmap melhor horário (DOW × faixa 6h)
   const DOW=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
   const spDate=ts=>new Date(new Date(ts).toLocaleString('en-US',{timeZone:'America/Sao_Paulo'}));
@@ -1605,9 +1677,9 @@ function renderTrendCharts(){
     incompleto=g=>med>0&&g<0.35*med;
   }
   drawMulti('ch-combo',ks,[
-    {label:'Receita do site',data:ks.map(k=>Math.round(agr[k].receita)),color:'#2fbf71',type:'bar',axis:'y'},
-    {label:'Investimento (Meta)',data:ks.map(k=>Math.round(agr[k].gasto)),color:'#e8e9ed',type:'line',axis:'y'},
-    {label:'MER (receita ÷ investimento)',data:ks.map(k=>(incompleto(agr[k].gasto)||agr[k].gasto<=0)?null:+(agr[k].receita/agr[k].gasto).toFixed(2)),color:'#f5a623',type:'line',axis:'y1'},
+    {label:'Receita do site',data:ks.map(k=>Math.round(agr[k].receita)),color:'#22c55e',type:'bar',axis:'y'},
+    {label:'Investimento (Meta)',data:ks.map(k=>Math.round(agr[k].gasto)),color:'#e4e4e7',type:'line',axis:'y'},
+    {label:'MER (receita ÷ investimento)',data:ks.map(k=>(incompleto(agr[k].gasto)||agr[k].gasto<=0)?null:+(agr[k].receita/agr[k].gasto).toFixed(2)),color:'#eab308',type:'line',axis:'y1'},
   ]);
 }
 function setGran(g){STATE.gran=g;document.getElementById('gran-d').classList.toggle('on',g==='diario');document.getElementById('gran-m').classList.toggle('on',g==='mensal');renderTrendCharts();}
@@ -1628,13 +1700,13 @@ function drawMulti(id,labels,series){
       backgroundColor:s.type==='bar'?s.color+'55':s.color+'22',
       tension:.3,pointRadius:0,borderWidth:2,fill:false,spanGaps:true,order:s.type==='bar'?2:1}))},
     options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
-      plugins:{legend:{labels:{color:'#9aa3b2',boxWidth:12}},
+      plugins:{legend:{labels:{color:'#a1a1aa',boxWidth:12}},
         tooltip:{callbacks:{label:c=>c.dataset.yAxisID==='y1'
           ? c.dataset.label+': '+(c.parsed.y==null?'—':(+c.parsed.y).toFixed(2))
           : c.dataset.label+': '+rs(c.parsed.y)}}},
-      scales:{y:{position:'left',ticks:{color:'#9aa3b2',callback:v=>'R$'+Math.round(v/1000)+'k'},grid:{color:'#23262e'}},
-              y1:{position:'right',ticks:{color:'#9aa3b2'},grid:{display:false}},
-              x:{ticks:{color:'#9aa3b2',maxTicksLimit:12},grid:{display:false}}}}});
+      scales:{y:{position:'left',ticks:{color:'#a1a1aa',callback:v=>'R$'+Math.round(v/1000)+'k'},grid:{color:'#2a2a2e'}},
+              y1:{position:'right',ticks:{color:'#a1a1aa'},grid:{display:false}},
+              x:{ticks:{color:'#a1a1aa',maxTicksLimit:12},grid:{display:false}}}}});
 }
 function drawLine(id,labels,series,single){
   if(CHARTS[id])CHARTS[id].destroy();
@@ -1643,9 +1715,9 @@ function drawLine(id,labels,series,single){
     datasets:series.map(s=>({label:s.label,data:s.data,borderColor:s.color,backgroundColor:s.color+'22',
       tension:.25,spanGaps:true,pointRadius:0,borderWidth:2,fill:!single}))},
     options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
-      plugins:{legend:{labels:{color:'#9aa3b2',boxWidth:12}}},
-      scales:{x:{ticks:{color:'#9aa3b2',maxTicksLimit:10},grid:{color:'#23262e'}},
-              y:{ticks:{color:'#9aa3b2'},grid:{color:'#23262e'}}}}});
+      plugins:{legend:{labels:{color:'#a1a1aa',boxWidth:12}}},
+      scales:{x:{ticks:{color:'#a1a1aa',maxTicksLimit:10},grid:{color:'#2a2a2e'}},
+              y:{ticks:{color:'#a1a1aa'},grid:{color:'#2a2a2e'}}}}});
 }
 
 // ---------- Loja (Shopify) — aba de performance da loja + tráfego pago ----------
@@ -1812,7 +1884,7 @@ function renderShopify(){
   document.querySelectorAll('#sh-kpis-paid .kpi').forEach(el=>el.classList.add('paid'));
   requestAnimationFrame(()=>{
     drawSpark('sh-s-rec',days,ser('rec'),'#22d3ee'); drawSpark('sh-s-ped',days,ser('ped'),'#7c5cff');
-    drawSpark('sh-s-sess',days,ser('sess'),'#2fbf71'); drawSpark('sh-s-meta',days,ser('meta'),'#f5a623');
+    drawSpark('sh-s-sess',days,ser('sess'),'#22c55e'); drawSpark('sh-s-meta',days,ser('meta'),'#eab308');
     drawSpark('sh-s-novos',days,ser('novos'),'#7c5cff');
   });
   renderFunil(); renderShopifyTrend(); renderShopifyCanais(); renderShopifyProdutos();
@@ -1830,10 +1902,10 @@ function drawDual(id,labels,left,right){
     backgroundColor:s.type==='bar'?s.color+'55':s.color+'22',tension:.3,pointRadius:0,borderWidth:2,fill:false});
   CHARTS[id]=new Chart(ctx,{data:{labels:L,datasets:[mk(left),mk(right)]},
     options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
-      plugins:{legend:{labels:{color:'#9aa3b2',boxWidth:12}}},
-      scales:{y:{position:'left',ticks:{color:'#9aa3b2',callback:v=>'R$'+Math.round(v/1000)+'k'},grid:{color:'#23262e'}},
-              y1:{position:'right',ticks:{color:'#9aa3b2'},grid:{display:false}},
-              x:{ticks:{color:'#9aa3b2',maxTicksLimit:10},grid:{display:false}}}}});
+      plugins:{legend:{labels:{color:'#a1a1aa',boxWidth:12}}},
+      scales:{y:{position:'left',ticks:{color:'#a1a1aa',callback:v=>'R$'+Math.round(v/1000)+'k'},grid:{color:'#2a2a2e'}},
+              y1:{position:'right',ticks:{color:'#a1a1aa'},grid:{display:false}},
+              x:{ticks:{color:'#a1a1aa',maxTicksLimit:10},grid:{display:false}}}}});
 }
 function renderShopifyTrend(){
   if(!STATE.shop) return;
@@ -1845,12 +1917,12 @@ function renderShopifyTrend(){
   if(STATE.sgran==='mensal'){const mm={};keys.forEach(d=>{const k=d.slice(0,7);(mm[k]||(mm[k]={rec:0,sess:0,meta:0}));mm[k].rec+=byd[d].rec;mm[k].sess+=byd[d].sess;mm[k].meta+=byd[d].meta;});keys=Object.keys(mm).sort();agr=mm;}
   drawDual('sh-ch-rev',keys,
     {label:'Receita',data:keys.map(k=>Math.round(agr[k].rec)),color:'#22d3ee',type:'bar',axis:'y'},
-    {label:'Sessões',data:keys.map(k=>agr[k].sess),color:'#2fbf71',type:'line',axis:'y1'});
+    {label:'Sessões',data:keys.map(k=>agr[k].sess),color:'#22c55e',type:'line',axis:'y1'});
   drawDual('sh-ch-mer',keys,
-    {label:'Gasto Meta',data:keys.map(k=>Math.round(agr[k].meta)),color:'#f5a623',type:'bar',axis:'y'},
+    {label:'Gasto Meta',data:keys.map(k=>Math.round(agr[k].meta)),color:'#eab308',type:'bar',axis:'y'},
     {label:'MER',data:keys.map(k=>agr[k].meta>0?+(agr[k].rec/agr[k].meta).toFixed(2):null),color:'#7c5cff',type:'line',axis:'y1'});
 }
-const SH_COR={'Paid Social':'#7c5cff','Cross-network':'#a78bfa','Paid Search':'#f5a623','Paid Shopping':'#f59e0b','Paid Other':'#fbbf24','Direct':'#9aa3b2','Referral':'#22d3ee','Organic Search':'#2fbf71','Organic Social':'#14b8a6','Organic Shopping':'#34d399','Email':'#ec4899','Unassigned':'#6b7280','AI Assistant':'#f472b6'};
+const SH_COR={'Paid Social':'#7c5cff','Cross-network':'#a78bfa','Paid Search':'#eab308','Paid Shopping':'#f59e0b','Paid Other':'#fbbf24','Direct':'#a1a1aa','Referral':'#22d3ee','Organic Search':'#22c55e','Organic Social':'#14b8a6','Organic Shopping':'#34d399','Email':'#ec4899','Unassigned':'#6b7280','AI Assistant':'#f472b6'};
 function renderShopifyCanais(){
   const cor=c=>SH_COR[c]||'#6b7280', isPaid=c=>/^Paid|Cross-network/.test(c);
   const by={}; (STATE.trafego||[]).forEach(r=>{const c=r.canal||'(outro)';(by[c]||(by[c]={c,sess:0,rec:0}));by[c].sess+=+r.sessions||0;by[c].rec+=+r.receita||0;});
@@ -1861,7 +1933,7 @@ function renderShopifyCanais(){
   const paid=arr.filter(x=>isPaid(x.c)).reduce((s,x)=>s+x.rec,0);
   if(CHARTS['sh-ch-mix'])CHARTS['sh-ch-mix'].destroy();
   const ctx=document.getElementById('sh-ch-mix'); if(ctx)
-    CHARTS['sh-ch-mix']=new Chart(ctx,{type:'doughnut',data:{labels:['Pago','Orgânico/Direto/Ref'],datasets:[{data:[paid,Math.max(0,tot-paid)],backgroundColor:['#f5a623','#2fbf71'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#9aa3b2',boxWidth:12}}},cutout:'62%'}});
+    CHARTS['sh-ch-mix']=new Chart(ctx,{type:'doughnut',data:{labels:['Pago','Orgânico/Direto/Ref'],datasets:[{data:[paid,Math.max(0,tot-paid)],backgroundColor:['#eab308','#22c55e'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#a1a1aa',boxWidth:12}}},cutout:'62%'}});
 }
 function renderShopifyProdutos(){
   const by={}; (STATE.shop.sku||[]).forEach(r=>{const k=r.sku_pai;(by[k]||(by[k]={pai:k,nome:r.nome,cat:r.cat,rec:0,qtd:0,cmv:0}));by[k].rec+=+r.receita||0;by[k].qtd+=+r.qtd||0;by[k].cmv+=+r.cmv||0;});
@@ -1914,8 +1986,8 @@ function renderFunilMidia(){
   const stages=[
     {n:'Impressões',v:imp,c:'#7c5cff',rate:null},
     {n:'Cliques',v:cli,c:'#22d3ee',rate:pctS(cli,imp),rl:'CTR'},
-    {n:'Sessões pagas (site)',v:sessPaid,c:'#f5a623',rate:pctS(sessPaid,cli),rl:'chegada'},
-    {n:'Pedidos pagos',v:ordPaid,c:'#2fbf71',rate:pctS(ordPaid,sessPaid),rl:'conversão'},
+    {n:'Sessões pagas (site)',v:sessPaid,c:'#eab308',rate:pctS(sessPaid,cli),rl:'chegada'},
+    {n:'Pedidos pagos',v:ordPaid,c:'#22c55e',rate:pctS(ordPaid,sessPaid),rl:'conversão'},
   ];
   const vals=stages.map(s=>s.v).filter(v=>v>0);
   const lg=v=>v>0?Math.log10(v):0;
@@ -2082,15 +2154,26 @@ function renderMidia(){
   const pc0=v=>v==null?'—':(v*100).toFixed(0)+'%';
   const rs2=v=>v==null?'—':'R$'+(+v).toFixed(2).replace('.',',');
   const lucroDe=x=>cm2pct==null?null:x.receita*cm2pct-x.gasto;
+  const maiorGasto=arr.reduce((m,x)=>Math.max(m,x.gasto||0),0);
+  const roasMin=+((STATE.md.alerta||[])[0]||{}).roas_min||4;
   document.getElementById('tb-midia').innerHTML=arr.map(x=>{
     const L=lucroDe(x);
     const thumb=STATE.md.nivel==='anuncio'
       ? `<img class="md-thumb" src="${escH(x.thumb||PLACEHOLDER)}" alt="" loading="lazy" onerror="this.onerror=null;this.src=PLACEHOLDER">` : '';
+    // Investimento vira BARRA na própria célula: o número continua lá e a proporção fica
+    // visível sem gastar uma coluna. Escala = maior investimento da lista (não o total).
+    const share=maiorGasto>0?Math.min(100,x.gasto/maiorGasto*100):0;
+    const barra=`<span class="cellbar"><span class="fill" style="width:${share.toFixed(1)}%"></span>`+
+                `<span class="txt">${rs(x.gasto)}</span></span>`;
+    // ROAS contra o EQUILÍBRIO real (1÷CM2%), não contra um número bonito: abaixo dele o
+    // anúncio queima caixa. CR é connect rate — abaixo de 80% o problema é a página.
+    const hRoas=x.roas_meta==null?'':(roasEq&&x.roas_meta<roasEq?'h-bad':(x.roas_meta<roasMin?'h-warn':'h-good'));
+    const hCr=x.cr_conecta==null?'':(x.cr_conecta<0.6?'h-bad':(x.cr_conecta<0.8?'h-warn':'h-good'));
     return `<tr><td class="l"><div class="md-nome">${thumb}<span class="t" title="${escH(x.nome)}">${escH(x.nome)}</span></div></td>`+
       `<td>${rs2(x.cpm)}</td><td>${(x.alcance||0).toLocaleString('pt-BR')}</td><td>${x.frequencia==null?'—':n2(x.frequencia)}</td>`+
       `<td>${(x.link_clicks||0).toLocaleString('pt-BR')}</td><td>${pc2(x.ctr_todos)}</td><td>${pc2(x.ctr_link)}</td>`+
-      `<td>${pc0(x.cr_conecta)}</td><td>${rs2(x.cpc)}</td><td><b>${rs(x.gasto)}</b></td>`+
-      `<td>${x.roas_meta==null?'—':n2(x.roas_meta)}</td><td>${(x.compras||0).toLocaleString('pt-BR')}</td>`+
+      `<td class="${hCr}">${pc0(x.cr_conecta)}</td><td>${rs2(x.cpc)}</td><td style="min-width:96px">${barra}</td>`+
+      `<td class="${hRoas}">${x.roas_meta==null?'—':n2(x.roas_meta)}</td><td>${(x.compras||0).toLocaleString('pt-BR')}</td>`+
       `<td>${rs(x.receita)}</td><td class="${L==null?'':(L>=0?'pos':'neg')}">${L==null?'—':rs(L)}</td></tr>`;
   }).join('')||`<tr><td colspan="14" class="l muted" style="padding:14px">${q?('nenhum dos '+(D[STATE.md.nivel]||[]).length+' '+STATE.md.nivel+'s casa com <b>'+escH(q)+'</b>'):'Sem gasto de mídia no período.'}</td></tr>`;
   const Lt=cm2pct==null?null:tot.receita*cm2pct-tot.gasto;
@@ -2136,35 +2219,104 @@ function renderMidiaAlerta(roasEq){
     `<div class="muted" style="margin-top:9px;font-size:11.5px">A barra de ${n2(barra)} é de <b>qualidade</b> e fica em <code>app_config.marketing_roas_teste_min</code>. O <b>equilíbrio</b> (${roasEq?n2(roasEq):'—'}) sai da margem CM2 do site — abaixo dele o anúncio queima caixa. Criativo que já rodava antes de 17/06/2026 fica fora: a base não sabe quando ele estreou.</div></div>`;
 }
 
-// Funil da mídia, no formato do "FUNIL BÁSICO" que o marketing mandou.
+// Funil da mídia — forma de funil de verdade (SVG), não barras.
+//
+// Rampa ORDINAL de 6 degraus (etapa de funil é posição numa sequência, não identidade):
+// uma cor só, luminosidade monotônica. Validada contra o fundo do card #171a21 —
+// monotonia ✓, ΔL≥0.06 ✓, ponta escura 2,16:1 ✓, desvio de matiz 7° ✓.
+const FUNIL_RAMPA=['#4f3fa8','#6250c6','#7660e2','#8b78f2','#a494ff','#c0b3ff'];
+
 function renderMidiaFunil(tot){
   const META=c=>/Paid Social|Cross-network/.test(c||'');
   let sess=0; (STATE.trafego||[]).forEach(r=>{if(META(r.canal))sess+=+r.sessions||0;});
+  // ⚠️ Sessões do GA4 NÃO é etapa deste funil — é outra régua de medição (site, último
+  // clique, subconta). Misturar no mesmo afunilamento faria o desenho mentir. Vai pro rodapé.
   const et=[
-    {l:'Impressões',v:tot.impressoes},
-    {l:'Cliques no link',v:tot.link_clicks},
-    {l:'Chegou na página',v:tot.lpv},
-    {l:'Sessões (GA4)',v:sess,alt:true},
-    {l:'Carrinho',v:tot.atc},
-    {l:'Checkout',v:tot.ic},
-    {l:'Compras',v:tot.compras},
-  ].filter(x=>x.v>0||x.l==='Compras');
-  const mx=Math.max(...et.map(x=>x.v||0),1);
+    {l:'Impressões',      s:'o anúncio apareceu',            v:tot.impressoes},
+    {l:'Cliques no link', s:'clicou pra ir ao site',         v:tot.link_clicks},
+    {l:'Chegou na página',s:'a página carregou',             v:tot.lpv},
+    {l:'Carrinho',        s:'adicionou ao carrinho',         v:tot.atc},
+    {l:'Checkout',        s:'iniciou o checkout',            v:tot.ic},
+    {l:'Compras',         s:'comprou',                       v:tot.compras},
+  ];
+  const topo=et[0].v||1;
   const ri=v=>(Math.round(v||0)).toLocaleString('pt-BR');
-  const html=et.map((x,i)=>{
-    const ant=i>0?et[i-1].v:null;
-    const tx=(ant&&ant>0&&!x.alt)?((x.v/ant*100).toFixed(x.v/ant<0.1?2:1).replace('.',',')+'% da etapa acima'):'';
-    return `<div class="fun-row"><span class="et">${x.l}</span>`+
-      `<span class="ba" style="width:${Math.max(2,(x.v/mx)*100)}%;${x.alt?'opacity:.45':''}"></span>`+
-      `<span class="vl">${ri(x.v)}</span><span class="tx">${tx}</span></div>`;
+  // Largura em RAIZ QUADRADA e isso está escrito na tela: de 2,1 mi de impressões a ~2,8 mil
+  // compras são ~750:1, e em escala linear as quatro últimas etapas viram um fio invisível.
+  // O número exato fica rotulado em TODAS as etapas, então nada some — o que a largura dá é a
+  // forma; quem carrega a quantidade é o rótulo e a taxa entre etapas.
+  const W=300, H=56, GAP=3, X0=210, PAD=16;
+  // LARGURA POR PASSO, não por valor absoluto — e a razão é honestidade, não estética.
+  // De 3,5 mi de impressões a 2,1 mil compras são ~1.600:1. Em escala linear as 4 últimas
+  // etapas somem; em raiz quadrada elas BATEM NO PISO e ficam com a MESMA largura (medido:
+  // 8.107, 7.433 e 2.168 desenhados idênticos) — largura igual pra valor diferente é erro,
+  // não estilo. Aqui cada banda afunila em função da TAXA daquele passo, com piso no passo:
+  // toda etapa fica visivelmente mais estreita que a anterior, nenhuma some, e nunca duas
+  // etapas diferentes têm a mesma largura. A distorção é monotônica e está declarada na tela.
+  const PISO=0.58, TETO=0.97;
+  const larguras=et.map(()=>0); larguras[0]=W;
+  for(let i=1;i<et.length;i++){
+    const ant=et[i-1].v, t=(ant>0)?Math.sqrt(Math.max(et[i].v,0)/ant):0;
+    larguras[i]=larguras[i-1]*Math.min(TETO,Math.max(PISO,t));
+  }
+  const larg=(v,i)=>larguras[i];
+  const alt=et.length*(H+GAP)+PAD*2;
+  // a maior queda entre etapas consecutivas é onde o funil vaza — marcada, não deixada pro olho
+  let pior=-1, piorTaxa=1;
+  et.forEach((x,i)=>{ if(i>0&&et[i-1].v>0){ const t=x.v/et[i-1].v; if(t<piorTaxa){piorTaxa=t;pior=i;} } });
+
+  // Laterais em CURVA (bezier), não reta: com 1,94% de CTR a segunda etapa é 7× mais estreita
+  // que a primeira, e um trapézio reto desenha um "V" — a forma passa a gritar a queda em vez de
+  // mostrar o caminho. A curva amortece a transição sem mexer em largura nenhuma: o topo e a
+  // base de cada banda continuam exatamente no valor medido; só o percurso entre os dois é suave.
+  const cx=X0+W/2;
+  const banda=(y,wt,wb,fill)=>{
+    // tensão baixa: com k alto a curva sai VERTICAL do canto de cima e a primeira banda
+    // vira um cogumelo de aba — visto no 1º render, só olhando (nenhuma régua pega isso).
+    const k=H*0.2;
+    return `<path class="band" fill="${fill}" d="`+
+      `M${cx-wt/2},${y} L${cx+wt/2},${y} `+
+      `C${cx+wt/2},${y+k} ${cx+wb/2},${y+H-k} ${cx+wb/2},${y+H} `+
+      `L${cx-wb/2},${y+H} `+
+      `C${cx-wb/2},${y+H-k} ${cx-wt/2},${y+k} ${cx-wt/2},${y} Z"></path>`;
+  };
+  const bandas=et.map((x,i)=>{
+    const wt=larg(x.v,i), wb=larg(0,Math.min(i+1,et.length-1));
+    const y=PAD+i*(H+GAP);
+    const ant=i>0?et[i-1].v:null, taxa=(ant&&ant>0)?x.v/ant:null;
+    const txt=taxa!=null?((taxa*100).toFixed(taxa<0.1?2:1).replace('.',',')+'%'):'100%';
+    const dentro=Math.min(wt,wb)>=112;   // só rotula dentro quando cabe na parte MAIS ESTREITA
+    return `<g class="st"><title>${escH(x.l)}: ${ri(x.v)} — ${escH(x.s)}${taxa!=null?` · ${txt} da etapa acima`:''}</title>`+
+      banda(y,wt,wb,`url(#fg${i})`)+
+      `<text class="et" x="${X0-18}" y="${y+H/2-2}" text-anchor="end">${escH(x.l)}</text>`+
+      `<text class="sub" x="${X0-18}" y="${y+H/2+13}" text-anchor="end">${escH(x.s)}</text>`+
+      (dentro?`<text class="vl" x="${cx}" y="${y+H/2+5}" text-anchor="middle" style="fill:#14161d">${ri(x.v)}</text>`
+             :`<text class="vl" x="${X0+W+18}" y="${y+H/2+5}">${ri(x.v)}</text>`)+
+      `<text class="tx ${i===pior?'leak':''}" x="${X0+W+(dentro?18:108)}" y="${y+H/2+5}">`+
+        `${txt}${i===pior?' ↓ maior queda':''}</text></g>`;
   }).join('');
+  // gradiente sutil por banda (mesmo degrau da rampa, ±claro) — dá volume sem inventar cor nova
+  const defs='<defs>'+FUNIL_RAMPA.map((c,i)=>
+    `<linearGradient id="fg${i}" x1="0" y1="0" x2="1" y2="0">`+
+    `<stop offset="0" stop-color="${c}" stop-opacity=".82"/>`+
+    `<stop offset=".5" stop-color="${c}"/>`+
+    `<stop offset="1" stop-color="${c}" stop-opacity=".82"/></linearGradient>`).join('')+'</defs>';
+
   const cps=sess>0?tot.gasto/sess:null, cpm=tot.impressoes>0?tot.gasto/tot.impressoes*1000:null;
   const r2=v=>v==null?'—':'R$'+(+v).toFixed(2).replace('.',',');
-  document.getElementById('md-funil').innerHTML=html+
+  document.getElementById('md-funil').innerHTML=
+    `<svg class="funil" viewBox="0 0 800 ${alt}" preserveAspectRatio="xMinYMin meet" role="img" `+
+    `aria-label="Funil da mídia paga, da impressão à compra">${defs}${bandas}</svg>`+
     `<div class="fun-ref"><span>CPM <b>${r2(cpm)}</b></span><span>CPC <b>${r2(tot.cliques>0?tot.gasto/tot.cliques:null)}</b></span>`+
     `<span>CPS (por sessão) <b>${r2(cps)}</b></span><span>CPA <b>${tot.compras>0?rs(tot.gasto/tot.compras):'—'}</b></span>`+
-    `<span>Investimento <b>${rs(tot.gasto)}</b></span></div>`+
-    `<div class="muted" style="margin-top:8px;font-size:11.5px">⚠️ <b>Sessões (GA4)</b> é medida no site, não pela Meta — entra como referência (barra apagada), não como etapa do funil da plataforma. E o GA4 subconta compra em 35-45%, por isso a última etapa usa a <b>compra atribuída pela Meta</b>.</div>`;
+    `<span>Investimento <b>${rs(tot.gasto)}</b></span>`+
+    `<span>Sessões no site (GA4) <b>${ri(sess)}</b></span></div>`+
+    `<div class="fun-nota">A <b>largura mostra o afunilamento de cada passo</b>, não o valor absoluto: de `+
+    `${ri(topo)} impressões a ${ri(et[et.length-1].v)} compras é ~${Math.round(topo/Math.max(et[et.length-1].v,1))}:1, `+
+    `e em escala de valor as últimas etapas sumiriam ou ficariam todas iguais. Cada banda é mais estreita que a `+
+    `anterior na medida da taxa daquele passo — <b>a quantidade exata está no número e a proporção real, na taxa à direita</b>.<br>`+
+    `⚠️ <b>Sessões do GA4 não é etapa deste funil</b> — é outra régua (medida no site, último clique, e `+
+    `subconta compra em 35-45%). Fica no rodapé de propósito; o funil inteiro é o que a <b>Meta</b> mede.</div>`;
 }
 
 // ═══════════════ ROTEADOR DE 2 NÍVEIS (22/09/2026) ═══════════════
@@ -2289,7 +2441,10 @@ function lerHash(){
   document.querySelectorAll('#tbl-midia th').forEach(th=>th.onclick=()=>{
     const k=th.dataset.k; if(!k)return;
     STATE.md.sort.dir=(STATE.md.sort.k===k)?-STATE.md.sort.dir:-1; STATE.md.sort.k=k;
-    document.querySelectorAll('#tbl-midia th').forEach(x=>x.classList.toggle('sorted',x===th));
+    document.querySelectorAll('#tbl-midia th').forEach(x=>{
+      x.classList.toggle('sorted',x===th);
+      x.classList.toggle('asc',x===th&&STATE.md.sort.dir===1);
+    });
     renderMidia();
   });
 

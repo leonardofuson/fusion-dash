@@ -12,8 +12,9 @@ Roda contra o ARQUIVO LOCAL (servidor efêmero), então pega regressão ANTES do
 A sessão é injetada no localStorage antes de qualquer script da página — depois do load não
 adianta: o requireAuth já rodou e já redirecionou.
 
-  .venv/bin/python fusion-dash/scripts/smoke_marketing.py
-  .venv/bin/python fusion-dash/scripts/smoke_marketing.py --autoteste   # prova que sabe reprovar
+  .venv/bin/python fusion-dash/scripts/smoke_marketing.py              # arquivo local (pré-deploy)
+  .venv/bin/python fusion-dash/scripts/smoke_marketing.py --prod       # o que está publicado
+  .venv/bin/python fusion-dash/scripts/smoke_marketing.py --autoteste  # prova que sabe reprovar
 """
 import json
 import os
@@ -103,10 +104,19 @@ def main():
     sessao = entrar(e["SUPABASE_URL"], key, e["FUSION_TEST_EMAIL"], e["FUSION_TEST_PASSWORD"])
     print(f"login ok — {e['FUSION_TEST_EMAIL']}")
 
-    srv = subprocess.Popen([sys.executable, "-m", "http.server", str(PORTA)], cwd=DASH,
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    time.sleep(1.2)
-    base = f"http://localhost:{PORTA}/marketing.html"
+    # --prod testa o que está PUBLICADO; o default testa o arquivo local (pega regressão antes
+    # do deploy). Os dois importam: "config declarada no repo ≠ config aplicada no serviço".
+    prod = "--prod" in sys.argv
+    srv = None
+    if prod:
+        base = "https://fusion-dash.onrender.com/marketing.html"
+        print("alvo: PRODUÇÃO")
+    else:
+        srv = subprocess.Popen([sys.executable, "-m", "http.server", str(PORTA)], cwd=DASH,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        time.sleep(1.2)
+        base = f"http://localhost:{PORTA}/marketing.html"
+        print("alvo: arquivo local")
     ok = bad = 0
     try:
         with Navegador() as nav:
@@ -316,7 +326,8 @@ def main():
                       f"  🔴 sem sessão ainda abriu o pane {d2.get('pane')}")
         return 1 if bad else 0
     finally:
-        srv.terminate()
+        if srv:
+            srv.terminate()
 
 
 if __name__ == "__main__":
