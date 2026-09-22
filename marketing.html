@@ -179,14 +179,16 @@
      identidade pra recodificar o que a posição já diz. Rampa violeta de 6 degraus
      validada contra o fundo do card (#171a21): monotonia, ΔL>=0.06, ponta escura 2,16:1. */
   .funil{width:100%;display:block;overflow:visible}
-  .funil .et{fill:var(--txt);font-size:12.5px;font-weight:600}
+  .funil .et{fill:var(--txt);font-size:12px;font-weight:600}
   .funil .sub{fill:var(--mut);font-size:10.5px}
-  .funil .vl{fill:var(--txt);font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}
+  .funil .vl{fill:var(--txt);font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums}
   .funil .tx{fill:var(--mut);font-size:11.5px;font-variant-numeric:tabular-nums}
   .funil .tx.leak{fill:var(--amber);font-weight:700}
-  .funil .band{transition:opacity .12s}
-  .funil g.st:hover .band{opacity:.82}
-  .funil g.st{cursor:default}
+  .funil .silhueta{transition:opacity .12s}
+  .funil .div{stroke:var(--panel);stroke-width:2;opacity:.9}
+  .funil g.st .hit{cursor:default}
+  .funil g.st:hover .et,.funil g.st:hover .vl{fill:#fff}
+  .funil g.st:hover .hit{fill:rgba(255,255,255,.04)}
   .fun-ref{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:12px;padding-top:11px;border-top:1px solid var(--line);font-size:12px;color:var(--mut)}
   .fun-ref b{color:var(--txt)}
   .fun-nota{margin-top:9px;font-size:11.5px;color:var(--mut);line-height:1.6}
@@ -2229,94 +2231,70 @@ const FUNIL_RAMPA=['#4f3fa8','#6250c6','#7660e2','#8b78f2','#a494ff','#c0b3ff'];
 function renderMidiaFunil(tot){
   const META=c=>/Paid Social|Cross-network/.test(c||'');
   let sess=0; (STATE.trafego||[]).forEach(r=>{if(META(r.canal))sess+=+r.sessions||0;});
-  // ⚠️ Sessões do GA4 NÃO é etapa deste funil — é outra régua de medição (site, último
-  // clique, subconta). Misturar no mesmo afunilamento faria o desenho mentir. Vai pro rodapé.
+  // ⚠️ Sessões do GA4 NÃO é etapa deste funil — é outra régua (site, último clique, subconta).
   const et=[
-    {l:'Impressões',      s:'o anúncio apareceu',            v:tot.impressoes},
-    {l:'Cliques no link', s:'clicou pra ir ao site',         v:tot.link_clicks},
-    {l:'Chegou na página',s:'a página carregou',             v:tot.lpv},
-    {l:'Carrinho',        s:'adicionou ao carrinho',         v:tot.atc},
-    {l:'Checkout',        s:'iniciou o checkout',            v:tot.ic},
-    {l:'Compras',         s:'comprou',                       v:tot.compras},
+    {l:'Impressões',      s:'o anúncio apareceu',    v:tot.impressoes},
+    {l:'Cliques no link', s:'clicou pra ir ao site', v:tot.link_clicks},
+    {l:'Chegou na página',s:'a página carregou',     v:tot.lpv},
+    {l:'Carrinho',        s:'adicionou ao carrinho', v:tot.atc},
+    {l:'Checkout',        s:'iniciou o checkout',    v:tot.ic},
+    {l:'Compras',         s:'comprou',               v:tot.compras},
   ];
-  const topo=et[0].v||1;
   const ri=v=>(Math.round(v||0)).toLocaleString('pt-BR');
-  // Largura em RAIZ QUADRADA e isso está escrito na tela: de 2,1 mi de impressões a ~2,8 mil
-  // compras são ~750:1, e em escala linear as quatro últimas etapas viram um fio invisível.
-  // O número exato fica rotulado em TODAS as etapas, então nada some — o que a largura dá é a
-  // forma; quem carrega a quantidade é o rótulo e a taxa entre etapas.
-  const W=300, H=56, GAP=3, X0=210, PAD=16;
-  // LARGURA POR PASSO, não por valor absoluto — e a razão é honestidade, não estética.
-  // De 3,5 mi de impressões a 2,1 mil compras são ~1.600:1. Em escala linear as 4 últimas
-  // etapas somem; em raiz quadrada elas BATEM NO PISO e ficam com a MESMA largura (medido:
-  // 8.107, 7.433 e 2.168 desenhados idênticos) — largura igual pra valor diferente é erro,
-  // não estilo. Aqui cada banda afunila em função da TAXA daquele passo, com piso no passo:
-  // toda etapa fica visivelmente mais estreita que a anterior, nenhuma some, e nunca duas
-  // etapas diferentes têm a mesma largura. A distorção é monotônica e está declarada na tela.
-  const PISO=0.58, TETO=0.97;
-  const larguras=et.map(()=>0); larguras[0]=W;
-  for(let i=1;i<et.length;i++){
-    const ant=et[i-1].v, t=(ant>0)?Math.sqrt(Math.max(et[i].v,0)/ant):0;
-    larguras[i]=larguras[i-1]*Math.min(TETO,Math.max(PISO,t));
-  }
-  const larg=(v,i)=>larguras[i];
-  const alt=et.length*(H+GAP)+PAD*2;
-  // a maior queda entre etapas consecutivas é onde o funil vaza — marcada, não deixada pro olho
   let pior=-1, piorTaxa=1;
   et.forEach((x,i)=>{ if(i>0&&et[i-1].v>0){ const t=x.v/et[i-1].v; if(t<piorTaxa){piorTaxa=t;pior=i;} } });
 
-  // Laterais em CURVA (bezier), não reta: com 1,94% de CTR a segunda etapa é 7× mais estreita
-  // que a primeira, e um trapézio reto desenha um "V" — a forma passa a gritar a queda em vez de
-  // mostrar o caminho. A curva amortece a transição sem mexer em largura nenhuma: o topo e a
-  // base de cada banda continuam exatamente no valor medido; só o percurso entre os dois é suave.
-  const cx=X0+W/2;
-  const banda=(y,wt,wb,fill)=>{
-    // tensão baixa: com k alto a curva sai VERTICAL do canto de cima e a primeira banda
-    // vira um cogumelo de aba — visto no 1º render, só olhando (nenhuma régua pega isso).
-    const k=H*0.2;
-    return `<path class="band" fill="${fill}" d="`+
-      `M${cx-wt/2},${y} L${cx+wt/2},${y} `+
-      `C${cx+wt/2},${y+k} ${cx+wb/2},${y+H-k} ${cx+wb/2},${y+H} `+
-      `L${cx-wb/2},${y+H} `+
-      `C${cx-wb/2},${y+H-k} ${cx-wt/2},${y+k} ${cx-wt/2},${y} Z"></path>`;
-  };
-  const bandas=et.map((x,i)=>{
-    const wt=larg(x.v,i), wb=larg(0,Math.min(i+1,et.length-1));
-    const y=PAD+i*(H+GAP);
-    const ant=i>0?et[i-1].v:null, taxa=(ant&&ant>0)?x.v/ant:null;
+  // ── GEOMETRIA ILUSTRATIVA (decisão do Leo, 22/09/2026: "o funil não precisa ser proporcional")
+  // A silhueta é FIXA — afunila a uma razão constante, não pela grandeza de cada etapa. Isso
+  // resolve de vez a tensão que as duas tentativas anteriores tinham: com ~1.600:1 entre a 1ª e
+  // a última etapa, escala linear apaga o fim do funil e raiz quadrada empata etapas diferentes
+  // na mesma largura. Aqui a forma não tenta medir nada — quem mede é o número e a taxa, que
+  // estão em toda linha — e a tela DIZ isso. Forma ilustrativa declarada é honesta; forma que
+  // parece medir e não mede é que não é.
+  const H=38, WTOPO=250, RAZAO=0.80, X0=232, PAD=10;
+  const cx=X0+WTOPO/2, alt=et.length*H+PAD*2;
+  const w=i=>WTOPO*Math.pow(RAZAO,i);            // largura no TOPO da banda i
+  const wIni=w(0), wFim=w(et.length)*1.0;        // boca e bico
+  const yTopo=PAD, yBase=PAD+et.length*H;
+  // uma silhueta só, lados em curva suave (côncava) — em vez de 6 polígonos com frestas
+  const kc=(yBase-yTopo)*0.42;
+  const silhueta=`M${cx-wIni/2},${yTopo} L${cx+wIni/2},${yTopo} `+
+    `C${cx+wIni/2},${yTopo+kc} ${cx+wFim/2},${yBase-kc} ${cx+wFim/2},${yBase} `+
+    `L${cx-wFim/2},${yBase} `+
+    `C${cx-wFim/2},${yBase-kc} ${cx-wIni/2},${yTopo+kc} ${cx-wIni/2},${yTopo} Z`;
+
+  const linhas=et.map((x,i)=>{
+    const y=PAD+i*H, ant=i>0?et[i-1].v:null, taxa=(ant&&ant>0)?x.v/ant:null;
     const txt=taxa!=null?((taxa*100).toFixed(taxa<0.1?2:1).replace('.',',')+'%'):'100%';
-    const dentro=Math.min(wt,wb)>=112;   // só rotula dentro quando cabe na parte MAIS ESTREITA
-    return `<g class="st"><title>${escH(x.l)}: ${ri(x.v)} — ${escH(x.s)}${taxa!=null?` · ${txt} da etapa acima`:''}</title>`+
-      banda(y,wt,wb,`url(#fg${i})`)+
-      `<text class="et" x="${X0-18}" y="${y+H/2-2}" text-anchor="end">${escH(x.l)}</text>`+
-      `<text class="sub" x="${X0-18}" y="${y+H/2+13}" text-anchor="end">${escH(x.s)}</text>`+
-      (dentro?`<text class="vl" x="${cx}" y="${y+H/2+5}" text-anchor="middle" style="fill:#14161d">${ri(x.v)}</text>`
-             :`<text class="vl" x="${X0+W+18}" y="${y+H/2+5}">${ri(x.v)}</text>`)+
-      `<text class="tx ${i===pior?'leak':''}" x="${X0+W+(dentro?18:108)}" y="${y+H/2+5}">`+
+    return `<g class="st"><title>${escH(x.l)}: ${ri(x.v)} — ${escH(x.s)}`+
+      `${taxa!=null?` · ${txt} da etapa acima`:''}</title>`+
+      `<rect class="hit" x="0" y="${y}" width="800" height="${H}" fill="transparent"></rect>`+
+      (i?`<line class="div" x1="0" y1="${y}" x2="800" y2="${y}" clip-path="url(#funil-clip)"></line>`:'')+
+      `<text class="et" x="${X0-16}" y="${y+H/2+4}" text-anchor="end">${escH(x.l)}</text>`+
+      `<text class="vl" x="${X0+WTOPO+16}" y="${y+H/2+4}">${ri(x.v)}</text>`+
+      `<text class="tx ${i===pior?'leak':''}" x="${X0+WTOPO+130}" y="${y+H/2+4}">`+
         `${txt}${i===pior?' ↓ maior queda':''}</text></g>`;
   }).join('');
-  // gradiente sutil por banda (mesmo degrau da rampa, ±claro) — dá volume sem inventar cor nova
-  const defs='<defs>'+FUNIL_RAMPA.map((c,i)=>
-    `<linearGradient id="fg${i}" x1="0" y1="0" x2="1" y2="0">`+
-    `<stop offset="0" stop-color="${c}" stop-opacity=".82"/>`+
-    `<stop offset=".5" stop-color="${c}"/>`+
-    `<stop offset="1" stop-color="${c}" stop-opacity=".82"/></linearGradient>`).join('')+'</defs>';
+  // gradiente vertical na rampa inteira: a cor ainda mostra a ORDEM das etapas (ordinal),
+  // que é a única coisa que a forma continua encodando.
+  const defs=`<defs><clipPath id="funil-clip"><path d="${silhueta}"/></clipPath>`+
+    '<linearGradient id="funil-g" x1="0" y1="0" x2="0" y2="1">'+
+    FUNIL_RAMPA.map((c,i)=>`<stop offset="${(i/(FUNIL_RAMPA.length-1)).toFixed(3)}" stop-color="${c}"/>`).join('')+
+    '</linearGradient></defs>';
 
   const cps=sess>0?tot.gasto/sess:null, cpm=tot.impressoes>0?tot.gasto/tot.impressoes*1000:null;
   const r2=v=>v==null?'—':'R$'+(+v).toFixed(2).replace('.',',');
   document.getElementById('md-funil').innerHTML=
     `<svg class="funil" viewBox="0 0 800 ${alt}" preserveAspectRatio="xMinYMin meet" role="img" `+
-    `aria-label="Funil da mídia paga, da impressão à compra">${defs}${bandas}</svg>`+
+    `aria-label="Funil da mídia paga, da impressão à compra">${defs}`+
+    `<path class="silhueta" d="${silhueta}" fill="url(#funil-g)"></path>${linhas}</svg>`+
     `<div class="fun-ref"><span>CPM <b>${r2(cpm)}</b></span><span>CPC <b>${r2(tot.cliques>0?tot.gasto/tot.cliques:null)}</b></span>`+
     `<span>CPS (por sessão) <b>${r2(cps)}</b></span><span>CPA <b>${tot.compras>0?rs(tot.gasto/tot.compras):'—'}</b></span>`+
     `<span>Investimento <b>${rs(tot.gasto)}</b></span>`+
     `<span>Sessões no site (GA4) <b>${ri(sess)}</b></span></div>`+
-    `<div class="fun-nota">A <b>largura mostra o afunilamento de cada passo</b>, não o valor absoluto: de `+
-    `${ri(topo)} impressões a ${ri(et[et.length-1].v)} compras é ~${Math.round(topo/Math.max(et[et.length-1].v,1))}:1, `+
-    `e em escala de valor as últimas etapas sumiriam ou ficariam todas iguais. Cada banda é mais estreita que a `+
-    `anterior na medida da taxa daquele passo — <b>a quantidade exata está no número e a proporção real, na taxa à direita</b>.<br>`+
-    `⚠️ <b>Sessões do GA4 não é etapa deste funil</b> — é outra régua (medida no site, último clique, e `+
-    `subconta compra em 35-45%). Fica no rodapé de propósito; o funil inteiro é o que a <b>Meta</b> mede.</div>`;
+    `<div class="fun-nota"><b>A forma é ilustrativa</b> — a largura não mede nada; o dado está no `+
+    `número e na taxa de cada etapa. ⚠️ <b>Sessões do GA4 fica fora do funil</b>: é outra régua `+
+    `(site, último clique, subconta compra em 35-45%). O funil é o que a <b>Meta</b> mede.</div>`;
 }
 
 // ═══════════════ ROTEADOR DE 2 NÍVEIS (22/09/2026) ═══════════════
