@@ -33,9 +33,16 @@
     cursor:pointer;font-size:12px;color:var(--mut)}
   .chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
   main{padding:18px;max-width:1320px;margin:0 auto}
-  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:18px;flex-wrap:wrap}
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:0;flex-wrap:wrap}
   .tab{padding:10px 16px;cursor:pointer;color:var(--mut);border-bottom:2px solid transparent;font-weight:600}
   .tab.on{color:var(--txt);border-bottom-color:var(--accent)}
+  /* 2º nível: só aparece nas abas que agrupam mais de um pane (Mídia, Loja & Produto) */
+  .subchips{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0 18px}
+  .subchips:empty{margin:0 0 18px}
+  .subchip{padding:5px 12px;border:1px solid var(--line);border-radius:20px;background:var(--panel);
+    cursor:pointer;font-size:12px;color:var(--mut);font-weight:600}
+  .subchip.on{background:var(--panel2);border-color:var(--accent);color:var(--txt)}
+  .subchip .n{font-weight:400;opacity:.75;margin-left:5px}
   .pane{display:none}.pane.on{display:block}
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:12px;margin-bottom:18px}
   .kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
@@ -92,6 +99,25 @@
   .b-sem{background:rgba(154,163,178,.16);color:var(--mut)}
   tr.pnl-conc>td{background:#101820}
   .cat-chip{display:inline-block;padding:1px 7px;border-radius:5px;background:rgba(124,92,255,.18);color:#b9a9ff;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;vertical-align:middle;margin-right:2px}
+  /* ---- aba Mídia ---- */
+  .md-nome{display:flex;align-items:center;gap:9px;min-width:0;max-width:340px}
+  .md-nome .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .md-thumb{width:38px;height:38px;border-radius:6px;object-fit:cover;background:var(--panel2);
+    border:1px solid var(--line);flex:none}
+  .md-alerta{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--red);
+    border-radius:10px;padding:11px 14px;margin-bottom:14px;font-size:13px}
+  .md-alerta.ok{border-left-color:var(--green)}
+  .md-alerta .tit{font-weight:700;color:var(--txt);margin-bottom:5px}
+  .md-alerta ul{margin:6px 0 0;padding-left:18px;color:var(--mut);line-height:1.7}
+  .md-alerta b{color:var(--txt)}
+  .fun{display:grid;gap:7px}
+  .fun-row{display:grid;grid-template-columns:150px 1fr 120px 110px;align-items:center;gap:12px;font-size:13px}
+  .fun-row .et{color:var(--mut)}
+  .fun-row .ba{height:26px;border-radius:5px;background:linear-gradient(90deg,var(--accent),var(--accent2));min-width:2px}
+  .fun-row .vl{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
+  .fun-row .tx{text-align:right;color:var(--mut);font-size:12px}
+  .fun-ref{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:12px;padding-top:11px;border-top:1px solid var(--line);font-size:12px;color:var(--mut)}
+  .fun-ref b{color:var(--txt)}
   .casc{font-size:13px}
   .casc-row{display:grid;grid-template-columns:1fr 120px 46px;align-items:center;gap:10px;padding:6px 2px}
   .casc-row .lbl2{display:flex;align-items:center;gap:9px;min-width:0;color:var(--mut)}
@@ -245,17 +271,19 @@
 
 <main>
   <div id="alertas-banner"></div>
+  <!-- 5 abas, uma por PERGUNTA (22/09/2026). Eram 9, organizadas por fonte de dado — e a conta
+       disso foi um renderFunil declarado duas vezes, com o funil do site executando o renderer
+       do funil de mídia por hoisting. Os panes NÃO se moveram nem mudaram de id: o que agrupa é
+       o roteador (ABAS/SUB, no <script>), e cada pane continua com o seu renderer. -->
   <div class="tabs">
-    <div class="tab on" data-t="geral">Visão Geral</div>
-    <div class="tab" data-t="shopify">🛍️ Loja (Shopify)</div>
-    <div class="tab" data-t="funil">🌐 Funil</div>
-    <div class="tab" data-t="organico">📲 Orgânico</div>
-    <div class="tab" data-t="sku">Lucro por SKU</div>
-    <div class="tab" data-t="criativo">Saúde de Criativo</div>
-    <div class="tab" data-t="incr">Incrementalidade</div>
-    <div class="tab" data-t="audit">Auditoria da Agência</div>
-    <div class="tab" data-t="analista">🤖 Analista</div>
+    <div class="tab on" data-t="dinheiro" title="O anúncio deixou lucro? (diretoria)">Dinheiro</div>
+    <div class="tab" data-t="midia" title="Que alavanca eu puxo agora? (analista de mídia)">📣 Mídia</div>
+    <div class="tab" data-t="loja" title="O que vende, e com que margem?">🛍️ Loja &amp; Produto</div>
+    <div class="tab" data-t="organico" title="O que funciona sem pagar?">📲 Orgânico</div>
+    <div class="tab" data-t="analista" title="Pergunte em linguagem natural">🤖 Analista</div>
   </div>
+  <div class="subchips" id="subchips"></div>
+  <div class="md-alerta" id="rota-aviso" style="display:none"></div>
 
   <!-- VISÃO GERAL -->
   <section class="pane on" id="pane-geral">
@@ -287,9 +315,61 @@
       <span class="gran-toggle"><button id="gran-d" class="on" onclick="setGran('diario')">Diário</button><button id="gran-m" onclick="setGran('mensal')">Mensal</button></span>
       <span class="muted" style="font-size:11px">— escolha um período longo (ex.: Este Ano ou datas custom) pra ver mais meses</span>
     </div>
-    <div class="grid2">
-      <div class="card"><h3>Gasto <span class="hint">Meta + Google</span></h3><canvas id="ch-spend"></canvas></div>
-      <div class="card"><h3>MER_site <span class="hint">receita Shopify ÷ gasto Meta · no diário, dias de gasto incompleto são excluídos</span></h3><canvas id="ch-mer"></canvas></div>
+    <!-- 22/09/2026: os dois gráficos (Gasto · MER_site) viraram UM. O pedido do marketing era
+         "investimento / receita / ROAS" no mesmo eixo de tempo — e é exatamente a soma dos dois
+         que existiam, porque MER_site = receita do site ÷ gasto Meta É o retorno deste recorte.
+         ⚠️ A receita vem de mvw_marketing_canal_margem_dia (via dailySeries), NÃO do rev_site da
+         mvw_marketing_mer_dia: aquele é valor_bruto cru, com frete e sem filtrar status, e faria
+         a linha do gráfico discordar do KPI "Receita Site" logo acima. -->
+    <div class="card">
+      <h3>Investimento × Receita × MER <span class="hint">Meta → site · barra = receita, linha preta = investimento, linha verde = MER (eixo direito) · no diário, dias de gasto incompleto saem da linha</span></h3>
+      <canvas id="ch-combo" style="max-height:340px"></canvas>
+    </div>
+  </section>
+
+  <!-- MÍDIA — a tela do analista: campanha → conjunto → anúncio (22/09/2026) -->
+  <section class="pane" id="pane-midia">
+    <div class="note">
+      <div class="note-lead">O que a Meta <b>cobra e entrega</b>, por campanha, conjunto de anúncios e anúncio — as alavancas da operação diária.</div>
+      <div class="note-sub"><b>ROAS aqui é o atribuído pela plataforma</b> (7d de clique + 1d de visualização), não o MER da aba Dinheiro: a Meta reivindica a venda que ela acha que causou. Use pra <b>comparar anúncios entre si</b>; pra saber se sobrou dinheiro, a régua é o <b>CM3</b>. Dado da Meta até <span id="md-frescor">—</span>.</div>
+    </div>
+    <details class="gloss"><summary>O que cada coluna quer dizer</summary><div class="gbody">
+      <div class="gi"><b>CPM</b> = custo por mil impressões (preço do leilão). <b>Alcance</b> = pessoas distintas; <b>Frequência</b> = quantas vezes cada uma viu (≥4 satura). <b>CTR Todos</b> = qualquer clique ÷ impressões; <b>CTR</b> = só clique no <b>link</b> ÷ impressões — a diferença entre os dois é gente clicando em curtir/comentar/perfil em vez de ir pro site.</div>
+      <div class="gi"><b>CR</b> = <b>connect rate</b>: visualizações da página ÷ cliques no link. Mede se quem clicou <b>chegou</b> — abaixo de ~80% o problema é velocidade/carregamento da página, não o criativo. <b>Pode passar de 100%</b> porque as janelas de atribuição do clique e da visualização não são a mesma. ⚠️ Não confundir com taxa de conversão (essa roda em 2-4%).</div>
+      <div class="gi"><b>Lucro est.</b> é nosso, não da Meta: receita atribuída × margem CM2 do site no período − o que foi gasto. É a coluna que responde "essa campanha deu dinheiro?" em vez de "quanto a Meta diz que voltou". <span class="badge b-revisar">est.</span> porque a margem é a média do canal, não a da campanha.</div>
+    </div></details>
+    <div id="md-alertas"></div>
+    <div class="kpis" id="kpis-midia"></div>
+    <div class="filtros" style="align-items:center;gap:10px;flex-wrap:wrap">
+      <span class="subchips" id="md-nivel" style="margin:0">
+        <button class="subchip on" data-n="campanha">Campanhas</button>
+        <button class="subchip" data-n="conjunto">Conjuntos</button>
+        <button class="subchip" data-n="anuncio">Anúncios</button>
+      </span>
+      <input id="md-busca" placeholder="buscar por nome ou código — ex.: rmkt, calça malha, 1202569…" style="flex:1;min-width:240px">
+      <span class="muted" id="md-conta" style="font-size:11px"></span>
+    </div>
+    <div class="card" style="padding:0;overflow:auto">
+      <table id="tbl-midia"><thead><tr>
+        <th data-k="nome" class="l">Nome</th>
+        <th data-k="cpm" title="Custo por mil impressões">CPM</th>
+        <th data-k="alcance" title="Pessoas distintas alcançadas">Alcance</th>
+        <th data-k="frequencia" title="Vezes que a mesma pessoa viu (≥4 = saturação)">Freq.</th>
+        <th data-k="link_clicks" title="Cliques no link (que vão pro site)">Cliques link</th>
+        <th data-k="ctr_todos" title="Qualquer clique ÷ impressões">CTR todos</th>
+        <th data-k="ctr_link" title="Cliques no link ÷ impressões">CTR</th>
+        <th data-k="cr_conecta" title="CONNECT RATE: visualizações da página ÷ cliques no link. Não é taxa de conversão.">CR</th>
+        <th data-k="cpc" title="Custo por clique">CPC</th>
+        <th data-k="gasto" class="sorted" title="Quanto foi gasto no período">Investimento</th>
+        <th data-k="roas_meta" title="Receita ÷ gasto, atribuído pela Meta">ROAS</th>
+        <th data-k="compras" title="Compras atribuídas pela Meta">Compras</th>
+        <th data-k="receita" title="Receita atribuída pela Meta">Receita</th>
+        <th data-k="lucro" title="Receita × margem CM2 do site − gasto. Estimativa: usa a margem média do canal.">Lucro est.</th>
+      </tr></thead><tbody id="tb-midia"></tbody><tfoot id="tf-midia"></tfoot></table>
+    </div>
+    <div class="card">
+      <h3>Funil da mídia paga <span class="hint">o que a Meta mede, etapa a etapa · mesmo período dos chips</span></h3>
+      <div id="md-funil"></div>
     </div>
   </section>
 
@@ -615,6 +695,7 @@ async function carregar(force){
   renderAll();
   if(STATE.tab==='shopify')carregarShopify();  // período mudou com a aba Loja aberta → recarrega (key novo)
   if(STATE.tab==='funil')carregarFunil();      // idem para a aba Funil (usa STATE.trafego já refrescado + ads Meta do período)
+  if(STATE.tab==='midia'){STATE.md.dados=null;carregarMidia();}   // a key da Mídia é o período
   document.getElementById('loader').style.display='none';
   carregarCurva();    // curva 90d (independe do período) — fire-and-forget
   carregarCriativo(); // saúde de criativo (snapshot mais recente) — fire-and-forget
@@ -1506,31 +1587,28 @@ async function rodarAnalista(){
 }
 
 // ---------- charts ----------
-// gráficos de tendência (Gasto + MER), granularidade Diário ou Mensal (toggle)
+// Gráfico combinado Investimento × Receita × MER, granularidade Diário ou Mensal (toggle).
+// Substituiu o par Gasto + MER_site em 22/09/2026 (pedido do marketing) — ver comentário no HTML.
 function renderTrendCharts(){
   const ds=dailySeries(STATE.mer,STATE.canal);
   if(!ds.length){return;}
+  let ks, agr, incompleto;
   if(STATE.gran==='mensal'){
     const mm={}; ds.forEach(x=>{const k=x.data.slice(0,7);(mm[k]||(mm[k]={gasto:0,goog:0,receita:0}));mm[k].gasto+=x.gasto;mm[k].goog+=x.goog;mm[k].receita+=x.receita;});
-    const ks=Object.keys(mm).sort();
-    drawLine('ch-spend',ks,[
-      {label:'Meta',data:ks.map(k=>Math.round(mm[k].gasto)),color:'#7c5cff'},
-      {label:'Google',data:ks.map(k=>Math.round(mm[k].goog)),color:'#22d3ee'},
-    ]);
-    drawLine('ch-mer',ks,[
-      {label:'MER_site (mensal)',data:ks.map(k=>mm[k].gasto>0?+(mm[k].receita/mm[k].gasto).toFixed(2):null),color:'#2fbf71'},
-    ],true);
+    ks=Object.keys(mm).sort(); agr=mm; incompleto=()=>false;
   } else {
+    // dia de gasto muito abaixo da mediana = ingestão incompleta; entra na barra mas sai da RAZÃO
+    // (senão o MER do dia explode e a linha vira serra). Mesma regra que já existia no ch-mer.
     const spd=ds.map(x=>x.gasto).filter(v=>v>0).slice().sort((a,b)=>a-b);
-    const med=spd.length?spd[Math.floor(spd.length/2)]:0; const inc=g=>med>0&&g<0.35*med;
-    drawLine('ch-spend',ds.map(x=>x.data),[
-      {label:'Meta',data:ds.map(x=>Math.round(x.gasto)),color:'#7c5cff'},
-      {label:'Google',data:ds.map(x=>Math.round(x.goog)),color:'#22d3ee'},
-    ]);
-    drawLine('ch-mer',ds.map(x=>x.data),[
-      {label:'MER_site',data:ds.map(x=>(inc(x.gasto)||x.gasto<=0)?null:+(x.receita/x.gasto).toFixed(2)),color:'#2fbf71'},
-    ],true);
+    const med=spd.length?spd[Math.floor(spd.length/2)]:0;
+    agr={}; ds.forEach(x=>agr[x.data]=x); ks=ds.map(x=>x.data);
+    incompleto=g=>med>0&&g<0.35*med;
   }
+  drawMulti('ch-combo',ks,[
+    {label:'Receita do site',data:ks.map(k=>Math.round(agr[k].receita)),color:'#2fbf71',type:'bar',axis:'y'},
+    {label:'Investimento (Meta)',data:ks.map(k=>Math.round(agr[k].gasto)),color:'#e8e9ed',type:'line',axis:'y'},
+    {label:'MER (receita ÷ investimento)',data:ks.map(k=>(incompleto(agr[k].gasto)||agr[k].gasto<=0)?null:+(agr[k].receita/agr[k].gasto).toFixed(2)),color:'#f5a623',type:'line',axis:'y1'},
+  ]);
 }
 function setGran(g){STATE.gran=g;document.getElementById('gran-d').classList.toggle('on',g==='diario');document.getElementById('gran-m').classList.toggle('on',g==='mensal');renderTrendCharts();}
 function drawSpark(id,labels,data,color){
@@ -1538,6 +1616,25 @@ function drawSpark(id,labels,data,color){
   const ctx=document.getElementById(id);if(!ctx)return;
   CHARTS[id]=new Chart(ctx,{type:'line',data:{labels:labels,datasets:[{data:data,borderColor:color,backgroundColor:color+'22',fill:true,tension:.4,pointRadius:0,borderWidth:1.5,spanGaps:true}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{enabled:false}},scales:{x:{display:false},y:{display:false}},elements:{line:{borderJoinStyle:'round'}}}});
+}
+// N séries em 2 eixos (o drawDual só aceita 2 e fica; este é o irmão de N).
+// Eixo y = R$ (barra e linha de investimento), eixo y1 = razão (MER/ROAS).
+function drawMulti(id,labels,series){
+  if(CHARTS[id])CHARTS[id].destroy();
+  const ctx=document.getElementById(id);if(!ctx)return;
+  const L=labels.map(d=>d.length===7?(d.slice(5)+'/'+d.slice(2,4)):d.slice(5));
+  CHARTS[id]=new Chart(ctx,{data:{labels:L,datasets:series.map(s=>({
+      type:s.type,label:s.label,data:s.data,yAxisID:s.axis,borderColor:s.color,
+      backgroundColor:s.type==='bar'?s.color+'55':s.color+'22',
+      tension:.3,pointRadius:0,borderWidth:2,fill:false,spanGaps:true,order:s.type==='bar'?2:1}))},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{labels:{color:'#9aa3b2',boxWidth:12}},
+        tooltip:{callbacks:{label:c=>c.dataset.yAxisID==='y1'
+          ? c.dataset.label+': '+(c.parsed.y==null?'—':(+c.parsed.y).toFixed(2))
+          : c.dataset.label+': '+rs(c.parsed.y)}}},
+      scales:{y:{position:'left',ticks:{color:'#9aa3b2',callback:v=>'R$'+Math.round(v/1000)+'k'},grid:{color:'#23262e'}},
+              y1:{position:'right',ticks:{color:'#9aa3b2'},grid:{display:false}},
+              x:{ticks:{color:'#9aa3b2',maxTicksLimit:12},grid:{display:false}}}}});
 }
 function drawLine(id,labels,series,single){
   if(CHARTS[id])CHARTS[id].destroy();
@@ -1791,9 +1888,9 @@ function setSGran(g){STATE.sgran=g;document.getElementById('sgran-d').classList.
 async function carregarFunil(){
   STATE.funilAds=await buscarTudo('ads_metrics',
     'select=data,impressoes,cliques,gasto,receita_total&plataforma=eq.meta_ads&level=eq.campaign&data=gte.'+STATE.de+'&data=lte.'+STATE.ate+'&order=data.asc');
-  renderFunil();
+  renderFunilMidia();
 }
-function renderFunil(){
+function renderFunilMidia(){
   const META=c=>/Paid Social|Cross-network/.test(c||'');
   const tr=STATE.trafego||[];
   let sessPaid=0,ordPaid=0,recPaid=0,sessTot=0,ordTot=0,recTot=0;
@@ -1888,23 +1985,263 @@ async function carregarTitulos(){
   });
 }
 
+// ═══════════════ ABA MÍDIA — campanha → conjunto → anúncio (22/09/2026) ═══════════════
+// Fonte: vw_ads_campanha_dia (desempacota o metadata da Meta) + vw_ads_conjunto_dia +
+// vw_ads_anuncio_dia (ads_entidade_dia, grão diário, escrito por fusion_sync_ads_meta.py).
+STATE.md={nivel:'campanha',busca:'',sort:{k:'gasto',dir:-1},dados:null,alerta:null};
+
+// Busca que casa NOME e CÓDIGO na mesma caixa, sem acento, palavra a palavra — regra do
+// CLAUDE.md ("lista longa tem caixa de busca"). Porte do casa()/normalizar() do fusion-estoque-app.
+const mdNorm=s=>String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+function mdCasa(termo,...campos){
+  const q=mdNorm(termo).trim(); if(!q)return true;
+  const alvo=campos.map(mdNorm).join(' ');
+  return q.split(/\s+/).every(p=>alvo.includes(p));   // ordem das palavras não importa
+}
+
+async function carregarMidia(){
+  const k='midia_'+STATE.de+'_'+STATE.ate;
+  if(STATE.md.dados&&STATE.md.dados.key===k){renderMidia();return;}
+  document.getElementById('tb-midia').innerHTML='<tr><td colspan="14" class="l muted" style="padding:14px">Carregando…</td></tr>';
+  const per='&data=gte.'+STATE.de+'&data=lte.'+STATE.ate+'&order=data.asc';
+  const [camp,conj,anun,alerta]=await Promise.all([
+    buscarTudo('vw_ads_campanha_dia','select=*&plataforma=eq.meta_ads'+per),
+    buscarTudo('vw_ads_conjunto_dia','select=*'+per),
+    buscarTudo('vw_ads_anuncio_dia','select=*'+per),
+    buscarTudo('vw_ads_criativo_alerta','select=*&order=spend.desc'),
+  ]);
+  STATE.md.dados={key:k,campanha:agregaMidia(camp,'campaign_id','campaign_name'),
+                  conjunto:agregaMidia(conj,'adset_id','adset_name'),
+                  anuncio:agregaMidia(anun,'ad_id','ad_name')};
+  STATE.md.alerta=alerta;
+  renderMidia();
+}
+// soma o período por entidade. ⚠️ ALCANCE é somado por dia — pessoa que viu em 2 dias conta 2×;
+// não há como deduplicar do nosso lado (a Meta só devolve o alcance único do período que ELA
+// agrega). Por isso a coluna é rotulada e a frequência sai coerente com esse mesmo denominador.
+function agregaMidia(rows,idk,nomek){
+  const by={};
+  (rows||[]).forEach(r=>{
+    const id=r[idk]||'—';
+    const a=by[id]||(by[id]={id,nome:r[nomek]||'(sem nome)',campanha:r.campaign_name||'',
+      gasto:0,impressoes:0,cliques:0,link_clicks:0,lpv:0,atc:0,ic:0,compras:0,receita:0,alcance:0,
+      thumb:null,dias:0});
+    a.gasto+=+r.gasto||0; a.impressoes+=+r.impressoes||0; a.cliques+=+r.cliques||0;
+    a.link_clicks+=+r.link_clicks||0; a.lpv+=+r.landing_page_views||0;
+    a.atc+=+r.add_to_cart||0; a.ic+=+r.initiate_checkout||0;
+    a.compras+=+r.compras||0; a.receita+=+r.receita||0; a.alcance+=+r.alcance||0; a.dias++;
+    if(r.thumbnail_url&&!a.thumb)a.thumb=r.thumbnail_url;
+  });
+  return Object.values(by).map(a=>Object.assign(a,{
+    cpm:a.impressoes>0?a.gasto/a.impressoes*1000:null,
+    ctr_todos:a.impressoes>0?a.cliques/a.impressoes:null,
+    ctr_link:a.impressoes>0?a.link_clicks/a.impressoes:null,
+    cr_conecta:a.link_clicks>0?a.lpv/a.link_clicks:null,
+    cpc:a.cliques>0?a.gasto/a.cliques:null,
+    cpa:a.compras>0?a.gasto/a.compras:null,
+    frequencia:a.alcance>0?a.impressoes/a.alcance:null,
+    roas_meta:a.gasto>0?a.receita/a.gasto:null,
+  }));
+}
+
+const PLACEHOLDER='data:image/svg+xml;utf8,'+encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="38" height="38"><rect width="38" height="38" fill="#232834"/>'+
+  '<text x="19" y="24" font-size="15" text-anchor="middle" fill="#6b7280">▦</text></svg>');
+
+function renderMidia(){
+  const D=STATE.md.dados; if(!D)return;
+  const K=kpiSet(STATE.mer,STATE.canal,STATE.trafego);
+  const cm2pct=(K.rec>0)?K.cm2/K.rec:null;            // margem do site no período → lucro estimado
+  const roasEq=(cm2pct&&cm2pct>0)?1/cm2pct:null;      // ROAS de equilíbrio (ponto onde empata)
+  let arr=D[STATE.md.nivel]||[];
+  const tot=arr.reduce((a,x)=>{['gasto','impressoes','cliques','link_clicks','lpv','atc','ic','compras','receita','alcance'].forEach(k=>a[k]=(a[k]||0)+x[k]);return a;},{});
+
+  // KPIs do período (sempre do TOTAL, não do que a busca filtrou — senão o topo mente)
+  document.getElementById('kpis-midia').innerHTML=[
+    {l:'Investimento',v:rs(tot.gasto),s:'Meta · '+(arr.length)+' '+STATE.md.nivel+'s',dn:true},
+    {l:'Impressões',v:(tot.impressoes||0).toLocaleString('pt-BR'),s:'vezes que o anúncio apareceu'},
+    {l:'CPM',v:tot.impressoes>0?'R$'+(tot.gasto/tot.impressoes*1000).toFixed(2).replace('.',','):'—',s:'custo por mil impressões',dn:true},
+    {l:'CTR',v:tot.impressoes>0?(tot.link_clicks/tot.impressoes*100).toFixed(2).replace('.',',')+'%':'—',s:'cliques no link ÷ impressões'},
+    {l:'CPC',v:tot.cliques>0?'R$'+(tot.gasto/tot.cliques).toFixed(2).replace('.',','):'—',s:'custo por clique',dn:true},
+    {l:'CR (conecta)',v:tot.link_clicks>0?(tot.lpv/tot.link_clicks*100).toFixed(0)+'%':'—',s:'chegou na página ÷ clicou',t:'CONNECT RATE — visualizações da página ÷ cliques no link. Abaixo de ~80% o problema é a página (velocidade/carregamento), não o criativo. Pode passar de 100% porque as janelas de atribuição diferem. NÃO é taxa de conversão.'},
+    {l:'CPA',v:tot.compras>0?rs(tot.gasto/tot.compras):'—',s:'gasto ÷ compras atribuídas',dn:true},
+    {l:'ROAS Meta',v:tot.gasto>0?n2(tot.receita/tot.gasto):'—',s:'atribuído pela plataforma',accent:true},
+    {l:'ROAS de equilíbrio',v:roasEq?n2(roasEq):'—',s:cm2pct?'margem CM2 '+(cm2pct*100).toFixed(0)+'% · abaixo disso dá prejuízo':'sem margem no período',t:'1 ÷ margem CM2 do site no período. É o ROAS em que o anúncio EMPATA. Nenhuma plataforma calcula isso — ela não conhece o seu custo.'},
+  ].map(kpiHTML).join('');
+
+  // filtro + ordenação
+  const q=STATE.md.busca;
+  if(q)arr=arr.filter(x=>mdCasa(q,x.nome,x.id,x.campanha));
+  const sk=STATE.md.sort.k,sd=STATE.md.sort.dir;
+  arr=arr.slice().sort((a,b)=>{
+    const va=sk==='nome'?mdNorm(a.nome):(a[sk]==null?-Infinity:a[sk]);
+    const vb=sk==='nome'?mdNorm(b.nome):(b[sk]==null?-Infinity:b[sk]);
+    return va<vb?sd:(va>vb?-sd:0);
+  });
+  const pc2=v=>v==null?'—':(v*100).toFixed(2).replace('.',',')+'%';
+  const pc0=v=>v==null?'—':(v*100).toFixed(0)+'%';
+  const rs2=v=>v==null?'—':'R$'+(+v).toFixed(2).replace('.',',');
+  const lucroDe=x=>cm2pct==null?null:x.receita*cm2pct-x.gasto;
+  document.getElementById('tb-midia').innerHTML=arr.map(x=>{
+    const L=lucroDe(x);
+    const thumb=STATE.md.nivel==='anuncio'
+      ? `<img class="md-thumb" src="${escH(x.thumb||PLACEHOLDER)}" alt="" loading="lazy" onerror="this.onerror=null;this.src=PLACEHOLDER">` : '';
+    return `<tr><td class="l"><div class="md-nome">${thumb}<span class="t" title="${escH(x.nome)}">${escH(x.nome)}</span></div></td>`+
+      `<td>${rs2(x.cpm)}</td><td>${(x.alcance||0).toLocaleString('pt-BR')}</td><td>${x.frequencia==null?'—':n2(x.frequencia)}</td>`+
+      `<td>${(x.link_clicks||0).toLocaleString('pt-BR')}</td><td>${pc2(x.ctr_todos)}</td><td>${pc2(x.ctr_link)}</td>`+
+      `<td>${pc0(x.cr_conecta)}</td><td>${rs2(x.cpc)}</td><td><b>${rs(x.gasto)}</b></td>`+
+      `<td>${x.roas_meta==null?'—':n2(x.roas_meta)}</td><td>${(x.compras||0).toLocaleString('pt-BR')}</td>`+
+      `<td>${rs(x.receita)}</td><td class="${L==null?'':(L>=0?'pos':'neg')}">${L==null?'—':rs(L)}</td></tr>`;
+  }).join('')||`<tr><td colspan="14" class="l muted" style="padding:14px">${q?('nenhum dos '+(D[STATE.md.nivel]||[]).length+' '+STATE.md.nivel+'s casa com <b>'+escH(q)+'</b>'):'Sem gasto de mídia no período.'}</td></tr>`;
+  const Lt=cm2pct==null?null:tot.receita*cm2pct-tot.gasto;
+  document.getElementById('tf-midia').innerHTML=`<tr><td class="l"><b>Total (${(D[STATE.md.nivel]||[]).length})</b></td>`+
+    `<td>${tot.impressoes>0?rs2(tot.gasto/tot.impressoes*1000):'—'}</td><td>${(tot.alcance||0).toLocaleString('pt-BR')}</td>`+
+    `<td>${tot.alcance>0?n2(tot.impressoes/tot.alcance):'—'}</td><td>${(tot.link_clicks||0).toLocaleString('pt-BR')}</td>`+
+    `<td>${pc2(tot.impressoes>0?tot.cliques/tot.impressoes:null)}</td><td>${pc2(tot.impressoes>0?tot.link_clicks/tot.impressoes:null)}</td>`+
+    `<td>${pc0(tot.link_clicks>0?tot.lpv/tot.link_clicks:null)}</td><td>${tot.cliques>0?rs2(tot.gasto/tot.cliques):'—'}</td>`+
+    `<td><b>${rs(tot.gasto)}</b></td><td>${tot.gasto>0?n2(tot.receita/tot.gasto):'—'}</td><td>${(tot.compras||0).toLocaleString('pt-BR')}</td>`+
+    `<td>${rs(tot.receita)}</td><td class="${Lt==null?'':(Lt>=0?'pos':'neg')}">${Lt==null?'—':rs(Lt)}</td></tr>`;
+  document.getElementById('md-conta').textContent=q?(arr.length+' de '+(D[STATE.md.nivel]||[]).length):'';
+  renderMidiaAlerta(roasEq);
+  renderMidiaFunil(tot);
+
+  // ⚠️ DUAS FONTES, DOIS RELÓGIOS — e sem isto seriam dois números com o mesmo nome.
+  // Esta aba lê as views VIVAS (ads_metrics/ads_entidade_dia, frescas a cada sync); a aba
+  // Dinheiro lê mvw_marketing_mer_dia, que só muda quando o cron refresca. Durante o dia o
+  // investimento daqui fica À FRENTE do de lá — medido em 22/09/2026: R$2.021,81 de diferença,
+  // que era exatamente o gasto do próprio dia. Em vez de esconder, a tela DECLARA a defasagem.
+  const atraso=tot.gasto-(K.meta||0);
+  const fr=document.getElementById('md-frescor');
+  fr.innerHTML=atraso>1
+    ? `<b>agora</b> — ${rs(atraso)} a mais que a aba Dinheiro, que lê a tabela do cron `+
+      `<span class="info" data-tip="Esta aba lê o dado vivo; a aba Dinheiro lê as MVs, que o cron refresca. A diferença é o gasto ingerido depois do último refresh — não é erro de nenhuma das duas.">i</span>`
+    : '<b>agora</b> (em linha com a aba Dinheiro)';
+}
+
+// Alerta de teste de criativo: o 4,0 pedido pelo marketing + o equilíbrio real, lado a lado.
+function renderMidiaAlerta(roasEq){
+  const box=document.getElementById('md-alertas'); const A=STATE.md.alerta||[];
+  if(!A.length){box.innerHTML='';return;}
+  const crit=A.filter(x=>x.situacao==='critico_prejuizo'), baixo=A.filter(x=>x.situacao==='abaixo_da_barra');
+  const p=A[0]||{}; const barra=+p.roas_min||4, dias=+p.teste_dias||7, gmin=+p.gasto_min||500;
+  if(!crit.length&&!baixo.length){
+    box.innerHTML=`<div class="md-alerta ok"><div class="tit">✅ Nenhum criativo reprovado</div>`+
+      `<span class="muted">Todos com mais de ${dias} dias e mais de ${rs(gmin)} gastos estão acima de ROAS ${n2(barra)}.</span></div>`;
+    return;
+  }
+  const li=x=>`<li><b>${escH((x.ad_name||'').slice(0,58))}</b> — ROAS <b>${n2(x.roas)}</b> · ${rs(x.spend)} gastos · ${x.idade_dias} dias no ar${x.purchases>0?' · '+Math.round(x.purchases)+' compras':' · nenhuma compra'}</li>`;
+  box.innerHTML=`<div class="md-alerta"><div class="tit">🔴 ${crit.length+baixo.length} criativo(s) reprovados no teste de ${dias} dias</div>`+
+    (crit.length?`<div style="margin-top:6px"><b>Abaixo do equilíbrio</b> (ROAS &lt; ${roasEq?n2(roasEq):'—'}) — está <b>dando prejuízo</b> agora:<ul>${crit.map(li).join('')}</ul></div>`:'')+
+    (baixo.length?`<div style="margin-top:8px"><b>Abaixo da barra de teste</b> (ROAS &lt; ${n2(barra)}) — ainda dá lucro, mas não merece verba nova:<ul>${baixo.map(li).join('')}</ul></div>`:'')+
+    `<div class="muted" style="margin-top:9px;font-size:11.5px">A barra de ${n2(barra)} é de <b>qualidade</b> e fica em <code>app_config.marketing_roas_teste_min</code>. O <b>equilíbrio</b> (${roasEq?n2(roasEq):'—'}) sai da margem CM2 do site — abaixo dele o anúncio queima caixa. Criativo que já rodava antes de 17/06/2026 fica fora: a base não sabe quando ele estreou.</div></div>`;
+}
+
+// Funil da mídia, no formato do "FUNIL BÁSICO" que o marketing mandou.
+function renderMidiaFunil(tot){
+  const META=c=>/Paid Social|Cross-network/.test(c||'');
+  let sess=0; (STATE.trafego||[]).forEach(r=>{if(META(r.canal))sess+=+r.sessions||0;});
+  const et=[
+    {l:'Impressões',v:tot.impressoes},
+    {l:'Cliques no link',v:tot.link_clicks},
+    {l:'Chegou na página',v:tot.lpv},
+    {l:'Sessões (GA4)',v:sess,alt:true},
+    {l:'Carrinho',v:tot.atc},
+    {l:'Checkout',v:tot.ic},
+    {l:'Compras',v:tot.compras},
+  ].filter(x=>x.v>0||x.l==='Compras');
+  const mx=Math.max(...et.map(x=>x.v||0),1);
+  const ri=v=>(Math.round(v||0)).toLocaleString('pt-BR');
+  const html=et.map((x,i)=>{
+    const ant=i>0?et[i-1].v:null;
+    const tx=(ant&&ant>0&&!x.alt)?((x.v/ant*100).toFixed(x.v/ant<0.1?2:1).replace('.',',')+'% da etapa acima'):'';
+    return `<div class="fun-row"><span class="et">${x.l}</span>`+
+      `<span class="ba" style="width:${Math.max(2,(x.v/mx)*100)}%;${x.alt?'opacity:.45':''}"></span>`+
+      `<span class="vl">${ri(x.v)}</span><span class="tx">${tx}</span></div>`;
+  }).join('');
+  const cps=sess>0?tot.gasto/sess:null, cpm=tot.impressoes>0?tot.gasto/tot.impressoes*1000:null;
+  const r2=v=>v==null?'—':'R$'+(+v).toFixed(2).replace('.',',');
+  document.getElementById('md-funil').innerHTML=html+
+    `<div class="fun-ref"><span>CPM <b>${r2(cpm)}</b></span><span>CPC <b>${r2(tot.cliques>0?tot.gasto/tot.cliques:null)}</b></span>`+
+    `<span>CPS (por sessão) <b>${r2(cps)}</b></span><span>CPA <b>${tot.compras>0?rs(tot.gasto/tot.compras):'—'}</b></span>`+
+    `<span>Investimento <b>${rs(tot.gasto)}</b></span></div>`+
+    `<div class="muted" style="margin-top:8px;font-size:11.5px">⚠️ <b>Sessões (GA4)</b> é medida no site, não pela Meta — entra como referência (barra apagada), não como etapa do funil da plataforma. E o GA4 subconta compra em 35-45%, por isso a última etapa usa a <b>compra atribuída pela Meta</b>.</div>`;
+}
+
+// ═══════════════ ROTEADOR DE 2 NÍVEIS (22/09/2026) ═══════════════
+// 5 abas, uma por PERGUNTA. Os panes não se moveram no DOM nem mudaram de id — este mapa é a
+// única coisa que sabe onde cada um mora, e cada pane continua com o seu próprio renderer.
+const ABAS={
+  dinheiro:[{p:'geral',    l:'Visão geral'}],
+  midia:   [{p:'midia',    l:'Campanhas'},
+            {p:'criativo', l:'Saúde de criativo'},
+            {p:'funil',    l:'Clique → sessão (GA4)'},
+            {p:'incr',     l:'Incrementalidade'},
+            {p:'audit',    l:'Agência'}],
+  loja:    [{p:'shopify',  l:'Loja'},{p:'sku',l:'Lucro por SKU'}],
+  organico:[{p:'organico', l:'Instagram'}],
+  analista:[{p:'analista', l:'Analista'}],
+};
+const PANE_ABA={}; Object.entries(ABAS).forEach(([a,ps])=>ps.forEach(x=>PANE_ABA[x.p]=a));
+
+// Cada pane só renderiza quando APARECE — disparar render de pane escondido gasta fetch e
+// esconde erro (era o que o renderShopify fazia com o funil).
+function aoAbrirPane(p){
+  if(p==='midia')carregarMidia();
+  if(p==='analista')mostrarAnalistaCache();
+  if(p==='incr'){initIncrDefaults();carregarExperimentos();}
+  if(p==='shopify')carregarShopify();
+  if(p==='funil')carregarFunil();
+  if(p==='organico')renderOrganico();
+}
+
+function abrir(aba,pane,push){
+  if(!ABAS[aba])aba='dinheiro';
+  const lista=ABAS[aba];
+  if(!pane||!lista.some(x=>x.p===pane))pane=(STATE.subAba&&STATE.subAba[aba])||lista[0].p;
+  STATE.aba=aba; STATE.tab=pane;
+  (STATE.subAba||(STATE.subAba={}))[aba]=pane;     // lembra em que sub-aba você estava
+  document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x.dataset.t===aba));
+  document.querySelectorAll('.pane').forEach(x=>x.classList.toggle('on',x.id==='pane-'+pane));
+  const sc=document.getElementById('subchips');
+  sc.innerHTML=lista.length>1?lista.map(x=>
+    `<button class="subchip ${x.p===pane?'on':''}" data-p="${x.p}">${x.l}</button>`).join(''):'';
+  if(push){const h='#'+aba+(lista.length>1?'/'+pane:''); if(location.hash!==h)history.replaceState(null,'',h);}
+  aoAbrirPane(pane);
+}
+
+// ⚠️ Link salvo não pode levar calado pra tela errada. Chave antiga (#criativo, #funil, #sku…)
+// é o nome de um PANE e resolve sozinha pela ABAS; chave desconhecida cai na 1ª aba DIZENDO
+// que caiu, em vez de fingir que era ali.
+function lerHash(){
+  const h=decodeURIComponent((location.hash||'').replace(/^#/,''));
+  const av=document.getElementById('rota-aviso'); av.style.display='none';
+  if(!h){abrir('dinheiro',null,false);return;}
+  // ⚠️ Hash com '=' ou '&' NÃO é rota: é retorno de auth (#access_token=…&refresh_token=…) ou
+  // hand-off de sessão. Avisar "essa tela não existe" nesse caso seria alarme falso na cara de
+  // quem acabou de logar. Cai na aba padrão, calado — que é o certo AQUI, porque não há tela
+  // pedida pra errar.
+  if(/[=&]/.test(h)){abrir('dinheiro',null,false);return;}
+  const [a,b]=h.split('/');
+  if(ABAS[a]){abrir(a,b,true);return;}
+  if(PANE_ABA[a]){abrir(PANE_ABA[a],a,true);return;}          // link antigo: #criativo → midia/criativo
+  abrir('dinheiro',null,true);
+  av.innerHTML=`<div class="tit">A tela <b>${escH(h)}</b> não existe mais com esse nome</div>`+
+    `<span class="muted">As 9 abas viraram 5 em 22/09/2026. Você está na <b>Dinheiro</b>; use as abas acima para achar o que procurava.</span>`;
+  av.style.display='block';
+}
+
 (async function init(){
   auth=await fusionAuth.requireAuth('marketing');
   if(!auth)return;
   SB=fusionAuth.SUPABASE_URL;ANON=fusionAuth.SUPABASE_ANON_KEY;
   document.getElementById('who').textContent=auth.role.nome||auth.role.email||'';
   document.getElementById('btnOut').onclick=()=>fusionAuth.signOut();
-  // tabs
-  document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
-    STATE.tab=t.dataset.t;
-    document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===t));
-    document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('on',p.id==='pane-'+t.dataset.t));
-    if(t.dataset.t==='analista')mostrarAnalistaCache();
-    if(t.dataset.t==='incr'){initIncrDefaults();carregarExperimentos();}
-    if(t.dataset.t==='shopify')carregarShopify();
-    if(t.dataset.t==='funil')carregarFunil();
-    if(t.dataset.t==='organico')renderOrganico();
+  // tabs (2 níveis) — os panes seguem com os ids de sempre; o que agrupa é este mapa.
+  document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>abrir(t.dataset.t,null,true));
+  document.getElementById('subchips').addEventListener('click',e=>{
+    const b=e.target.closest('.subchip'); if(b)abrir(STATE.aba,b.dataset.p,true);
   });
+  window.addEventListener('hashchange',()=>lerHash());
   document.getElementById('btn-analista').onclick=rodarAnalista;
   document.getElementById('btn-medir').onclick=medirIncr;
   document.getElementById('ana-foco').addEventListener('keydown',e=>{if(e.key==='Enter')rodarAnalista();});
@@ -1941,9 +2278,25 @@ async function carregarTitulos(){
     STATE.shop=null;  // invalida cache da aba Loja → refetch
     await carregar(true);b.textContent='↻ Atualizar';b.disabled=false;
   };
+  // aba Mídia: nível (campanha/conjunto/anúncio), busca e ordenação
+  document.getElementById('md-nivel').addEventListener('click',e=>{
+    const b=e.target.closest('.subchip'); if(!b)return;
+    STATE.md.nivel=b.dataset.n;
+    document.querySelectorAll('#md-nivel .subchip').forEach(x=>x.classList.toggle('on',x===b));
+    renderMidia();
+  });
+  document.getElementById('md-busca').addEventListener('input',e=>{STATE.md.busca=e.target.value;renderMidia();});
+  document.querySelectorAll('#tbl-midia th').forEach(th=>th.onclick=()=>{
+    const k=th.dataset.k; if(!k)return;
+    STATE.md.sort.dir=(STATE.md.sort.k===k)?-STATE.md.sort.dir:-1; STATE.md.sort.k=k;
+    document.querySelectorAll('#tbl-midia th').forEach(x=>x.classList.toggle('sorted',x===th));
+    renderMidia();
+  });
+
   STATE.de=inicioMesSP();STATE.ate=hojeSP();syncCustomInputs();
   await carregarTitulos();
   await carregar(false);
+  lerHash();   // respeita link salvo (inclusive os antigos, de quando eram 9 abas)
 })();
 </script>
 </body>

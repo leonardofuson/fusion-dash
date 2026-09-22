@@ -259,6 +259,38 @@ Fonte única: tabela `contas_pagar` (só Fio e Trama).
   - **Forecast = sazonal**: ritmo diário do YTD 2026 (`ytd/dias_decorridos`) × índice de sazonalidade de 2025 por mês (`daily25[m]/baseline`). Mês corrente = realizado + projeção dos dias restantes; futuros = projeção cheia. ⚠️ Como a MV só guarda 365d, a sazonalidade usa **2025-06→12** (não o ano anterior inteiro) — meses sem base usam índice 1.
   - **Meta** vem de `projecao_faturamento` (Cockpit; `tipo=projetado`, `versao=1`, planilha `PROJEÇÃO FUSION 2026.xlsx`), somada por mês entre os macro_canais. Carregada 1× em `META_ROWS`. Validação 01/06: forecast R$51,4M vs meta R$40,9M (126%); realizado YTD = 118% da meta YTD.
 
+## Dash Marketing (`marketing.html`) — 5 abas, roteador de 2 níveis (22/09/2026)
+
+Eram **9 abas** organizadas por *fonte de dado*; viraram **5**, uma por *pergunta*:
+**Dinheiro** (diretoria: cascata CM, curva ótima, Investimento×Receita×MER) · **📣 Mídia**
+(analista: Campanhas · Saúde de criativo · Clique→sessão · Incrementalidade · Agência) ·
+**🛍️ Loja & Produto** (Loja · Lucro por SKU) · **📲 Orgânico** · **🤖 Analista**.
+
+**Como foi feito, e por que é barato:** os panes **não se moveram no DOM e não mudaram de id**;
+nenhum renderer foi movido. O que agrupa é o mapa `ABAS` + `PANE_ABA` no `<script>`, e
+`abrir(aba, pane)` liga aba, sub-chips e pane. Mexer na organização = mexer no mapa.
+
+- ⚠️ **Hash é `#aba/pane`** (`#midia/criativo`). **Link antigo continua funcionando** porque a
+  chave é o nome do *pane*: `#criativo` resolve sozinho pra `midia/criativo` via `PANE_ABA`.
+  Hash **desconhecido** cai na 1ª aba **dizendo que caiu** — a armadilha do catch-all do
+  `fusion-produtos` ("link antigo leva pra tela errada, calado") não se repete aqui.
+- ⚠️ **Hash com `=` ou `&` NÃO é rota** — é retorno de auth (`#access_token=…&refresh_token=…`).
+  Cai na aba padrão **calado**: avisar "essa tela não existe" na cara de quem acabou de logar
+  seria alarme falso.
+- ⚠️ **Renderer só roda quando o pane APARECE** (`aoAbrirPane`). Disparar render de pane escondido
+  gasta fetch e mascara erro — era o que o `renderShopify` fazia ao chamar o funil.
+- 🔴 **`renderFunil` estava declarado DUAS vezes** no mesmo `<script>` (funil do site × funil de
+  mídia). Por hoisting a segunda vencia, e desde 13/07 a aba Loja executava o renderer errado.
+  O de mídia virou `renderFunilMidia`. **É o custo concreto de organizar aba por fonte de dado.**
+
+**Smoke que DIRIGE a tela:** `.venv/bin/python fusion-dash/scripts/smoke_marketing.py`
+(28 checks — as 10 telas com clique real, os links antigos, a busca e a reconciliação dos números
+entre si; `--autoteste` prova que sabe reprovar). Roda contra o **arquivo local** por um servidor
+efêmero, então pega regressão **antes** do deploy, e injeta a sessão via
+`Page.addScriptToEvaluateOnNewDocument` — depois do load não adianta, o `requireAuth` já rodou.
+⚠️ **Seletor errado no teste dá VERDE FALSO**: `#sh-kpis` e `#kpis-organico` não existem
+(são `sh-kpis-loja` e `org-kpis`), e um fallback largo aprovava a tela mesmo sem o JS rodar.
+
 ## Dash Simulador (`simulador.html`)
 
 - Calculadora de margem por SKU+canal+preço, curva ótima de ads, antes/depois (snapshot+manual), cenários salvos por user (RLS).
