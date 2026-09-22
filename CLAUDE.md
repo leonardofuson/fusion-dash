@@ -259,6 +259,46 @@ Fonte única: tabela `contas_pagar` (só Fio e Trama).
   - **Forecast = sazonal**: ritmo diário do YTD 2026 (`ytd/dias_decorridos`) × índice de sazonalidade de 2025 por mês (`daily25[m]/baseline`). Mês corrente = realizado + projeção dos dias restantes; futuros = projeção cheia. ⚠️ Como a MV só guarda 365d, a sazonalidade usa **2025-06→12** (não o ano anterior inteiro) — meses sem base usam índice 1.
   - **Meta** vem de `projecao_faturamento` (Cockpit; `tipo=projetado`, `versao=1`, planilha `PROJEÇÃO FUSION 2026.xlsx`), somada por mês entre os macro_canais. Carregada 1× em `META_ROWS`. Validação 01/06: forecast R$51,4M vs meta R$40,9M (126%); realizado YTD = 118% da meta YTD.
 
+## Linguagem visual dos dashes — e a deriva entre eles (medida em 22/09/2026)
+
+Os dashes **não** compartilham arquivo de estilo: cada HTML tem o seu `<style>`, e cada um foi
+copiado do anterior. É a mesma doença dos 6 apps React registrada no `CLAUDE.md` da raiz
+(*"copiar a fundação não cria vínculo — cria sósias que envelhecem cada um pro seu lado"*),
+aqui com um sintoma próprio. Levantamento completo do que cada um faz:
+
+| | lojas · ecommerce · estoque | diretoria | simulador | **marketing (até 22/09)** |
+|---|---|---|---|---|
+| fundo / painel / linha | `#09090b` / `#18181b` / `#2a2a2e` | `#0a0a0b` / `#18181b` / `#27272a` | `#09090b` / `#111113` | **`#0f1115` / `#171a21` / `#2a2f3a`** |
+| fonte | Inter | Inter | Inter | **system-ui (não carregava Inter)** |
+| accent | `#6366f1` | `#3b82f6` | `#6366f1` | `#7c5cff` |
+| verde/vermelho/âmbar | `#22c55e`/`#f43f5e`/`#eab308` | `#10b981`/`#ef4444`/`#f59e0b` | `#4ade80`/`#f87171`/`#facc15` | `#2fbf71`/`#ef5350`/`#f5a623` |
+
+⚠️ **`--txt3` diverge entre dois dashes que são byte-a-byte iguais no resto**: `#8b8b95` em
+lojas/estoque, `#52525b` em ecommerce/diretoria. Ninguém decidiu isso.
+
+**O marketing era o único fora da rampa zinc** — e em 22/09 entrou nela: os **nomes** dos tokens
+ficaram (`--panel`, `--line`, `--mut`…) e só os **valores** mudaram, então nenhuma regra existente
+precisou ser reescrita. O **accent violeta fica**: `#7c5cff` é a cor da categoria *Inteligência*
+no `CAT_META` do `index.html`, e cada dash herda a cor da sua seção.
+
+> 🔑 **Vocabulário compartilhado — herde daqui em vez de inventar.** O que já existe em algum
+> dash e vale copiar (com o mapa de tradução de token abaixo):
+> **barra dentro da célula** (`.atg-bar/.atg-fill/.atg-txt`, `lojas.html`) · **mini-barra inline**
+> (`.grade-bar`, `estoque.html`) · **célula com fundo semântico** (`td.h0/h1/h3` + `hcls()`,
+> `estoque.html`) · **heatmap contínuo por alpha** (`pintarDowHeat`, `ecommerce.html`) ·
+> **coluna fixa com sombra de profundidade** (`.cecm-t`, `ecommerce.html`) · **tfoot de total**
+> (`estoque.html`) · **KPI com fio de accent + gradiente + elevação no hover**
+> (`ecommerce.html`, `simulador.html`) · **calendário-heatmap em modal** (`lojas.html`).
+>
+> **Mapa de tradução** (pra colar CSS de um dash no outro): `--bg2`→`--panel` · `--bg3`→`--panel2`
+> · `--bdr`→`--line` · `--txt1`→`--txt` · `--txt2`/`--txt3`→`--mut` · `--blue`/`--indigo`→`--accent`
+> · `--cyan`→`--accent2`.
+
+⚠️ **Contraste se MEDE.** Na migração do marketing, 11 dos 12 pares passaram de 4,5:1 — o que
+reprovou foi o **accent como texto** (`#7c5cff` sobre o painel dá **4,08:1**). Daí o token
+`--accent-txt:#9a80ff` (5,83:1): a cor da marca continua em fundo e borda, onde o piso é 3:1;
+texto usa o degrau mais claro. Escolher no olho teria deixado passar.
+
 ## Dash Marketing (`marketing.html`) — 5 abas, roteador de 2 níveis (22/09/2026)
 
 Eram **9 abas** organizadas por *fonte de dado*; viraram **5**, uma por *pergunta*:
@@ -282,6 +322,16 @@ nenhum renderer foi movido. O que agrupa é o mapa `ABAS` + `PANE_ABA` no `<scri
 - 🔴 **`renderFunil` estava declarado DUAS vezes** no mesmo `<script>` (funil do site × funil de
   mídia). Por hoisting a segunda vencia, e desde 13/07 a aba Loja executava o renderer errado.
   O de mídia virou `renderFunilMidia`. **É o custo concreto de organizar aba por fonte de dado.**
+
+> 🔴 **Deploy "live" pode estar servindo o ARQUIVO ANTIGO (22/09/2026).** O static site do
+> Render publica de forma **aditiva** e serve por CDN: o deploy apareceu `live` com o commit
+> certo e `curl` devolvia o `marketing.html` **anterior**, com a paleta velha. Pior: os 28 checks
+> do smoke passaram **contra o arquivo velho**, porque testam o que a tela FAZ — a aba Mídia já
+> existia no deploy anterior. **Comportamento verde não prova bytes publicados.**
+> O `smoke_marketing.py --prod` agora compara o **sha256 do arquivo local com o do publicado** e
+> reprova se diferirem. Conserto: redeploy limpando o cache —
+> `POST /v1/services/srv-d7bskqk9c44c73bjknn0/deploys` com `{"clearCache":"clear"}`.
+> Mesma família da #034 (HTTP 200 ≠ deploy feito) e da nota de remoção de arquivo acima.
 
 **Smoke que DIRIGE a tela:** `.venv/bin/python fusion-dash/scripts/smoke_marketing.py`
 (28 checks — as 10 telas com clique real, os links antigos, a busca e a reconciliação dos números

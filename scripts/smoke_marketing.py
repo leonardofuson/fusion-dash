@@ -111,6 +111,27 @@ def main():
     if prod:
         base = "https://fusion-dash.onrender.com/marketing.html"
         print("alvo: PRODUÇÃO")
+        # 🔴 O deploy do Render pode ficar "live" SERVINDO O ARQUIVO ANTIGO (publish aditivo +
+        # cache de CDN). Aconteceu em 22/09/2026: commit live, bytes velhos — e os 28 checks de
+        # comportamento passaram mesmo assim, porque testam o que a tela FAZ, não o que foi
+        # publicado. Sem esta comparação, `--prod` verde não prova deploy nenhum.
+        # Conserto quando acusar: POST /v1/services/{id}/deploys com {"clearCache":"clear"}.
+        import hashlib
+        local = (DASH / "marketing.html").read_bytes()
+        try:
+            servido = urllib.request.urlopen(base, timeout=30).read()
+        except Exception as ex:
+            sys.exit(f"🔴 não consegui baixar o HTML publicado: {ex}")
+        hl, hs = hashlib.sha256(local).hexdigest()[:12], hashlib.sha256(servido).hexdigest()[:12]
+        if hl == hs:
+            print(f"  ✅ bytes publicados == arquivo local (sha {hl})")
+        else:
+            print(f"  🔴 O QUE ESTÁ NO AR NÃO É ESTE ARQUIVO — local {hl} ({len(local)}B) × "
+                  f"publicado {hs} ({len(servido)}B)")
+            print("     O deploy pode estar 'live' e servindo o anterior (publish aditivo do "
+                  "Render + CDN). Redeploy com clearCache:\n"
+                  "     POST /v1/services/srv-d7bskqk9c44c73bjknn0/deploys  {\"clearCache\":\"clear\"}")
+            return 1
     else:
         srv = subprocess.Popen([sys.executable, "-m", "http.server", str(PORTA)], cwd=DASH,
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
