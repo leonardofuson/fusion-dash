@@ -43,6 +43,10 @@
     // Hub do Mercado Livre (app fusion-ml) — 14/08/2026. Abastecimento do Full (o que mandar
     // do CD, em qual grade), reclamações por prazo e perguntas por tema. Gate: chave 'ml'.
     ml:         { titulo: 'Mercado Livre',  descricao: 'O que mandar pro Full, reclamações por prazo e o que perguntam nos anúncios', url: '/ml.html', icone: '🟡', cat: 'operacoes' },
+    // PATAFU — Programa Avançado de Tarefas Fusion (app fusion-patafu) — 02/10/2026. Tarefas,
+    // projetos e a visão da empresa. Gate: chave 'patafu' — quem dá/tira é a tela Pessoas e
+    // equipes do próprio app (RPC pm_membro_salvar), não a mão em user_roles.
+    patafu:     { titulo: 'PATAFU',         descricao: 'Minhas tarefas, quadro dos projetos e a empresa numa tela', url: '/patafu.html', icone: '🐾', cat: 'operacoes' },
     // Inteligência
     simulador:  { titulo: 'Simulador',     descricao: 'Margem por produto + curva ótima de ads', url: '/simulador.html', icone: '🎯', cat: 'inteligencia' },
     crm:        { titulo: 'CRM',           descricao: 'Base 360°, segmentação RFM e histórico de atendimento', url: '/crm.html', icone: '👥', cat: 'inteligencia' },
