@@ -27,6 +27,11 @@
     ecommerce:  { titulo: 'E-commerce',    descricao: 'Canais digitais e marketplaces', url: '/ecommerce.html', icone: '🛒', cat: 'vendas' },
     'vendas-historicas': { titulo: 'Vendas Históricas', descricao: 'Histórico mensal do ecommerce: receita, margem e mix por mês', url: '/vendas-historicas.html', icone: '📈', cat: 'vendas' },
     lojas:      { titulo: 'Lojas Físicas', descricao: 'Vendas das lojas físicas (Linx Microvix)', url: '/lojas.html', icone: '🏬', cat: 'vendas' },
+    // Comando Marketplaces (app fusion-comando) — 02/10/2026. A visão do DIRETOR sobre
+    // marketplaces + site: placar contra a meta, exceções com dono, margem até a CM3 e (fases
+    // seguintes) diário de alterações com antes × depois. Gate: chave 'comando' — quem dá/tira
+    // é a tela Acessos do próprio app (RPC mkp_acesso_definir), por CANAL; o filtro é no banco.
+    comando:    { titulo: 'Comando Marketplaces', descricao: 'Placar contra a meta, exceções com dono e margem real até a CM3', url: '/comando.html', icone: '🎛️', cat: 'vendas' },
     diretoria:  { titulo: 'Diretoria',     descricao: 'Visão executiva consolidada por canal', url: '/diretoria.html', icone: '📊', cat: 'vendas' },
     // Operações
     // estoque (read-only "Posição multi-canal") APOSENTADO 23/07/2026 — SUBSTITUÍDO pelo 'estoque-sistema'
