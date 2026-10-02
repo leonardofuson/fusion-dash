@@ -350,6 +350,13 @@ efêmero, então pega regressão **antes** do deploy, e injeta a sessão via
 
 ## Dash Projetos (`projetos.html`) — gestão de projetos estratégicos (iniciado 11/05/2026)
 
+> ⛔ **DESLIGADO E APAGADO em 02/10/2026** (decisão do Leo, `TODO_GESTAO_TAREFAS_PROJETOS.md` §0;
+> `DECISOES.md` #267). 2 projetos, 6 tarefas, parado desde 28/05. As 12 tabelas, as 2 views, as 3
+> funções de log e o bucket `projetos-anexos` (0 objetos) saíram depois do backup em
+> `backups/2026-10-02_projetos_estrategicos.json`. `projetos.html` é só um **redirect** para o
+> `patafu.html` — tarefa e projeto agora vivem no app **`fusion-patafu`** (PATAFU). O texto abaixo é
+> **arqueológico**: não descreve nada que exista.
+
 Sistema de PM completo pra Aquisição Facção Paraná + Fábrica SAS (ex-"Fábrica Paraguay", retipada 26/05/2026 — Santo Antônio do Sudoeste/PR; v1 escopo "só interno Fusion"). Schema em `sql/2026-05-11_projetos_v1.sql` (12 tabelas + 4 triggers + 2 views) + seed em `sql/2026-05-11_projetos_seed.sql`.
 
 **Tabelas**: `pessoas`, `projetos`, `projeto_pessoas`, `projeto_marcos`, `projeto_tarefas`, `projeto_decisoes`, `projeto_riscos`, `projeto_paginas`, `projeto_comentarios`, `projeto_anexos`, `projeto_atividades` (log append-only por triggers), `projeto_notificacoes`. Views: `vw_projeto_resumo`, `vw_minhas_tarefas`.
@@ -460,15 +467,9 @@ echo "$HTML" | grep -q 'canal_custos_faixa' && echo "✅ simulador lê canal_cus
 echo "$HTML" | grep -q 'ads_curva_otima' && echo "✅ simulador lê ads_curva_otima" || echo "🔴 ads_curva_otima ausente"
 echo "$HTML" | grep -qE "'</script>'" && echo "🔴 simulador </script> literal" || echo "✅ simulador sem </script> literal"
 
-# 6. projetos.html — invariantes Sprint 1
-HTML=$(curl -s "$BASE/projetos.html")
-echo "$HTML" | grep -q 'id="tab-visao"' && echo "✅ projetos aba visao" || echo "🔴 aba visao ausente"
-echo "$HTML" | grep -q 'id="tab-tarefas"' && echo "✅ projetos aba tarefas" || echo "🔴 aba tarefas ausente"
-echo "$HTML" | grep -q 'id="tab-pessoas"' && echo "✅ projetos aba pessoas" || echo "🔴 aba pessoas ausente"
-echo "$HTML" | grep -q 'id="tab-marcos"' && echo "✅ projetos aba marcos" || echo "🔴 aba marcos ausente"
-echo "$HTML" | grep -q "fusionAuth.requireAuth('projetos')" && echo "✅ projetos auth gate" || echo "🔴 auth gate ausente"
-echo "$HTML" | grep -q 'vw_minhas_tarefas' && echo "✅ projetos lê vw_minhas_tarefas" || echo "🔴 view minhas tarefas ausente"
-echo "$HTML" | grep -qE "'</script>'" && echo "🔴 projetos </script> literal" || echo "✅ projetos sem </script> literal"
+# 6. projetos.html — desde 02/10/2026 é só redirect pro PATAFU (Projetos Estratégicos apagado, #267)
+curl -s "$BASE/projetos.html" | grep -q "patafu.html" && echo "✅ projetos.html redireciona pro PATAFU" || echo "🔴 projetos.html não redireciona"
+curl -s "$BASE/patafu.html" | grep -q "requireAuth('patafu')" && echo "✅ patafu.html com gate" || echo "🔴 patafu.html sem gate"
 ```
 
 **Invariantes cross-arquivo críticos**:
