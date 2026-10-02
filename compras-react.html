@@ -38,7 +38,11 @@
       if (!auth) return; // requireAuth já redirecionou (sem sessão ou sem permissão)
       const s = auth.session;
       const APP_URL = 'https://fusion-compras.onrender.com';
-      const src = APP_URL + '/#sso=' + encodeURIComponent(s.access_token) + '|' + encodeURIComponent(s.refresh_token);
+      // ?ir=/caminho — deep link vindo de outro sistema ou do e-mail (ex.: PATAFU "OP 1780", resumo
+      // diário). Só caminho RELATIVO do próprio app: nada de URL de fora (open redirect).
+      const ir = new URLSearchParams(location.search).get('ir');
+      const caminho = ir && /^\/(?!\/)/.test(ir) ? ir : '/';
+      const src = APP_URL + caminho + '#sso=' + encodeURIComponent(s.access_token) + '|' + encodeURIComponent(s.refresh_token);
       const frame = document.getElementById('frame');
       frame.onload = function () { const l = document.getElementById('load'); if (l) l.remove(); };
       frame.src = src;
