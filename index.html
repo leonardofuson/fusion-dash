@@ -218,7 +218,8 @@ async function init() {
   CAT_META.forEach(cat => {
     const keys = Object.keys(fusionAuth.DASHES).filter(k => {
       const m = fusionAuth.DASHES[k];
-      if (!m || m.cat !== cat.key || !allowed.has(k)) return false;
+      // `chave`: tile que usa a permissão de OUTRO (ex.: Portal do Costureiro usa 'compras', #302)
+      if (!m || m.cat !== cat.key || !allowed.has(m.chave || k)) return false;
       if (m.restritoPara && !m.restritoPara.includes(email)) return false;
       return true;
     });
