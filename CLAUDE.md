@@ -354,6 +354,11 @@ efêmero, então pega regressão **antes** do deploy, e injeta a sessão via
 > `DECISOES.md` #267). 2 projetos, 6 tarefas, parado desde 28/05. As 12 tabelas, as 2 views, as 3
 > funções de log e o bucket `projetos-anexos` (0 objetos) saíram depois do backup em
 > `backups/2026-10-02_projetos_estrategicos.json`. `projetos.html` é só um **redirect** para o
+> `costureiros.html` (07/10/2026, #302) — tile **Portal do Costureiro**: embute o `fusion-portal-costureiro`
+> em MODO INTERNO (#sso=). **Sem chave própria**: a entrada no `DASHES` tem `chave: 'compras'` e o
+> `index.html` filtra por `m.chave || k` — quem tem Compras vê o tile. Tile que usa a permissão de
+> outro usa este campo; não criar chave nova em `user_roles.dashes` para isso.
+
 > `patafu.html` — tarefa e projeto agora vivem no app **`fusion-patafu`** (PATAFU). O texto abaixo é
 > **arqueológico**: não descreve nada que exista.
 
@@ -470,6 +475,7 @@ echo "$HTML" | grep -qE "'</script>'" && echo "🔴 simulador </script> literal"
 # 6. projetos.html — desde 02/10/2026 é só redirect pro PATAFU (Projetos Estratégicos apagado, #267)
 curl -s "$BASE/projetos.html" | grep -q "patafu.html" && echo "✅ projetos.html redireciona pro PATAFU" || echo "🔴 projetos.html não redireciona"
 curl -s "$BASE/patafu.html" | grep -q "requireAuth('patafu')" && echo "✅ patafu.html com gate" || echo "🔴 patafu.html sem gate"
+curl -s "$BASE/costureiros.html" | grep -q "requireAuth('compras')" && echo "✅ costureiros.html com gate compras" || echo "🔴 costureiros.html sem gate"
 ```
 
 **Invariantes cross-arquivo críticos**:
