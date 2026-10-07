@@ -34,7 +34,7 @@
     // aqui pela chave 'compras' (a mesma do tile Compras) — e de novo no banco, nas portal_interno_*.
     // O portal externo (o costureiro no celular) segue fora de iframe, no endereço próprio.
     (async function () {
-      const auth = await fusionAuth.requireAuth('compras');
+      const auth = await fusionAuth.requireAuth(['compras', 'costureiros']);
       if (!auth) return;
       const s = auth.session;
       const APP_URL = 'https://fusion-portal-costureiro.onrender.com';

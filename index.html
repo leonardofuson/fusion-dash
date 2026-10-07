@@ -219,7 +219,9 @@ async function init() {
     const keys = Object.keys(fusionAuth.DASHES).filter(k => {
       const m = fusionAuth.DASHES[k];
       // `chave`: tile que usa a permissão de OUTRO (ex.: Portal do Costureiro usa 'compras', #302)
-      if (!m || m.cat !== cat.key || !allowed.has(m.chave || k)) return false;
+      // `chave` pode ser lista (qualquer uma abre): o Portal do Costureiro aceita compras OU costureiros (#304)
+      const chaves = Array.isArray(m && m.chave) ? m.chave : [(m && m.chave) || k];
+      if (!m || m.cat !== cat.key || !chaves.some(c => allowed.has(c))) return false;
       if (m.restritoPara && !m.restritoPara.includes(email)) return false;
       return true;
     });

@@ -53,10 +53,10 @@
     // equipes do próprio app (RPC pm_membro_salvar), não a mão em user_roles.
     // Portal do Costureiro, VISÃO INTERNA (app fusion-portal-costureiro em modo interno) — 07/10/2026,
     // #302. O Compras vê o portal de cada costureiro exatamente como ele vê (só leitura) e cuida dos
-    // acessos. ⚠️ `chave: 'compras'`: NÃO há chave própria — o pedido do Leo foi "todos que têm
-    // acesso ao Compras devem ter acesso ao costureiro". O index.html filtra por `m.chave || k`, e o
+    // acessos. ⚠️ `chave`: quem tem 'compras' entra (#302, "todos que têm acesso ao Compras devem
+    // ter acesso ao costureiro") E quem tem 'costureiros' (#304: o painel sem o Compras inteiro). O index.html filtra por `m.chave || k`, e o
     // banco confere a mesma chave (portal_interno_* → fn_portal_interno_exigir).
-    costureiros: { titulo: 'Portal do Costureiro', descricao: 'O que cada costureiro vê no portal (só leitura) e quem tem acesso', url: '/costureiros.html', icone: '🧵', cat: 'operacoes', chave: 'compras' },
+    costureiros: { titulo: 'Portal do Costureiro', descricao: 'O que cada costureiro vê no portal (só leitura) e quem tem acesso', url: '/costureiros.html', icone: '🧵', cat: 'operacoes', chave: ['compras', 'costureiros'] },
     patafu:     { titulo: 'PATAFU',         descricao: 'Minhas tarefas, quadro dos projetos e a empresa numa tela', url: '/patafu.html', icone: '🐾', cat: 'operacoes' },
     // Inteligência
     simulador:  { titulo: 'Simulador',     descricao: 'Margem por produto + curva ótima de ads', url: '/simulador.html', icone: '🎯', cat: 'inteligencia' },
