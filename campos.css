@@ -1,0 +1,20 @@
+/* ── CAMPOS DE FORMULÁRIO (23/10/2026, Leo; ai-framework/regras-interface.md §Campos) ─────────────
+   Um arquivo só, ligado por <link> em todo dash que tem campo: os dashes não compartilham <style>
+   (cada um é sósia do anterior), e a borda de campo era a `--bdr`/`--line` da tabela (#2a2a2e, ~1,3:1
+   sobre o painel) — o campo sumia. Borda ≥ 3:1 contra o fundo ao redor (WCAG 1.4.11); foco = borda de
+   destaque + anel de 3px. O `:root` na frente dá especificidade para vencer o `input{…}` de cada página
+   sem !important. Campo sem borda de propósito (`.fpill` do estoque: a pílula é a caixa) fica de fora:
+   a pílula ganha a borda no lugar dele. Mesma régua dos apps React (fusion-produtos/src/index.css). */
+:root { --campo-borda: #63666f; --campo-borda-hover: #8b8f99; --campo-foco: #818cf8; }
+:root input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]):not([type=color]),
+:root select, :root textarea, :root .dselect, :root .form-select, :root .form-textarea { border-color: var(--campo-borda); }
+:root input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]):not([type=color]):hover,
+:root select:hover, :root textarea:hover { border-color: var(--campo-borda-hover); }
+:root input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]):not([type=color]):focus,
+:root select:focus, :root textarea:focus, :root .dselect:focus {
+  outline: none; border-color: var(--campo-foco); box-shadow: 0 0 0 3px rgb(129 140 248 / 0.28);
+}
+:root input::placeholder, :root textarea::placeholder { color: #a8aebb; }
+:root .fpill input, :root .fpill select { box-shadow: none; }
+:root .fpill { border-color: var(--campo-borda); }
+:root .fpill:focus-within { border-color: var(--campo-foco); box-shadow: 0 0 0 3px rgb(129 140 248 / 0.28); }
