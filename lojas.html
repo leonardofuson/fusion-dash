@@ -162,7 +162,8 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
 table.tb tr:last-child td{border-bottom:none;}
 
 /* Premiação por loja — leaderboard compacto, sem emojis, alinhado ao dash */
-.premiacao-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;}
+.premiacao-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;}
+@media(max-width:1400px){.premiacao-grid{grid-template-columns:repeat(3,1fr);}}
 @media(max-width:1100px){.premiacao-grid{grid-template-columns:repeat(2,1fr);}}
 @media(max-width:560px){.premiacao-grid{grid-template-columns:1fr;}}
 .premio-card{background:var(--bg3);border:1px solid var(--bdr);border-radius:12px;padding:13px 14px 14px;}
@@ -638,7 +639,8 @@ Chart.defaults.color='#a1a1aa';
 var LOJA_CORES={
   'Oriente':'#6366f1','Marcolina':'#22c55e','São Bernardo':'#eab308',
   'Vautier':'#a855f7','Polo Plaza':'#ec4899','Atacado WhatsApp':'#06b6d4',
-  'Atacado Lojas':'#f97316','Outras Receitas Lojas':'#ef4444'
+  'Atacado Lojas':'#f97316','Outras Receitas Lojas':'#ef4444',
+  'Shopping SBC':'#14b8a6'  // 6ª loja (Linx cod 9 "SBC Shopping"), inaugurada out/2026
 };
 var CAT_CORES={
   'CALÇA':'#6366f1','CAMISA':'#22c55e','CAMISETA':'#eab308','BLAZER & TERNO':'#a855f7',
@@ -673,7 +675,7 @@ var IGNORAR_LOJA=['Atacado WhatsApp', LOJA_ATACADO];
 // Lojas físicas canônicas — SEMPRE aparecem (com R$0 quando não venderam no período),
 // pra não "sumir" em dia parado / início de mês. Outras lojas que aparecerem nos dados
 // entram por cima.
-var LOJAS_CANONICAS=['Marcolina','Oriente','Polo Plaza','Vautier','São Bernardo'];
+var LOJAS_CANONICAS=['Marcolina','Oriente','Polo Plaza','Vautier','São Bernardo','Shopping SBC'];
 // Comissão: % sobre o realizado. Tier destravado por bater a meta — e a meta é medida
 // SÓ pelo varejo (atacado não conta pra atingimento), mas o atacado é remunerado no tier
 // que o varejo destravou. Atacado paga menos que varejo no tier alto (1,5% vs 2%).
@@ -1085,7 +1087,7 @@ async function carregar(){
 
     if(STATE.lojas.length===0){
       var seen={};
-      LOJAS_CANONICAS.forEach(function(n){seen[n]=true;STATE.lojasSel[n]=true;});  // 5 lojas sempre presentes
+      LOJAS_CANONICAS.forEach(function(n){seen[n]=true;STATE.lojasSel[n]=true;});  // lojas canônicas sempre presentes
       STATE.pedidosRaw.forEach(function(p){
         var n=getLoja(p.loja_nome,p.origem_conta);
         if(IGNORAR_LOJA.indexOf(n)>=0) return;
@@ -3060,7 +3062,7 @@ async function abrirMetas(){
   selAno.innerHTML=[anoAtual-1,anoAtual,anoAtual+1].map(function(a){
     return '<option value="'+a+'"'+(a===anoAtual?' selected':'')+'>'+a+'</option>';}).join('');
   // Lojas (canônicas — mesma whitelist do dash, sem Atacado WhatsApp)
-  METAS_STATE.lojas=['Marcolina','Oriente','Polo Plaza','Vautier','São Bernardo'];
+  METAS_STATE.lojas=LOJAS_CANONICAS.slice();
   // Vendedores: id, nome, loja_primaria, ativo — pra CRUD na aba "Por Vendedor"
   METAS_STATE.vendData={}; METAS_STATE.vendDirty={}; METAS_STATE.vendNovos=[];
   try{
@@ -3184,7 +3186,7 @@ function renderLinhaVendedor(vd, existing, isNovo){
   var nome=vd.vendedor;
   var idKey=isNovo?('novo_'+vd.tempId):vd.id;
   var loja=vd.loja_primaria||'';
-  var opt=['','Marcolina','Oriente','Polo Plaza','Vautier','São Bernardo'].map(function(l){
+  var opt=['','Marcolina','Oriente','Polo Plaza','Vautier','São Bernardo','Shopping SBC'].map(function(l){
     return '<option value="'+esc(l)+'"'+(l===loja?' selected':'')+'>'+(l||'—')+'</option>';
   }).join('');
   var html='<tr data-vend-id="'+idKey+'"'+(isNovo?' data-novo="1" class="linha-novo"':'')+'>';
