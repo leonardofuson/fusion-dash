@@ -61,7 +61,9 @@
     // Inteligência
     simulador:  { titulo: 'Simulador',     descricao: 'Margem por produto + curva ótima de ads', url: '/simulador.html', icone: '🎯', cat: 'inteligencia' },
     crm:        { titulo: 'CRM',           descricao: 'Base 360°, segmentação RFM e histórico de atendimento', url: '/crm.html', icone: '👥', cat: 'inteligencia' },
-    marketing:  { titulo: 'Marketing',     descricao: 'Mídia paga Meta + Google: lucro por SKU, MER, auditoria da agência', url: '/marketing.html', icone: '📣', cat: 'inteligencia', restritoPara: ['leonardo@usefusion.com.br', 'allanjonnesj@gmail.com', 'tiago@usefusion.com.br', 'thiago.caleb@usefusion.com.br', 'gabsdev08@gmail.com', 'brunodevwork@gmail.com', 'novocicloabc@gmail.com'] },
+    marketing:  { titulo: 'Marketing',     descricao: 'Mídia paga Meta + Google: lucro por SKU, MER, auditoria da agência', url: '/marketing.html', icone: '📣', cat: 'inteligencia', restritoPara: ['leonardo@usefusion.com.br', 'allanjonnesj@gmail.com', 'tiago@usefusion.com.br', 'thiago.caleb@usefusion.com.br', 'gabsdev08@gmail.com', 'brunodevwork@gmail.com', 'novocicloabc@gmail.com',
+      // equipe de marketing (Leo, 26/10/2026): videomaker, fotógrafo (Zero Fotografia) e Angelo
+      'vinicius@usefusion.com.br', 'zerofotografia7@gmail.com', 'contatoangelo.reiss@gmail.com'] },
     // Assistente
     // 'max-chat' SUSPENSO em 06/09/2026 (decisão do Leo). O chat teve 48 conversas / 168
     // mensagens na vida inteira e a última foi em 16/06/2026 — 82 dias sem ninguém abrir.
