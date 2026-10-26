@@ -58,6 +58,11 @@
     // banco confere a mesma chave (portal_interno_* → fn_portal_interno_exigir).
     costureiros: { titulo: 'Portal do Costureiro', descricao: 'O que cada costureiro vê no portal (só leitura) e quem tem acesso', url: '/costureiros.html', icone: '🧵', cat: 'operacoes', chave: ['compras', 'costureiros'] },
     patafu:     { titulo: 'PATAFU',         descricao: 'Minhas tarefas, quadro dos projetos e a empresa numa tela', url: '/patafu.html', icone: '🐾', cat: 'operacoes' },
+    // Mesa (Marketing) — a central do departamento de marketing (app da agência, ~/Projetos/agencia/mesa), 26/10/2026.
+    // Peças, alterações de imagem e vídeo, tarefas, aprovações da Diretoria, campanhas e resultados. Login: o deste
+    // portal, passado por #sso= (a Mesa confere o token no Supabase Auth e o banco age com o e-mail dele). Gate: chave
+    // 'mesa' aqui E a pessoa cadastrada na equipe da Mesa (agencia.pessoa), conferida pelo banco.
+    mesa:       { titulo: 'Mesa (Marketing)', descricao: 'Peças, alterações, tarefas, aprovações da Diretoria e resultados do marketing', url: '/mesa.html', icone: '🎬', cat: 'operacoes' },
     // Inteligência
     simulador:  { titulo: 'Simulador',     descricao: 'Margem por produto + curva ótima de ads', url: '/simulador.html', icone: '🎯', cat: 'inteligencia' },
     crm:        { titulo: 'CRM',           descricao: 'Base 360°, segmentação RFM e histórico de atendimento', url: '/crm.html', icone: '👥', cat: 'inteligencia' },
