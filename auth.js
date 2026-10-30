@@ -79,6 +79,9 @@
     // analista LLM do Marketing (`marketing.html` → /api/marketing/analista) e o
     // `max-chat-admin.html` rodam nele. Suspender o backend derruba os dois.
     // 'max-chat': { titulo: 'Max Chat',      descricao: 'Pergunte sobre vendas, estoque e mais — IA responde na hora', url: 'https://max-chat-frontend.onrender.com', icone: '🤖', cat: 'assistente' },
+    // Max, o assistente interno (app fusion-max) — 30/10/2026. Quadro só da diretoria (Leo: "aquela tela que apenas a
+    // diretoria enxerga"). Sem chave própria: `chave` usa a que os dois já têm, e o acesso de verdade é MAX_DIRETORIA, no servidor.
+    max:        { titulo: 'Max', descricao: 'Pergunte sobre compras, financeiro, vendas e lojas. Uso, gastos e sugestões', url: '/max.html', icone: '🔮', chave: 'compras', restritoPara: ['leonardo@usefusion.com.br', 'tiago@usefusion.com.br'], cat: 'assistente' },
     'max-chat-admin': { titulo: 'Max Chat — Admin', descricao: 'Qualidade do chat, falhas, sugestões', url: '/max-chat-admin.html', icone: '🛠️', restritoPara: ['leonardo@usefusion.com.br'], cat: 'assistente' },
 
     // Plataforma
