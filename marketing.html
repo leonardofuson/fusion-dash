@@ -1533,7 +1533,8 @@ function renderAudit(){
 }
 
 // ---------- analista (LLM) ----------
-const MAXCHAT='https://max-chat-2vs0.onrender.com';
+// Analista no servidor do Max desde 02/11/2026 (o Max Chat antigo saiu). Mesma URL que o max-painel.js usa.
+const MAX_API='https://fusion-max-api.onrender.com';
 function anaCacheKey(){return 'mkt_analise_v1_'+STATE.de+'_'+STATE.ate;}
 // monta o MESMO estado que as outras abas mostram (nunca diverge da tela)
 function buildAnalistaPayload(){
@@ -1636,7 +1637,7 @@ async function rodarAnalista(){
   try{
     const foco=(document.getElementById('ana-foco').value||'').trim();
     const dados=buildAnalistaPayload();
-    const resp=await fetch(MAXCHAT+'/api/marketing/analista',{method:'POST',headers:{...(await authHeaders()),'Content-Type':'application/json'},body:JSON.stringify({dados,foco})});
+    const resp=await fetch(MAX_API+'/analista/marketing',{method:'POST',headers:{...(await authHeaders()),'Content-Type':'application/json'},body:JSON.stringify({dados,foco})});
     if(!resp.ok||!resp.body){const j=await resp.json().catch(()=>({}));out.innerHTML='<div class="muted" style="padding:18px;color:var(--red)">Erro: '+((j&&j.erro)||('HTTP '+resp.status))+'</div>';return;}
     const reader=resp.body.getReader(), dec=new TextDecoder(); let buf='';
     for(;;){
