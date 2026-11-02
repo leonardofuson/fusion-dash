@@ -70,19 +70,10 @@
       // equipe de marketing (Leo, 26/10/2026): videomaker, fotógrafo (Zero Fotografia) e Angelo
       'vinicius@usefusion.com.br', 'zerofotografia7@gmail.com', 'contatoangelo.reiss@gmail.com'] },
     // Assistente
-    // 'max-chat' SUSPENSO em 06/09/2026 (decisão do Leo). O chat teve 48 conversas / 168
-    // mensagens na vida inteira e a última foi em 16/06/2026 — 82 dias sem ninguém abrir.
-    // Suspensos no Render: `max-chat-frontend` (esta url) + os crons `max-chat-snapshots` e
-    // `max-chat-apply-sugestoes` (que não tinha o que aplicar desde 03/05). Tabelas `max_chat_*`
-    // PRESERVADAS — religar é resume + descomentar esta linha.
-    // ⚠️ O web service `max-chat` (max-chat-2vs0.onrender.com) segue NO AR de propósito: o
-    // analista LLM do Marketing (`marketing.html` → /api/marketing/analista) e o
-    // `max-chat-admin.html` rodam nele. Suspender o backend derruba os dois.
-    // 'max-chat': { titulo: 'Max Chat',      descricao: 'Pergunte sobre vendas, estoque e mais — IA responde na hora', url: 'https://max-chat-frontend.onrender.com', icone: '🤖', cat: 'assistente' },
+    // Max Chat antigo: apagado em 02/11/2026 (chat, painel admin e serviço; o Max abaixo o substituiu).
     // Max, o assistente interno (app fusion-max) — 30/10/2026. Quadro só da diretoria (Leo: "aquela tela que apenas a
     // diretoria enxerga"). Sem chave própria: `chave` usa a que os dois já têm, e o acesso de verdade é MAX_DIRETORIA, no servidor.
     max:        { titulo: 'Max', descricao: 'Pergunte sobre compras, financeiro, vendas e lojas. Uso, gastos e sugestões', url: '/max.html', icone: '🔮', chave: 'compras', restritoPara: ['leonardo@usefusion.com.br', 'tiago@usefusion.com.br'], cat: 'assistente' },
-    'max-chat-admin': { titulo: 'Max Chat — Admin', descricao: 'Qualidade do chat, falhas, sugestões', url: '/max-chat-admin.html', icone: '🛠️', restritoPara: ['leonardo@usefusion.com.br'], cat: 'assistente' },
 
     // Plataforma
     monitor:    { titulo: 'Monitor',       descricao: 'Semáforo dos jobs agendados: rodou, deu certo e o dado chegou', url: '/monitor.html', icone: '🚦', restritoPara: ['leonardo@usefusion.com.br'], cat: 'plataforma' },
