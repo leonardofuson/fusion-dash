@@ -792,8 +792,20 @@ async function fetchAgregadoMV(de,ate){
   // order explícito (MV não tem coluna `id` — buscarTudo cairia no &order=id.asc)
   var f='select=*&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+EXCL_CANAL+'&order=data_pedido.asc';
   // Fase 3: a view = a MV + as colunas *_est. Mês fechado → *_est ≈ 0 e ela é idêntica à MV (A9).
-  return buscarTudo('mvw_ecom_canal_dia_est',f);
+  // Pedidos vêm da porta da contagem (mvw_eco_venda_dia, regra do Leo de 03/11/2026: cancelado e pendente fora, devolvido
+  // conta). A tela não calcula mais "pedidos − cancelados": lê pedidos_venda, a mesma régua do Max.
+  var fv='select=data_pedido,canal_nome_raw,origem_conta,pedidos_venda&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc,canal_nome_raw.asc,origem_conta.asc';
+  var res=await Promise.all([buscarTudo('mvw_ecom_canal_dia_est',f),buscarTudo('mvw_eco_venda_dia',fv)]);
+  var pv={};res[1].forEach(function(r){pv[r.data_pedido+'|'+r.canal_nome_raw+'|'+r.origem_conta]=parseInt(r.pedidos_venda||0);});
+  var semPorta=0;
+  res[0].forEach(function(r){var k=r.data_pedido+'|'+r.canal_nome_raw+'|'+r.origem_conta;if(k in pv)r.pedidos_venda=pv[k];else semPorta++;});
+  // Linha sem par na porta não vira zero calado: avisa no console e a soma usa a conta antiga só nela (pedidosVenda).
+  if(semPorta)console.warn('ecommerce: '+semPorta+' linha(s) da MV de canal sem par em mvw_eco_venda_dia');
+  return res[0];
 }
+// Pedidos que contam como venda numa linha da MV de canal. pedidos_venda vem da porta; sem ela (cache velho, linha sem par)
+// cai na conta antiga, que só difere nos pendentes.
+function pedidosVenda(r){return r.pedidos_venda!==undefined?r.pedidos_venda:parseInt(r.pedidos||0)-parseInt(r.cancelados||0);}
 // Devolução REAL do Site Próprio via Troquecommerce (RMA): inclui TROCAS (vale-crédito,
 // sem dinheiro de volta) que são invisíveis no refund Shopify. Coorte por data do pedido.
 async function fetchTroqueSite(de,ate){
@@ -981,7 +993,7 @@ function adsFiltrado(byCanal){
 
 // localStorage cache (TTL 5min) — MV rows agregados (canal_dia + sku_dia ~ algumas
 // centenas de KB; cabe folgado no limite de ~5MB). Pedidos detalhados vêm do servidor.
-function cacheKey(de,ate){return 'ecomm_v2_'+de+'_'+ate;}  // v2: exclui "Venda Direta" (21/07)
+function cacheKey(de,ate){return 'ecomm_v3_'+de+'_'+ate;}  // v3: pedidos da porta, pedidos_venda (03/11/2026); v2: exclui "Venda Direta" (21/07)
 function cacheGet(de,ate){
   try{
     var raw=localStorage.getItem(cacheKey(de,ate));
@@ -1034,7 +1046,7 @@ function calcPnLFromMV(rows,adsVal,skuRows,applyFixo){
     rebate+=parseFloat(r.rebate||0);   // cupom bancado pela plataforma (deflator) — 20/07/2026
     // CMV: REAL da MV de SKU se disponível; senão proporção real do canal, menos o CMV que voltou.
     if(cmvReal===null)cmv+=Math.max(rb*cmvPct(_nome)-parseFloat(r.cmv_devolvido||0),0);
-    ped+=parseInt(r.pedidos||0)-parseInt(r.cancelados||0);
+    ped+=pedidosVenda(r);
   });
   if(cmvReal!==null)cmv=cmvReal;
   frete+=freteReversoNoEscopo();  // reversa/troca do Site (Troque), agregado do período
@@ -1956,7 +1968,7 @@ function renderCanalTableFromMV(rows){
     var cE=parseFloat(r.comissao_est||0), aE=parseFloat(r.afiliado_est||0), dE=parseFloat(r.devolucao_est||0);
     c.est+=cE+aE+dE;
     c.r+=parseFloat(r.receita_bruta||0);
-    c.ped+=(parseInt(r.pedidos||0)-parseInt(r.cancelados||0));
+    c.ped+=pedidosVenda(r);
     c.fee+=Math.max(parseFloat(r.comissao||0)-parseFloat(r.fee_estornado||0),0)+cE;  // líquida do estorno + estimada
     c.afiliado+=parseFloat(r.afiliado||0)+aE;
     c.rebate+=parseFloat(r.rebate||0);   // cupom da plataforma (deflator) — 20/07/2026
@@ -2883,7 +2895,7 @@ function abrirProduto(sku){
 // ── Tooltips "i" dos headers da tabela Performance por canal ──────────────────
 (function(){
   var TIPS={
-    pedidos:{h:'Pedidos',b:'Nº de pedidos no período. Exclui <b>cancelados</b>; pedido <b>devolvido</b> conta como venda (e aparece em Devoluções).'},
+    pedidos:{h:'Pedidos',b:'Nº de pedidos que contam como venda no período. Exclui <b>cancelados</b> e pagamento <b>pendente</b>; pedido <b>devolvido</b> conta como venda (e aparece em Devoluções). Mesma regra do Max.'},
     receita_bruta:{h:'Receita Bruta',b:'Valor faturado <b>só dos produtos</b> — líquido de desconto, antes de devoluções. O <b>frete pago pelo cliente NÃO é receita</b>:'
       +'<div class="tip-row">• <b>ML:</b> a API já manda só o item</div>'
       +'<div class="tip-row">• <b>Shopee / TikTok / Site:</b> o frete vem embutido e é descontado</div>'
