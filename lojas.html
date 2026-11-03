@@ -640,8 +640,9 @@ Chart.defaults.color='#a1a1aa';
 var LOJA_CORES={
   'Oriente':'#6366f1','Marcolina':'#22c55e','São Bernardo':'#eab308',
   'Vautier':'#a855f7','Polo Plaza':'#ec4899','Atacado WhatsApp':'#06b6d4',
-  'Atacado Lojas':'#f97316','Outras Receitas Lojas':'#ef4444',
-  'SBC Shopping':'#14b8a6'  // 6ª loja (Linx cod 9), inaugurada em 21/10/2026
+  'Atacado Lojas':'#f97316',
+  'SBC Shopping':'#14b8a6',  // 6ª loja (Linx cod 9), inaugurada em 21/10/2026
+  'Shopping Total':'#94a3b8' // loja antiga, encerrada (vendas de 11-12/2024)
 };
 var CAT_CORES={
   'CALÇA':'#6366f1','CAMISA':'#22c55e','CAMISETA':'#eab308','BLAZER & TERNO':'#a855f7',
@@ -666,30 +667,34 @@ function avatarHtml(nome,corFallback,rank){
     '<img src="/vendedores/'+firstTwo+'.jpg" onerror="this.src=\'/vendedores/'+first+'.jpg\';this.onerror=function(){this.style.display=\'none\'}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:50%;z-index:1;">'+
     '<span>'+ini+'</span></div></div>';
 }
-// "Atacado Lojas" = atacado vendido DENTRO das lojas físicas (depósito 7 do Linx, criado
-// jul/2026). É entidade SEPARADA do varejo: sai de todo KPI/card/Pareto/meta e aparece só
+// ════════ PORTA ÚNICA DAS VENDAS DAS LOJAS (03/11/2026) ════════
+// Esta tela SÓ LÊ a porta do banco (sql/2026-11-02_lojas_porta_unica.sql e
+// .memory/decisions/2026-11-02-porta-unica-das-lojas.md):
+//   mvw_loj_venda_dia · mvw_loj_venda_categoria_dia · mvw_loj_venda_produto_dia · rpc lojas_indicadores
+// O que conta como venda, a loja de cada pedido, cancelado, troca, vale, saldão, item de teste,
+// varejo × atacado e quem fica fora do ranking são regras do BANCO (tabelas *_regra). A tela só
+// filtra, soma linhas já prontas para gráfico e formata. Ticket, PA, preço médio e variações vêm
+// prontos da lojas_indicadores. Nenhuma leitura das fontes antigas (pedidos e itens crus, a view
+// unificada de pedidos, as tabelas prontas antigas das lojas).
+//
+// "Atacado Lojas" = atacado vendido DENTRO das lojas físicas (loja_tipo='atacado' na porta).
+// Fica fora dos KPIs/cards/Pareto/meta (tudo aqui lê p_tipo/loja_tipo 'varejo') e aparece só
 // no card `.c-atacado` + coluna "Atacado" do quadro de vendedores (decisão Leo, 20/07/2026).
-// Por isso entra no IGNORAR_LOJA — que é o filtro único que já cobre os ~15 caminhos de
-// agregação do varejo. Os dados vêm de STATE.pedidosRaw (pré-filtro), via calcAtacado().
 var LOJA_ATACADO='Atacado Lojas';
-var IGNORAR_LOJA=['Atacado WhatsApp', LOJA_ATACADO];
-// Lojas físicas canônicas — SEMPRE aparecem (com R$0 quando não venderam no período),
-// pra não "sumir" em dia parado / início de mês. Outras lojas que aparecerem nos dados
-// entram por cima.
+// Lojas físicas abertas — SEMPRE aparecem (com R$0 quando não venderam no período),
+// pra não "sumir" em dia parado / início de mês. Outras lojas de varejo que aparecerem nos
+// dados (ex.: Shopping Total em 2024) entram por cima.
 var LOJAS_CANONICAS=['Marcolina','Oriente','Polo Plaza','Vautier','São Bernardo','SBC Shopping'];
 // Comissão: % sobre o realizado. Tier destravado por bater a meta — e a meta é medida
 // SÓ pelo varejo (atacado não conta pra atingimento), mas o atacado é remunerado no tier
 // que o varejo destravou. Atacado paga menos que varejo no tier alto (1,5% vs 2%).
 var COMISSAO={varejoMeta:0.02, varejoBase:0.0075, atacadoMeta:0.015, atacadoBase:0.0075};
-// Contas que NÃO são vendedor de verdade (não recebem comissão/meta; nunca semeadas no drawer).
-// Global — usado no quadro de vendedores E no guard do drawer de metas.
-var NAO_VENDEDORES=new Set(['Online SBC','Suporte Marcolina','Suporte Oriente','Suporte SBC',
-  'Suporte Valtier','Compra Funcionário','Compra Funcionario','Vendedor Não Identificado']);
+// Contas que NÃO são vendedor de verdade (suporte, canal online, sem vendedor): vêm da porta
+// (conta_ranking=false, tabela vendedor_regra). Não recebem comissão/meta do dia, ficam fora
+// do ranking e nunca são semeadas no drawer. Compra de funcionário nem é venda da loja.
+var RANK={};   // vendedor -> conta_ranking (lido das linhas da porta)
+function naoRanking(v){return RANK[v]===false;}
 
-function getLoja(loja_nome,origem){
-  if(origem==='flecha') return 'Atacado WhatsApp';
-  return (loja_nome||'').trim()||'Outras Receitas Lojas';
-}
 function lojaDisplay(n){return n||'';}
 function getCor(nome){return LOJA_CORES[nome]||'#64748b';}
 
@@ -715,116 +720,142 @@ function fimMesSP(){
 }
 function inicioAno(){return hojeSP().slice(0,4)+'-01-01';}
 
-// ---- Fetch ----
+// ---- Fetch (só a porta das lojas) ----
+// Paginação com ORDER pela chave única da tabela pronta (senão a página perde/duplica linha).
+// 1ª página sozinha; se veio cheia, as seguintes em ondas paralelas de 4.
 async function buscarTudo(tab,filtro){
-  var todos=[],off=0,tam=1000,pag=0;
-  if(filtro.indexOf('order=')<0) filtro+='&order=id.asc';
-  while(pag<MAX_PAGES){
-    var url=SB_URL+'/rest/v1/'+tab+'?'+filtro+'&limit='+tam+'&offset='+off;
-    var r=await fetch(url,{headers:AUTH_HEADERS});
+  var tam=1000;
+  if(filtro.indexOf('order=')<0) filtro+='&order=id.asc';   // tabelas de cadastro (metas) têm id
+  async function pagina(off){
+    var r=await fetch(SB_URL+'/rest/v1/'+tab+'?'+filtro+'&limit='+tam+'&offset='+off,{headers:AUTH_HEADERS});
     if(!r.ok) throw new Error(tab+' HTTP '+r.status);
     var lote=await r.json();
-    if(!Array.isArray(lote)||lote.length===0) break;
-    todos=todos.concat(lote);
-    if(lote.length<tam) break;
-    off+=tam;pag++;
+    if(!Array.isArray(lote)) throw new Error(tab+': resposta inesperada');
+    return lote;
   }
-  return todos;
-}
-
-var SEL_PED='id,data_pedido,valor_bruto,loja_nome,origem_conta,status,vendedor,crm_cliente_id';
-var SEL_HIST='id,id_tiny_origem,data_pedido,valor_bruto,loja_nome,origem_conta,status,vendedor';
-
-function buildFilt(de,ate,cols){
-  return 'select='+cols+'&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+
-    '&origem_conta=eq.kwid';
-}
-async function fetchPedidos(de,ate){
-  // Unificado em 31/05/2026: vw_pedidos_full faz UNION ALL no servidor
-  // (id_tiny_origem do histórico vem como id_tiny). 1 chamada.
-  return buscarTudo('vw_pedidos_full',buildFilt(de,ate,SEL_PED));
-}
-
-// Progressive load (01/06/2026): MV agregada vem PRIMEIRO (~200ms,
-// ~600 linhas pra 120d×7 lojas vs ~57k pedidos detalhados em vw_pedidos_full).
-// Atualiza KPIs/Hero JÁ. Pedidos detalhados vêm depois pra rankings, vendedores, SKUs.
-// Refresh CONCURRENTLY rola no cron_enriquecimento_financeiro.py (06h BRT).
-async function fetchAgregadoMV(de,ate){
-  // MV não tem coluna `id` — passar order explícito pra evitar fallback &order=id.asc do buscarTudo.
-  return buscarTudo('mvw_lojas_dia','select=*&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc');
-}
-async function fetchTopProdutosMV(de,ate){
-  return buscarTudo('mvw_lojas_sku_dia','select=loja_nome,sku_pai,nome,categoria,quantidade,receita&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc');
-}
-async function fetchVendedoresMV(de,ate){
-  return buscarTudo('mvw_lojas_vend_dia','select=*&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc');
-}
-
-// localStorage cache (TTL 5min) — só pra rows agregados das MVs (~200KB cabe folgado).
-// Pedidos detalhados continuam vindo do servidor pra evitar quota stress.
-function cacheKey(de,ate){return 'lojas_v2_'+de+'_'+ate;}
-function cacheGet(de,ate){
-  try{
-    var raw=localStorage.getItem(cacheKey(de,ate));
-    if(!raw) return null;
-    var obj=JSON.parse(raw);
-    if(Date.now()-obj.ts > 5*60*1000) return null; // 5min TTL
-    return obj.data;
-  }catch(e){return null;}
-}
-function cacheSet(de,ate,data){
-  try{ localStorage.setItem(cacheKey(de,ate),JSON.stringify({ts:Date.now(),data:data})); }
-  catch(e){/* quota stress — silent */}
-}
-
-function calcKPIsFromMV(rows){
-  if(!rows||!rows.length) return {fat:0,ped:0,tm:0,porLoja:{}};
-  var fat=0,ped=0,porLoja={};
-  rows.forEach(function(r){
-    var loja=r.loja_nome;
-    if(!loja) return;
-    if(IGNORAR_LOJA.indexOf(loja)>=0) return;
-    if(STATE.lojasSel && Object.keys(STATE.lojasSel).length>0 && !STATE.lojasSel[loja]) return;
-    var rec=parseFloat(r.receita_bruta||0);
-    var pp=(parseInt(r.pedidos||0)-parseInt(r.cancelados||0));
-    fat+=rec; ped+=pp;
-    if(!porLoja[loja]) porLoja[loja]={fat:0,ped:0};
-    porLoja[loja].fat+=rec;
-    porLoja[loja].ped+=pp;
-  });
-  return {fat:fat,ped:ped,tm:ped>0?fat/ped:0,porLoja:porLoja};
-}
-
-async function fetchItensForIds(ids){
-  if(!ids.length) return [];
-  var batches=[];
-  for(var i=0;i<ids.length;i+=BATCH_SZ){
-    var chunk=ids.slice(i,i+BATCH_SZ);
-    batches.push(buscarTudo('itens_pedido','select=pedido_id,quantidade,preco_unitario,desconto_item,produto_id&pedido_id=in.('+chunk.join(',')+')'));
+  var todos=await pagina(0);
+  if(todos.length<tam) return todos;
+  var pag=1;
+  while(pag<MAX_PAGES){
+    var onda=[];
+    for(var i=0;i<4&&pag<MAX_PAGES;i++,pag++) onda.push(pagina(pag*tam));
+    var lotes=await Promise.all(onda), fimDados=false;
+    lotes.forEach(function(l){ todos=todos.concat(l); if(l.length<tam) fimDados=true; });
+    if(fimDados) return todos;
   }
-  var res=await Promise.all(batches);
-  return [].concat.apply([],res);
+  throw new Error(tab+': mais de '+(MAX_PAGES*tam)+' linhas — período grande demais para esta consulta');
+}
+function enc(v){return encodeURIComponent(v);}
+function filtroData(de,ate){return '&data_pedido=gte.'+de+'&data_pedido=lte.'+ate;}
+
+// dia × loja × vendedor (todas as lojas; varejo e atacado separados por loja_tipo)
+var SEL_DIA='select=data_pedido,loja,loja_tipo,vendedor,conta_ranking,atendimentos,pecas,receita';
+function fetchDia(de,ate,extra){
+  return buscarTudo('mvw_loj_venda_dia',SEL_DIA+filtroData(de,ate)+(extra||'')+'&order=data_pedido.asc,loja.asc,vendedor.asc');
+}
+// dia × loja × vendedor × categoria (só varejo; usada com o filtro de uma categoria)
+function fetchCatDia(de,ate,cat){
+  return buscarTudo('mvw_loj_venda_categoria_dia',SEL_DIA+',categoria'+filtroData(de,ate)+
+    '&loja_tipo=eq.varejo&categoria=eq.'+enc(cat)+'&order=data_pedido.asc,loja.asc,vendedor.asc,categoria.asc');
+}
+// dia × loja × vendedor × estilo (só varejo)
+function fetchProdDia(de,ate,sku){
+  return buscarTudo('mvw_loj_venda_produto_dia',SEL_DIA+',sku_pai,categoria,nome'+filtroData(de,ate)+
+    '&loja_tipo=eq.varejo'+(sku?'&sku_pai=eq.'+enc(sku):'')+
+    '&order=data_pedido.asc,loja.asc,vendedor.asc,sku_pai.asc,categoria.asc');
+}
+// Indicadores calculados no banco (ticket, PA, preço médio, variação...). Cache por chamada
+// enquanto os dados carregados não mudam (zerado em carregar()).
+var IND_CACHE={};
+async function rpcIndicadores(p){
+  var body={p_de:p.p_de,p_ate:p.p_ate,p_agrupar:p.p_agrupar,p_loja:p.p_loja||null,p_vendedor:p.p_vendedor||null,
+    p_categoria:p.p_categoria||null,p_sku_pai:p.p_sku_pai||null,p_tipo:p.p_tipo||'varejo',p_so_ranking:!!p.p_so_ranking,
+    p_de_ant:p.p_de_ant||null,p_ate_ant:p.p_ate_ant||null};
+  var k=JSON.stringify(body);
+  if(IND_CACHE[k]) return IND_CACHE[k];
+  IND_CACHE[k]=(async function(){
+    var r=await fetch(SB_URL+'/rest/v1/rpc/lojas_indicadores',{method:'POST',
+      headers:Object.assign({},AUTH_HEADERS,{'Content-Type':'application/json'}),body:JSON.stringify(body)});
+    if(!r.ok){ delete IND_CACHE[k]; throw new Error('lojas_indicadores HTTP '+r.status+': '+(await r.text()).slice(0,200)); }
+    return (await r.json()).map(function(x){
+      ['receita','pecas','ticket','pa','preco_medio','custo','margem_pct','participacao_pct','receita_ant','pecas_ant',
+       'ticket_ant','pa_ant','var_receita_pct','var_ticket_pct','var_pa_pct','atendimentos','atendimentos_ant','posicao']
+        .forEach(function(c){ if(x[c]!=null) x[c]=+x[c]; });
+      return x;
+    });
+  })();
+  return IND_CACHE[k];
+}
+// Lojas escolhidas nos chips: null = todas (consulta sem filtro de loja).
+function lojasFiltro(){
+  var sel=STATE.lojas.filter(function(n){return STATE.lojasSel[n];});
+  return sel.length===STATE.lojas.length?null:sel;
+}
+// lojas_indicadores respeitando os chips de loja. O banco filtra UMA loja por chamada; com um
+// subconjunto de 2+ lojas a tela chama uma vez por loja e junta as partes. Só nesse caso os
+// índices são refeitos aqui, com a MESMA definição escrita na função do banco
+// (ticket = receita ÷ atendimentos, PA = peças ÷ atendimentos, variação = atual ÷ anterior − 1).
+async function indicadores(p){
+  var sel=lojasFiltro();
+  if(sel===null) return rpcIndicadores(p);
+  if(!sel.length) return [];
+  if(p.p_agrupar==='loja'){
+    var rows=await rpcIndicadores(p);
+    return rows.filter(function(r){return sel.indexOf(r.chave)>=0;});
+  }
+  var partes=await Promise.all(sel.map(function(l){return rpcIndicadores(Object.assign({},p,{p_loja:l}));}));
+  if(partes.length===1) return partes[0];
+  var m={};
+  partes.forEach(function(rows){rows.forEach(function(r){
+    var o=m[r.chave]||(m[r.chave]={chave:r.chave,nome:r.nome,loja:null,_lojaRec:-1,receita:0,atendimentos:0,pecas:0,custo:0,
+      receita_ant:null,atendimentos_ant:null,pecas_ant:null});
+    o.receita+=r.receita; o.atendimentos+=r.atendimentos; o.pecas+=r.pecas; o.custo+=r.custo;
+    if(r.receita_ant!=null){o.receita_ant=(o.receita_ant||0)+r.receita_ant; o.atendimentos_ant=(o.atendimentos_ant||0)+r.atendimentos_ant; o.pecas_ant=(o.pecas_ant||0)+r.pecas_ant;}
+    if(r.loja && r.receita>o._lojaRec){o.loja=r.loja; o._lojaRec=r.receita;}
+  });});
+  function r2(x){return x==null||!isFinite(x)?null:Math.round(x*100)/100;}
+  function r1(x){return x==null||!isFinite(x)?null:Math.round(x*10)/10;}
+  return Object.values(m).map(function(o){
+    o.ticket=o.atendimentos?r2(o.receita/o.atendimentos):null;
+    o.pa=o.atendimentos?r2(o.pecas/o.atendimentos):null;
+    o.preco_medio=o.pecas?r2(o.receita/o.pecas):null;
+    if(o.receita_ant!=null){
+      o.ticket_ant=o.atendimentos_ant?r2(o.receita_ant/o.atendimentos_ant):null;
+      o.pa_ant=o.atendimentos_ant?r2(o.pecas_ant/o.atendimentos_ant):null;
+      o.var_receita_pct=o.receita_ant?r1(100*(o.receita/o.receita_ant-1)):null;
+      o.var_ticket_pct=(o.ticket_ant&&o.ticket!=null)?r1(100*(o.ticket/o.ticket_ant-1)):null;
+      o.var_pa_pct=(o.pa_ant&&o.pa!=null)?r1(100*(o.pa/o.pa_ant-1)):null;
+    }
+    return o;
+  }).sort(function(a,b){return b.receita-a.receita;});
 }
 
-var PROD_CACHE=null;
-async function fetchProdutos(){
-  if(PROD_CACHE) return PROD_CACHE;
-  var lista=await buscarTudo('produtos','select=id,sku,sku_pai,nome,categoria,cor,tamanho,tipo&ativo=eq.true');
-  var byId={}, bySku={};
-  lista.forEach(function(p){
-    byId[p.id]={
-      sku:p.sku, sku_pai:p.sku_pai||p.sku, nome:p.nome||p.sku,
-      cat:p.categoria||'OUTROS', cor:p.cor||'', tam:p.tamanho||''
-    };
-    bySku[p.sku]={nome:p.nome||p.sku, cat:p.categoria||'OUTROS'};
+// Linha da porta → registro da tela. Uma linha = dia × loja × vendedor (× categoria/estilo),
+// NÃO um pedido: `_n` = atendimentos da linha, `valor_bruto` = receita da linha (o nome antigo
+// foi mantido para os gráficos que só somam receita).
+function linhaPorta(r){
+  return {data_pedido:r.data_pedido, _nome:r.loja, _tipo:r.loja_tipo, _cor:getCor(r.loja), _vend:r.vendedor,
+    _rank:r.conta_ranking, valor_bruto:+r.receita||0, _n:+r.atendimentos||0, _pc:+r.pecas||0};
+}
+// Linha de estilo da porta → item da tela (Top produtos, Pareto, lista de produtos, detalhe).
+function itemPorta(r){
+  return {_sku_pai:r.sku_pai, _nome:r.nome||r.sku_pai, _cat:r.categoria, _loja:r.loja, _vend:r.vendedor,
+    _data:r.data_pedido, _receita:+r.receita||0, _qtd:+r.pecas||0, _n:+r.atendimentos||0};
+}
+function soVarejoSel(rows){
+  return (rows||[]).filter(function(p){
+    if(p._tipo!=='varejo') return false;
+    if(STATE.lojasSel && Object.keys(STATE.lojasSel).length>0 && !STATE.lojasSel[p._nome]) return false;
+    return true;
   });
-  PROD_CACHE={byId:byId,bySku:bySku};
-  return PROD_CACHE;
 }
 
 // ---- State ----
 var DE=null, ATE=null;
-var STATE={pedidos:[],anteriores:[],pedidosEscopo:[],anterioresEscopo:[],itens:[],prods:null,lojas:[],lojasSel:{},stackMode:'abs',skuGroups:[],skuSel:null,vendSel:null,totLoja:{},metas:{},metasVend:{},metasLoaded:false,freshness:null,lojaHighlight:null,catSel:null,vendSort:{key:'fat',dir:'desc'},skuSort:{key:'receita',dir:'desc'},viewMode:'diario',paretoMode:'receita',dowW:null};
+// diaRaw/diaPrevRaw/mtd = linhas da porta (dia × loja × vendedor); pedidos/anteriores = as de
+// varejo nas lojas escolhidas; pedidosEscopo = idem com o filtro de produto/categoria/vendedor;
+// itens = linhas por estilo (janela M-1 → hoje); ind = indicadores prontos da lojas_indicadores.
+var STATE={diaRaw:[],diaPrevRaw:[],mtd:[],ant:null,escopoCache:{},ind:null,pedidos:[],anteriores:[],pedidosEscopo:[],anterioresEscopo:[],itens:[],lojas:[],lojasSel:{},stackMode:'abs',skuGroups:[],skuSel:null,vendSel:null,totLoja:{},metas:{},metasVend:{},metasLoaded:false,freshness:null,lojaHighlight:null,catSel:null,vendSort:{key:'fat',dir:'desc'},skuSort:{key:'receita',dir:'desc'},viewMode:'diario',paretoMode:'receita',dowW:null};
 var CHARTS={hero:null,pareto:null,sparkPed:null,sparkTM:null,sparkPA:null,lojaSparklines:[]};
 
 function setPeriodo(preset,el){
@@ -938,218 +969,60 @@ function periodoAnterior(de,ate){
   return {de:novoDe, ate:novoAte};
 }
 
-var REDISTRIBUIR_LOJA='Outras Receitas Lojas';  // bucket sem loja real → rateado entre as lojas
-function filtrarPedidos(lista){
-  var incCanc=false; // filtro "incluir cancelados" removido — sempre exclui cancelados/devolvidos
-  var CANC=['cancelado','devolvido'];
-  // Passe 1: classifica (sem filtro de loja ainda — redistribuição precisa de todos)
-  var tmp=[];
-  lista.forEach(function(p){
-    var nome=getLoja(p.loja_nome,p.origem_conta);
-    if(IGNORAR_LOJA.indexOf(nome)>=0) return;
-    var st=(p.status||'').toLowerCase();
-    var isCanc=CANC.indexOf(st)>=0;
-    if(isCanc && !incCanc) return;
-    p._nome=nome;
-    p._cor=getCor(nome);
-    p._canc=isCanc;
-    p._vend=(p.vendedor||'').trim()||'Vendedor Não Identificado';
-    tmp.push(p);
-  });
-  // Rateio: "Outras Receitas Lojas" é distribuído entre as lojas reais
-  // proporcionalmente à participação de cada uma na receita (greedy por déficit,
-  // pra a soma adicionada bater ~exato com o share). Mantém o total intacto.
-  var realTot={}, realSum=0;
-  tmp.forEach(function(p){ if(p._nome!==REDISTRIBUIR_LOJA && !p._canc){var v=parseFloat(p.valor_bruto||0);realTot[p._nome]=(realTot[p._nome]||0)+v;realSum+=v;} });
-  var lojasReais=Object.keys(realTot);
-  if(lojasReais.length){
-    var outras=tmp.filter(function(p){return p._nome===REDISTRIBUIR_LOJA;});
-    var outrasSum=0; outras.forEach(function(p){if(!p._canc)outrasSum+=parseFloat(p.valor_bruto||0);});
-    var target={}, added={};
-    lojasReais.forEach(function(n){target[n]=(realTot[n]/realSum)*outrasSum;added[n]=0;});
-    outras.sort(function(a,b){return parseFloat(b.valor_bruto||0)-parseFloat(a.valor_bruto||0);});
-    outras.forEach(function(p){
-      var v=p._canc?0:parseFloat(p.valor_bruto||0);
-      var best=lojasReais[0], bestDef=-Infinity;
-      lojasReais.forEach(function(n){var def=target[n]-added[n];if(def>bestDef){bestDef=def;best=n;}});
-      p._nome=best; p._cor=getCor(best); added[best]+=v;
-    });
-  }
-  // Passe 2: aplica filtro de loja selecionada (já com _nome redistribuído)
-  var ativos=[];
-  tmp.forEach(function(p){
-    if(STATE.lojasSel && Object.keys(STATE.lojasSel).length>0 && !STATE.lojasSel[p._nome]) return;
-    ativos.push(p);
-  });
-  return ativos;
-}
-
-// Constrói STATE.skuGroups a partir de mvw_lojas_sku_dia (rows agregados
-// por data×loja×sku_pai). Preserva porLoja; porTam só vem com itens
-// detalhados (drilldown de tamanho). Permite renderPareto/renderSkuList
-// rodarem antes do fetch full de itens.
-function agruparSkusFromMV(rows){
-  var map={};
-  rows.forEach(function(r){
-    var loja=r.loja_nome;
-    if(!loja || IGNORAR_LOJA.indexOf(loja)>=0) return;
-    if(STATE.lojasSel && Object.keys(STATE.lojasSel).length>0 && !STATE.lojasSel[loja]) return;
-    if(STATE.catSel && r.categoria!==STATE.catSel) return;
-    var k=r.sku_pai;
-    if(!map[k]) map[k]={sku_pai:k,nome:r.nome||k,cat:r.categoria||'OUTROS',receita:0,qtd:0,porLoja:{},porTam:{}};
-    var rec=parseFloat(r.receita||0), qtd=parseFloat(r.quantidade||0);
-    map[k].receita+=rec; map[k].qtd+=qtd;
-    if(!map[k].porLoja[loja]) map[k].porLoja[loja]={receita:0,qtd:0,pedidos:{}};
-    map[k].porLoja[loja].receita+=rec;
-    map[k].porLoja[loja].qtd+=qtd;
-  });
-  return Object.values(map).sort(function(a,b){return b.receita-a.receita;});
-}
-function renderTopProdutosImediato(skuRows){
-  if(!skuRows||!skuRows.length) return;
-  STATE.skuGroups=agruparSkusFromMV(skuRows);
-  try{ renderPareto(); }catch(e){console.warn('renderPareto imediato:',e);}
-  try{ renderCatChips(); }catch(e){}
-}
-
-// Defer renders pesados (Geo, DOW heatmap) pra não bloquear first paint.
+// Defer renders pesados (charts) pra não bloquear first paint.
 // Idle callback espera CPU vagar — fallback pra setTimeout(0) em browsers
 // que não suportam (Safari < 16.4).
 var idle = window.requestIdleCallback || function(fn){return setTimeout(fn,0);};
 
-// Render IMEDIATO via MV (progressive load 01/06/2026) — sub-set dos KPIs
-// que dão pra calcular sem itens detalhados. PA, sparklines, loja líder por
-// SKU etc só vêm depois quando renderKPIs() completo sobrescreve.
-function renderKPIsImediato(cur,prev){
-  var html='';
-  html+='<div class="kpi hero">';
-  html+='<div class="kpi-lbl">Receita Bruta</div>';
-  html+='<div class="kpi-val">'+fmt(cur.fat)+'</div>';
-  html+='<div class="kpi-delta">'+deltaBadge(delta(cur.fat,prev.fat))+' <span style="color:#d4d4d8">vs anterior</span></div>';
-  html+='<div class="kpi-sub" style="margin-top:6px;font-size:9px;opacity:0.6;">Estimativa rápida · detalhes carregando…</div>';
-  html+='</div>';
-  html+='<div class="kpi"><div class="kpi-lbl">Pedidos</div><div class="kpi-val">'+fmtN(cur.ped)+'</div><div class="kpi-delta">'+deltaBadge(delta(cur.ped,prev.ped))+'</div></div>';
-  // Qtd. Produtos (estimativa via MV de SKU; render completo sobrescreve com itens)
-  var pecasEst=(STATE.skuGroups||[]).reduce(function(s,g){return s+(g.qtd||0);},0);
-  html+='<div class="kpi"><div class="kpi-lbl">Qtd. Produtos</div><div class="kpi-val">'+(pecasEst>0?fmtN(pecasEst):'—')+'</div><div class="kpi-sub">'+(pecasEst>0?'peças vendidas':'carregando…')+'</div></div>';
-  html+='<div class="kpi"><div class="kpi-lbl">Ticket Médio</div><div class="kpi-val">'+fmt(cur.tm)+'</div><div class="kpi-delta">'+deltaBadge(delta(cur.tm,prev.tm))+'</div></div>';
-  document.getElementById('kpis').innerHTML=html;
-}
-
+var LOAD_TOK=0;
 async function carregar(){
   if(!DE||!ATE) return;
-
-  // 1) CACHE LOCAL — se hit válido (<5min), pinta tudo IMEDIATO antes do fetch.
-  var cached=cacheGet(DE,ATE);
-  if(cached){
-    try{
-      if(cached.mv){
-        STATE.mvRows=cached.mv;
-        var c=calcKPIsFromMV(cached.mv);
-        var p=cached.mvPrev?calcKPIsFromMV(cached.mvPrev):{fat:0,ped:0,tm:0,porLoja:{}};
-        renderKPIsImediato(c,p);
-      }
-      if(cached.sku) renderTopProdutosImediato(cached.sku);
-      document.getElementById('upd').textContent='Cache · atualizando…';
-    }catch(e){console.warn('cache render:',e);}
-  } else {
-    document.getElementById('kpis').innerHTML='<div class="kpi hero"><div class="kpi-lbl">Carregando...</div><div class="spin"></div></div>';
-  }
-
+  var tok=++LOAD_TOK;
+  document.getElementById('kpis').innerHTML='<div class="kpi hero"><div class="kpi-lbl">Carregando...</div><div class="spin"></div></div>';
+  document.getElementById('upd').textContent='Atualizando…';
   try {
     var usarComp=document.getElementById('chk-compare').checked;
     var ant=periodoAnterior(DE,ATE);
-
-    // 2) Progressive load: MV agregada PRIMEIRO (~200ms), renderiza KPIs imediato
-    var pMV=fetchAgregadoMV(DE,ATE).then(function(mv){
-      STATE.mvRows=mv;
-      try{
-        var cur=calcKPIsFromMV(mv);
-        var prev=STATE.mvRowsPrev?calcKPIsFromMV(STATE.mvRowsPrev):{fat:0,ped:0,tm:0,porLoja:{}};
-        if(!STATE.pedidosRaw) renderKPIsImediato(cur,prev);
-      }catch(e){console.warn('MV render:',e);}
-      return mv;
-    }).catch(function(e){console.warn('MV falhou (vai cair em pedidos detalhados):',e);return null;});
-    if(usarComp){
-      fetchAgregadoMV(ant.de,ant.ate).then(function(r){STATE.mvRowsPrev=r;}).catch(function(){});
-    }
-    // Top Produtos via MV (Pareto + lista SKU imediatos)
-    var pSku=fetchTopProdutosMV(DE,ATE).then(function(rows){
-      STATE.mvSku=rows;
-      if(!STATE.itens||!STATE.itens.length) renderTopProdutosImediato(rows);
-      return rows;
-    }).catch(function(e){console.warn('MV sku:',e);return null;});
-
-    var fetches=[fetchPedidos(DE,ATE)];
-    if(usarComp) fetches.push(fetchPedidos(ant.de,ant.ate));
-    var res=await Promise.all(fetches);
-    STATE.pedidosRaw=res[0];
-    STATE.anterioresRaw=usarComp?res[1]:[];
-
-    if(STATE.lojas.length===0){
-      var seen={};
-      LOJAS_CANONICAS.forEach(function(n){seen[n]=true;STATE.lojasSel[n]=true;});  // lojas canônicas sempre presentes
-      STATE.pedidosRaw.forEach(function(p){
-        var n=getLoja(p.loja_nome,p.origem_conta);
-        if(IGNORAR_LOJA.indexOf(n)>=0) return;
-        if(n===REDISTRIBUIR_LOJA) return;  // bucket rateado entre as lojas — não vira chip
-        if(!seen[n]){seen[n]=true;STATE.lojasSel[n]=true;}
-      });
-      STATE.lojas=Object.keys(seen).sort();
-      renderLojaChips();
-    }
-
-    // ---- Itens for SKU drill (only se range overlaps M/M-1) ----
+    STATE.ant=usarComp?ant:null;
+    // Estilos: janela M-1 → hoje (a mesma "60d" de antes), pra lista/Pareto/Top produtos.
     var inicio=inicioPedidos();
-    var skuDisponivel=(DE>=inicio)||(ATE>=inicio);
-    if(skuDisponivel){
-      var recentes=STATE.pedidosRaw.filter(function(p){
-        if(p.data_pedido<inicio) return false;
-        var n=getLoja(p.loja_nome,p.origem_conta);
-        return IGNORAR_LOJA.indexOf(n)<0;
-      });
-      var ids=recentes.map(function(p){return p.id;}).filter(function(x){return x;});
-      var itens=await fetchItensForIds(ids);
-      var prods=await fetchProdutos();
-      var pedById={};
-      recentes.forEach(function(p){pedById[p.id]=p;});
-      itens.forEach(function(it){
-        var ped=pedById[it.pedido_id];
-        if(!ped) return;
-        var prod=prods.byId[it.produto_id];
-        if(!prod) return;
-        var skuPai=prod.sku_pai;
-        var pai;
-        if(/^MAT-/i.test(skuPai)){ skuPai=prod.sku; pai={nome:prod.nome,cat:prod.cat}; }
-        else { pai=prods.bySku[skuPai]||{nome:prod.nome,cat:prod.cat}; }
-        var nomePai=pai.nome;
-        if(!nomePai||nomePai==='Material/Insumo'||nomePai==='Desconhecido') nomePai=skuPai;
-        it._sku_pai=skuPai;
-        it._nome=nomePai;
-        it._cat=pai.cat||prod.cat;
-        it._cor=prod.cor;
-        it._tam=prod.tam;
-        it._loja=getLoja(ped.loja_nome,ped.origem_conta);
-        it._data=ped.data_pedido;
-        it._receita=(parseFloat(it.preco_unitario)||0)*(parseFloat(it.quantidade)||0)-(parseFloat(it.desconto_item)||0);
-        it._qtd=parseFloat(it.quantidade)||0;
-        it._canc=(ped.status||'').toLowerCase();
-      });
-      STATE.itens=itens.filter(function(it){return it._sku_pai && (!['cancelado','devolvido'].includes(it._canc)) && it._cat!=='TECIDO' && it._cat!=='TROCA';});
-      agruparSkus();
-    } else {
-      STATE.itens=[]; STATE.skuGroups=[];
-    }
+    var temItens=ATE>=inicio;
+    var deItens=DE>inicio?DE:inicio;
+    var h=hojeSP(), im=inicioMesSP();
+    var res=await Promise.all([
+      fetchDia(DE,ATE),
+      usarComp?fetchDia(ant.de,ant.ate,'&loja_tipo=eq.varejo'):Promise.resolve([]),
+      fetchDia(im,h,'&loja_tipo=eq.varejo'),        // mês corrente: meta, projeção, previsão (invariante ao chip)
+      temItens?fetchProdDia(deItens,ATE):Promise.resolve([])
+    ]);
+    if(tok!==LOAD_TOK) return;
+    IND_CACHE={}; STATE.escopoCache={};
+    STATE.diaRaw=res[0].map(linhaPorta);
+    STATE.diaPrevRaw=res[1].map(linhaPorta);
+    STATE.mtd=res[2].map(linhaPorta);
+    STATE.itens=res[3].map(itemPorta);
+    STATE.diaRaw.concat(STATE.mtd).forEach(function(p){ if(p._vend) RANK[p._vend]=p._rank; });
+
+    // Chips de loja: as lojas abertas sempre; loja de varejo que aparecer no período (ex.:
+    // Shopping Total em 2024) entra ligada — senão KPIs (sem filtro de loja) e gráficos
+    // (que filtram pelos chips) divergiriam.
+    var seen={}, mudou=STATE.lojas.length===0;
+    STATE.lojas.forEach(function(n){seen[n]=true;});
+    LOJAS_CANONICAS.concat(STATE.diaRaw.filter(function(p){return p._tipo==='varejo';}).map(function(p){return p._nome;}))
+      .forEach(function(n){ if(!seen[n]){seen[n]=true;STATE.lojasSel[n]=true;mudou=true;} });
+    if(mudou){ STATE.lojas=Object.keys(seen).sort(); renderLojaChips(); }
 
     // Fetch metas do mês atual (uma vez)
     if(!STATE.metasLoaded){
       try{
-        var h=hojeSP();var mesAtual=parseInt(h.slice(5,7));var anoAtual=parseInt(h.slice(0,4));
+        var mesAtual=parseInt(h.slice(5,7));var anoAtual=parseInt(h.slice(0,4));
         var metasRaw=await buscarTudo('metas_lojas','select=loja_nome,meta_receita&ano=eq.'+anoAtual+'&mes=eq.'+mesAtual);
+        STATE.metas={};
         metasRaw.forEach(function(m){STATE.metas[m.loja_nome]=parseFloat(m.meta_receita)||0;});
         // metas por vendedor (TODOS os meses) — month-keyed 'YYYY-MM' pra colunas
         // Meta/Atg%/Previsão seguirem o mês do período selecionado.
         var metasV=await buscarTudo('metas_vendedores','select=vendedor,ano,mes,meta_receita');
+        STATE.metasVend={};
         metasV.forEach(function(m){
           var k=m.ano+'-'+String(m.mes).padStart(2,'0');
           if(!STATE.metasVend[m.vendedor]) STATE.metasVend[m.vendedor]={};
@@ -1157,11 +1030,12 @@ async function carregar(){
         });
         STATE.metasLoaded=true;
       }catch(e){console.warn('Metas não carregadas:',e.message);}
+      if(tok!==LOAD_TOK) return;
     }
 
-    // Freshness: data mais recente nos pedidos
+    // Freshness: dia mais recente com venda no período
     var maxData=null;
-    STATE.pedidosRaw.forEach(function(p){
+    STATE.diaRaw.forEach(function(p){
       var d=(p.data_pedido||'').slice(0,10);
       if(d&&(!maxData||d>maxData)) maxData=d;
     });
@@ -1175,36 +1049,29 @@ async function carregar(){
     STATE.seasonPrevByMonth=null;
     if(STATE.viewMode==='mensal'){
       try{
-        var _Y=parseInt(hojeSP().slice(0,4)), _M=parseInt(hojeSP().slice(5,7));
+        var _Y=parseInt(h.slice(0,4)), _M=parseInt(h.slice(5,7));
         if(_M<12){
           var _py=_Y-1, _de=_py+'-'+String(_M+1).padStart(2,'0')+'-01', _ate=_py+'-12-31';
-          var segRows=await fetchAgregadoMV(_de,_ate);
+          var segRows=soVarejoSel((await fetchDia(_de,_ate,'&loja_tipo=eq.varejo')).map(linhaPorta));
+          if(tok!==LOAD_TOK) return;
           var sp={};
           segRows.forEach(function(r){
-            var n=(r.loja_nome||'').trim();
-            if(IGNORAR_LOJA.indexOf(n)>=0) return;
-            if(STATE.lojasSel && Object.keys(STATE.lojasSel).length>0 && !STATE.lojasSel[n]) return;
             var k=(r.data_pedido||'').slice(0,7);
-            sp[k]=(sp[k]||0)+parseFloat(r.receita_bruta||0);
+            sp[k]=(sp[k]||0)+r.valor_bruto;
           });
           STATE.seasonPrevByMonth=sp;
         }
       }catch(e){STATE.seasonPrevByMonth=null;}
     }
 
-    renderAll();
+    await renderAll();
+    if(tok!==LOAD_TOK) return;
     var freshTxt=STATE.freshness?'Dados até '+new Date(STATE.freshness+'T12:00:00').toLocaleDateString('pt-BR'):'';
     document.getElementById('upd').textContent=freshTxt+' · Atualizado '+new Date().toLocaleTimeString('pt-BR');
-
-    // Salva cache pra reload rápido na próxima visita (TTL 5min)
-    try{
-      var mvNow=await pMV;
-      var skuNow=await pSku;
-      cacheSet(DE,ATE,{mv:mvNow,mvPrev:STATE.mvRowsPrev||null,sku:skuNow});
-    }catch(e){/* cache best-effort */}
   } catch(err) {
     console.error(err);
-    document.getElementById('kpis').innerHTML='<div class="kpi hero"><div class="kpi-lbl">Erro</div><div class="kpi-val d-dn">!</div><div class="kpi-sub">'+err.message+'</div></div>';
+    document.getElementById('upd').textContent='';
+    document.getElementById('kpis').innerHTML='<div class="kpi hero"><div class="kpi-lbl">Erro ao ler a porta das lojas</div><div class="kpi-val d-dn">!</div><div class="kpi-sub">'+esc(err.message)+'</div></div>';
   }
 }
 
@@ -1231,15 +1098,12 @@ var PREMIO={loaded:false,loading:false,weekFechada:null,weekAtual:null,month:nul
 var MES_ABREV=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 function inicioSemana(){var h=hojeSP();var dt=new Date(h+'T12:00:00Z');var dow=(dt.getUTCDay()+6)%7;return somaDias(h,-dow);} // 0=seg
 function diaMes(ds){return ds.slice(8,10)+' '+MES_ABREV[parseInt(ds.slice(5,7))-1];}
+// Linhas loja · vendedor da lojas_indicadores (só quem conta no ranking) → mapa loja|vendedor.
 function aggVendPremio(rows){
   var m={};
   (rows||[]).forEach(function(r){
-    var loja=(r.loja_nome||'').trim(), vend=(r.vendedor||'').trim();
-    if(!vend||vend==='Vendedor Não Identificado'||IGNORAR_LOJA.indexOf(loja)>=0) return;
-    var k=loja+'|'+vend;
-    if(!m[k]) m[k]={loja:loja,vend:vend,fat:0,ped:0};
-    m[k].fat+=(+r.receita||0);
-    m[k].ped+=((+r.pedidos||0)-(+r.cancelados||0)); // pedidos líquidos (sem cancelados)
+    if(!r.loja||!r.nome) return;
+    m[r.loja+'|'+r.nome]={loja:r.loja,vend:r.nome,fat:r.receita,ped:r.atendimentos,tm:r.ticket,pecas:r.pecas};
   });
   return m;
 }
@@ -1247,39 +1111,19 @@ function premioSelVend(map,loja,metric,minPed){
   minPed=minPed||1; var best=null;
   Object.keys(map).forEach(function(k){
     var e=map[k]; if(e.loja!==loja) return;
-    var val; if(metric==='tm'){ if(e.ped<minPed) return; val=e.fat/e.ped; } else { val=e.fat; }
+    var val; if(metric==='tm'){ if(e.ped<minPed||e.tm==null) return; val=e.tm; } else { val=e.fat; }
     if(val<=0) return;
     if(!best||val>best.val) best={vend:e.vend,val:val};
   });
   return best;
 }
-// ternos do mês por (loja, vendedor) — fetch DEDICADO (independente do período do dash).
-// vendedor vem do pedido (itens_pedido não tem vendedor); categoria via fetchProdutos().
-async function ternosMesPorVend(mIni,hoje){
-  var peds=await buscarTudo('pedidos','select=id,vendedor,loja_nome,origem_conta,status,data_pedido&data_pedido=gte.'+mIni+'&data_pedido=lte.'+hoje+'&order=id.asc');
-  var pedInfo={}, ids=[];
-  peds.forEach(function(p){
-    var st=(p.status||'').toLowerCase(); if(st==='cancelado'||st==='devolvido') return;
-    pedInfo[p.id]={vend:(p.vendedor||'').trim(), loja:getLoja(p.loja_nome,p.origem_conta)};
-    ids.push(p.id);
-  });
-  var prods=await fetchProdutos();
-  var itens=await fetchItensForIds(ids);
-  var m={};
-  itens.forEach(function(it){
-    var prod=prods.byId[it.produto_id]; if(!prod||prod.cat!=='BLAZER & TERNO') return;
-    var pi=pedInfo[it.pedido_id]; if(!pi) return;
-    if(!pi.vend||pi.vend==='Vendedor Não Identificado'||IGNORAR_LOJA.indexOf(pi.loja)>=0) return;
-    var k=pi.loja+'|'+pi.vend; m[k]=(m[k]||0)+(parseFloat(it.quantidade)||0);
-  });
-  return m;
-}
+// Ternos do mês por (loja, vendedor) = peças da categoria 'BLAZER & TERNO' na porta.
 function premioSelTernos(map,loja){
   var best=null;
   Object.keys(map).forEach(function(k){
-    var parts=k.split('|'); if(parts[0]!==loja) return;
-    var q=map[k]; if(q<=0) return;
-    if(!best||q>best.val) best={vend:parts.slice(1).join('|'),val:q};
+    var e=map[k]; if(e.loja!==loja) return;
+    var q=e.pecas||0; if(q<=0) return;
+    if(!best||q>best.val) best={vend:e.vend,val:q};
   });
   return best;
 }
@@ -1288,15 +1132,15 @@ async function loadPremio(){
   try{
     var seg=inicioSemana(), dom=somaDias(seg,6), mIni=inicioMesSP(), hoje=hojeSP();
     var segF=somaDias(seg,-7), domF=somaDias(seg,-1);  // semana FECHADA (seg–dom anterior, completa)
-    var sel='select=loja_nome,vendedor,pedidos,cancelados,receita,data_pedido&order=data_pedido.asc';
+    var base={p_agrupar:'loja_vendedor',p_tipo:'varejo',p_so_ranking:true};
     var res=await Promise.all([
-      buscarTudo('mvw_lojas_vend_dia',sel+'&data_pedido=gte.'+segF+'&data_pedido=lte.'+domF),
-      buscarTudo('mvw_lojas_vend_dia',sel+'&data_pedido=gte.'+seg+'&data_pedido=lte.'+dom),
-      buscarTudo('mvw_lojas_vend_dia',sel+'&data_pedido=gte.'+mIni+'&data_pedido=lte.'+hoje),
-      ternosMesPorVend(mIni,hoje)
+      rpcIndicadores(Object.assign({p_de:segF,p_ate:domF},base)),
+      rpcIndicadores(Object.assign({p_de:seg,p_ate:dom},base)),
+      rpcIndicadores(Object.assign({p_de:mIni,p_ate:hoje},base)),
+      rpcIndicadores(Object.assign({p_de:mIni,p_ate:hoje,p_categoria:'BLAZER & TERNO'},base))
     ]);
     PREMIO.weekFechada=aggVendPremio(res[0]); PREMIO.weekAtual=aggVendPremio(res[1]);
-    PREMIO.month=aggVendPremio(res[2]); PREMIO.ternos=res[3];
+    PREMIO.month=aggVendPremio(res[2]); PREMIO.ternos=aggVendPremio(res[3]);
     PREMIO.semFechada={de:segF,ate:domF}; PREMIO.semAtual={de:seg,ate:dom}; PREMIO.loaded=true;
   }catch(e){console.warn('premio load',e);} finally{PREMIO.loading=false;}
 }
@@ -1318,7 +1162,7 @@ async function renderPremiacao(){
   var box=document.getElementById('premiacao-grid'); if(!box) return;
   if(!PREMIO.loaded){ await loadPremio(); if(!PREMIO.loaded){ box.innerHTML='<div class="premio-empty">Não foi possível carregar a premiação.</div>'; return; } }
   var ternos=PREMIO.ternos||{};
-  var lojas=(STATE.lojas||[]).filter(function(n){return IGNORAR_LOJA.indexOf(n)<0 && (!STATE.lojasSel||STATE.lojasSel[n]);});
+  var lojas=(STATE.lojas||[]).filter(function(n){return !STATE.lojasSel||STATE.lojasSel[n];});
   if(!lojas.length){ box.innerHTML='<div class="premio-empty">Selecione ao menos uma loja.</div>'; return; }
   var sF=PREMIO.semFechada, sA=PREMIO.semAtual, mesLbl=MES_ABREV[parseInt(hojeSP().slice(5,7))-1];
   box.innerHTML=lojas.map(function(loja){
@@ -1341,8 +1185,8 @@ async function renderPremiacao(){
 }
 
 // ════════ Heatmap diário de 1 vendedor (drill-down da tabela Top vendedores) ════════
-// Fonte: mvw_lojas_vend_dia (invariante ao período do dash — mês próprio c/ navegação).
-// Toggles: métrica (receita R$ ↔ vendas qtd) e comparação (só ele ↔ vs loja).
+// Fonte: mvw_loj_venda_dia, só varejo (invariante ao período do dash — mês próprio c/ navegação).
+// Toggles: métrica (receita R$ ↔ vendas = atendimentos) e comparação (só ele ↔ vs loja).
 var HM={cache:{}, inflight:{}, vendSel:null, vendLoja:null, metric:'rec', compare:false};
 var HMCAL={month:null};
 function hmK(v){ return v>=1000 ? (v/1000).toFixed(1).replace('.',',')+'k' : String(Math.round(v)); }
@@ -1358,12 +1202,10 @@ function hmAgg(rows){
   (rows||[]).forEach(function(r){
     var v=(r.vendedor||'').trim(); if(!v) return;
     var d=(r.data_pedido||'').slice(0,10);
-    var rec=parseFloat(r.receita||0), q=(parseInt(r.pedidos||0,10)-parseInt(r.cancelados||0,10));
-    var loja=(r.loja_nome||'').trim();
-    // Heatmap é de varejo: mesma régua da coluna Faturamento da tabela. Sem isso, um dia
-    // com 1 venda de atacado acenderia o calendário com receita que o Faturamento não tem.
-    if(IGNORAR_LOJA.indexOf(loja)>=0) return;
-    if(!vend[v]) vend[v]={days:{}, _rec:0,_qtd:0, lojas:{}};
+    var rec=parseFloat(r.receita||0), q=parseInt(r.atendimentos||0,10);
+    var loja=r.loja||'';
+    // Heatmap é de varejo (a consulta já pede loja_tipo=varejo): mesma régua da coluna Faturamento.
+    if(!vend[v]) vend[v]={days:{}, _rec:0,_qtd:0, lojas:{}, rank:r.conta_ranking};
     var cell=vend[v].days[d]||(vend[v].days[d]={rec:0,qtd:0});
     cell.rec+=rec; cell.qtd+=q; vend[v]._rec+=rec; vend[v]._qtd+=q;
     if(loja) vend[v].lojas[loja]=(vend[v].lojas[loja]||0)+rec;
@@ -1378,7 +1220,7 @@ function hmFetchMonth(m){
   if(HM.cache[m]) return Promise.resolve(HM.cache[m]);
   if(HM.inflight[m]) return HM.inflight[m];
   var de=m+'-01', ate=m+'-'+String(hmUltimoDia(m)).padStart(2,'0');
-  var p=buscarTudo('mvw_lojas_vend_dia','select=vendedor,loja_nome,data_pedido,receita,pedidos,cancelados&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc')
+  var p=buscarTudo('mvw_loj_venda_dia','select=vendedor,loja,conta_ranking,data_pedido,receita,atendimentos'+filtroData(de,ate)+'&loja_tipo=eq.varejo&order=data_pedido.asc,loja.asc,vendedor.asc')
     .then(function(rows){ HM.cache[m]=hmAgg(rows); delete HM.inflight[m]; return HM.cache[m]; })
     .catch(function(e){ console.warn('HM fetch',e); HM.cache[m]={vend:{}}; delete HM.inflight[m]; return HM.cache[m]; });
   HM.inflight[m]=p; return p;
@@ -1450,7 +1292,7 @@ function hmRenderCompare(data, nome){
   var loja=(data.vend[nome]&&data.vend[nome].loja)||HM.vendLoja;
   if(!loja){ box.innerHTML='<div class="hmc-empty">Sem loja de referência para comparar.</div>'; return; }
   var peers=Object.keys(data.vend).filter(function(v){
-    return v && v!=='Vendedor Não Identificado' && !NAO_VENDEDORES.has(v) && data.vend[v].loja===loja && hmTotVal(data.vend[v])>0;
+    return v && data.vend[v].rank!==false && data.vend[v].loja===loja && hmTotVal(data.vend[v])>0;
   }).map(function(v){ return {nome:v, val:hmTotVal(data.vend[v])}; }).sort(function(a,b){return b.val-a.val;});
   if(!peers.length){ box.innerHTML='<div class="hmc-empty">Sem vendas na loja neste mês.</div>'; return; }
   var mx=peers[0].val||1, rank=peers.map(function(p){return p.nome;}).indexOf(nome)+1;
@@ -1467,37 +1309,59 @@ function hmRenderCompare(data, nome){
   box.innerHTML=html;
 }
 
-// Escopo por produto: quando há SKU ou categoria selecionada, cada pedido passa a
-// valer a SOMA dos seus itens que casam (pedidos sem item da categoria saem). Faz
-// KPIs/hero/loja-cards refletirem o filtro de produto, não só as tabelas de item.
-// Limita-se à janela com itens disponíveis (M/M-1) — mesma limitação das tabelas.
-function escopoProduto(pedidos){
-  var itemMatch = STATE.skuSel ? function(it){return it._sku_pai===STATE.skuSel;}
-                : STATE.catSel ? function(it){return (it._cat||'OUTROS')===STATE.catSel;}
-                : null;
-  if(!itemMatch) return pedidos;
-  var porPed={};
-  STATE.itens.forEach(function(it){ if(itemMatch(it)) porPed[it.pedido_id]=(porPed[it.pedido_id]||0)+it._receita; });
-  var out=[];
-  pedidos.forEach(function(p){
-    var v=porPed[p.id];
-    if(v!=null){ var c=Object.assign({},p); c.valor_bruto=v; c._canc=false; out.push(c); }
-  });
-  return out;
+// Escopo por produto: com estilo ou categoria escolhidos, as linhas da tela passam a ser as da
+// porta naquele estilo/categoria (mvw_loj_venda_produto_dia / _categoria_dia), no período
+// inteiro, e os indicadores vêm da lojas_indicadores com o mesmo filtro (atendimentos = pedidos
+// com aquele estilo/categoria, como o banco define). Busca uma vez por filtro e guarda.
+async function linhasEscopo(de,ate,sku,cat){
+  var k=(sku?'s:'+sku:'c:'+cat)+'|'+de+'|'+ate;
+  if(!STATE.escopoCache[k]){
+    STATE.escopoCache[k]=(sku?fetchProdDia(de,ate,sku):fetchCatDia(de,ate,cat)).then(function(rows){return rows.map(linhaPorta);});
+  }
+  return STATE.escopoCache[k];
 }
-function renderAll(){
-  STATE.pedidos=filtrarPedidos(STATE.pedidosRaw);
-  STATE.anteriores=filtrarPedidos(STATE.anterioresRaw);
-  // Atacado: só escopo de período (não segue filtro de produto/categoria — os itens do
-  // atacado nem são buscados, o fetch de itens exclui IGNORAR_LOJA). Calculado antes de
+function filtroProduto(){
+  return STATE.skuSel?{p_sku_pai:STATE.skuSel}:(STATE.catSel?{p_categoria:STATE.catSel}:{});
+}
+// Busca tudo o que os quadros precisam para o filtro atual (linhas do escopo + indicadores).
+async function prepararEscopo(){
+  var prod=filtroProduto(), temProd=!!(STATE.skuSel||STATE.catSel), ant=STATE.ant;
+  var cmp=ant?{p_de_ant:ant.de,p_ate_ant:ant.ate}:{};
+  var per={p_de:DE,p_ate:ATE,p_tipo:'varejo'};
+  var vend=STATE.vendSel?{p_vendedor:STATE.vendSel}:{};
+  var res=await Promise.all([
+    temProd?linhasEscopo(DE,ATE,STATE.skuSel,STATE.catSel):Promise.resolve(null),
+    (temProd&&ant)?linhasEscopo(ant.de,ant.ate,STATE.skuSel,STATE.catSel):Promise.resolve(null),
+    indicadores(Object.assign({p_agrupar:'total'},per,prod,vend,cmp)),
+    indicadores(Object.assign({p_agrupar:'loja'},per,prod,vend,cmp)),
+    indicadores(Object.assign({p_agrupar:'vendedor'},per,prod)),
+    indicadores(Object.assign({p_agrupar:'dia'},per,prod,vend)),
+    rpcIndicadores({p_de:DE,p_ate:ATE,p_agrupar:'total',p_loja:LOJA_ATACADO,p_tipo:'atacado'})
+  ]);
+  var porVend=function(rows){return STATE.vendSel?rows.filter(function(p){return p._vend===STATE.vendSel;}):rows;};
+  // Devolve sem gravar: quem grava no STATE é o renderAll, e só se nenhum clique mais novo
+  // pediu outro recorte (senão a resposta atrasada sobrescreveria a mais nova).
+  return {pedidosEscopo:porVend(temProd?soVarejoSel(res[0]):STATE.pedidos),
+    anterioresEscopo:porVend(temProd?soVarejoSel(res[1]||[]):STATE.anteriores),
+    ind:{total:res[2][0]||null, loja:res[3], vend:res[4], dia:res[5], atacado:res[6][0]||null}};
+}
+var RENDER_TOK=0;
+async function renderAll(){
+  var tok=++RENDER_TOK;
+  STATE.pedidos=soVarejoSel(STATE.diaRaw);
+  STATE.anteriores=soVarejoSel(STATE.diaPrevRaw);
+  var esc0;
+  try{ esc0=await prepararEscopo(); }
+  catch(e){
+    console.error('prepararEscopo:',e);
+    if(tok===RENDER_TOK) document.getElementById('kpis').innerHTML='<div class="kpi hero"><div class="kpi-lbl">Erro ao ler a porta das lojas</div><div class="kpi-val d-dn">!</div><div class="kpi-sub">'+esc(e.message)+'</div></div>';
+    return;
+  }
+  if(tok!==RENDER_TOK) return;   // outro clique já pediu outro recorte: descarta esta resposta
+  STATE.pedidosEscopo=esc0.pedidosEscopo; STATE.anterioresEscopo=esc0.anterioresEscopo; STATE.ind=esc0.ind;
+  // Atacado: só escopo de período (não segue filtro de produto/categoria). Calculado antes de
   // renderVendedores, que usa STATE.atacado na coluna "Atacado" e na comissão.
   STATE.atacado=calcAtacado();
-  var _baseCur=STATE.vendSel?STATE.pedidos.filter(function(p){return p._vend===STATE.vendSel;}):STATE.pedidos;
-  var _basePrev=STATE.vendSel?STATE.anteriores.filter(function(p){return p._vend===STATE.vendSel;}):STATE.anteriores;
-  var _prodFiltro=STATE.skuSel||STATE.catSel;
-  STATE.pedidosEscopo=_prodFiltro?escopoProduto(_baseCur):_baseCur;
-  // sem itens do período anterior → sem comparação confiável; deltas mostram "—"
-  STATE.anterioresEscopo=_prodFiltro?[]:_basePrev;
 
   // Critical render path — visualmente prioritário
   renderKPIs();
@@ -1509,8 +1373,6 @@ function renderAll(){
   syncToURL();
 
   // Charts pesados — deferidos pro browser respirar (Chart.js bottleneck).
-  // Em janelas grandes (12 meses), esses renders somam ~500-800ms; mover
-  // pro idle deixa as KPIs e a tabela aparecerem antes.
   idle(function(){
     try{renderHero();}catch(e){console.error('renderHero:',e);}
     try{renderLojaCards();}catch(e){console.error('renderLojaCards:',e);}
@@ -1521,87 +1383,35 @@ function renderAll(){
 }
 
 // ---- KPIs ----
-function calcKPIs(pedidos){
-  var fat=0, ped=0, canc=0, porLoja={};
-  pedidos.forEach(function(p){
-    var v=parseFloat(p.valor_bruto||0);
-    if(p._canc){canc++;return;}
-    fat+=v; ped++;
-    if(!porLoja[p._nome]) porLoja[p._nome]={fat:0,ped:0,cor:p._cor};
-    porLoja[p._nome].fat+=v;
-    porLoja[p._nome].ped++;
-  });
-  var total=ped+canc;
-  return {fat:fat,ped:ped,canc:canc,tm:ped>0?fat/ped:0,tc:total>0?canc/total*100:0,porLoja:porLoja};
-}
 function delta(a,b){if(!b) return null;return (a-b)/b*100;}
 function deltaBadge(d){
-  if(d===null||isNaN(d)) return '<span class="delta-badge flat">—</span>';
+  if(d===null||d===undefined||isNaN(d)) return '<span class="delta-badge flat">—</span>';
   var cls=d>=0.5?'up':(d<=-0.5?'down':'flat');
   var sign=d>=0?'+':'';
   return '<span class="delta-badge '+cls+'">'+sign+d.toFixed(1)+'%</span>';
 }
-
-// PA por loja a partir dos itens (e geral)
-function calcPALoja(){
-  var qtdPorLoja={}, pedPorLoja={};
-  var pedSeen={};
-  STATE.itens.forEach(function(it){
-    if(STATE.lojasSel && Object.keys(STATE.lojasSel).length>0 && !STATE.lojasSel[it._loja]) return;
-    qtdPorLoja[it._loja]=(qtdPorLoja[it._loja]||0)+it._qtd;
-    var k=it._loja+'|'+it.pedido_id;
-    if(!pedSeen[k]){pedSeen[k]=true;pedPorLoja[it._loja]=(pedPorLoja[it._loja]||0)+1;}
+// Receita do mês corrente (até hoje), varejo, nas lojas escolhidas — base de meta e projeção.
+function fatMesCorrente(porChave){
+  var out={};
+  soVarejoSel(STATE.mtd).forEach(function(p){
+    if(STATE.vendSel && p._vend!==STATE.vendSel) return;
+    var k=porChave?porChave(p):'_';
+    out[k]=(out[k]||0)+p.valor_bruto;
   });
-  var paLoja={};
-  Object.keys(qtdPorLoja).forEach(function(l){
-    paLoja[l]=pedPorLoja[l]>0?qtdPorLoja[l]/pedPorLoja[l]:0;
-  });
-  return paLoja;
+  return out;
 }
 
 function renderKPIs(){
   var mensal=STATE.viewMode==='mensal';
-  var cur=calcKPIs(STATE.pedidosEscopo);
-  var prev=calcKPIs(STATE.anterioresEscopo);
-
-  // pedToVend pra filtrar itens por vendedor selecionado
-  var pedVendMap={};
-  if(STATE.vendSel) STATE.pedidos.forEach(function(p){if(p._vend===STATE.vendSel) pedVendMap[p.id]=true;});
-
-  // PA geral + Quantidade de Produtos (peças) a partir dos itens
-  var paGeral=null, qtdTotal=null;
-  if(STATE.itens.length>0){
-    var pedIds={},qtd=0;
-    STATE.itens.forEach(function(it){
-      if(STATE.vendSel && !pedVendMap[it.pedido_id]) return;
-      if(STATE.skuSel && it._sku_pai!==STATE.skuSel) return;
-      if(STATE.catSel && (it._cat||'OUTROS')!==STATE.catSel) return;
-      if(STATE.lojasSel[it._loja] || Object.keys(STATE.lojasSel).every(function(k){return !STATE.lojasSel[k];})){
-        qtd+=it._qtd;
-        pedIds[it.pedido_id]=true;
-      }
-    });
-    var nPed=Object.keys(pedIds).length;
-    paGeral=nPed>0?qtd/nPed:0;
-    qtdTotal=qtd;
-  }
+  var t=(STATE.ind&&STATE.ind.total)||{receita:0,atendimentos:0,pecas:0,ticket:null,pa:null};
+  var temAnt=!!STATE.ant;
 
   var html='';
   // Projeção e meta integradas no KPI Receita
   var h=hojeSP();
   var inicioM=inicioMesSP();var fimM=fimMesSP();
   var diasDec=daysBetween(inicioM,h);var diasTot=daysBetween(inicioM,fimM);
-  var fatMes=0;
-  (STATE.pedidosRaw||[]).forEach(function(p){
-    var d=(p.data_pedido||'').slice(0,10);
-    if(d<inicioM||d>h) return;
-    var st=(p.status||'').toLowerCase();
-    if(st==='cancelado'||st==='devolvido') return;
-    var nome=getLoja(p.loja_nome,p.origem_conta);
-    if(IGNORAR_LOJA.indexOf(nome)>=0) return;
-    if(STATE.vendSel && ((p.vendedor||'').trim()||'Vendedor Não Identificado')!==STATE.vendSel) return;
-    fatMes+=parseFloat(p.valor_bruto||0);
-  });
+  var fatMes=fatMesCorrente()._||0;
   var projTotal=diasDec>0?fatMes/diasDec*diasTot:0;
   var metaTotal=Object.values(STATE.metas).reduce(function(s,v){return s+v;},0);
   var pctMeta=metaTotal>0?fatMes/metaTotal*100:0;
@@ -1609,8 +1419,8 @@ function renderKPIs(){
 
   html+='<div class="kpi hero">';
   html+='<div class="kpi-lbl">Receita Bruta</div>';
-  html+='<div class="kpi-val">'+fmt(cur.fat)+'</div>';
-  html+='<div class="kpi-delta">'+deltaBadge(delta(cur.fat,prev.fat))+' <span style="color:#d4d4d8">'+(mensal?'vs ano passado':'vs anterior')+'</span></div>';
+  html+='<div class="kpi-val">'+fmt(t.receita)+'</div>';
+  html+='<div class="kpi-delta">'+deltaBadge(temAnt?t.var_receita_pct:null)+' <span style="color:#d4d4d8">'+(mensal?'vs ano passado':'vs anterior')+'</span></div>';
   if(metaTotal>0 && !mensal){
     var barW=pctMeta>100?100:pctMeta;
     var barC=pctMeta>=100?'var(--green)':(pctMeta>=70?'var(--amber)':'var(--red)');
@@ -1627,20 +1437,19 @@ function renderKPIs(){
     html+='</div>';
   }
   html+='</div>';
-  html+='<div class="kpi" style="position:relative;overflow:hidden"><div class="kpi-lbl">Pedidos</div><div class="kpi-val">'+fmtN(cur.ped)+'</div><div class="kpi-delta">'+deltaBadge(delta(cur.ped,prev.ped))+'</div><canvas class="kpi-spark" id="spark-ped"></canvas></div>';
-  html+='<div class="kpi" style="position:relative;overflow:hidden"><div class="kpi-lbl">Qtd. Produtos</div><div class="kpi-val">'+(qtdTotal!==null?fmtN(qtdTotal):'—')+'</div><div class="kpi-sub">'+(qtdTotal!==null?'peças vendidas':'carregando…')+'</div><canvas class="kpi-spark" id="spark-qtd"></canvas></div>';
-  html+='<div class="kpi" style="position:relative;overflow:hidden"><div class="kpi-lbl">Ticket Médio</div><div class="kpi-val">'+fmt(cur.tm)+'</div><div class="kpi-delta">'+deltaBadge(delta(cur.tm,prev.tm))+'</div><canvas class="kpi-spark" id="spark-tm"></canvas></div>';
+  html+='<div class="kpi" style="position:relative;overflow:hidden"><div class="kpi-lbl">Atendimentos</div><div class="kpi-val">'+fmtN(t.atendimentos)+'</div><div class="kpi-delta">'+deltaBadge(temAnt?delta(t.atendimentos,t.atendimentos_ant):null)+'</div><canvas class="kpi-spark" id="spark-ped"></canvas></div>';
+  html+='<div class="kpi" style="position:relative;overflow:hidden"><div class="kpi-lbl">Qtd. Produtos</div><div class="kpi-val">'+fmtN(t.pecas)+'</div><div class="kpi-sub">peças vendidas</div><canvas class="kpi-spark" id="spark-qtd"></canvas></div>';
+  html+='<div class="kpi" style="position:relative;overflow:hidden"><div class="kpi-lbl">Ticket Médio</div><div class="kpi-val">'+(t.ticket!=null?fmt(t.ticket):'—')+'</div><div class="kpi-delta">'+deltaBadge(temAnt?t.var_ticket_pct:null)+'</div><canvas class="kpi-spark" id="spark-tm"></canvas></div>';
   html+='<div class="kpi hero">';
   html+='<div class="kpi-lbl">Peças / Atendimento</div>';
-  html+='<div class="kpi-val">'+(paGeral!==null?fmtD(paGeral):'—')+'</div>';
-  html+='<div class="kpi-sub">'+(paGeral!==null?'média do período':'fora do range 60d')+'</div>';
+  html+='<div class="kpi-val">'+(t.pa!=null?fmtD(t.pa):'—')+'</div>';
+  html+='<div class="kpi-sub">média do período</div>';
   html+='<canvas class="kpi-spark" id="spark-pa"></canvas>';
   html+='</div>';
 
-
   document.getElementById('kpis').innerHTML=html;
 
-  // Sparklines com destroy pra evitar memory leak
+  // Sparklines (indicadores por dia, prontos da lojas_indicadores) com destroy pra evitar memory leak
   var sparkOpts={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{enabled:false}},scales:{x:{display:false},y:{display:false}}};
   function mkSpark(id,key,labels,data,color){
     var el=document.getElementById(id);
@@ -1648,34 +1457,12 @@ function renderKPIs(){
     if(CHARTS[key]) CHARTS[key].destroy();
     CHARTS[key]=new Chart(el,{type:'line',data:{labels:labels,datasets:[{data:data,borderColor:color,backgroundColor:color+'26',fill:true,tension:0.4,pointRadius:0,borderWidth:2}]},options:sparkOpts});
   }
-  // Pedidos
-  var diarioPed={},diarioFat2={},diarioCnt2={};
-  STATE.pedidos.forEach(function(p){
-    if(p._canc)return;
-    var d=(p.data_pedido||'').slice(0,10);
-    diarioPed[d]=(diarioPed[d]||0)+1;
-    diarioFat2[d]=(diarioFat2[d]||0)+parseFloat(p.valor_bruto||0);
-    diarioCnt2[d]=(diarioCnt2[d]||0)+1;
-  });
-  var kp=Object.keys(diarioPed).sort();
-  mkSpark('spark-ped','sparkPed',kp,kp.map(function(k){return diarioPed[k];}),'#3b82f6');
-  mkSpark('spark-tm','sparkTM',kp,kp.map(function(k){return diarioCnt2[k]>0?diarioFat2[k]/diarioCnt2[k]:0;}),'#f59e0b');
-  // PA
-  if(STATE.itens.length>0){
-    var pedInfo={};
-    STATE.pedidos.forEach(function(p){if(!p._canc) pedInfo[p.id]=p.data_pedido;});
-    var porDiaPA={},porDiaPedPA={};
-    STATE.itens.forEach(function(it){
-      var d=(pedInfo[it.pedido_id]||'').slice(0,10);
-      if(!d) return;
-      porDiaPA[d]=(porDiaPA[d]||0)+it._qtd;
-      if(!porDiaPedPA[d]) porDiaPedPA[d]={};
-      porDiaPedPA[d][it.pedido_id]=true;
-    });
-    var paK=Object.keys(porDiaPA).sort();
-    mkSpark('spark-pa','sparkPA',paK,paK.map(function(k){var n=porDiaPedPA[k]?Object.keys(porDiaPedPA[k]).length:1;return n>0?porDiaPA[k]/n:0;}),'#a855f7');
-    mkSpark('spark-qtd','sparkQtd',paK,paK.map(function(k){return porDiaPA[k];}),'#22c55e');
-  }
+  var dias=((STATE.ind&&STATE.ind.dia)||[]).slice().sort(function(a,b){return a.chave<b.chave?-1:1;});
+  var kp=dias.map(function(r){return r.chave;});
+  mkSpark('spark-ped','sparkPed',kp,dias.map(function(r){return r.atendimentos;}),'#3b82f6');
+  mkSpark('spark-tm','sparkTM',kp,dias.map(function(r){return r.ticket||0;}),'#f59e0b');
+  mkSpark('spark-pa','sparkPA',kp,dias.map(function(r){return r.pa||0;}),'#a855f7');
+  mkSpark('spark-qtd','sparkQtd',kp,dias.map(function(r){return r.pecas;}),'#22c55e');
 }
 
 // ---- Export Image ----
@@ -1782,51 +1569,14 @@ function loadFromURL(){
 
 // ---- Highlights row ----
 function renderHighlights(){
-  // Top 5 vendedores — respeita filtro de produto (skuSel) E de categoria (catSel),
-  // igual à tabela renderVendedores. skuSel é mais específico que catSel.
-  var porVend={};
-  if(STATE.skuSel || STATE.catSel){
-    // Filtro ativo: agrega só os itens que casam (SKU selecionado ou categoria).
-    var itemMatch=STATE.skuSel
-      ? function(it){return it._sku_pai===STATE.skuSel;}
-      : function(it){return (it._cat||'OUTROS')===STATE.catSel;};
-    var pedToVend={};
-    STATE.pedidos.forEach(function(p){if(!p._canc) pedToVend[p.id]=p._vend;});
-    var pedSeen={};
-    STATE.itens.forEach(function(it){
-      if(!itemMatch(it)) return;
-      var v=pedToVend[it.pedido_id];
-      if(!v) return;
-      if(!porVend[v]) porVend[v]={nome:v,fat:0,ped:0,lojas:{}};
-      porVend[v].fat+=it._receita;
-      porVend[v].lojas[it._loja]=(porVend[v].lojas[it._loja]||0)+it._receita;
-      var k=v+'|'+it.pedido_id;
-      if(!pedSeen[k]){pedSeen[k]=true;porVend[v].ped++;}
-    });
-  } else {
-    STATE.pedidos.forEach(function(p){
-      if(p._canc) return;
-      var v=p._vend;
-      if(!porVend[v]) porVend[v]={nome:v,fat:0,ped:0,lojas:{}};
-      porVend[v].fat+=parseFloat(p.valor_bruto||0);
-      porVend[v].ped++;
-      porVend[v].lojas[p._nome]=(porVend[v].lojas[p._nome]||0)+parseFloat(p.valor_bruto||0);
-    });
-  }
-  Object.values(porVend).forEach(function(v){
-    var mx=0,top='—';
-    Object.keys(v.lojas).forEach(function(l){if(v.lojas[l]>mx){mx=v.lojas[l];top=l;}});
-    v.lojaTop=top;
-  });
-  var topVends=Object.values(porVend).sort(function(a,b){return b.fat-a.fat;}).slice(0,5);
+  // Top 5 vendedores — lojas_indicadores por vendedor, com o filtro de produto/categoria e as
+  // lojas escolhidas. Só quem conta no ranking (suporte/canal online/sem vendedor ficam fora).
+  var topVends=((STATE.ind&&STATE.ind.vend)||[]).filter(function(r){return !naoRanking(r.chave);})
+    .slice().sort(function(a,b){return b.receita-a.receita;}).slice(0,5)
+    .map(function(r){return {nome:r.chave,fat:r.receita,ped:r.atendimentos,tm:r.ticket,lojaTop:r.loja||'—'};});
 
-  // Top 5 produtos (SKU pai) — respeita filtro de loja/vendedor
-  var topGrupos=STATE.skuGroups;
-  if(temFiltroAtivo()){
-    topGrupos=gruparSkusFromItens(itensFiltrados().itens);
-  }
-  var topProds=topGrupos.slice(0,5);
-
+  // Top 5 produtos (estilo) — respeita filtro de loja/vendedor/categoria
+  var topProds=gruparSkusFromItens(itensFiltrados().itens).slice(0,5);
   var html='';
 
   // Top 5 vendedores
@@ -1836,7 +1586,7 @@ function renderHighlights(){
   if(topVends.length===0) html+='<div style="color:#d4d4d8;font-size:11px;padding:10px;">Sem dados</div>';
   topVends.forEach(function(v,i){
     var cor=getCor(v.lojaTop);
-    var tm=v.ped>0?v.fat/v.ped:0;
+    var tm=v.tm;
     var isActive=STATE.vendSel===v.nome;
     html+='<div class="hl-mini rank-'+(i+1)+(isActive?' active':'')+'" onclick="selectVend(\''+v.nome.replace(/'/g,"\\'")+'\')">';
     html+='<span class="hl-rank">#'+(i+1)+'</span>';
@@ -1844,7 +1594,7 @@ function renderHighlights(){
     html+='<div class="hl-name" title="'+v.nome+'">'+v.nome+'</div>';
     html+='<div class="hl-val">'+fmt(v.fat)+'</div>';
     html+='<div class="hl-sub">Vendas: '+fmtN(v.ped)+'</div>';
-    html+='<div class="hl-sub">T.M.: '+fmt(tm)+'</div>';
+    html+='<div class="hl-sub">T.M.: '+(tm!=null?fmt(tm):'—')+'</div>';
     html+='</div>';
   });
   html+='</div></div>';
@@ -1951,7 +1701,6 @@ function renderHero(){
   var diario={};
   var lojas={};
   pedidosUse.forEach(function(p){
-    if(p._canc) return;
     var d=mensal?(p.data_pedido||'').slice(0,7):(p.data_pedido||'').slice(0,10);
     if(!d) return;
     if(!diario[d]) diario[d]={};
@@ -1971,7 +1720,6 @@ function renderHero(){
     var prevUse=STATE.anterioresEscopo||STATE.anteriores||[];
     var pm={};
     prevUse.forEach(function(p){
-      if(p._canc) return;
       var k=(p.data_pedido||'').slice(0,7); if(!k) return;
       pm[k]=(pm[k]||0)+parseFloat(p.valor_bruto||0);
     });
@@ -2169,18 +1917,8 @@ function calcProjMesLoja(){
   var fimMes=fimMesSP();
   var diasDecorridos=daysBetween(inicioMes,hoje);
   var diasTotalMes=daysBetween(inicioMes,fimMes);
-  // Fat do mês atual por loja
-  var fatMesLoja={};
-  STATE.pedidosRaw.forEach(function(p){
-    var d=(p.data_pedido||'').slice(0,10);
-    if(d<inicioMes||d>hoje) return;
-    var st=(p.status||'').toLowerCase();
-    if(st==='cancelado'||st==='devolvido') return;
-    var nome=getLoja(p.loja_nome,p.origem_conta);
-    if(IGNORAR_LOJA.indexOf(nome)>=0) return;
-    if(STATE.vendSel && ((p.vendedor||'').trim()||'Vendedor Não Identificado')!==STATE.vendSel) return;
-    fatMesLoja[nome]=(fatMesLoja[nome]||0)+parseFloat(p.valor_bruto||0);
-  });
+  // Fat do mês atual por loja (porta, varejo, invariante ao chip de período)
+  var fatMesLoja=fatMesCorrente(function(p){return p._nome;});
   // Projeção simples: (fat acumulado / dias decorridos) * dias total mês
   var proj={};
   if(diasDecorridos>0){
@@ -2197,17 +1935,10 @@ function calcVendMes(){
   var inicioMes=inicioMesSP(), hoje=hojeSP(), fimMes=fimMesSP();
   var diasDecorridos=daysBetween(inicioMes,hoje), diasTotalMes=daysBetween(inicioMes,fimMes);
   var fatMes={}, fatOntem={};   // fatOntem = realizado do mês ATÉ ONTEM (base do catch-up)
-  (STATE.pedidosRaw||[]).forEach(function(p){
+  soVarejoSel(STATE.mtd).forEach(function(p){
     var d=(p.data_pedido||'').slice(0,10);
-    if(d<inicioMes||d>hoje) return;
-    var st=(p.status||'').toLowerCase();
-    if(st==='cancelado'||st==='devolvido') return;
-    var nome=getLoja(p.loja_nome,p.origem_conta);
-    if(IGNORAR_LOJA.indexOf(nome)>=0) return;
-    var v=(p.vendedor||'').trim()||'Vendedor Não Identificado';
-    var val=parseFloat(p.valor_bruto||0);
-    fatMes[v]=(fatMes[v]||0)+val;
-    if(d<hoje) fatOntem[v]=(fatOntem[v]||0)+val;
+    fatMes[p._vend]=(fatMes[p._vend]||0)+p.valor_bruto;
+    if(d<hoje) fatOntem[p._vend]=(fatOntem[p._vend]||0)+p.valor_bruto;
   });
   var proj={};
   if(diasDecorridos>0) Object.keys(fatMes).forEach(function(v){proj[v]=fatMes[v]/diasDecorridos*diasTotalMes;});
@@ -2220,11 +1951,11 @@ async function fetchDowProfile(){
   if(STATE.dowW) return;
   try{
     var h=hojeSP(), de=somaDias(h,-90);
-    var rows=await buscarTudo('mvw_lojas_dia','select=loja_nome,data_pedido,receita_bruta&data_pedido=gte.'+de+'&data_pedido=lte.'+h+'&order=data_pedido.asc');
+    var rows=(await fetchDia(de,h,'&loja_tipo=eq.varejo')).map(linhaPorta);
     var sum={}, days={}, gSum=[0,0,0,0,0,0,0], gDays=[{},{},{},{},{},{},{}];
     rows.forEach(function(r){
-      var loja=(r.loja_nome||'').trim(); if(IGNORAR_LOJA.indexOf(loja)>=0) return;
-      var d=(r.data_pedido||'').slice(0,10); var dw=dowIdx(d); var rec=parseFloat(r.receita_bruta||0);
+      var loja=r._nome;
+      var d=(r.data_pedido||'').slice(0,10); var dw=dowIdx(d); var rec=r.valor_bruto;
       if(!sum[loja]){sum[loja]=[0,0,0,0,0,0,0]; days[loja]=[{},{},{},{},{},{},{}];}
       sum[loja][dw]+=rec; days[loja][dw][d]=true;
       gSum[dw]+=rec; gDays[dw][d]=true;
@@ -2235,32 +1966,18 @@ async function fetchDowProfile(){
     });
     W._g=gSum.map(function(s,i){var n=Object.keys(gDays[i]).length; return n>0?s/n:0;});
     STATE.dowW=W;
-    // Realizado do mês corrente ATÉ ONTEM — por loja e por vendedor — a partir das MVs
+    // Realizado do mês corrente ATÉ ONTEM — por loja e por vendedor — das mesmas linhas
     // (INVARIANTE ao período/chip selecionado). Base do "Meta hoje" (catch-up): sem isso,
-    // o realizado saía de pedidosRaw (escopado ao período) e a Meta hoje mudava entre
-    // "Hoje" (realizado=0 → meta inflada) e "Este Mês" (realizado real → meta correta).
+    // a Meta hoje mudava entre "Hoje" (realizado=0 → meta inflada) e "Este Mês".
     var im=inicioMesSP();
-    var mLoja={};
+    var mLoja={}, mVend={};
     rows.forEach(function(r){
       var d=(r.data_pedido||'').slice(0,10);
       if(d<im || d>=h) return;  // [início do mês, ontem]
-      var loja=(r.loja_nome||'').trim(); if(IGNORAR_LOJA.indexOf(loja)>=0) return;
-      mLoja[loja]=(mLoja[loja]||0)+parseFloat(r.receita_bruta||0);
+      mLoja[r._nome]=(mLoja[r._nome]||0)+r.valor_bruto;
+      if(r._vend) mVend[r._vend]=(mVend[r._vend]||0)+r.valor_bruto;
     });
     STATE.mtdLojaOntem=mLoja;
-    var mVend={};
-    try{
-      // ⚠️ PRECISA trazer loja_nome e filtrar IGNORAR_LOJA. Sem isso, o realizado que
-      // alimenta a "Meta hoje" incluiria Atacado Lojas / Atacado WhatsApp enquanto o
-      // Atg.% (que sai de STATE.pedidos, já filtrado) não — as duas colunas discordariam
-      // e a meta do dia apareceria menor do que realmente é.
-      var vr=await buscarTudo('mvw_lojas_vend_dia','select=vendedor,loja_nome,data_pedido,receita&data_pedido=gte.'+im+'&data_pedido=lt.'+h+'&order=data_pedido.asc');
-      vr.forEach(function(r){
-        var v=(r.vendedor||'').trim(); if(!v) return;
-        if(IGNORAR_LOJA.indexOf((r.loja_nome||'').trim())>=0) return;
-        mVend[v]=(mVend[v]||0)+parseFloat(r.receita||0);
-      });
-    }catch(e){console.warn('mtdVend:',e);}
     STATE.mtdVendOntem=mVend;
   }catch(e){console.warn('dowW:',e); STATE.dowW={_g:[1,1,1,1,1,1.6,0]};}
 }
@@ -2286,22 +2003,17 @@ function mesesNoRange(de,ate){
 // ============================================================
 // 🟠 Atacado Lojas — entidade separada do varejo
 // ============================================================
-// Agrega de STATE.pedidosRaw (PRÉ-filtro) de propósito: filtrarPedidos descarta a loja
-// inteira via IGNORAR_LOJA, que é exatamente o que mantém o atacado fora dos KPIs, dos
-// cards de loja, do Pareto e do atingimento de meta. pedidosRaw já vem escopado ao
-// período do chip (fetchPedidos(DE,ATE)), então não precisa refiltrar por data.
+// Linhas da porta com loja_tipo='atacado' da loja "Atacado Lojas" (o varejo nunca as lê: tudo
+// o mais pede loja_tipo/p_tipo 'varejo'). Escopo = período do chip; não segue filtro de
+// produto/categoria. Totais e ticket vêm prontos da lojas_indicadores (p_tipo='atacado');
+// por vendedor é só a soma da receita das linhas.
 function calcAtacado(){
-  var out={fat:0, ped:0, tm:0, porVend:{}};
-  var CANC=['cancelado','devolvido'];
-  (STATE.pedidosRaw||[]).forEach(function(p){
-    if(getLoja(p.loja_nome,p.origem_conta)!==LOJA_ATACADO) return;
-    if(CANC.indexOf((p.status||'').toLowerCase())>=0) return;
-    var v=(p.vendedor||'').trim()||'Vendedor Não Identificado';
-    var val=parseFloat(p.valor_bruto||0);
-    out.fat+=val; out.ped++;
-    out.porVend[v]=(out.porVend[v]||0)+val;
+  var t=(STATE.ind&&STATE.ind.atacado)||null;
+  var out={fat:t?t.receita:0, ped:t?t.atendimentos:0, tm:t?t.ticket:null, porVend:{}};
+  (STATE.diaRaw||[]).forEach(function(p){
+    if(p._tipo!=='atacado' || p._nome!==LOJA_ATACADO) return;
+    out.porVend[p._vend]=(out.porVend[p._vend]||0)+p.valor_bruto;
   });
-  out.tm=out.ped>0?out.fat/out.ped:0;
   return out;
 }
 
@@ -2324,7 +2036,7 @@ function renderAtacado(){
       '</div>'+
       '<div class="atc-stats">'+
         '<div class="atc-stat"><div class="atc-stat-lbl">Vendas</div><div class="atc-stat-val">'+fmtN(a.ped)+'</div></div>'+
-        '<div class="atc-stat"><div class="atc-stat-lbl">Ticket médio</div><div class="atc-stat-val">'+fmt(a.tm)+'</div></div>'+
+        '<div class="atc-stat"><div class="atc-stat-lbl">Ticket médio</div><div class="atc-stat-val">'+(a.tm!=null?fmt(a.tm):'—')+'</div></div>'+
         '<div class="atc-stat"><div class="atc-stat-lbl">Vendedores</div><div class="atc-stat-val">'+fmtN(vends.length)+'</div></div>'+
       '</div>'+
     '</div>'+
@@ -2339,58 +2051,36 @@ function renderAtacado(){
 function renderLojaCards(){
   var mensal=STATE.viewMode==='mensal';
   var pedidosUse=STATE.pedidosEscopo||STATE.pedidos;
-  var anterioresUse=STATE.anterioresEscopo||STATE.anteriores;
-  var cur=calcKPIs(pedidosUse).porLoja;
-  var prev=calcKPIs(anterioresUse).porLoja;
+  // Receita, atendimentos, ticket, PA e variação por loja: prontos da lojas_indicadores
+  var cur={};
+  ((STATE.ind&&STATE.ind.loja)||[]).forEach(function(r){
+    cur[r.chave]={fat:r.receita,ped:r.atendimentos,tm:r.ticket,pa:r.pa,dlt:STATE.ant?r.var_receita_pct:null};
+  });
   var fatTotal=Object.values(cur).reduce(function(s,c){return s+c.fat;},0);
   // Sempre mostra as lojas conhecidas/selecionadas (com R$0 se não venderam no período) — não some em dia parado.
-  var nomes=(STATE.lojas||[]).filter(function(n){return IGNORAR_LOJA.indexOf(n)<0 && n!==REDISTRIBUIR_LOJA && (!STATE.lojasSel||STATE.lojasSel[n]);});
-  Object.keys(cur).forEach(function(n){if(nomes.indexOf(n)<0 && IGNORAR_LOJA.indexOf(n)<0 && n!==REDISTRIBUIR_LOJA) nomes.push(n);});
+  var nomes=(STATE.lojas||[]).filter(function(n){return !STATE.lojasSel||STATE.lojasSel[n];});
+  Object.keys(cur).forEach(function(n){if(nomes.indexOf(n)<0) nomes.push(n);});
   nomes.sort(function(a,b){return (cur[b]?cur[b].fat:0)-(cur[a]?cur[a].fat:0);});
-  var paLoja=calcPALoja();
   var projMes=calcProjMesLoja();
 
   // Pre-compute: sparkline data + fat mês por loja (uma passada só)
-  var sparkData={}, fatMesPorLoja={}, fatMesLojaOntem={};
-  var _inicioM=inicioMesSP(), _hojeC=hojeSP();
+  var sparkData={};
   pedidosUse.forEach(function(p){
-    if(p._canc) return;
     var d=(p.data_pedido||'').slice(0,10);
     if(!sparkData[p._nome]) sparkData[p._nome]={};
-    sparkData[p._nome][d]=(sparkData[p._nome][d]||0)+parseFloat(p.valor_bruto||0);
+    sparkData[p._nome][d]=(sparkData[p._nome][d]||0)+p.valor_bruto;
   });
-  (STATE.pedidosRaw||[]).forEach(function(p2){
-    var d2=(p2.data_pedido||'').slice(0,10);
-    if(d2<_inicioM||d2>_hojeC) return;
-    var st2=(p2.status||'').toLowerCase();
-    if(st2==='cancelado'||st2==='devolvido') return;
-    var nm=getLoja(p2.loja_nome,p2.origem_conta);
-    if(IGNORAR_LOJA.indexOf(nm)>=0) return;
-    if(STATE.vendSel && ((p2.vendedor||'').trim()||'Vendedor Não Identificado')!==STATE.vendSel) return;
-    var v2=parseFloat(p2.valor_bruto||0);
-    fatMesPorLoja[nm]=(fatMesPorLoja[nm]||0)+v2;
-    if(d2<_hojeC) fatMesLojaOntem[nm]=(fatMesLojaOntem[nm]||0)+v2;
-  });
-  var _periodoAbertoL=ATE>=_hojeC;
-
-  // Clientes cadastrados (vendas com cliente identificado no Linx — crm_cliente_id,
-  // exclui consumidor padrão). Por loja: nº de clientes distintos + % das vendas.
-  var crmPorLoja={};
-  pedidosUse.forEach(function(p){
-    if(p._canc) return;
-    if(!crmPorLoja[p._nome]) crmPorLoja[p._nome]={ident:0,total:0,cli:{}};
-    crmPorLoja[p._nome].total++;
-    if(p.crm_cliente_id){ crmPorLoja[p._nome].ident++; crmPorLoja[p._nome].cli[p.crm_cliente_id]=1; }
-  });
+  var fatMesPorLoja=fatMesCorrente(function(p){return p._nome;});
+  var _periodoAbertoL=ATE>=hojeSP();
 
   var cardId=0;
   var html=nomes.map(function(n){
-    var c=cur[n]||{fat:0,ped:0}, p=prev[n]||{fat:0,ped:0};
-    var tm=c.ped>0?c.fat/c.ped:0;
+    var c=cur[n]||{fat:0,ped:0,tm:null,pa:null,dlt:null};
+    var tm=c.tm;
     var pct=fatTotal>0?c.fat/fatTotal*100:0;
-    var dlt=p.fat?((c.fat-p.fat)/p.fat*100):null;
+    var dlt=(c.dlt==null||isNaN(c.dlt))?null:c.dlt;
     var dltTxt=dlt===null?'—':((dlt>=0?'+':'')+dlt.toFixed(1)+'%');
-    var pa=paLoja[n];
+    var pa=c.pa;
     // Mensal: sem previsão de mês nem meta por loja (não fazem sentido em janela de meses)
     var proj=mensal?0:(projMes[n]||0);
     var meta=mensal?0:(STATE.metas[n]||0);
@@ -2414,7 +2104,7 @@ function renderLojaCards(){
     var projPctMeta=meta>0?proj/meta*100:0;
     var projCor=meta>0?(projPctMeta>=100?'var(--green)':(projPctMeta>=70?'var(--amber)':'var(--red)')):'var(--amber)';
     // Meta do dia (catch-up ponderado por dia-da-semana) — só no mês corrente aberto (não no mensal).
-    // realAteOntem vem de STATE.mtdLojaOntem (MV, INVARIANTE ao período) — não de pedidosRaw
+    // realAteOntem vem de STATE.mtdLojaOntem (porta, INVARIANTE ao período) — não do período
     // (escopado ao chip), senão a Meta hoje mudava entre "Hoje" e "Este Mês".
     var _realOntemLoja=(STATE.mtdLojaOntem&&STATE.mtdLojaOntem[n])||0;
     var metaDiaLoja=(!mensal && _periodoAbertoL && meta>0)?metaDoDia(meta,_realOntemLoja,n):null;
@@ -2433,27 +2123,12 @@ function renderLojaCards(){
       '</div>'+
       '<div class="cc-bar-wrap"><div class="cc-bar-fill" style="width:'+pct.toFixed(1)+'%"></div></div>'+
       '<div class="cc-bar-lbl">'+Math.round(pct)+'% do fat total das lojas</div>'+
-      (function(){
-        var crm=crmPorLoja[n]||{ident:0,total:0,cli:{}};
-        var nc=Object.keys(crm.cli).length;
-        var pi=crm.total>0?crm.ident/crm.total*100:0;
-        var cor,bg,bd;
-        if(pi>=20){cor='var(--green)';bg='rgba(34,197,94,0.13)';bd='rgba(34,197,94,0.5)';}
-        else if(pi>=5){cor='var(--amber)';bg='rgba(245,158,11,0.13)';bd='rgba(245,158,11,0.45)';}
-        else{cor='#f87171';bg='rgba(248,113,113,0.11)';bd='rgba(248,113,113,0.4)';}
-        return '<div title="Vendas com cliente identificado no Linx (exclui consumidor padrão)" '+
-          'style="margin:12px 0 4px;padding:11px 13px;border-radius:12px;background:'+bg+';border:1px solid '+bd+';display:flex;align-items:center;gap:12px;">'+
-          '<span style="font-size:26px;line-height:1;">👤</span>'+
-          '<div style="line-height:1.1;flex:1;">'+
-            '<div style="font-size:1.7rem;font-weight:800;color:var(--txt1);font-variant-numeric:tabular-nums;letter-spacing:-0.01em;">'+fmtN(nc)+
-              '<span style="font-size:1rem;font-weight:800;color:'+cor+';margin-left:8px;">'+pi.toFixed(0)+'%</span></div>'+
-            '<div style="font-size:10px;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:var(--txt3);margin-top:2px;">clientes cadastrados · % das vendas</div>'+
-          '</div></div>';
-      })()+
+      // (O quadro "clientes cadastrados · % das vendas" saiu em 03/11/2026: a porta das lojas
+      // não traz o cliente do pedido; volta quando a porta tiver essa coluna.)
       '<div class="cc-stats">'+
-        '<div class="cc-stat"><div class="cc-stat-lbl">Pedidos</div><div class="cc-stat-val">'+fmtN(c.ped)+'</div></div>'+
-        '<div class="cc-stat"><div class="cc-stat-lbl">Ticket</div><div class="cc-stat-val">'+fmt(tm)+'</div></div>'+
-        '<div class="cc-stat"><div class="cc-stat-lbl">'+(pa!==undefined?'PA':'—')+'</div><div class="cc-stat-val">'+(pa!==undefined?fmtD(pa):'—')+'</div></div>'+
+        '<div class="cc-stat"><div class="cc-stat-lbl">Atendimentos</div><div class="cc-stat-val">'+fmtN(c.ped)+'</div></div>'+
+        '<div class="cc-stat"><div class="cc-stat-lbl">Ticket</div><div class="cc-stat-val">'+(tm!=null?fmt(tm):'—')+'</div></div>'+
+        '<div class="cc-stat"><div class="cc-stat-lbl">PA</div><div class="cc-stat-val">'+(pa!=null?fmtD(pa):'—')+'</div></div>'+
       '</div>'+
       metaHtml+
       metaDiaHtml+
@@ -2482,23 +2157,6 @@ function renderLojaCards(){
 function dowIdx(dstr){var dt=new Date(dstr+'T12:00:00Z');return (dt.getUTCDay()+6)%7;}
 
 // ---- Pareto SKU ----
-function agruparSkus(){
-  var map={};
-  STATE.itens.forEach(function(it){
-    var k=it._sku_pai;
-    if(!map[k]) map[k]={sku_pai:k,nome:it._nome,cat:it._cat,receita:0,qtd:0,porLoja:{},porTam:{}};
-    map[k].receita+=it._receita;
-    map[k].qtd+=it._qtd;
-    if(!map[k].porLoja[it._loja]) map[k].porLoja[it._loja]={receita:0,qtd:0,pedidos:{}};
-    map[k].porLoja[it._loja].receita+=it._receita;
-    map[k].porLoja[it._loja].qtd+=it._qtd;
-    map[k].porLoja[it._loja].pedidos[it.pedido_id]=true;
-    var tk=it._tam||'—';
-    if(!map[k].porTam[tk]) map[k].porTam[tk]={};
-    map[k].porTam[tk][it._loja]=(map[k].porTam[tk][it._loja]||0)+it._qtd;
-  });
-  STATE.skuGroups=Object.values(map).sort(function(a,b){return b.receita-a.receita;});
-}
 var paretoLabelsPlugin={
   id:'paretoLabels',
   afterDatasetsDraw:function(chart){
@@ -2542,11 +2200,7 @@ var paretoLabelsPlugin={
 };
 
 function renderPareto(){
-  var grupos=STATE.skuGroups;
-  if(temFiltroAtivo()){
-    var f=itensFiltrados();
-    grupos=gruparSkusFromItens(f.itens);
-  }
+  var grupos=gruparSkusFromItens(itensFiltrados().itens);
   // métrica selecionada: receita (R$) ou qtd (unidades)
   var qtdMode=STATE.paretoMode==='qtd';
   var val=function(s){return qtdMode?(s.qtd||0):(s.receita||0);};
@@ -2600,9 +2254,9 @@ function renderPareto(){
 // ---- Category filter chips ----
 function renderCatChips(){
   var cats={};
-  STATE.skuGroups.forEach(function(s){
-    var c=s.cat||'OUTROS';
-    cats[c]=(cats[c]||0)+s.receita;
+  (STATE.itens||[]).forEach(function(it){
+    var c=it._cat||'SEM CATEGORIA';
+    cats[c]=(cats[c]||0)+it._receita;
   });
   var sorted=Object.keys(cats).sort(function(a,b){return cats[b]-cats[a];});
   var el=document.getElementById('cat-chips');
@@ -2617,56 +2271,39 @@ function renderCatChips(){
 function toggleCat(c){
   STATE.catSel=c;
   renderAll();  // categoria reflete em TODOS os containers (KPIs, hero, lojas, pareto...)
-  if(STATE.skuSel) renderSkuDetail();
 }
 
-// Helper: algum filtro ativo (loja ou vendedor)?
-// STATE.lojasSel começa com todas TRUE; filtro de loja vira ativo quando nem todas estão TRUE.
-function temFiltroAtivo(){
-  if(STATE.vendSel) return true;
-  var keys=Object.keys(STATE.lojasSel||{});
-  if(keys.length===0) return false;
-  return !keys.every(function(k){return STATE.lojasSel[k];});
-}
-
+// Linhas por estilo da porta no escopo atual: lojas escolhidas, vendedor e categoria.
 function itensFiltrados(){
-  var pedToVend={};
-  STATE.pedidos.forEach(function(p){if(!p._canc) pedToVend[p.id]=p._vend;});
-  var itens=STATE.itens;
-  if(STATE.vendSel){
-    itens=itens.filter(function(it){return pedToVend[it.pedido_id]===STATE.vendSel;});
-  }
-  // Filtro de loja: STATE.itens é construído antes do filtro UI, então aplica aqui.
-  // Mesmo pattern de aplicarFiltrosPedidos (linha 566).
-  if(STATE.lojasSel && Object.keys(STATE.lojasSel).length>0){
-    itens=itens.filter(function(it){return STATE.lojasSel[it._loja];});
-  }
-  return {itens:itens,pedToVend:pedToVend};
+  var itens=(STATE.itens||[]).filter(function(it){
+    if(STATE.lojasSel && Object.keys(STATE.lojasSel).length>0 && !STATE.lojasSel[it._loja]) return false;
+    if(STATE.vendSel && it._vend!==STATE.vendSel) return false;
+    if(STATE.catSel && it._cat!==STATE.catSel) return false;
+    return true;
+  });
+  return {itens:itens};
 }
 
-// Reagrupa SKUs a partir de uma lista de itens (usa STATE.itens por default)
+// Agrupa linhas por estilo (sku_pai). Receita e peças somam; atendimentos do estilo somam
+// entre dias/lojas/vendedores (cada linha já é "pedidos com esse estilo").
 function gruparSkusFromItens(itens){
   var map={};
   itens.forEach(function(it){
     var k=it._sku_pai;
-    if(!map[k]) map[k]={sku_pai:k,nome:it._nome,cat:it._cat,receita:0,qtd:0,porLoja:{},porTam:{}};
+    if(!map[k]) map[k]={sku_pai:k,nome:it._nome,cat:it._cat,receita:0,qtd:0,porLoja:{}};
     map[k].receita+=it._receita;
     map[k].qtd+=it._qtd;
-    if(!map[k].porLoja[it._loja]) map[k].porLoja[it._loja]={receita:0,qtd:0,pedidos:{}};
+    if(!map[k].porLoja[it._loja]) map[k].porLoja[it._loja]={receita:0,qtd:0,n:0};
     map[k].porLoja[it._loja].receita+=it._receita;
     map[k].porLoja[it._loja].qtd+=it._qtd;
-    map[k].porLoja[it._loja].pedidos[it.pedido_id]=true;
-    var tk=it._tam||'—';
-    if(!map[k].porTam[tk]) map[k].porTam[tk]={};
-    map[k].porTam[tk][it._loja]=(map[k].porTam[tk][it._loja]||0)+it._qtd;
+    map[k].porLoja[it._loja].n+=it._n;
   });
   return Object.values(map).sort(function(a,b){return b.receita-a.receita;});
 }
 
 function renderSkuList(){
   var q=(document.getElementById('sku-search').value||'').toLowerCase();
-  var f=itensFiltrados();
-  var grupos=temFiltroAtivo()?gruparSkusFromItens(f.itens):STATE.skuGroups;
+  var grupos=gruparSkusFromItens(itensFiltrados().itens);
 
   // totLoja: receita total por loja no escopo atual (todos os SKUs filtrados)
   var totLoja={};
@@ -2677,7 +2314,6 @@ function renderSkuList(){
   });
 
   var listaFull=grupos.filter(function(s){
-    if(STATE.catSel && (s.cat||'OUTROS')!==STATE.catSel) return false;
     if(!q) return true;
     return s.sku_pai.toLowerCase().indexOf(q)>=0 || (s.nome||'').toLowerCase().indexOf(q)>=0;
   });
@@ -2780,17 +2416,12 @@ function clearSelections(){
 }
 
 function renderSkuDetail(){
-  // Se há filtro ativo (vendedor ou loja), reagrupa a partir dos itens filtrados
-  var grupos=STATE.skuGroups;
-  if(temFiltroAtivo()){
-    var f=itensFiltrados();
-    grupos=gruparSkusFromItens(f.itens);
-  }
+  // Reagrupa a partir das linhas no escopo atual (lojas, vendedor, categoria)
+  var grupos=gruparSkusFromItens(itensFiltrados().itens);
   var s=grupos.find(function(x){return x.sku_pai===STATE.skuSel;});
   var wrap=document.getElementById('sku-detail');
   if(!s){wrap.innerHTML='<div class="sku-empty">Selecione um SKU pai acima.</div>';return;}
   var lojasN=Object.keys(s.porLoja).sort(function(a,b){return s.porLoja[b].receita-s.porLoja[a].receita;});
-  var totalPed=lojasN.reduce(function(n,c){return n+Object.keys(s.porLoja[c].pedidos).length;},0);
 
   // Total por loja no escopo atual (denominador para "% do fat da loja")
   var totLoja={};
@@ -2859,85 +2490,35 @@ function renderSkuDetail(){
 
 // ---- Vendedores ----
 function renderVendedores(){
-  var pedToVend={};
-  STATE.pedidos.forEach(function(p){if(!p._canc) pedToVend[p.id]=p._vend;});
+  // Faturamento, vendas (atendimentos), peças, ticket, PA e loja principal de cada vendedor:
+  // prontos da lojas_indicadores, já com o filtro de produto/categoria e as lojas escolhidas
+  // (com filtro de produto, "vendas" = pedidos que tinham aquele estilo/categoria).
+  var agg={};
+  ((STATE.ind&&STATE.ind.vend)||[]).forEach(function(r){
+    agg[r.chave]={nome:r.chave,fat:r.receita,ped:r.atendimentos,qtd:r.pecas,tm:r.ticket,pa:r.pa,lojaTop:r.loja||'—'};
+  });
 
-  // Quando há filtro de produto (skuSel) OU de categoria (catSel), só consideramos
-  // as vendas correspondentes (dos itens). O fat/ped do vendedor vem dos itens
-  // filtrados, não dos pedidos inteiros. skuSel é mais específico que catSel.
-  var agg={}, paVend={};
-  var itemMatch=STATE.skuSel
-    ? function(it){return it._sku_pai===STATE.skuSel;}
-    : function(it){return (it._cat||'OUTROS')===STATE.catSel;};
-
-  if(STATE.skuSel || STATE.catSel){
-    // Monta agregação baseada nos itens que casam o filtro
-    var qtdV={}, pedV={}, pedSeen={};
-    STATE.itens.forEach(function(it){
-      if(!itemMatch(it)) return;
-      var v=pedToVend[it.pedido_id];
-      if(!v) return;
-      if(!agg[v]) agg[v]={nome:v,fat:0,ped:0,lojas:{}};
-      agg[v].fat+=it._receita;
-      agg[v].lojas[it._loja]=(agg[v].lojas[it._loja]||0)+it._receita;
-      qtdV[v]=(qtdV[v]||0)+it._qtd;
-      var k=v+'|'+it.pedido_id;
-      if(!pedSeen[k]){pedSeen[k]=true;agg[v].ped++;pedV[v]=(pedV[v]||0)+1;}
-    });
-    Object.keys(qtdV).forEach(function(v){paVend[v]=pedV[v]>0?qtdV[v]/pedV[v]:null;});
-  } else {
-    // Vendas completas do período (pedidos)
-    STATE.pedidos.forEach(function(p){
-      if(p._canc) return;
-      var v=p._vend;
-      if(!agg[v]) agg[v]={nome:v,fat:0,ped:0,lojas:{}};
-      agg[v].fat+=parseFloat(p.valor_bruto||0);
-      agg[v].ped++;
-      agg[v].lojas[p._nome]=(agg[v].lojas[p._nome]||0)+parseFloat(p.valor_bruto||0);
-    });
-    // PA por vendedor (a partir dos itens do range 60d)
-    var qtdV={}, pedV={}, pedSeen={};
-    STATE.itens.forEach(function(it){
-      var v=pedToVend[it.pedido_id];
-      if(!v) return;
-      qtdV[v]=(qtdV[v]||0)+it._qtd;
-      var k=v+'|'+it.pedido_id;
-      if(!pedSeen[k]){pedSeen[k]=true;pedV[v]=(pedV[v]||0)+1;}
-    });
-    Object.keys(qtdV).forEach(function(v){paVend[v]=pedV[v]>0?qtdV[v]/pedV[v]:null;});
-  }
-
-  // Vendedor que no período SÓ vendeu atacado não aparece no `agg` (que sai de
-  // STATE.pedidos, já sem Atacado Lojas). Sem semear, o atacado dele ficaria invisível
-  // na tabela — dinheiro que existe e ninguém vê. Entra com varejo zerado, que é o fato.
-  // Só sem filtro de produto: com skuSel/catSel a tabela é "quem vendeu o produto X", e
-  // semear vendedor de atacado (cujos itens nem são carregados) poluiria esse recorte.
+  // Vendedor que no período SÓ vendeu atacado não aparece nos indicadores de varejo. Sem
+  // semear, o atacado dele ficaria invisível na tabela — dinheiro que existe e ninguém vê.
+  // Entra com varejo zerado, que é o fato. Só sem filtro de produto (com skuSel/catSel a
+  // tabela é "quem vendeu o produto X").
   if(STATE.atacado && !STATE.skuSel && !STATE.catSel){
     Object.keys(STATE.atacado.porVend).forEach(function(v){
-      // lojas{} semeado com o atacado → a coluna Loja mostra "Atacado Lojas" em vez de "—",
-      // que é o fato pra quem só vendeu atacado. Quem também vendeu varejo já tem lojas
-      // de varejo com valor maior, então a loja dominante dele não muda.
-      if(!agg[v]) agg[v]={nome:v,fat:0,ped:0,lojas:{}};
-      if(!Object.keys(agg[v].lojas).length) agg[v].lojas[LOJA_ATACADO]=STATE.atacado.porVend[v];
+      if(!agg[v]) agg[v]={nome:v,fat:0,ped:0,qtd:0,tm:null,pa:null,lojaTop:LOJA_ATACADO};
     });
   }
 
   // --- Meta / atingimento / previsão (period-aware: segue o mês do período) ---
-  // NAO_VENDEDORES é global (definido no topo do script).
+  // Quem não conta no ranking (porta: conta_ranking=false) não tem comissão nem meta do dia.
   var vm=calcVendMes();                 // fatMes (MTD do mês corrente) — base da projeção do resto do mês
   var mesesRange=mesesNoRange(DE,ATE);  // meses cobertos pelo período selecionado
-  var fatPerVend={};                    // realizado do período por vendedor (sem filtro de produto)
-  STATE.pedidos.forEach(function(p){if(!p._canc) fatPerVend[p._vend]=(fatPerVend[p._vend]||0)+parseFloat(p.valor_bruto||0);});
+  var fatPerVend={};                    // realizado de varejo do período por vendedor (sem filtro de produto)
+  STATE.pedidos.forEach(function(p){fatPerVend[p._vend]=(fatPerVend[p._vend]||0)+p.valor_bruto;});
   var _im=inicioMesSP(), _h=hojeSP(), _fm=fimMesSP();
   var diasDec=daysBetween(_im,_h), diasTot=daysBetween(_im,_fm);
   var periodoAberto=ATE>=_h;            // range alcança hoje → projeta o resto do mês corrente
   Object.values(agg).forEach(function(v){
-    var mx=0,top='—';
-    Object.keys(v.lojas).forEach(function(l){if(v.lojas[l]>mx){mx=v.lojas[l];top=l;}});
-    v.lojaTop=top; delete v.lojas;
-    v.tm=v.ped>0?v.fat/v.ped:0;
-    v.pa=paVend[v.nome]!=null?paVend[v.nome]:-1;
-    v.qtd=qtdV[v.nome]||0;   // peças vendidas (do escopo filtrado, se houver)
+    if(v.pa==null) v.pa=-1;             // ordenação: sem PA vai pro fim
     v.loja=lojaDisplay(v.lojaTop);
     var mvend=STATE.metasVend[v.nome]||{};
     v.meta=mesesRange.reduce(function(s,mk){return s+(mvend[mk]||0);},0);  // meta do(s) mês(es) do período
@@ -2947,25 +2528,25 @@ function renderVendedores(){
     v.metaPct=v.meta>0?realizado/v.meta*100:-1;
     v.projPct=v.meta>0?v.proj/v.meta*100:-1;
     // Comissão: o TIER é destravado por bater a meta, e a meta é medida SÓ pelo varejo
-    // (`realizado` já exclui Atacado Lojas, que sai no filtrarPedidos). O atacado é
-    // comissionado no tier que o varejo destravou, mas a % dele é menor no tier alto
-    // (1,5% vs 2%). Base do varejo = realizado do período, não filtrado por produto.
+    // (`realizado` só lê linhas loja_tipo='varejo'). O atacado é comissionado no tier que o
+    // varejo destravou, mas a % dele é menor no tier alto (1,5% vs 2%). Base do varejo =
+    // realizado do período, não filtrado por produto.
     // Contas que não são vendedor de verdade não recebem comissão (mostram —).
     v.realizado=realizado;
     v.atacado=(STATE.atacado&&STATE.atacado.porVend[v.nome])||0;
     var bateuMeta=(v.meta>0 && realizado>=v.meta);
-    var naoVend=NAO_VENDEDORES.has(v.nome);
+    var naoVend=naoRanking(v.nome);
     v.comissaoPct=naoVend?0:(bateuMeta?COMISSAO.varejoMeta:COMISSAO.varejoBase);
     v.comissaoAtacadoPct=naoVend?0:(bateuMeta?COMISSAO.atacadoMeta:COMISSAO.atacadoBase);
     v.comissaoVarejo=realizado*v.comissaoPct;
     v.comissaoAtacado=v.atacado*v.comissaoAtacadoPct;
     v.comissao=v.comissaoVarejo+v.comissaoAtacado;
     // Meta do dia (catch-up ponderado pelo dia-da-semana) — só no mês corrente aberto.
-    // realAteOntem vem de STATE.mtdVendOntem (MV, INVARIANTE ao período), não de vm.fatOntem
-    // (pedidosRaw escopado ao chip) — senão a Meta hoje mudava entre "Hoje" e "Este Mês".
+    // realAteOntem vem do mês corrente (STATE.mtd, INVARIANTE ao período e com os mesmos
+    // chips de loja da previsão e do Atg.%) — senão a Meta hoje mudava entre "Hoje" e "Este Mês".
     var metaMesAtual=(mvend[_im.slice(0,7)]||0);
-    var _realOntemVend=(STATE.mtdVendOntem&&STATE.mtdVendOntem[v.nome])||0;
-    v.metaDia=(periodoAberto && !NAO_VENDEDORES.has(v.nome))?metaDoDia(metaMesAtual,_realOntemVend,v.lojaTop):null;
+    var _realOntemVend=vm.fatOntem[v.nome]||0;
+    v.metaDia=(periodoAberto && !naoVend)?metaDoDia(metaMesAtual,_realOntemVend,v.lojaTop):null;
   });
   var sk=STATE.vendSort.key, sd=STATE.vendSort.dir==='asc'?1:-1;
   var arr=Object.values(agg).sort(function(a,b){
@@ -2985,16 +2566,16 @@ function renderVendedores(){
   // Breadcrumb
   var breadcrumb='';
   if(STATE.skuSel){
-    var sku=STATE.skuGroups.find(function(s){return s.sku_pai===STATE.skuSel;});
-    var nome=sku?(sku.nome||sku.sku_pai):STATE.skuSel;
+    var sku=(STATE.itens||[]).find(function(it){return it._sku_pai===STATE.skuSel;});
+    var nome=sku?(sku._nome||sku._sku_pai):STATE.skuSel;
     breadcrumb='<div style="padding:8px 12px;margin-bottom:10px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.3);border-radius:8px;font-size:11px;color:#d4d4d8;">Filtrado: vendedores que venderam <b style="color:var(--green)">'+nome+'</b> <button onclick="selectSku(\''+STATE.skuSel.replace(/'/g,"\\'")+'\')" style="margin-left:8px;background:transparent;border:1px solid rgba(34,197,94,0.4);color:var(--green);padding:2px 8px;border-radius:4px;cursor:pointer;font-size:10px;">✕ limpar</button></div>';
   } else if(STATE.catSel){
     breadcrumb='<div style="padding:8px 12px;margin-bottom:10px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.3);border-radius:8px;font-size:11px;color:#d4d4d8;">Filtrado: vendedores na categoria <b style="color:var(--green)">'+STATE.catSel+'</b> <button onclick="toggleCat(null)" style="margin-left:8px;background:transparent;border:1px solid rgba(34,197,94,0.4);color:var(--green);padding:2px 8px;border-radius:4px;cursor:pointer;font-size:10px;">✕ limpar</button></div>';
   }
 
   var html=arr.map(function(v,i){
-    var tm=v.ped>0?v.fat/v.ped:0;
-    var pa=paVend[v.nome];
+    var tm=v.tm;
+    var pa=v.pa>=0?v.pa:null;
     var isActive=STATE.vendSel===v.nome;
     var activeStyle=isActive?'background:rgba(34,197,94,0.15);':'';
     function corMeta(pct){return pct>=100?'var(--green)':(pct>=70?'var(--amber)':'var(--red)');}
@@ -3021,7 +2602,7 @@ function renderVendedores(){
       '<td class="val" style="color:'+metaDiaCor+';font-weight:800;" title="Quanto precisa vender HOJE pra bater a meta do mês (ponderado pelo dia-da-semana)">'+metaDiaTxt+'</td>'+
       '<td class="val" style="color:'+comCor+';font-weight:700;" title="'+comTitle+'">'+(v.comissao>0?fmt(v.comissao):'—')+'</td>';
     var vEsc=v.nome.replace(/'/g,"\\'"), lEsc=(v.lojaTop||'').replace(/'/g,"\\'");
-    return '<tr style="cursor:pointer;'+activeStyle+'" onclick="selectVend(\''+vEsc+'\')"><td class="r">'+(i+1)+'</td><td style="font-weight:600"><span class="vend-hm" onclick="event.stopPropagation();hmOpenVend(\''+vEsc+'\',\''+lEsc+'\')" title="Ver heatmap diário deste vendedor">'+v.nome+'</span></td><td style="color:'+getCor(v.lojaTop)+'">'+lojaDisplay(v.lojaTop)+'</td><td class="val">'+fmt(v.fat)+'</td><td class="val" style="color:'+(v.atacado>0?'#f97316':'inherit')+';font-weight:'+(v.atacado>0?'700':'400')+';">'+(v.atacado>0?fmt(v.atacado):'—')+'</td><td class="val">'+fmtN(v.ped)+'</td><td class="val">'+fmtN(v.qtd)+'</td><td class="val">'+fmt(tm)+'</td><td class="val">'+(pa!=null?fmtD(pa):'—')+'</td>'+metaTd+'</tr>';
+    return '<tr style="cursor:pointer;'+activeStyle+'" onclick="selectVend(\''+vEsc+'\')"><td class="r">'+(i+1)+'</td><td style="font-weight:600"><span class="vend-hm" onclick="event.stopPropagation();hmOpenVend(\''+vEsc+'\',\''+lEsc+'\')" title="Ver heatmap diário deste vendedor">'+v.nome+'</span></td><td style="color:'+getCor(v.lojaTop)+'">'+lojaDisplay(v.lojaTop)+'</td><td class="val">'+fmt(v.fat)+'</td><td class="val" style="color:'+(v.atacado>0?'#f97316':'inherit')+';font-weight:'+(v.atacado>0?'700':'400')+';">'+(v.atacado>0?fmt(v.atacado):'—')+'</td><td class="val">'+fmtN(v.ped)+'</td><td class="val">'+fmtN(v.qtd)+'</td><td class="val">'+(tm!=null?fmt(tm):'—')+'</td><td class="val">'+(pa!=null?fmtD(pa):'—')+'</td>'+metaTd+'</tr>';
   }).join('');
   var wrap=document.getElementById('tbody-vendedores').parentElement.parentElement.parentElement; // .tb-wrap-scroll
   // inject breadcrumb above the table
@@ -3084,13 +2665,13 @@ function seedVendedoresSemCadastro(){
   try{
     var cadastrados=new Set(Object.values(METAS_STATE.vendData).map(function(v){return v.vendedor;}));
     var agg={};  // vend -> {n, lojas:{loja:count}}
+    // Linhas da porta (varejo): quem conta no ranking, com nº de atendimentos por loja.
     (STATE.pedidos||[]).forEach(function(p){
-      if(p.origem_conta!=='kwid' || p._canc) return;
-      var v=p._vend; if(!v || NAO_VENDEDORES.has(v)) return;
-      var lj=getLoja(p.loja_nome,p.origem_conta);
-      if(LOJAS_CANONICAS.indexOf(lj)<0) return;  // só lojas reais (ignora Atacado etc.)
+      var v=p._vend; if(!v || p._rank===false) return;
+      var lj=p._nome;
+      if(LOJAS_CANONICAS.indexOf(lj)<0) return;  // só lojas abertas
       if(!agg[v]) agg[v]={n:0,lojas:{}};
-      agg[v].n++; agg[v].lojas[lj]=(agg[v].lojas[lj]||0)+1;
+      agg[v].n+=p._n; agg[v].lojas[lj]=(agg[v].lojas[lj]||0)+p._n;
     });
     var semCad=[];
     Object.keys(agg).forEach(function(v){
