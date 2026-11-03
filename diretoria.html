@@ -270,7 +270,7 @@ function deltaHtml(d){
 }
 
 // localStorage cache TTL 5min — rows da MV (janela = união de 12m fixos + período anterior).
-function cacheKey(de,ate){return 'diretoria_v4_'+de+'_'+ate;}
+function cacheKey(de,ate){return 'diretoria_v5_'+de+'_'+ate;}  // v5: vw_venda_empresa_dia (03/11/2026)
 function cacheGet(de,ate){
   try{
     const raw=localStorage.getItem(cacheKey(de,ate));
@@ -463,9 +463,10 @@ async function carregar(){
     try{ renderTudo(cached.rows,pDE,pATE,wDe); document.getElementById('upd').textContent='Cache · atualizando…'; }
     catch(e){console.warn('cache render:',e);}
   }
-  // mvw_diretoria_dia já é pré-agregada por (data, origem, canal, loja) — ~4k rows/365d.
-  // apiAll pagina (cap PostgREST 1000); ordem pela chave única da MV pra offset exato.
-  const allRows = await apiAll('mvw_diretoria_dia?select=*&data_pedido=gte.'+fetchDe+'&data_pedido=lte.'+fetchAte+'&order=data_pedido.asc,origem_conta.asc,canal_nome_raw.asc,loja_nome.asc');
+  // Venda da empresa pelas portas (03/11/2026): e-commerce por mvw_eco_venda_dia, lojas por mvw_loj_pedido, Flecha de pedidos.
+  // Já vem por (data, origem, canal, loja) e com pedidos = só os que contam (sem cancelado nem pendente, sem Venda Direta).
+  // apiAll pagina (cap PostgREST 1000); ordem pela chave da view pra offset exato.
+  const allRows = await apiAll('vw_venda_empresa_dia?select=data_pedido,origem_conta,canal_nome_raw,loja_nome,pedidos,receita_bruta,devolucoes&data_pedido=gte.'+fetchDe+'&data_pedido=lte.'+fetchAte+'&order=data_pedido.asc,origem_conta.asc,canal_nome_raw.asc,loja_nome.asc');
   if(!allRows || !Array.isArray(allRows)){ document.getElementById('upd').textContent='Erro'; return; }
   // Meta oficial 2026 (planilha → projecao_faturamento). Carrega 1x; usada na projeção.
   if(META_ROWS===null){
@@ -485,7 +486,7 @@ async function carregar(){
 //        em enriquecimento inconsistente; comissão/frete são custo, não dedução de receita)
 const REC=r=>parseFloat(r.receita_bruta||0);
 const DEV=r=>parseFloat(r.devolucoes||0);
-const PED=r=>(parseInt(r.pedidos||0)-parseInt(r.cancelados||0));
+const PED=r=>parseInt(r.pedidos||0);  // a view já tira cancelado e pendente (regra do Leo, 03/11/2026)
 // helpers de líquido por bucket {fat,dev}
 const liqOf=o=>(o?o.fat-o.dev:0);
 
@@ -542,7 +543,7 @@ function preverMesPorGrupo(allRows){
   return prev;
 }
 
-// Renderização completa a partir de allRows (janela 12m+anterior) da mvw_diretoria_dia.
+// Renderização completa a partir de allRows (janela 12m+anterior) da vw_venda_empresa_dia (03/11/2026).
 // Fatia client-side: cur=período selecionado, prev=período anterior, mensal=12m fixos.
 function renderTudo(allRows,pDE,pATE,wDe){
   const cur=allRows.filter(r=>r.data_pedido>=DE && r.data_pedido<=ATE);
@@ -563,8 +564,9 @@ function renderTudo(allRows,pDE,pATE,wDe){
   const devTotal=A.totDev, devPrev=P.totDev;
   const liqTotal=fatTotal-devTotal, liqPrev=P.totFat-devPrev;
   const taxaDev=fatTotal>0?devTotal/fatTotal*100:0;
-  const tmCur=pedTotal>0?liqTotal/pedTotal:0;
-  const tmPrev=P.totPed>0?liqPrev/P.totPed:0;
+  // Ticket = venda bruta ÷ pedidos (Leo, 03/11/2026), a mesma régua do E-commerce, do Diário e do Max.
+  const tmCur=pedTotal>0?fatTotal/pedTotal:0;
+  const tmPrev=P.totPed>0?P.totFat/P.totPed:0;
   const fatDiaCur=liqTotal/diasP;
   const diasPrev=Math.max(1,Math.round((new Date(pATE)-new Date(pDE))/86400000)+1);
   const fatDiaPrev=liqPrev/diasPrev;
@@ -586,7 +588,7 @@ function renderTudo(allRows,pDE,pATE,wDe){
     const o=A.grupos[g]||{fat:0,ped:0,dev:0}, cor=GRUPO_CORES[g];
     const liq=liqOf(o), liqPrevG=liqOf(P.grupos[g]);
     const d=temPrev?delta(liq, liqPrevG):null;
-    const tkt=o.ped>0?liq/o.ped:0, fatDia=liq/diasP, prev=prevMes(g);
+    const tkt=o.ped>0?o.fat/o.ped:0, fatDia=liq/diasP, prev=prevMes(g);
     return `<div class="origem-card" style="border-left-color:${cor}">
       <div class="origem-nome" style="color:${cor}">${g}</div>
       <div class="origem-fat" style="color:${cor}">${fmt(liq)}</div>
