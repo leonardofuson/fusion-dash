@@ -409,6 +409,14 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
 
 <div class="main">
 
+  <!-- ABAS: Diário (período curto, margem completa) · Histórico (mês a mês, desde 10/2024, das tabelas prontas).
+       O Histórico voltou para dentro do painel em 03/11/2026 (Leo): a tela "Vendas Históricas" existia porque período
+       longo baixava pedido por pedido; agora o banco entrega o mês já somado (vw_eco_venda_mes, vw_eco_sku_mes). -->
+  <div class="chips" id="abas-ecom" style="margin-bottom:12px;">
+    <button class="chip on" id="aba-diario" onclick="setAbaEcom('diario')">Diário</button>
+    <button class="chip" id="aba-historico" onclick="setAbaEcom('historico')">Histórico</button>
+  </div>
+
   <!-- FILTROS do diário (período + canais) -->
   <div class="filtros" id="filtros-diario">
     <div class="chips">
@@ -418,7 +426,7 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
       <button class="chip" data-preset="30d" onclick="setPeriodo('30d',this)">30d</button>
       <button class="chip on" data-preset="mtd" onclick="setPeriodo('mtd',this)">MTD</button>
       <button class="chip" data-preset="m-1" onclick="setPeriodo('m-1',this)">Último Mês</button>
-      <span style="font-size:10px;color:var(--txt3);align-self:center;margin-left:4px">· histórico &gt;60d na <b>Diretoria</b></span>
+      <span style="font-size:10px;color:var(--txt3);align-self:center;margin-left:4px">· mês a mês desde 10/2024 na aba <b>Histórico</b></span>
     </div>
     <div class="drange">
       <input type="date" id="dt-de" class="dinput">
@@ -532,6 +540,41 @@ table.tb td.val{text-align:right;font-weight:600;font-variant-numeric:tabular-nu
   </div>
 
   </div><!-- /tab-diario -->
+
+  <div id="tab-historico" class="tab-panel" style="display:none">
+    <div class="filtros">
+      <div class="chips" id="hist-periodos">
+        <button class="chip" data-hist="12" onclick="setHistPeriodo(12)">12 meses</button>
+        <button class="chip on" data-hist="24" onclick="setHistPeriodo(24)">24 meses</button>
+        <button class="chip" data-hist="0" onclick="setHistPeriodo(0)">Tudo</button>
+      </div>
+      <span id="hist-upd" style="margin-left:auto;font-size:11px;color:var(--txt3);"></span>
+    </div>
+    <div class="filter-row">
+      <span class="filter-label">Canais:</span>
+      <div class="chips" id="hist-canais"></div>
+      <button class="btn-ghost" onclick="histCanais(true)">Todos</button>
+      <button class="btn-ghost" onclick="histCanais(false)">Limpar</button>
+    </div>
+    <div class="kpi-grid" id="hist-kpis"><div class="kpi"><div class="kpi-lbl">Carregando...</div><div class="spin"></div></div></div>
+    <div class="card">
+      <div class="card-title"><span>Venda bruta por mês e canal</span><span style="font-size:10px;font-weight:500;color:var(--txt3);">valor do produto, sem frete · pedidos sem cancelado nem pendente</span></div>
+      <div class="chart-hero"><canvas id="chart-hist"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title"><span>Mês a mês</span><span style="font-size:10px;font-weight:500;color:var(--txt3);">ticket = venda bruta ÷ pedidos · vs mesmo mês do ano anterior</span></div>
+      <div id="hist-meses" style="max-height:460px;overflow:auto;"></div>
+    </div>
+    <div class="card">
+      <div class="card-title"><span>Produtos no período</span><span style="font-size:10px;font-weight:500;color:var(--txt3);">soma por produto: fica um pouco abaixo da venda por canal (não conta pedido devolvido)</span></div>
+      <div class="search-wrap" style="max-width:480px;margin-bottom:12px;">
+        <span class="search-icon">🔍</span>
+        <input type="text" class="search-input" id="hist-busca" placeholder="Buscar por nome ou código…" autocomplete="off" oninput="renderHistProdutos()" onkeydown="if(event.key==='Escape'){this.value='';renderHistProdutos();}">
+      </div>
+      <div id="hist-prod" style="max-height:460px;overflow:auto;"></div>
+    </div>
+    <div style="font-size:11px;color:var(--txt3);margin:4px 2px 18px;">Margem, comissão e custos ficam na aba Diário (últimos 12 meses).</div>
+  </div><!-- /tab-historico -->
 
 
 </div>
@@ -2825,6 +2868,9 @@ document.addEventListener('keydown',function(e){
   var ui=document.getElementById('user-info-tb');if(ui)ui.textContent=(auth.role.nome||auth.role.email);
   var h=hojeSP();DE=inicioMesSP();ATE=h;
   document.getElementById('dt-de').value=DE;document.getElementById('dt-ate').value=ATE;
+  // Link antigo da tela "Vendas Históricas" chega com #historico (redirect em vendas-historicas.html). Só depois do login:
+  // antes disso AUTH_HEADERS não existe e a busca falharia.
+  if(location.hash==='#historico')setAbaEcom('historico');
   carregar();
 })();
 
@@ -2985,6 +3031,102 @@ function abrirProduto(sku){
 document.addEventListener('keydown',function(e){
   if(e.key==='Escape'){var o=document.getElementById('wf-drill-ov');if(o&&o.classList.contains('open'))fecharWfDrill();}
 });
+</script>
+<script>
+// ── Aba Histórico (03/11/2026) ─────────────────────────────────────────────────────────────────────────────────────────
+// Lê só o que o banco entrega somado por mês: vw_eco_venda_mes (porta da contagem: pedidos, venda bruta, cancelados,
+// devoluções) e vw_eco_sku_mes (produto). A tela não recalcula regra: soma meses e divide para o ticket.
+var HIST={venda:null,sku:null,meses:24,canais:null};
+function setAbaEcom(a){
+  var h=a==='historico';
+  ['filtros-diario','filtros-canais','filtro-produto','tab-diario'].forEach(function(id){var el=document.getElementById(id);if(el)el.style.display=h?'none':'';});
+  document.getElementById('tab-historico').style.display=h?'':'none';
+  document.getElementById('aba-diario').classList.toggle('on',!h);
+  document.getElementById('aba-historico').classList.toggle('on',h);
+  if(h)carregarHist();
+}
+async function carregarHist(){
+  if(HIST.venda&&HIST.sku){renderHist();return;}
+  document.getElementById('hist-upd').textContent='Carregando…';
+  try{
+    var r=await Promise.all([
+      buscarTudo('vw_eco_venda_mes','select=mes,canal,pedidos_venda,cancelados,devolvidos,receita_bruta,devolucoes&order=mes.asc,canal.asc'),
+      buscarTudo('vw_eco_sku_mes','select=mes,canal,sku_pai,nome,cat,receita,qtd,devolucao&order=mes.asc,canal.asc,sku_pai.asc')]);
+    HIST.venda=r[0];HIST.sku=r[1];
+    document.getElementById('hist-upd').textContent='Atualizado '+new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  }catch(e){
+    // Falha não vira zero: diz que não carregou.
+    console.error('historico:',e);
+    document.getElementById('hist-kpis').innerHTML='<div class="kpi"><div class="kpi-lbl">Não foi possível carregar o histórico</div><div class="kpi-val">—</div></div>';
+    document.getElementById('hist-upd').textContent='Erro ao carregar';return;
+  }
+  if(!HIST.canais){HIST.canais={};HIST.venda.forEach(function(x){HIST.canais[x.canal]=true;});}
+  renderHist();
+}
+function setHistPeriodo(n){HIST.meses=n;document.querySelectorAll('#hist-periodos .chip').forEach(function(c){c.classList.toggle('on',+c.dataset.hist===n);});renderHist();}
+function histCanais(todos){Object.keys(HIST.canais).forEach(function(k){HIST.canais[k]=todos;});renderHist();}
+function histToggleCanal(c){HIST.canais[c]=!HIST.canais[c];renderHist();}
+function histMesIni(){
+  if(!HIST.meses)return '0000-00-00';
+  var d=new Date();d.setDate(1);d.setMonth(d.getMonth()-(HIST.meses-1));
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01';
+}
+function histNorm(t){return String(t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();}
+function histMes(m){var p=m.split('-');return ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'][+p[1]-1]+'/'+p[0].slice(2);}
+function renderHist(){
+  if(!HIST.venda)return;
+  var ini=histMesIni(), on=function(c){return HIST.canais[c];};
+  // chips de canal, ordenados pela venda do período
+  var porCanal={};HIST.venda.forEach(function(x){if(x.mes>=ini)porCanal[x.canal]=(porCanal[x.canal]||0)+(+x.receita_bruta||0);});
+  var canais=Object.keys(HIST.canais).sort(function(a,b){return (porCanal[b]||0)-(porCanal[a]||0);});
+  document.getElementById('hist-canais').innerHTML=canais.map(function(c){
+    return '<button class="chip'+(on(c)?' on':'')+'" onclick="histToggleCanal(\''+c.replace(/'/g,"\\'")+'\')">'+c+'</button>';}).join('');
+  var linhas=HIST.venda.filter(function(x){return x.mes>=ini&&on(x.canal);});
+  // cancelados vem NULO antes de 03/2026 (planilha histórica não registrava; venda_campo_disponivel 'eco_cancelado'):
+  // o mês mostra "—" e o KPI soma só os meses com registro, dizendo isso.
+  var meses={},tot={p:0,r:0,c:0,dv:0,semCanc:0,pC:0};
+  linhas.forEach(function(x){var m=meses[x.mes]||(meses[x.mes]={p:0,r:0,c:0,dv:0,semCanc:false,porCanal:{}});
+    var p=+x.pedidos_venda||0,r=+x.receita_bruta||0,dv=+x.devolucoes||0,semC=x.cancelados==null,c=semC?0:+x.cancelados;
+    if(semC)m.semCanc=true;else tot.pC+=p;
+    m.p+=p;m.r+=r;m.c+=c;m.dv+=dv;m.porCanal[x.canal]=(m.porCanal[x.canal]||0)+r;tot.p+=p;tot.r+=r;tot.c+=c;tot.dv+=dv;});
+  Object.keys(meses).forEach(function(m){if(meses[m].semCanc)tot.semCanc++;});
+  var chaves=Object.keys(meses).sort();
+  var k=function(l,v,sub){return '<div class="kpi"><div class="kpi-lbl">'+l+'</div><div class="kpi-val">'+v+'</div>'+(sub?'<div class="kpi-delta" style="color:var(--txt3)">'+sub+'</div>':'')+'</div>';};
+  var per=chaves.length?histMes(chaves[0])+' a '+histMes(chaves[chaves.length-1]):'sem venda';
+  document.getElementById('hist-kpis').innerHTML=
+    k('Venda bruta',fmt(tot.r),per)+k('Pedidos',fmtN(tot.p),chaves.length+' meses')+k('Ticket médio',tot.p?fmt(tot.r/tot.p):'—','venda bruta ÷ pedidos')+
+    k('Cancelados',tot.semCanc===chaves.length?'—':fmtN(tot.c),tot.semCanc===chaves.length?'não registrado antes de mar/26':(tot.semCanc?'só de mar/26 em diante · ':'')+((tot.pC+tot.c)?fmtD(tot.c/(tot.pC+tot.c)*100)+'% dos pedidos':''))+
+    k('Devoluções',fmt(tot.dv),tot.r?fmtD(tot.dv/tot.r*100)+'% da venda bruta':'')+k('Venda líquida',fmt(tot.r-tot.dv),'bruta − devoluções');
+  // gráfico empilhado por canal
+  var cs=canais.filter(on);
+  if(CHARTS.hist)CHARTS.hist.destroy();
+  CHARTS.hist=new Chart(document.getElementById('chart-hist'),{type:'bar',
+    data:{labels:chaves.map(histMes),datasets:cs.map(function(c){return {label:c,backgroundColor:getCor(c),stack:'v',data:chaves.map(function(m){return Math.round(meses[m].porCanal[c]||0);})};})},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#c2c4cc',boxWidth:10}},tooltip:{callbacks:{label:function(t){return t.dataset.label+': '+fmt(t.raw);}}}},
+      scales:{x:{stacked:true,ticks:{color:'#8e929c'},grid:{display:false}},y:{stacked:true,ticks:{color:'#8e929c',callback:function(v){return fmtK(v);}},grid:{color:'rgba(255,255,255,.05)'}}}}});
+  // tabela mês a mês (mais recente em cima) com variação contra o mesmo mês do ano anterior
+  var todos={};HIST.venda.forEach(function(x){if(on(x.canal))todos[x.mes]=(todos[x.mes]||0)+(+x.receita_bruta||0);});
+  var h='<table class="tb"><thead><tr><th>Mês</th><th class="r">Pedidos</th><th class="r">Venda bruta</th><th class="r">Ticket</th><th class="r">Cancelados</th><th class="r">Devoluções</th><th class="r">vs ano anterior</th></tr></thead><tbody>';
+  chaves.slice().reverse().forEach(function(m){var x=meses[m],a=(+m.slice(0,4)-1)+m.slice(4),ra=todos[a];
+    var v=ra?((x.r-ra)/ra*100):null;
+    h+='<tr><td>'+histMes(m)+'</td><td class="r">'+fmtN(x.p)+'</td><td class="r">'+fmt(x.r)+'</td><td class="r">'+(x.p?fmt(x.r/x.p):'—')+'</td><td class="r">'+(x.semCanc?'<span title="não registrado: a planilha histórica (até fev/26) não trazia cancelado" style="color:var(--txt3)">—</span>':fmtN(x.c))+'</td><td class="r">'+fmt(x.dv)+'</td><td class="r" style="color:'+(v==null?'var(--txt3)':v>=0?'#22c55e':'#f43f5e')+'">'+(v==null?'—':(v>=0?'+':'')+fmtD(v)+'%')+'</td></tr>';});
+  document.getElementById('hist-meses').innerHTML=h+'</tbody></table>'+(tot.semCanc?'<div style="font-size:11px;color:var(--txt3);margin-top:8px">Até fev/26 os dados vêm da planilha histórica: cancelado não registrado (—); devoluções são as que a planilha trouxe.</div>':'');
+  renderHistProdutos();
+}
+function renderHistProdutos(){
+  if(!HIST.sku)return;
+  var ini=histMesIni(),por={};
+  HIST.sku.forEach(function(x){if(x.mes<ini||!HIST.canais[x.canal])return;var p=por[x.sku_pai]||(por[x.sku_pai]={sku:x.sku_pai,nome:x.nome,cat:x.cat,r:0,q:0});p.r+=+x.receita||0;p.q+=+x.qtd||0;});
+  var lista=Object.keys(por).map(function(k){return por[k];}).sort(function(a,b){return b.r-a.r||(a.sku<b.sku?-1:1);});
+  var total=lista.reduce(function(s,x){return s+x.r;},0);
+  // busca: nome e código na mesma caixa, sem acento, palavra a palavra
+  var termos=histNorm(document.getElementById('hist-busca').value).split(/\s+/).filter(Boolean);
+  var achados=lista.filter(function(x){var t=histNorm(x.sku+' '+x.nome+' '+(x.cat||''));return termos.every(function(w){return t.indexOf(w)>=0;});});
+  if(!achados.length){document.getElementById('hist-prod').innerHTML='<div style="padding:18px;color:var(--txt3);font-size:12px">'+(lista.length?'Nenhum dos '+lista.length+' produtos do período casa com “'+document.getElementById('hist-busca').value+'”.':'Sem venda de produto no período.')+'</div>';return;}
+  var h='<table class="tb"><thead><tr><th>#</th><th>Código</th><th>Produto</th><th>Categoria</th><th class="r">Peças</th><th class="r">Receita</th><th class="r">% do total</th></tr></thead><tbody>';
+  achados.forEach(function(x){h+='<tr><td>'+(lista.indexOf(x)+1)+'</td><td>'+x.sku+'</td><td>'+(x.nome||'—')+'</td><td>'+(x.cat||'—')+'</td><td class="r">'+fmtN(x.q)+'</td><td class="r">'+fmt(x.r)+'</td><td class="r">'+(total?fmtD(x.r/total*100):'0.0')+'%</td></tr>';});
+  document.getElementById('hist-prod').innerHTML=h+'</tbody></table>';
+}
 </script>
 <script src="/max-painel.js" data-sistema="ecommerce"></script>
 </body>

@@ -25,7 +25,8 @@
     // Vendas
     diario:     { titulo: 'Diário',        descricao: 'Sua foto do dia: vendas por canal, ritmo vs meta e alertas', url: '/diario.html', icone: '☀️', cat: 'vendas' },
     ecommerce:  { titulo: 'E-commerce',    descricao: 'Canais digitais e marketplaces', url: '/ecommerce.html', icone: '🛒', cat: 'vendas' },
-    'vendas-historicas': { titulo: 'Vendas Históricas', descricao: 'Histórico mensal do ecommerce: receita, margem e mix por mês', url: '/vendas-historicas.html', icone: '📈', cat: 'vendas' },
+    // 'vendas-historicas' saiu do portal em 03/11/2026 (Leo): o histórico voltou para a aba Histórico do E-commerce.
+    // vendas-historicas.html redireciona para /ecommerce.html#historico; a chave em user_roles.dashes fica inofensiva.
     lojas:      { titulo: 'Lojas Físicas', descricao: 'Vendas das lojas físicas (Linx Microvix)', url: '/lojas.html', icone: '🏬', cat: 'vendas' },
     // Comando Marketplaces (app fusion-comando) — 02/10/2026. A visão do DIRETOR sobre
     // marketplaces + site: placar contra a meta, exceções com dono, margem até a CM3 e (fases
