@@ -698,7 +698,7 @@ function kpiSet(merRows,canalRows,trafegoRows){
   const c=alinhaReceitaSite((canalRows||[]).reduce((a,r)=>{['receita','cogs','cm1','fee','frete','devolucao','cm2','unidades'].forEach(k=>a[k]=(a[k]||0)+(+r[k]||0));return a;},{receita:0,cogs:0,cm1:0,fee:0,frete:0,devolucao:0,cm2:0,unidades:0}));
   const com=comissoesFrom(c.receita,c.devolucao,trafegoRows);
   const rec=c.receita, cm2=c.cm2, cm3=cm2-meta-com.agencia-com.gerente;
-  return {meta,goog,c,com,rec,cm2,cm3,un:c.unidades||0,ticket:c.unidades>0?rec/c.unidades:null,mer:meta>0?rec/meta:null,poas:meta>0?cm2/meta:null};
+  return {meta,goog,c,com,rec,cm2,cm3,un:c.unidades||0,porPeca:c.unidades>0?rec/c.unidades:null,mer:meta>0?rec/meta:null,poas:meta>0?cm2/meta:null};
 }
 const pctDelta=(a,b)=>(b&&isFinite(b)&&b!==0)?(a-b)/b*100:null;
 const escH=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -845,7 +845,7 @@ function renderGeral(){
   const P=kpiSet(STATE.merPrev,STATE.canalPrev,STATE.trafegoPrev); // período anterior (p/ Δ%)
   const temPrev=(STATE.merPrev&&STATE.merPrev.length)||(STATE.canalPrev&&STATE.canalPrev.length);
   const meta=K.meta, goog=K.goog, c=K.c, com=K.com, rec=K.rec, cm2=K.cm2, cm3=K.cm3;
-  const unSite=K.un, ticket=K.ticket, merSite=K.mer, poas=K.poas;
+  const unSite=K.un, porPeca=K.porPeca, merSite=K.mer, poas=K.poas;
   const pc=v=>rec>0?Math.round(v/rec*100):0;
   const dd=(a,b)=>temPrev?pctDelta(a,b):null;  // só mostra Δ se há período anterior
   // sparks por dia (período atual)
@@ -853,7 +853,7 @@ function renderGeral(){
   // KPIs como história linear: Investimento → Receita → Margem → Lucro → Eficiência, com Δ% vs anterior + sparkline
   document.getElementById('kpis-geral').innerHTML=[
     {l:'Gasto Meta',v:rs(meta),s:goog>0?'+ Google '+rs(goog):'investimento',d:dd(meta,P.meta),dn:true,spark:'sk-gasto',t:'Total investido em Meta Ads no período (custo de marketing do site). O Google entra como contexto da loja. Δ = vs período anterior de mesma duração (cinza = só contexto, gasto subir não é bom nem ruim).'},
-    {l:'Receita Site',v:rs(rec),s:unSite.toLocaleString('pt-BR')+' peças · ticket '+(ticket?rs(ticket):'—'),d:dd(rec,P.rec),spark:'sk-rec',t:'Faturamento do Site Próprio (Shopify) = PRODUTO (valor_bruto − frete do cliente), igual à Receita Bruta do dash de ecommerce. Δ = vs período anterior.'},
+    {l:'Receita Site',v:rs(rec),s:unSite.toLocaleString('pt-BR')+' peças · receita por peça '+(porPeca?rs(porPeca):'—'),d:dd(rec,P.rec),spark:'sk-rec',t:'Faturamento do Site Próprio (Shopify) = PRODUTO (valor_bruto − frete do cliente), igual à Receita Bruta do dash de ecommerce. Δ = vs período anterior.'},
     {l:'CM2',v:rs(cm2),s:pc(cm2)+'% da receita',d:dd(cm2,P.cm2),spark:'sk-cm2',t:'Margem de contribuição do site = Receita − CMV − comissão − frete − devolução. O que sobra ANTES do anúncio.'},
     {l:'CM3',v:rs(cm3),s:pc(cm3)+'% · lucro final',cls:cm3>=0?'pos':'neg',accent:true,d:dd(cm3,P.cm3),spark:'sk-cm3',t:'Lucro final do site DEPOIS de Anúncios + comissão da agência (2%) + comissão do gerente (0,65%). Verde = sobrou dinheiro. Δ = vs período anterior.'},
     {l:'MER_site',v:n2(merSite),s:'equilíbrio ≈2',d:dd(merSite,P.mer),spark:'sk-mer',t:'Receita Site ÷ Gasto Meta. Eficiência blended do canal. Acima de ~2 = lucrativo. Δ = vs período anterior.'},
@@ -1191,7 +1191,7 @@ async function medirIncr(){
     const de=B.de<T.de?B.de:T.de, ate=B.ate>T.ate?B.ate:T.ate;
     const [site,rev,spend]=await Promise.all([
       buscarTudo('mvw_marketing_canal_margem_dia','select=data,receita&canal_grupo=eq.site&data=gte.'+de+'&data=lte.'+ate+'&order=data.asc'),
-      buscarTudo('mvw_diretoria_dia','select=data_pedido,origem_conta,receita_bruta&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc'),
+      buscarTudo('vw_venda_empresa_dia','select=data_pedido,origem_conta,receita_bruta&data_pedido=gte.'+de+'&data_pedido=lte.'+ate+'&order=data_pedido.asc'),
       buscarTudo('ads_metrics','select=data,gasto&plataforma=eq.meta_ads&level=eq.campaign&data=gte.'+de+'&data=lte.'+ate+'&order=data.asc'),
     ]);
     const r=difDif(site,rev,spend,T,B,ctrl);
@@ -1547,7 +1547,7 @@ function buildAnalistaPayload(){
   const rec=c.receita, cm2=c.cm2, cm3=cm2-meta-com.agencia-com.gerente;
   const cascata={receita:R(rec),cmv:R(c.cogs),cm1:R(c.cm1),comissao:R(c.fee),frete:R(c.frete),devolucao:R(c.devolucao),cm2:R(cm2),gasto_meta:R(meta),
     comissao_agencia_2pct:R(com.agencia),comissao_gerente_065pct:R(com.gerente),cm3:R(cm3),
-    cm2_pct:rec>0?+(cm2/rec*100).toFixed(1):null,cm3_pct:rec>0?+(cm3/rec*100).toFixed(1):null,unidades:c.unidades||0,ticket:c.unidades>0?R(rec/c.unidades):null};
+    cm2_pct:rec>0?+(cm2/rec*100).toFixed(1):null,cm3_pct:rec>0?+(cm3/rec*100).toFixed(1):null,unidades:c.unidades||0,receita_por_peca:c.unidades>0?R(rec/c.unidades):null};
   const mer={gasto_meta:R(meta),gasto_google:R(goog),receita_site:R(rec),mer_site:meta>0?+(rec/meta).toFixed(2):null,poas_canal:meta>0?+(cm2/meta).toFixed(2):null};
   // produtos-pai (idêntico a renderSku, sem filtros de UI)
   let variants=aggSku(); const g={};
@@ -1732,7 +1732,8 @@ async function carregarShopify(){
   const dlen=ndays(STATE.de,STATE.ate), priorAte=somaDias(STATE.de,-1), priorDe=somaDias(STATE.de,-dlen);
   const ms=meses(STATE.de,STATE.ate);
   const [ec,sku,adsMeta,novos,novosSku,skuPnl,conv,recompra,funil,funilLanding]=await Promise.all([
-    buscarTudo('mvw_ecommerce_canal_dia','select=data_pedido,pedidos,receita_bruta,devolucoes&'+site+'&data_pedido=gte.'+priorDe+'&data_pedido=lte.'+STATE.ate+'&order=data_pedido.asc'),
+    // Porta da contagem (03/11/2026): pedidos = só os que contam (sem cancelado nem pendente), a régua do E-commerce e do Max.
+    buscarTudo('mvw_eco_venda_dia','select=data_pedido,pedidos:pedidos_venda,receita_bruta,devolucoes&'+site+'&data_pedido=gte.'+priorDe+'&data_pedido=lte.'+STATE.ate+'&order=data_pedido.asc'),
     buscarTudo('mvw_ecommerce_sku_dia','select=data_pedido,sku_pai,nome,cat,receita,qtd,cmv&'+site+'&data_pedido=gte.'+STATE.de+'&data_pedido=lte.'+STATE.ate+'&order=data_pedido.asc'),
     // Meta: gasto + compras ATRIBUÍDAS pela Meta (unidades_diretas=omni_purchase) → CPA reportado pela plataforma
     buscarTudo('ads_metrics','select=data,gasto,unidades_diretas&plataforma=eq.meta_ads&level=eq.campaign&data=gte.'+priorDe+'&data=lte.'+STATE.ate+'&order=data.asc'),
