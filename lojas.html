@@ -1413,7 +1413,8 @@ function renderKPIs(){
   var diasDec=daysBetween(inicioM,h);var diasTot=daysBetween(inicioM,fimM);
   var fatMes=fatMesCorrente()._||0;
   var projTotal=diasDec>0?fatMes/diasDec*diasTot:0;
-  var metaTotal=Object.values(STATE.metas).reduce(function(s,v){return s+v;},0);
+  // meta só das lojas marcadas: o realizado (fatMesCorrente) também segue os botões de loja
+  var metaTotal=Object.keys(STATE.metas).reduce(function(s,n){return s+(STATE.lojasSel[n]===false?0:STATE.metas[n]);},0);
   var pctMeta=metaTotal>0?fatMes/metaTotal*100:0;
   var projPctMeta=metaTotal>0?projTotal/metaTotal*100:0;
 
