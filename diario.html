@@ -93,8 +93,8 @@
 let SB='',ANON='';const CHARTS={};
 const TAX=0.065;
 // colunas do P&L (ordem)
-const COLS=['ML Fio','ML Confec','Shopee','TikTok','Shein','Venda Direta','Site','Lojas'];
-const CCOR={'ML Fio':'#7c5cff','ML Confec':'#a78bfa','Shopee':'#f5a623','TikTok':'#ec4899','Shein':'#f472b6','Venda Direta':'#94a3b8','Site':'#34d399','Lojas':'#22d3ee'};
+const COLS=['ML Fio','ML Confec','Shopee','TikTok','Shein','Outros','Site','Lojas'];  // Venda Direta não é canal (Leo, 03/11/2026): coluna virou Outros
+const CCOR={'ML Fio':'#7c5cff','ML Confec':'#a78bfa','Shopee':'#f5a623','TikTok':'#ec4899','Shein':'#f472b6','Outros':'#94a3b8','Site':'#34d399','Lojas':'#22d3ee'};
 const rsFull=v=>'R$ '+(Math.round(v||0)).toLocaleString('pt-BR');
 const rsK=v=>{v=v||0;const a=Math.abs(v);const s=v<0?'-':'';if(a>=1e6)return s+'R$ '+(a/1e6).toFixed(2).replace('.',',')+'M';if(a>=1e3)return s+'R$ '+(a/1e3).toFixed(0)+'k';return s+'R$ '+Math.round(a);};
 const ri=v=>(Math.round(v||0)).toLocaleString('pt-BR');
@@ -109,9 +109,11 @@ function inicioMes(d){return d.slice(0,7)+'-01';}
 function mesAnt(d){const dt=new Date(d+'T12:00:00'),day=dt.getDate(),p=new Date(dt.getFullYear(),dt.getMonth()-1,1),dim=new Date(p.getFullYear(),p.getMonth()+1,0).getDate();return{ini:fmtD(p),ate:fmtD(new Date(p.getFullYear(),p.getMonth(),Math.min(day,dim)))};}
 function diasNoMes(d){return new Date(+d.slice(0,4),+d.slice(5,7),0).getDate();}
 
-// régua idêntica ao mvw_diretoria_dia
-function recBrutaRow(p){const ml=(p.origem_conta==='fio_e_trama'||p.origem_conta==='confeccoes')&&/^Mercado Livre/.test(p.canal_nome_raw||'');return (+p.valor_bruto||0)-(ml?0:(+p.frete||0));}
-function devRow(p){return (+p.valor_devolucao||0)+(+p.valor_chargeback||0);}
+// A régua mora no banco (03/11/2026): vw_venda_empresa_dia e _recente já trazem por dia só os pedidos que contam, a receita
+// sem frete e a devolução, pelas portas do e-commerce e das lojas. A tela só soma.
+function recBrutaRow(p){return +p.receita_bruta||0;}
+function devRow(p){return +p.devolucoes||0;}
+function pedRow(p){return +p.pedidos||0;}
 function grupoDe(oc,canal,loja){oc=(oc||'').toLowerCase();loja=loja||'';canal=canal||'';
   if(oc==='flecha'||(oc==='kwid'&&loja==='Atacado WhatsApp'))return'Atacado';
   if(oc==='kwid')return'Lojas';if(oc==='shopify'||/site pr[óo]prio/i.test(canal))return'Site';return'Marketplaces';}
@@ -121,7 +123,7 @@ function colDe(grupo,canal){
   const c=canal||'';
   if(/Mercado Livre FIO/i.test(c))return'ML Fio';if(/Mercado Livre Conf/i.test(c))return'ML Confec';
   if(/Shopee/i.test(c))return'Shopee';if(/TikTok/i.test(c))return'TikTok';if(/Shein/i.test(c))return'Shein';
-  if(/Venda Direta/i.test(c))return'Venda Direta';return'Venda Direta';}
+  return'Outros';}
 function colDeFresh(oc,canal,loja){return colDe(grupoDe(oc,canal,loja),canal);}
 // ads: plataforma+conta → coluna
 function colAds(plat,conta){plat=(plat||'');conta=(conta||'');
@@ -142,8 +144,8 @@ async function carregar(){
   S.freshFrom=freshFrom;S.mStart=mStart;S.pm=mesAnt(hoje);
   const pmIni=S.pm.ini;
   const [fresh,mv,margem,ecomFixo,lojasCusto,ads,metaRows]=await Promise.all([
-    apiAll('vw_pedidos_full','select=data_pedido,origem_conta,canal_nome_raw,loja_nome,valor_bruto,frete,valor_devolucao,valor_chargeback,status&data_pedido=gte.'+freshFrom+'&status=neq.cancelado','id.asc'),
-    apiAll('mvw_diretoria_dia','select=data_pedido,origem_conta,canal_nome_raw,loja_nome,pedidos,receita_bruta,devolucoes&data_pedido=gte.'+mvFrom,'data_pedido.asc,origem_conta.asc,canal_nome_raw.asc,loja_nome.asc'),
+    apiAll('vw_venda_empresa_recente','select=data_pedido,origem_conta,canal_nome_raw,loja_nome,pedidos,receita_bruta,devolucoes&data_pedido=gte.'+freshFrom,'data_pedido.asc,origem_conta.asc,canal_nome_raw.asc,loja_nome.asc'),
+    apiAll('vw_venda_empresa_dia','select=data_pedido,origem_conta,canal_nome_raw,loja_nome,pedidos,receita_bruta,devolucoes&data_pedido=gte.'+mvFrom,'data_pedido.asc,origem_conta.asc,canal_nome_raw.asc,loja_nome.asc'),
     apiAll('mvw_margem_canal_dia','select=data_pedido,grupo,canal,receita_bruta,devolucoes,comissao,afiliado,frete_seller,cmv,unidades&data_pedido=gte.'+pmIni,'data_pedido.asc,grupo.asc,canal.asc,origem_conta.asc'),
     apiAll('vw_ecom_custo_fixo_canal_dia','select=data_pedido,canal_nome_raw,custo_fixo_rateado&data_pedido=gte.'+mStart,'data_pedido.asc'),
     apiAll('vw_lojas_custo_dia','select=data_pedido,comissao_lojas,custo_fixo_lojas&data_pedido=gte.'+mStart,'data_pedido.asc'),
@@ -154,7 +156,7 @@ async function carregar(){
   const meta={};metaRows.forEach(r=>{meta[r.ano_mes]=(meta[r.ano_mes]||0)+(+r.valor||0);});S.meta=meta;
   render();
   document.getElementById('loader').style.display='none';
-  document.getElementById('freshtxt').innerHTML='Hoje · ontem · performance em <b>tempo real</b> ('+agoraSP()+') · P&amp;L e margem via MV (~2h) · receita líquida = bruto − devoluções';
+  document.getElementById('freshtxt').innerHTML='Hoje · ontem: e-commerce em <b>tempo real</b> ('+agoraSP()+'), lojas a cada 30 min · P&amp;L e margem via MV (~2h) · receita líquida = bruto − devoluções · pedidos sem cancelado nem pendente · ticket = venda bruta ÷ pedidos';
 }
 
 // net diário combinado (MV histórico + fresh recente)
@@ -168,15 +170,15 @@ function render(){
   const hoje=S.hoje,mStart=S.mStart,ontem=somaDias(hoje,-1);
   const netDia=netDiaFn();
   // fresh agregado
-  let vHoje=0,vOntem=0,pedHoje=0,pedOntem=0;
-  S.fresh.forEach(p=>{const n=recBrutaRow(p)-devRow(p);if(p.data_pedido===hoje){vHoje+=n;pedHoje++;}if(p.data_pedido===ontem){vOntem+=n;pedOntem++;}});
+  let vHoje=0,vOntem=0,pedHoje=0,pedOntem=0,rOntem=0;
+  S.fresh.forEach(p=>{const n=recBrutaRow(p)-devRow(p);if(p.data_pedido===hoje){vHoje+=n;pedHoje+=pedRow(p);}if(p.data_pedido===ontem){vOntem+=n;rOntem+=recBrutaRow(p);pedOntem+=pedRow(p);}});
   // MTD fresh (mês corrente todo, do vw_pedidos_full últimos 3d) + MV pro resto do mês
   const freshMes=S.fresh.filter(p=>p.data_pedido>=mStart&&p.data_pedido>=S.freshFrom);
   const mvMes=S.mv.filter(r=>r.data_pedido>=mStart&&r.data_pedido<S.freshFrom);
   // MTD KPIs de performance
   let mtd=0,mtdPed=0,mtdUn=0,mtdDev=0,mtdRec=0;
   mvMes.forEach(r=>{mtd+=(+r.receita_bruta||0)-(+r.devolucoes||0);mtdPed+=(+r.pedidos||0);mtdDev+=(+r.devolucoes||0);mtdRec+=(+r.receita_bruta||0);});
-  freshMes.forEach(p=>{const rb=recBrutaRow(p),dv=devRow(p);mtd+=rb-dv;mtdPed++;mtdDev+=dv;mtdRec+=rb;});
+  freshMes.forEach(p=>{const rb=recBrutaRow(p),dv=devRow(p);mtd+=rb-dv;mtdPed+=pedRow(p);mtdDev+=dv;mtdRec+=rb;});
   // unidades MTD da margem MV (tem unidades)
   S.margem.filter(r=>r.data_pedido>=mStart).forEach(r=>{mtdUn+=(+r.unidades||0);});
   // prev month same days (da MV)
@@ -194,7 +196,7 @@ function render(){
   const barc=p=>p>=1?'var(--green)':p>=.8?'var(--amber)':'var(--red)';
   document.getElementById('hero').innerHTML=`
     <div class="hcard main"><div class="lbl">Faturamento do mês (MTD)</div><div class="big">${rsFull(mtd)}</div>
-      <div class="meta"><span>${ri(mtdPed)} pedidos</span><span>ticket <b>${rsFull(mtdPed?mtd/mtdPed:0)}</b></span><span>vs ${new Date(pm.ini+'T12:00:00').toLocaleDateString('pt-BR',{month:'short'}).replace('.','')} ${dH(dMtd)}</span></div></div>
+      <div class="meta"><span>${ri(mtdPed)} pedidos</span><span>ticket <b>${rsFull(mtdPed?mtdRec/mtdPed:0)}</b></span><span>vs ${new Date(pm.ini+'T12:00:00').toLocaleDateString('pt-BR',{month:'short'}).replace('.','')} ${dH(dMtd)}</span></div></div>
     <div class="hcard"><div class="lbl">Meta do mês</div><div class="big">${rsK(metaMes)}</div>
       <div class="meta"><span><b>${pct0(atMTD)}</b> atingido${metaMes>mtd?' · faltam '+rsK(metaMes-mtd):''}</span></div>
       <div class="bar"><i style="width:${Math.min(100,(atMTD||0)*100)}%;background:${barc(atMTD||0)}"></i></div></div>
@@ -202,12 +204,12 @@ function render(){
       <div class="meta"><span>${atProj>=1?'<span class="up">bate a meta</span>':'<span class="down">abaixo</span>'} · <b>${pct0(atProj)}</b> · ritmo atual</span></div></div>`;
   document.getElementById('strip').innerHTML=`
     <div class="scard"><span class="em">🟡</span><div><div class="lbl">Hoje até agora <span class="tag">parcial</span></div><div class="v">${rsFull(vHoje)}</div><div class="x">${ri(pedHoje)} pedidos · ao vivo</div></div></div>
-    <div class="scard"><span class="em">✅</span><div><div class="lbl">Ontem <span class="tag ok">fechado</span></div><div class="v">${rsFull(vOntem)}</div><div class="x">${ri(pedOntem)} pedidos · ticket ${rsFull(pedOntem?vOntem/pedOntem:0)}</div></div></div>`;
+    <div class="scard"><span class="em">✅</span><div><div class="lbl">Ontem <span class="tag ok">fechado</span></div><div class="v">${rsFull(vOntem)}</div><div class="x">${ri(pedOntem)} pedidos · ticket ${rsFull(pedOntem?rOntem/pedOntem:0)}</div></div></div>`;
 
   // ── PERF KPIs ──
   const kpi=(lbl,val,cur,prev,inv)=>{const d=prev?(cur-prev)/prev:null;const good=inv?(d!=null&&d<0):(d!=null&&d>=0);
     return `<div class="pcard"><div class="lbl">${lbl}</div><div class="v">${val}</div><div class="d">${d==null?'<span class="flat">—</span>':`<span class="${good?'up':'down'}">${d>=0?'▲':'▼'} ${Math.abs(d*100).toFixed(0)}%</span>`} <span class="muted">vs mês ant.</span></div></div>`;};
-  const tHoje=mtdPed?mtd/mtdPed:0,tPrev=pPed?pMtd/pPed:0;
+  const tHoje=mtdPed?mtdRec/mtdPed:0,tPrev=pPed?pRec/pPed:0;  // ticket = venda bruta ÷ pedidos (Leo, 03/11/2026)
   document.getElementById('perf').innerHTML=
     kpi('Pedidos',ri(mtdPed),mtdPed,pPed)+
     kpi('Ticket médio',rsFull(tHoje),tHoje,tPrev)+
